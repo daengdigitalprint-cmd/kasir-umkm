@@ -1,0 +1,427 @@
+.xb-faq {
+    .accordion_box {
+        .block {
+            overflow: hidden;
+            @include border-radius(5px);
+            background: var(--color-white);
+            box-shadow: 0 4px 4px 0 rgba(35, 27, 59, 0.04);
+            &:not(:last-child) {
+                margin-bottom: 10px;
+            }
+            .acc-btn {
+                font-size: 22px;
+                font-weight: 700;
+                padding: 28px 50px;
+                position: relative;
+                cursor: pointer;
+                letter-spacing: 0;
+                @include transition(.3s);
+                color: var(--color-heading);
+                background: var(--color-white);
+                font-family: var(--font-heading);
+                @include respond(md) {
+                    padding: 28px 30px;
+                }
+                @include respond(xs) {
+                    font-size: 20px;
+                    padding: 28px 32px 28px 20px;
+                }
+                .arrow {
+                    position: absolute;
+                    top: 22px;
+                    right: 50px;
+                    height: 36px;
+                    width: 36px;
+                    background: #fff;
+                    border-radius: 100%;
+                    @include transition(.3s);
+                    border: 1px solid #dfd8ff;
+                    background: var(--color-white);
+                    @include respond(md) {
+                        right: 30px;
+                    }
+                    @include respond(xs) {
+                        right: 20px;
+                    }
+                    &::before {
+                        top: 6px;
+                        left: 10px;
+                        font-size: 16px;
+                        content: "\f107";
+                        font-weight: 400;
+                        position: absolute;
+                        color: var(--color-heading);
+                        font-family: "Font Awesome 6 Pro";
+                        @include transition(0.6s cubic-bezier(0.165, 0.84, 0.44, 1));
+                    }
+                }
+            }
+            .acc_body {
+                display: none;
+                &.current {
+                    display: block;
+                }
+            }
+            .content {
+                padding: 12px 50px 24px;
+                @include respond(md) {
+                    padding: 12px 50px 24px 30px;
+                }
+                @include respond(xs) {
+                    padding: 12px 20px 24px;
+                }
+                p {
+                    font-size: 16px;
+                    font-weight: 400;
+                    line-height: 26px;
+                    max-width: 843px;
+                    color: var(--color-default);
+                    span {
+                        font-weight: 700;
+                        color: var(--color-heading);
+                    }
+                }
+            }
+            &.active-block {
+                .acc-btn {
+                    background: #140f26;
+                    color: var(--color-white);
+                    .arrow {
+                        &::before {
+                            top: 3px;
+                            content: "\f107";
+                            transform: rotate(180deg);
+                            -webkit-transform: rotate(180deg);
+                            -ms-transform: rotate(180deg);
+                            -moz-transform: rotate(180deg);
+                            -o-transform: rotate(180deg);
+                        }
+                    }
+                }
+            } 
+        }
+    }
+}
+.faq-top-content {
+    font-size: 18px;
+    color: #554f4f;
+    a {
+        text-decoration: underline;
+        color: var(--color-primary);
+        text-decoration-skip-ink: none;
+    }
+}
+.xb-desk-faq {
+    margin-left: 45px;
+    @include respond(lg) {
+        margin-left: 0;
+    }
+    .accordion_box {
+        .block {
+            box-shadow: none;
+            .acc-btn {
+                font-size: 20px;
+                padding: 28px 30px;
+                background: #EAF4EA;
+                @include border-radius(15px);
+                @include respond(xs) {
+                    padding: 28px 50px 28px 20px;
+                }
+            }
+            .content {
+                padding: 12px 66px 24px 30px;
+                @include respond(xs) {
+                    padding: 12px 20px 24px 20px;
+                }
+                p {
+                    color: #3f6c6b;
+                }
+            }
+            &.active-block {
+                .acc-btn {
+                    background: #EAF4EA;
+                    color: var(--color-heading);
+                }
+            }
+        }
+    }
+}
+.xb-faq-left {
+    .xb-content {
+        color: #3f6c6b;
+        max-width: 400px;
+        margin: 18px 0 55px;
+    }
+}
+.xb-faq-btn {
+    @include respond(md) {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        text-align: center;
+    }
+}
+.xb-faq-wrapper {
+    @include respond(md) {
+        padding-bottom: 120px;
+    }
+}
+.fs-faq {
+    .accordion_box {
+        .block {
+            padding: 0 25px 0 30px;
+            background: var(--color-white);
+            @include border-radius(10px);
+            border: 1px solid var(--color-border);
+            @media only screen and (max-width: 1023px) {
+                padding: 0 22px;
+            }
+            @include respond(xs) {
+                padding: 0 15px;
+            }
+            &:not(:last-child) {
+                margin-bottom: 20px;
+            }
+            .acc-btn {
+                padding: 20px 0 18px;
+                background: transparent;
+                @include border-radius(0);
+                @include respond(xs) {
+                    padding: 20px 10px 18px 0;
+                }
+                .arrow {
+                    height: 0;
+                    width: 0;
+                    right: 25px;
+                    top: 18px;
+                    &::before {
+                        top: 0;
+                        content: "\2b";
+                    }
+                }
+            }
+            .content {
+                padding: 12px 66px 24px 0;
+                border-top: 1px solid var(--color-border);
+                @include respond(xs) {
+                    padding: 12px 0 24px;
+                }
+                p {
+                    line-height: 25px;
+                    color: var(--color-default);
+                }
+            }
+            &.active-block {
+                border: 1px solid transparent;
+                box-shadow: 0 44px 18px -4px rgba(13, 23, 56, 0.04), 0 26px 10px -4px rgba(13, 23, 56, 0.06), 0 16px 6px -3px rgba(13, 23, 56, 0.07), 0 10px 4px -3px rgba(13, 23, 56, 0.08), 0 6px 2px -2px rgba(13, 23, 56, 0.08), 0 3px 1px -1px rgba(13, 23, 56, 0.09), 0 1px 1px -1px rgba(13, 23, 56, 0.09), 0 0 0 1px #e9e5ff, inset 0 1px 1px 1px rgba(255, 255, 255, 0.3);
+                .acc-btn {
+                    background: transparent;
+                    color: var(--color-heading);
+                    .arrow::before {
+                        content: "\f068";
+                    }
+                }
+            }
+        }
+    }
+}
+.fs-faq-image {
+    margin-top: 85px;
+    position: relative;
+    .img {
+        position: absolute;
+        left: 0;
+        top: 0;
+        @media only screen and (min-width: 992px) and (max-width: 1023px) {
+            left: -30px;
+        }
+        @include respond(md) {
+            left: 80px;
+        }
+        @include respond(xs) {
+            left: 0;
+        }
+    }
+}
+.as-faq {
+    margin-right: 45px;
+    @include respond(lg) {
+        margin-right: 30px;
+    }
+    @include respond(md) {
+        margin-right: 0;
+    }
+    .accordion_box {
+        .block {
+            box-shadow: none;
+            background: none;
+            @include border-radius(0);
+            border-top: 1px solid #ebdcfe;
+            &:not(:last-child) {
+                margin-bottom: 0;
+            }
+            .acc-btn {
+                font-size: 18px;
+                padding: 22px 10px;
+                background: transparent;
+                @include respond(xs) {
+                    padding: 22px 40px 22px 10px;
+                }
+                .arrow {
+                    height: 30px;
+                    width: 30px;
+                    right: 15px;
+                    top: 21px;
+                    border: 1px solid #ede0fc;
+                    @include respond(xs) {
+                        right: 10px;
+                    }
+                    &::before {
+                        left: 7px;
+                        top: 3px;
+                        color: #777676;
+                    }
+                }
+            }
+            .content {
+                padding: 0px 66px 24px 10px;
+                @include respond(xs) {
+                    padding: 0px 40px 24px 10px;
+                }
+                p {
+                    line-height: 24px;
+                    max-width: 543px;
+                }
+            }
+            &.active-block {
+                .acc-btn {
+                    padding: 22px 10px 8px;
+                    background: transparent;
+                    color: var(--color-heading);
+                    @media only screen and (max-width: 1023px) {
+                        padding: 22px 50px 8px 10px;
+                    }
+                    .arrow {
+                        background: #ede0fc;
+                        &::before {
+                            top: 0px;
+                            color: var(--color-heading);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+.as-faq-contact {
+    .xb-item {
+        &--inner {
+            position: relative;
+            text-align: center;
+            padding: 50px 90px;
+            overflow: hidden;
+            @include border-radius(20px);
+            border: 1px solid #ebdcfe;
+            background: rgba(255, 254, 254, 0.7);
+            @media only screen and (min-width: 1200px) and (max-width: 1300px) {
+                padding: 50px 60px;
+            }
+            @include respond(lg) {
+                padding: 50px 25px;
+            }
+            @media only screen and (max-width: 1023px) {
+                padding: 50px 22px;
+            }
+            @include respond(md) {
+                padding: 50px 130px;
+            }
+            @include respond(xs) {
+                padding: 40px 10px;
+            }
+        }
+        &--logo {
+            width: 80px;
+            height: 80px;
+            padding: 5px;
+            margin: 0 auto;
+            background: var(--color-white);
+            @include border-radius(10px);
+            span {
+                position: relative;
+                @include center;
+                height: 100%;
+                border-radius: inherit;
+                border: 1px solid #dbdbdb;
+                &::before {
+                    position: absolute;
+                    content: '';
+                    inset: 5px;
+                    border-radius: inherit;
+                    border: 1px solid rgba(237, 237, 237, 0.5);
+                }
+                img {
+                    max-width: 38px;
+                }
+            }
+        }
+        &--title {
+            font-size: 26px;
+            font-weight: 500;
+            line-height: 33px;
+            margin: 5px 0 45px;
+            background: linear-gradient(157deg, #000 22.95%, #6101ea 100%);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            @include respond(xs) {
+                font-size: 24px;
+            }
+        }
+        &--mail {
+            font-size: 14px;
+            margin-top: 10px;
+            color: rgba(34, 0, 83, 0.5);
+            a {
+                font-weight: 500;
+                color: var(--color-heading);
+            }
+        }
+        &--cursor {
+            position: absolute;
+            bottom: 40px;
+            right: 50px;
+            @media only screen and (min-width: 1200px) and (max-width: 1300px) {
+                right: 5px;
+            }
+            @include respond(lg) {
+                right: -20px;
+            }
+            @include respond(md) {
+                right: 125px;
+            }
+            @include respond(xs) {
+                right: -35px;
+                bottom: 15px;
+            }
+            @include respond(sm) {
+                right: 47px;
+                bottom: 20px;
+            }
+        }
+    }
+}
+.as-faq-wrapper {
+    margin: 0 -10px;
+    padding-left: 10px;
+    padding-right: 10px;
+    background: linear-gradient(359deg, #f5effd 0%, #fffefe 100%);
+    @include respond(xs) {
+        margin: 0;
+    }
+}
+
+
+
+
+

@@ -1,0 +1,111 @@
+.xb-mockup-wrap {
+    position: relative;
+    padding: 270px 0 30px;
+    @media only screen and (max-width: 1023px) {
+        padding: 220px 0 30px;
+    }
+    @include respond(md) {
+        padding: 220px 0 45px;
+    }
+    @include respond(xs) {
+        padding: 91px 0 60px;
+    }
+    @include respond(sm) {
+        padding: 150px 0 100px;
+    }
+}
+.xb-mockup-inner {
+    padding: 95px 0;
+    overflow: hidden;
+    position: relative;
+    @include border-radius(10px);
+    background: linear-gradient(181deg, #6840ff 0%, #a48cff 99.97%);
+    @include respond(xs) {
+        padding: 50px 0;
+    }
+    &::before,
+    &::after {
+        @include before;
+        width: 134px;
+        z-index: 1;
+        border-radius: inherit;
+        border-radius: 0 10px 10px 0;
+        background: linear-gradient(270deg, #6840ff 5.57%, rgba(104, 64, 255, 0) 100%);
+        @include respond(xs) {
+            width: 80px;
+        }
+    }
+    &::before {
+        transform: rotate(180deg);
+    }
+    &::after {
+        left: auto;
+        right: 0;
+    }
+}
+.xb-mockup-list {
+    gap: 50px;
+    margin-right: 50px;
+    li {
+        font-weight: 700;
+        font-size: 60px;
+        letter-spacing: -0.03em;
+        color: var(--color-white);
+        font-family: var(--font-heading);
+        @include respond(xs) {
+            font-size: 40px;
+        }
+        span {
+            font-weight: 500;
+        }
+    }
+}
+.xb-mockup-img {
+    position: relative;
+    text-align: center;
+    margin-top: -32%;
+    z-index: 1;
+    @include respond(lg) {
+        margin-top: -42%;
+    }
+    @media only screen and (max-width: 1023px) {
+        margin-top: -36%;
+        max-width: 670px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    @include respond(md) {
+        max-width: 600px;
+        margin-top: -46%;
+    }
+    @include respond(xs) {
+        max-width: 280px;
+        margin-top: -45%;
+    }
+    @include respond(sm) {
+        max-width: 350px;
+        margin-top: -37%;
+    }
+}
+
+.atropos {
+	position: relative;
+	display: block;
+	perspective: 1200px;
+	transform: translate3d(0, 0, 0);
+}
+.atropos-rotate, .atropos-scale {
+	width: 100%;
+	height: 100%;
+	transform-style: preserve-3d;
+	transition-property: transform;
+	display: block;
+}
+.atropos-inner {
+	width: 100%;
+	height: 100%;
+	position: relative;
+	transform-style: preserve-3d;
+	transform: translate3d(0, 0, 0);
+	display: block;
+}

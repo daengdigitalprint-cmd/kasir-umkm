@@ -1,0 +1,387 @@
+.xb-dashboard-item {
+    background: #d7f0d7;
+    padding: 45px 10px 10px;
+    @include border-radius(30px);
+    @include transition(.3s);
+    @include respond(md) {
+        display: inline-block;
+    }
+    .xb-item {
+        &--top {
+            padding-left: 40px;
+            padding-right: 40px;
+            margin-bottom: 20px;
+            @include respond(xs) {
+                gap: 30px;
+                padding-left: 10px;
+                padding-right: 10px;
+            }
+        }
+        &--title {
+            font-weight: 700;
+            font-size: 32px;
+            line-height: 37px;
+            max-width: 330px;
+            text-align: start;
+            letter-spacing: -0.03em;
+            text-transform: capitalize;
+            font-family: var(--second-family);
+            a {
+                color: currentColor;
+            }
+        }
+        &--arrow {
+            height: 60px;
+            width: 60px;
+            @include center;
+            @include transition(.3s);
+            @include border-radius(100%);
+            background: linear-gradient(180deg, #066 0%, #003d3d 100%);
+            svg rect {
+                @include transition(.3s);
+            }
+        }
+        &--img {
+            overflow: hidden;
+            position: relative;
+            .line {
+                svg path {
+                    stroke-dasharray: 3;
+                    stroke-dashoffset: 350;
+                    -webkit-animation: tp-line-dash 40s linear forwards infinite;
+                    animation: xb-line-dash 40s linear forwards infinite;
+                }
+                &--three {
+                    position: absolute;
+                    left: 38%;
+                    top: 17.5%;
+                    @include respond(lg) {
+                        top: 16.5%;
+                    }
+                    @include respond(md) {
+                        top: 17.5%;
+                    }
+                    @include respond(xs) {
+                        top: 15.5%;
+                    }
+                    @include respond(sm) {
+                        top: 16.5%;
+                    }
+                    svg {
+                        @include respond(xs) {
+                            width: 30px;
+                        }
+                        @include respond(sm) {
+                            width: 50px;
+                        }
+                    }
+                }
+                &--four {
+                    position: absolute;
+                    bottom: 13%;
+                    left: 8%;
+                    @include respond(xs) {
+                        left: 6%;
+                    }
+                    @include respond(sm) {
+                        left: 8%;
+                    }
+                    svg {
+                        @media only screen and (max-width: 1300px) {
+                            height: 100px;
+                        }
+                        @include respond(lg) {
+                            height: 85px;
+                        }
+                        @include respond(md) {
+                            height: 110px;
+                        }
+                        @include respond(xs) {
+                            height: 60px;
+                        }
+                        @include respond(sm) {
+                            height: 90px;
+                        }
+                    }
+                }
+            }
+        }
+        &--logo_content {
+            left: 50%;
+            bottom: 0;
+            width: 100%;
+            min-height: 256px;
+            position: absolute;
+            transform: translateX(-50%);
+            @include respond(xs) {
+                min-height: 140px;
+            }
+            .logo {
+                position: absolute;
+                height: 76px;
+                width: 76px;
+                left: 50%;
+                bottom: 20%;
+                transform: translateX(-50%);
+                @include respond(lg) {
+                    width: 60px;
+                    height: 60px;
+                    bottom: 17%;
+                }
+                @include respond(md) {
+                    bottom: 25%;
+                }
+                @include respond(xs) {
+                    bottom: 16%;
+                }
+                @include respond(sm) {
+                    bottom: 33%;
+                }
+                &::before,
+                &::after {
+                    position: absolute;
+                    content: '';
+                    inset: -12px;
+                    height: 130%;
+                    width: 130%;
+                    z-index: -2;
+                    @include border-radius(100%);
+                    @include respond(lg) {
+                        inset: -8px;
+                        height: 125%;
+                        width: 125%;
+                    }
+                }
+                &::before {
+                    filter: blur(29.600000381469727px);
+                    background: rgba(4, 88, 87, 0.26);
+                }
+                &::after {
+                    inset: -10px;
+                    height: 125%;
+                    width: 125%;
+                    backdrop-filter: blur(33px);
+                    background: rgba(255, 255, 255, 0.18);
+                    border: 1px solid rgba(255, 255, 255, 0.5);
+                    @include respond(lg) {
+                        inset: -5px;
+                        height: 115%;
+                        width: 115%;
+                    }
+                }
+                span {
+                    height: 100%;
+                    width: 100%;
+                    z-index: 1;
+                    @include center;
+                    overflow: hidden;
+                    position: absolute;
+                    @include border-radius(38px);
+                    &::before {
+                        position: absolute;
+                        content: '';
+                        left: 0;
+                        top: 0;
+                        height: 100%;
+                        width: 100%;
+                        z-index: -1;
+                        background-image: url(../img/dashboard/logo_bg.png);
+                        background-repeat: no-repeat;
+                        background-position: center center;
+                        animation: spin 10s linear infinite;
+                    }
+                }
+            }
+            .line {
+                position: absolute;
+                left: 0;
+                bottom: 0;
+                left: 50%;
+                transform: translateX(-50%);
+                &.one {
+                    left: 38%;
+                    svg {
+                        @media only screen and (max-width: 1300px) {
+                            height: 172px;
+                        }
+                        @include respond(lg) {
+                            height: 145px;
+                        }
+                        @media only screen and (max-width: 1023px) {
+                            height: 135px;
+                        }
+                        @include respond(md) {
+                            height: 190px;
+                        }
+                        @include respond(xs) {
+                            height: 105px;
+                        }
+                        @include respond(sm) {
+                            height: 155px;
+                        }
+                    }
+                }
+                &.two {
+                    left: 63%;
+                    svg {
+                        @media only screen and (max-width: 1300px) {
+                            height: 232px;
+                        }
+                        @include respond(lg) {
+                            height: 195px;
+                        }
+                        @media only screen and (max-width: 1023px) {
+                            height: 180px;
+                        }
+                        @include respond(md) {
+                            height: 256px;
+                        }
+                        @include respond(xs) {
+                            height: 140px;
+                        }
+                        @include respond(sm) {
+                            height: 207px;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    &:hover {
+        background: var(--color-secondary);
+        .xb-item--arrow {
+            background: var(--color-white);
+            svg rect {
+                fill: #075a59;
+            }
+        }
+    }
+}
+.fs-dashboard-wrapper {
+    position: relative;
+    min-height: 469px;
+    text-align: center;
+    overflow: hidden;
+    z-index: 1;
+    background: var(--color-secondary);
+    @include respond(md) {
+        min-height: 410px;
+    }
+    @include respond(xs) {
+        min-height: 357px;
+    }
+    @include respond(sm) {
+        min-height: 386px;
+    }
+    .dashboard-shape {
+        .shape--5 {
+            left: 50%;
+            bottom: 0;
+            width: 100%;
+            transform: translateX(-50%);
+        }
+    }
+}
+.fs-dashboard-nav {
+    gap: 10px;
+    margin-bottom: 40px;
+    position: relative;
+    background: #fbfaff;
+    display: inline-flex;
+    padding: 15px 52px 11px;
+    justify-content: center;
+    @include respond(lg) {
+        padding: 14px 20px 10px;
+    }
+    @include respond(md) {
+        margin: 0 70px 40px;
+        border-radius: 0 0 30px 30px;
+    }
+    @include respond(xs) {
+        margin: 0 0 40px;
+    }
+    .nav-link {
+        gap: 7px;
+        z-index: 1;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        min-height: 32px;
+        padding: 2px 10px;
+        display: inline-flex;
+        position: relative;
+        color: var(--color-default);
+        border: 1px solid #e9e5ff;
+        @include border-radius(6px);
+        @include transition(.3s);
+        @include respond(lg) {
+            padding: 2px 5px;
+        }
+        &::before {
+            position: absolute;
+            content: '';
+            left: 0;
+            top: 0;
+            opacity: 0;
+            height: 100%;
+            width: 100%;
+            z-index: -1;
+            background: #0d1738;
+            border-radius: inherit;
+            @include transition(.3s);
+            border: 1px solid #0d1738;
+        }
+        &.active {
+            color: var(--color-white);
+            &::before {
+                opacity: 1;
+            }
+            img {
+                filter: brightness(100);
+            }
+        }
+    }
+    &::before,
+    &::after {
+        @include respond(md) {
+            display: none;
+        }
+    }
+}
+.fs-dashboard-img-wrap {
+    position: relative;
+    overflow: hidden;
+    min-height: 433px;
+    max-width: 851px;
+    margin: 0 auto -65px;
+    background: var(--color-white);
+    @include border-radius(15px);
+    @include respond(lg) {
+        max-width: 750px;
+    }
+    @include respond(md) {
+        max-width: 520px;
+        min-height: 330px;
+    }
+    @include respond(xs) {
+        max-width: 320px;
+        min-height: 230px;
+    }
+    @include respond(sm) {
+        max-width: 472px;
+        min-height: 275px;
+    }
+    .tab-pane {
+        position: absolute;
+        left: 0;
+        top: 0;
+        height: 100%;
+        width: 100%;
+        display: block;
+        filter: blur(10px);
+        @include transition(.3s);
+        &.active {
+            filter: blur(0);
+        }
+    }
+}

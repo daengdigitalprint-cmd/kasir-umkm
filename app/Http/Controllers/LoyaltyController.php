@@ -1,0 +1,306 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\LoyaltyNotification;
+use App\Models\LoyaltyRedemption;
+use App\Models\LoyaltyReward;
+use App\Models\Store;
+use App\Services\LoyaltyService;
+use App\Support\LoyaltySettings;
+use App\Support\StorePlanLimits;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Inertia\Inertia;
+use RuntimeException;
+
+class LoyaltyController extends Controller
+{
+    public function __construct(private readonly LoyaltyService $loyalty) {}
+
+    /** Panel admin: ringkasan program loyalitas. */
+    public function index()
+    {
+        $store = auth()->user()->store;
+
+        if (! $store) {
+            return redirect()->route('stores.create')
+                ->with('error', 'Anda perlu membuat toko terlebih dahulu.');
+        }
+
+        if (! StorePlanLimits::allowsAdvancedRetailFeatures($store)) {
+            return redirect()->route('dashboard')
+                ->with('warning', 'Paket Starter tidak mencakup Program Loyalitas. Upgrade ke paket GrowUp di halaman langganan.');
+        }
+
+        $totalCirculating = (int) $store->customers()->sum('points_balance');
+        $totalEarned = (int) $store->customers()->sum('points_earned_total');
+        $totalRedeemed = (int) $store->customers()->sum('points_redeemed_total');
+        $membersWithPoints = (int) $store->customers()->where('points_balance', '>', 0)->count();
+
+        $rewards = $store->loyaltyRewards()->latest()->get();
+
+        $recentRedemptions = $store->loyaltyRedemptions()
+            ->with('customer:id,name')
+            ->latest()
+            ->limit(20)
+            ->get()
+            ->map(fn (LoyaltyRedemption $r) => [
+                'id' => $r->id,
+                'customer_name' => $r->customer?->name ?? '-',
+                'reward_name' => $r->reward_name,
+                'reward_type' => $r->reward_type,
+                'points_spent' => $r->points_spent,
+                'voucher_value' => $r->voucher_value,
+                'voucher_code' => $r->voucher_code,
+                'status' => $r->status,
+                'created_at' => $r->created_at?->toIso8601String(),
+            ]);
+
+        $topMembers = $store->customers()
+            ->where('points_balance', '>', 0)
+            ->orderByDesc('points_balance')
+            ->limit(10)
+            ->get(['id', 'name', 'points_balance', 'points_earned_total', 'points_redeemed_total']);
+
+        return Inertia::render('Loyalty/Index', [
+            'settings' => LoyaltySettings::all($store),
+            'stats' => [
+                'total_circulating' => $totalCirculating,
+                'total_earned' => $totalEarned,
+                'total_redeemed' => $totalRedeemed,
+                'members_with_points' => $membersWithPoints,
+                'rewards_count' => $rewards->count(),
+            ],
+            'rewards' => $rewards,
+            'recentRedemptions' => $recentRedemptions,
+            'topMembers' => $topMembers,
+            'store' => [
+                'id' => $store->id,
+                'name' => $store->name,
+                'currency' => $store->currency,
+            ],
+        ]);
+    }
+
+    /** Simpan aturan perolehan / kadaluarsa poin. */
+    public function updateSettings(Request $request)
+    {
+        $store = $this->currentStore();
+
+        $validated = $request->validate([
+            'enabled' => 'boolean',
+            'rupiah_per_point' => 'required|integer|min:1|max:10000000',
+            'birthday_bonus_points' => 'required|integer|min:0|max:1000000',
+            'referral_bonus_points' => 'required|integer|min:0|max:1000000',
+            'expiry_months' => 'required|integer|min:0|max:120',
+            'expiry_warn_days' => 'required|integer|min:1|max:365',
+        ]);
+
+        $validated['enabled'] = $request->boolean('enabled');
+
+        LoyaltySettings::update($store, $validated);
+
+        Log::info('[loyalty] aturan diperbarui', [
+            'store_id' => $store->id,
+            'user_id' => auth()->id(),
+            'values' => $validated,
+        ]);
+
+        return back()->with('success', 'Aturan program loyalitas disimpan.');
+    }
+
+    /** Tambah hadiah baru ke katalog. */
+    public function storeReward(Request $request)
+    {
+        $store = $this->currentStore();
+
+        $validated = $this->validateReward($request);
+
+        $store->loyaltyRewards()->create($validated);
+
+        return back()->with('success', 'Hadiah ditambahkan.');
+    }
+
+    /** Perbarui hadiah. */
+    public function updateReward(Request $request, LoyaltyReward $reward)
+    {
+        $this->authorizeReward($reward);
+
+        $validated = $this->validateReward($request);
+
+        $reward->update($validated);
+
+        return back()->with('success', 'Hadiah diperbarui.');
+    }
+
+    /** Hapus hadiah. */
+    public function destroyReward(LoyaltyReward $reward)
+    {
+        $this->authorizeReward($reward);
+
+        $reward->delete();
+
+        return back()->with('success', 'Hadiah dihapus.');
+    }
+
+    /** Proses penukaran hadiah untuk seorang pelanggan (dilakukan staf). */
+    public function redeem(Request $request)
+    {
+        $store = $this->currentStore();
+
+        $validated = $request->validate([
+            'customer_id' => 'required|integer',
+            'reward_id' => 'required|integer',
+        ]);
+
+        $customer = $store->customers()->findOrFail($validated['customer_id']);
+        $reward = $store->loyaltyRewards()->findOrFail($validated['reward_id']);
+
+        try {
+            $this->loyalty->redeem($customer, $reward, auth()->id());
+        } catch (RuntimeException $e) {
+            return back()->withErrors(['redeem' => $e->getMessage()]);
+        }
+
+        return back()->with('success', 'Penukaran hadiah berhasil.');
+    }
+
+    /** Penyesuaian manual / klaim poin oleh admin. */
+    public function adjust(Request $request)
+    {
+        $store = $this->currentStore();
+
+        $validated = $request->validate([
+            'customer_id' => 'required|integer',
+            'delta' => 'required|integer|not_in:0',
+            'reason' => 'required|string|max:255',
+        ]);
+
+        $customer = $store->customers()->findOrFail($validated['customer_id']);
+
+        try {
+            $this->loyalty->adjust($customer, (int) $validated['delta'], $validated['reason'], auth()->id());
+        } catch (RuntimeException $e) {
+            return back()->withErrors(['adjust' => $e->getMessage()]);
+        }
+
+        Log::info('[loyalty] penyesuaian poin oleh admin', [
+            'store_id' => $store->id,
+            'customer_id' => $customer->id,
+            'user_id' => auth()->id(),
+            'delta' => $validated['delta'],
+            'reason' => $validated['reason'],
+        ]);
+
+        return back()->with('success', 'Saldo poin pelanggan disesuaikan.');
+    }
+
+    /** Kirim notifikasi promo poin ke pelanggan (in-app + log). */
+    public function broadcastPromo(Request $request)
+    {
+        $store = $this->currentStore();
+
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'body' => 'required|string|max:1000',
+        ]);
+
+        $count = $this->loyalty->broadcastPromo($store, $validated['title'], $validated['body']);
+
+        return back()->with('success', "Promo dikirim ke {$count} pelanggan.");
+    }
+
+    /** Inbox notifikasi loyalitas in-app untuk staf toko. */
+    public function notifications()
+    {
+        $store = $this->currentStore();
+
+        $notifications = $store->loyaltyNotifications()
+            ->with('customer:id,name')
+            ->latest()
+            ->paginate(30)
+            ->through(fn (LoyaltyNotification $n) => [
+                'id' => $n->id,
+                'type' => $n->type,
+                'channel' => $n->channel,
+                'title' => $n->title,
+                'body' => $n->body,
+                'customer_name' => $n->customer?->name,
+                'read_at' => $n->read_at?->toIso8601String(),
+                'created_at' => $n->created_at?->toIso8601String(),
+            ]);
+
+        return Inertia::render('Loyalty/Notifications', [
+            'notifications' => $notifications,
+            'unreadCount' => $store->loyaltyNotifications()->whereNull('read_at')->count(),
+        ]);
+    }
+
+    /** Tandai notifikasi loyalitas sebagai telah dibaca. */
+    public function markNotificationRead(LoyaltyNotification $notification)
+    {
+        if ((int) $notification->store_id !== (int) $this->currentStore()->id) {
+            abort(403);
+        }
+
+        if ($notification->read_at === null) {
+            $notification->forceFill(['read_at' => now()])->save();
+        }
+
+        return back();
+    }
+
+    private function currentStore(): Store
+    {
+        $store = auth()->user()->store;
+
+        if (! $store) {
+            abort(404);
+        }
+
+        if (! StorePlanLimits::allowsAdvancedRetailFeatures($store)) {
+            abort(403, 'Paket Starter tidak mencakup Program Loyalitas. Upgrade ke paket GrowUp di halaman langganan.');
+        }
+
+        return $store;
+    }
+
+    private function authorizeReward(LoyaltyReward $reward): void
+    {
+        $store = auth()->user()->store;
+
+        if ($store === null || (int) $reward->store_id !== (int) $store->id) {
+            abort(403);
+        }
+
+        if (! StorePlanLimits::allowsAdvancedRetailFeatures($store)) {
+            abort(403, 'Paket Starter tidak mencakup Program Loyalitas. Upgrade ke paket GrowUp di halaman langganan.');
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function validateReward(Request $request): array
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string|max:1000',
+            'type' => 'required|in:voucher,free_product,service',
+            'points_cost' => 'required|integer|min:1|max:100000000',
+            'voucher_value' => 'nullable|numeric|min:0|max:1000000000',
+            'stock' => 'nullable|integer|min:0|max:1000000',
+            'is_active' => 'boolean',
+        ]);
+
+        if ($validated['type'] === 'voucher' && empty($validated['voucher_value'])) {
+            abort(422, 'Nilai voucher wajib diisi untuk hadiah tipe voucher.');
+        }
+
+        $validated['is_active'] = $request->boolean('is_active', true);
+        $validated['voucher_value'] = $validated['type'] === 'voucher' ? $validated['voucher_value'] : null;
+
+        return $validated;
+    }
+}

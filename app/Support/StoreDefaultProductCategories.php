@@ -12,7 +12,8 @@ class StoreDefaultProductCategories
 {
     public static function ensureForStore(Store $store): void
     {
-        $names = BusinessTypePresets::defaultProductCategoryNames($store->business_type ?? 'general');
+        // Pakai catalog() (sudah dipakai ProductController) supaya tidak bergantung pada helper terpisah yang bisa tidak ikut ter-deploy.
+        $names = BusinessTypePresets::catalog($store->business_type ?? 'general')['categories'];
 
         foreach ($names as $i => $name) {
             ProductCategory::query()->firstOrCreate(

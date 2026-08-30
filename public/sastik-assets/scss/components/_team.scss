@@ -1,0 +1,198 @@
+.ab-team-list {
+    gap: 20px;
+    margin-right: 20px;
+    li {
+        overflow: hidden;
+        @include border-radius(10px);
+        @include respond(xs) {
+            max-width: 60px;
+        }
+    }
+}
+.ab-team-wrap {
+    display: inline-block;
+    &:not(:last-child) {
+        margin-bottom: 13px;
+    }
+}
+.ab-team-container {
+    position: relative;
+    &::before, 
+    &::after {
+        @include before;
+        top: 50%;
+        z-index: 1;
+        left: -45px;
+        width: 384px;
+        height: 346px;
+        filter: blur(25px);
+        transform: rotate(-90deg);
+        background: var(--color-white);
+        transform: translateY(-50%);
+        @media only screen and (max-width: 1600px) {
+            left: -150px;
+        }
+        @include respond(lg) {
+            left: -200px;
+        }
+        @include respond(xs) {
+            left: -310px;
+        }
+        @include respond(sm) {
+            left: -280px;
+        }
+    }
+    &::after {
+        left: auto;
+        right: -45px;
+        @media only screen and (max-width: 1600px) {
+            right: -150px;
+        }
+        @include respond(lg) {
+            right: -200px;
+        }
+        @include respond(xs) {
+            right: -310px;
+        }
+        @include respond(xs) {
+            right: -280px;
+        }
+    }
+}
+.xb-team-item {
+    @include border-radius(20px);
+    background: var(--color-secondary);
+    .xb-item {
+        &--img {
+            overflow: hidden;
+            border-radius: 20px 20px 0 0;
+            border: 2px solid #e6e3fb;
+            border-bottom: none;
+            img {
+                width: 100%;
+                @include transition(.5s);
+            }
+        }
+        &--holder {
+            z-index: 1;
+            overflow: hidden;
+            position: relative;
+            padding: 20px 20px 20px;
+            border-radius: 0 0 20px 20px;
+            background: var(--color-secondary);
+            &::before {
+                @include before;
+                z-index: -1;
+                top: -2px;
+                border-radius: inherit;
+                @include transition(.3s);
+                background: var(--color-white);
+            }
+        }
+        &--name {
+            font-size: 24px;
+            letter-spacing: -0.04em;
+        }
+        &--desig {
+            font-size: 14px;
+            color: rgba(13, 23, 56, 0.7);
+        }
+        &--link {
+            height: 40px;
+            width: 40px;
+            @include center;
+            position: absolute;
+            right: 10px;
+            top: 10px;
+            @include transition(.3s);
+            color: var(--color-heading);
+            border: 1px solid #e6e3fb;
+            @include border-radius(100%);
+        }
+    }
+    &:hover {
+        .xb-item {
+            &--holder {
+                &::before {
+                    height: 0;
+                    transform-origin: top;
+                }
+            }
+            &--img img {
+                transform: scale(1.05);
+            }
+            &--link {
+                border: 1px solid #fff;
+                background: var(--color-white);
+            }
+        }
+    }
+}
+.team-section {
+    margin-top: -40px;
+}
+.xb-award-inner {
+    text-align: center;
+    .xb-item {
+        &--title {
+            font-weight: 500;
+            font-size: 20px;
+            margin-bottom: 25px;
+        }
+        &--img {
+            @include respond(xs) {
+                max-width: 290px;
+            }
+            @include respond(sm) {
+                max-width: 100%;
+            }
+        }
+    }
+}
+.xb-award-wrap {
+    gap: 120px;
+    justify-content: center;
+    @include respond(md) {
+        gap: 60px;
+        flex-wrap: nowrap;
+    }
+    @include respond(xs) {
+        gap: 40px;
+        flex-wrap: wrap;
+    }
+}
+.xb-team-impact-content {
+    padding-right: 70px;
+    @media only screen and (max-width: 1600px) {
+        padding-right: 0;
+    }
+    .content {
+        margin: 15px 0 25px;
+    }
+    .list {
+        li {
+            gap: 14px;
+            display: flex;
+            font-weight: 500;
+            align-items: center;
+            &:not(:last-child) {
+                margin-bottom: 11px;
+            }
+        }
+    }
+}
+.team-card-box {
+    .xb-card-item {
+        .xb-item {
+            &--inner {
+                min-height: 325px;
+            }
+            &--text {
+                font-size: 18px;
+            }
+        }
+    }
+}
+.team-group-section {
+    background: linear-gradient(4deg, #e6e3fb 0%, rgba(255, 255, 255, 0) 100%);
+}

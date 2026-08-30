@@ -1,0 +1,5 @@
+# Test .htaccess - Very Simple
+RewriteEngine On
+
+# Test redirect to public folder
+RewriteRule ^(.*)$ /public/$1 [L]

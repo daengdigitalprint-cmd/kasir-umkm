@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">UMKM Kasir</string>
+    <!-- Ganti URL saat build production. Development: Herd / emulator host. -->
+    <string name="kasir_url">https://kasirumkm.web.id/login</string>
+</resources>

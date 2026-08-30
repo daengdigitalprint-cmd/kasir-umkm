@@ -1,0 +1,41 @@
+// Image Optimization untuk mengurangi CLS (Cumulative Layout Shift)
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+// Reservasi ruang untuk gambar dengan aspect ratio
+.gt-about-wrapper {
+  .about-bg img,
+  .shape-1 img {
+    width: 100%;
+    height: auto;
+  }
+}
+
+// Optimasi gambar brand
+.gt-brand-image img {
+  width: auto;
+  max-width: 100%;
+  height: auto;
+}
+
+// Lazy loading untuk gambar dekoratif
+.hero-left img,
+.gradient-left img,
+.ellipse-1 img,
+.ellipse-2 img {
+  will-change: transform;
+}
+
+// Skeleton loader untuk mencegah layout shift
+.gt-hero-image,
+.gt-about-image {
+  min-height: 400px;
+  
+  @media (max-width: 768px) {
+    min-height: 300px;
+  }
+}

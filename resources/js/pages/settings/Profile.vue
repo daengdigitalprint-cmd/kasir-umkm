@@ -42,7 +42,34 @@ import {
     Bluetooth,
     Copy,
     HardDrive,
+    Trash2,
+    QrCode,
+    CreditCard,
+    Banknote,
+    Building,
+    Blocks,
+    ChefHat,
+    Factory,
+    CookingPot,
+    Ticket,
+    PackageOpen,
+    CalendarClock,
+    ScanQrCode,
+    BookOpenCheck,
+    KeyRound,
+    Warehouse as WarehouseIcon,
 } from 'lucide-vue-next';
+
+interface PaymentMethod {
+    type: string;
+    label: string;
+    active: boolean;
+    instructions?: string;
+    image?: string | null;
+    bank_name?: string;
+    account_number?: string;
+    account_name?: string;
+}
 
 interface Props {
     user?: {
@@ -86,9 +113,18 @@ interface Props {
         kitchen_queue_enabled?: boolean;
         fnb_order_types_enabled?: boolean;
         fnb_split_bill_enabled?: boolean;
+        open_bill_enabled?: boolean;
         direct_stock_edit?: boolean;
         warehouse_enabled?: boolean;
+        is_allow_local_purchase?: boolean;
         queue_module_enabled?: boolean;
+        attendance_enabled?: boolean;
+        scan_meja_enabled?: boolean;
+        accounting_enabled?: boolean;
+        max_backdate_days?: number;
+        receivables_enabled?: boolean;
+        scan_meja_payment_methods?: PaymentMethod[];
+        cashier_login_mode?: string;
         location_type?: string;
         organization_id?: number | null;
         organization_name?: string;
@@ -158,8 +194,24 @@ const activeTab = ref('profile');
 
 const canManageStoreSettings = computed(() => Boolean((page.props as { abilities?: { manage_store_settings?: boolean } }).abilities?.manage_store_settings));
 
-const canJoinExistingOrgForAttach = computed(() => (props.joinableOrganizations?.length ?? 0) > 0);
+const activeModuleCount = computed(
+    () =>
+        [
+            storeForm.recipes_enabled,
+            storeForm.productions_enabled,
+            storeForm.kitchen_queue_enabled,
+            storeForm.queue_module_enabled,
+            storeForm.wholesale_enabled,
+            storeForm.attendance_enabled,
+            storeForm.scan_meja_enabled,
+            storeForm.accounting_enabled,
+            storeForm.receivables_enabled,
+            storeForm.cashier_pin_enabled,
+            storeForm.warehouse_enabled,
+        ].filter(Boolean).length,
+);
 
+const canJoinExistingOrgForAttach = computed(() => (props.joinableOrganizations?.length ?? 0) > 0);
 watch(canManageStoreSettings, (ok) => {
     if (!ok && activeTab.value === 'store') {
         activeTab.value = 'profile';
@@ -226,10 +278,27 @@ const storeForm = useForm({
     kitchen_queue_enabled: props.store?.kitchen_queue_enabled === true,
     fnb_order_types_enabled: props.store?.fnb_order_types_enabled !== false,
     fnb_split_bill_enabled: props.store?.fnb_split_bill_enabled !== false,
+    open_bill_enabled: props.store?.open_bill_enabled === true,
     direct_stock_edit: props.store?.direct_stock_edit === true,
     warehouse_enabled: props.store?.warehouse_enabled === true,
+    is_allow_local_purchase: props.store?.is_allow_local_purchase === true,
     queue_module_enabled: props.store?.queue_module_enabled === true,
+    wholesale_enabled: props.store?.wholesale_enabled === true,
+    attendance_enabled: props.store?.attendance_enabled === true,
+    scan_meja_enabled: props.store?.scan_meja_enabled === true,
+    accounting_enabled: props.store?.accounting_enabled === true,
+    max_backdate_days: Number(props.store?.max_backdate_days ?? 7),
+    receivables_enabled: props.store?.receivables_enabled === true,
+    scan_meja_payment_methods: (props.store?.scan_meja_payment_methods ?? [
+        { type: 'cash', label: 'Tunai', active: true, instructions: 'Bayar langsung di kasir' },
+        { type: 'qris', label: 'QRIS', active: true, image: null },
+        { type: 'bank_transfer', label: 'Transfer Bank', active: false, bank_name: '', account_number: '', account_name: '' },
+    ]) as PaymentMethod[],
+    cashier_pin_enabled: props.store?.cashier_login_mode === 'pin',
+    qris_image: null as File | null,
 });
+
+const isFnBType = computed(() => storeForm.business_type === 'fnb');
 
 const featureDefaultsMap: Record<string, { recipes_enabled: boolean; productions_enabled: boolean }> = {
     fnb: { recipes_enabled: true, productions_enabled: true },
@@ -318,6 +387,48 @@ function removeReceiptLogoChoice() {
     }
 }
 
+// --- QRIS Image ---
+const qrisImageFile = ref<File | null>(null);
+const qrisImagePreview = ref<string | null>(null);
+function openQrisFilePicker() {
+    const el = document.getElementById('qris-upload-input') as HTMLInputElement | null;
+    el?.click();
+}
+
+
+const qrisImageUrl = computed(() => {
+    if (qrisImagePreview.value) return qrisImagePreview.value;
+    const qrisMethod = storeForm.scan_meja_payment_methods?.find(m => m.type === 'qris');
+    if (qrisMethod?.image) return `/storage/${qrisMethod.image}`;
+    return null;
+});
+
+function onQrisImageFile(event: Event) {
+    const target = event.target as HTMLInputElement;
+    const file = target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+        toastWarning('Ukuran gambar QRIS maksimal 2MB');
+        target.value = '';
+        return;
+    }
+    qrisImageFile.value = file;
+    if (qrisImagePreview.value) URL.revokeObjectURL(qrisImagePreview.value);
+    qrisImagePreview.value = URL.createObjectURL(file);
+    // Simpan file ke storeForm agar dikirim via forceFormData
+    storeForm.qris_image = file;
+}
+
+function removeQrisImage() {
+    qrisImageFile.value = null;
+    if (qrisImagePreview.value) { URL.revokeObjectURL(qrisImagePreview.value); qrisImagePreview.value = null; }
+    const el = document.getElementById('qris-upload-input') as HTMLInputElement | null;
+    if (el) el.value = '';
+    storeForm.qris_image = null;
+    const qrisIdx = storeForm.scan_meja_payment_methods?.findIndex(m => m.type === 'qris') ?? -1;
+    if (qrisIdx >= 0) storeForm.scan_meja_payment_methods[qrisIdx].image = null;
+}
+
 const submit = async () => {
     if (!form) return;
     const ok = await confirmDialog(
@@ -345,8 +456,10 @@ const submitStore = async () => {
                 batch_tracking_enabled: data.business_type === 'pharmacy' ? true : data.batch_tracking_enabled,
                 batch_expiry_email_enabled:
                     data.business_type === 'pharmacy' || data.batch_tracking_enabled ? data.batch_expiry_email_enabled : false,
+                cashier_login_mode: data.cashier_pin_enabled ? 'pin' : 'email',
                 _method: 'put',
             };
+            delete d.cashier_pin_enabled;
             if (props.store?.organization_id) {
                 delete d.organization_attach_mode;
                 delete d.attach_organization_name;
@@ -458,6 +571,26 @@ async function saveMemberRole(memberId: number) {
 
 function memberRoleDirty(m: { id: number; role: string }): boolean {
     return memberRoles.value[m.id] !== m.role;
+}
+
+async function toggleAccounting() {
+    const enabling = !storeForm.accounting_enabled;
+    if (enabling) {
+        const ok = await confirmDialog(
+            'Aktifkan Modul Akuntansi?',
+            'Setiap transaksi akan dijurnal secara otomatis. COA standar dan periode bulan berjalan akan dibuat. Kasir hanya dapat memproses pembayaran jika ada periode akuntansi terbuka.',
+            { confirmText: 'Aktifkan', icon: 'warning' },
+        );
+        if (!ok) return;
+    } else {
+        const ok = await confirmDialog(
+            'Nonaktifkan Modul Akuntansi?',
+            'Penjurnalan otomatis akan dihentikan. Histori jurnal yang sudah ada tetap tersimpan dan dapat diakses kembali saat modul diaktifkan ulang.',
+            { confirmText: 'Nonaktifkan', icon: 'warning' },
+        );
+        if (!ok) return;
+    }
+    storeForm.accounting_enabled = enabling;
 }
 </script>
 
@@ -951,6 +1084,25 @@ function memberRoleDirty(m: { id: number; role: string }): boolean {
                                         </div>
                                     </div>
 
+                                    <div class="rounded-xl border border-dashed border-emerald-200 bg-emerald-50/50 p-5 space-y-3">
+                                        <h3 class="text-sm font-bold text-slate-900">Modul Open Bill — pesanan belum bayar</h3>
+                                        <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
+                                            <input
+                                                v-model="storeForm.open_bill_enabled"
+                                                type="checkbox"
+                                                class="rounded border-gray-300"
+                                            />
+                                            Aktifkan modul open bill di kasir
+                                        </label>
+                                        <p class="text-xs text-slate-500 ml-6" v-if="!isFnBType">
+                                            Simpan keranjang sebagai pesanan belum dibayar, lalu panggil kembali saat pelanggan membayar.
+                                            Untuk usaha F&amp;B modul ini selalu aktif otomatis.
+                                        </p>
+                                        <p class="text-xs text-slate-500 ml-6" v-else>
+                                            Modul ini selalu aktif untuk usaha F&amp;B.
+                                        </p>
+                                    </div>
+
                                     <div class="rounded-xl border border-dashed border-amber-200 bg-amber-50/50 p-5 space-y-3">
                                         <h3 class="text-sm font-bold text-slate-900">Batch &amp; tanggal kedaluwarsa</h3>
                                         <p class="text-xs text-slate-600">
@@ -1058,79 +1210,576 @@ function memberRoleDirty(m: { id: number; role: string }): boolean {
                                         </label>
                                     </div>
 
-                                    <div class="rounded-xl border border-dashed border-rose-200 bg-rose-50/30 p-5 space-y-3">
-                                        <div>
-                                            <h3 class="text-sm font-bold text-slate-900">Modul Fitur</h3>
-                                            <p class="text-xs text-slate-600 mt-1">
-                                                Aktifkan atau nonaktifkan modul Resep dan Produksi sesuai kebutuhan usaha Anda.
-                                                Secara default aktif untuk F&B / Bakery, nonaktif untuk tipe lain.
-                                            </p>
+                                    <div class="rounded-xl border border-dashed border-rose-200 bg-gradient-to-br from-rose-50 via-white to-orange-50/60 p-5 space-y-4">
+                                        <div class="flex items-start gap-3">
+                                            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-rose-500 to-orange-400 shadow-md shadow-rose-200">
+                                                <Blocks class="h-6 w-6 text-white" />
+                                            </div>
+                                            <div>
+                                                <h3 class="text-base font-bold text-slate-900 flex items-center gap-2 flex-wrap">
+                                                    Modul Fitur
+                                                    <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
+                                                        {{ activeModuleCount }} aktif
+                                                    </span>
+                                                </h3>
+                                                <p class="text-xs text-slate-600 mt-1 leading-relaxed max-w-2xl">
+                                                    Aktifkan atau nonaktifkan modul sesuai kebutuhan usaha Anda.
+                                                    Secara default aktif untuk F&amp;B / Bakery, nonaktif untuk tipe lain.
+                                                </p>
+                                            </div>
                                         </div>
-                                        <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
-                                            <input
-                                                v-model="storeForm.recipes_enabled"
-                                                type="checkbox"
-                                                class="rounded border-gray-300"
-                                            />
-                                            Aktifkan menu Resep
-                                        </label>
-                                        <p v-if="storeForm.recipes_enabled" class="text-xs text-slate-500 ml-6">
-                                            Tersedia menu Resep di sidebar untuk membuat resep bahan baku.
-                                        </p>
-                                        <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
-                                            <input
-                                                v-model="storeForm.productions_enabled"
-                                                type="checkbox"
-                                                class="rounded border-gray-300"
-                                            />
-                                            Aktifkan menu Produksi
-                                        </label>
-                                        <p v-if="storeForm.productions_enabled" class="text-xs text-slate-500 ml-6">
-                                            Tersedia menu Produksi di sidebar untuk mengelola hasil produksi.
-                                        </p>
-                                        <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
-                                            <input
-                                                v-model="storeForm.kitchen_queue_enabled"
-                                                type="checkbox"
-                                                class="rounded border-gray-300"
-                                            />
-                                            Aktifkan menu Antrian Dapur
-                                        </label>
-                                        <p v-if="storeForm.kitchen_queue_enabled" class="text-xs text-slate-500 ml-6">
-                                            Tersedia menu Antrian Dapur di sidebar untuk mengelola antrian pesanan dapur.
-                                        </p>
-                                        <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
-                                            <input
-                                                v-model="storeForm.queue_module_enabled"
-                                                type="checkbox"
-                                                class="rounded border-gray-300"
-                                            />
-                                            Aktifkan Modul Antrian
-                                        </label>
-                                        <p v-if="storeForm.queue_module_enabled" class="text-xs text-slate-500 ml-6">
-                                            Tersedia menu Antrian di sidebar untuk membuat dan mengelola antrian pelanggan (kasir, layanan, dll).
-                                        </p>
-                                        <template v-if="props.store?.location_type !== 'central_warehouse'">
-                                            <div class="border-t border-rose-100 pt-3 mt-3">
-                                                <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
-                                                    <input
-                                                        v-model="storeForm.warehouse_enabled"
-                                                        type="checkbox"
-                                                        class="rounded border-gray-300"
-                                                    />
-                                                    Aktifkan sistem gudang
-                                                </label>
-                                                <p v-if="storeForm.warehouse_enabled" class="text-xs text-slate-500 ml-6">
-                                                    Pembelian supplier outlet dialihkan ke Gudang Pusat grup usaha; toko ini tidak dapat membeli mandiri.
-                                                </p>
-                                                <p v-else class="text-xs text-slate-500 ml-6">
-                                                    Toko dapat melakukan pembelian mandiri tanpa melalui Gudang Pusat.
-                                                </p>
-                                                <div v-if="storeForm.errors.warehouse_enabled" class="text-sm text-red-600 ml-6">
-                                                    {{ storeForm.errors.warehouse_enabled }}
+
+                                        <div class="grid gap-2.5 sm:grid-cols-2">
+                                            <!-- Resep -->
+                                            <button
+                                                type="button"
+                                                role="switch"
+                                                :aria-checked="storeForm.recipes_enabled"
+                                                @click="storeForm.recipes_enabled = !storeForm.recipes_enabled"
+                                                class="group relative flex items-start gap-3 rounded-xl border p-3.5 text-left transition-all duration-200 cursor-pointer"
+                                                :class="storeForm.recipes_enabled
+                                                    ? 'border-emerald-300 bg-emerald-50/80'
+                                                    : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'"
+                                            >
+                                                <div
+                                                    class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors"
+                                                    :class="storeForm.recipes_enabled ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'"
+                                                >
+                                                    <ChefHat class="h-5 w-5" />
+                                                </div>
+                                                <div class="min-w-0 flex-1">
+                                                    <div class="flex items-center justify-between gap-2">
+                                                        <span class="text-sm font-semibold" :class="storeForm.recipes_enabled ? 'text-emerald-900' : 'text-slate-700'">Resep</span>
+                                                        <span
+                                                            class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors"
+                                                            :class="storeForm.recipes_enabled ? 'bg-emerald-500' : 'bg-slate-300'"
+                                                        >
+                                                            <span
+                                                                class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+                                                                :class="storeForm.recipes_enabled ? 'translate-x-[18px]' : 'translate-x-0.5'"
+                                                            />
+                                                        </span>
+                                                    </div>
+                                                    <p class="mt-0.5 text-xs text-slate-500 leading-snug">
+                                                        Menu Resep di sidebar untuk membuat resep bahan baku.
+                                                    </p>
+                                                </div>
+                                            </button>
+                                            <!-- Produksi -->
+                                            <button
+                                                type="button"
+                                                role="switch"
+                                                :aria-checked="storeForm.productions_enabled"
+                                                @click="storeForm.productions_enabled = !storeForm.productions_enabled"
+                                                class="group relative flex items-start gap-3 rounded-xl border p-3.5 text-left transition-all duration-200 cursor-pointer"
+                                                :class="storeForm.productions_enabled
+                                                    ? 'border-emerald-300 bg-emerald-50/80'
+                                                    : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'"
+                                            >
+                                                <div
+                                                    class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors"
+                                                    :class="storeForm.productions_enabled ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'"
+                                                >
+                                                    <Factory class="h-5 w-5" />
+                                                </div>
+                                                <div class="min-w-0 flex-1">
+                                                    <div class="flex items-center justify-between gap-2">
+                                                        <span class="text-sm font-semibold" :class="storeForm.productions_enabled ? 'text-emerald-900' : 'text-slate-700'">Produksi</span>
+                                                        <span
+                                                            class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors"
+                                                            :class="storeForm.productions_enabled ? 'bg-emerald-500' : 'bg-slate-300'"
+                                                        >
+                                                            <span
+                                                                class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+                                                                :class="storeForm.productions_enabled ? 'translate-x-[18px]' : 'translate-x-0.5'"
+                                                            />
+                                                        </span>
+                                                    </div>
+                                                    <p class="mt-0.5 text-xs text-slate-500 leading-snug">
+                                                        Menu Produksi di sidebar untuk mengelola hasil produksi.
+                                                    </p>
+                                                </div>
+                                            </button>
+                                            <!-- Antrian Dapur -->
+                                            <button
+                                                type="button"
+                                                role="switch"
+                                                :aria-checked="storeForm.kitchen_queue_enabled"
+                                                @click="storeForm.kitchen_queue_enabled = !storeForm.kitchen_queue_enabled"
+                                                class="group relative flex items-start gap-3 rounded-xl border p-3.5 text-left transition-all duration-200 cursor-pointer"
+                                                :class="storeForm.kitchen_queue_enabled
+                                                    ? 'border-emerald-300 bg-emerald-50/80'
+                                                    : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'"
+                                            >
+                                                <div
+                                                    class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors"
+                                                    :class="storeForm.kitchen_queue_enabled ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'"
+                                                >
+                                                    <CookingPot class="h-5 w-5" />
+                                                </div>
+                                                <div class="min-w-0 flex-1">
+                                                    <div class="flex items-center justify-between gap-2">
+                                                        <span class="text-sm font-semibold" :class="storeForm.kitchen_queue_enabled ? 'text-emerald-900' : 'text-slate-700'">Antrian Dapur</span>
+                                                        <span
+                                                            class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors"
+                                                            :class="storeForm.kitchen_queue_enabled ? 'bg-emerald-500' : 'bg-slate-300'"
+                                                        >
+                                                            <span
+                                                                class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+                                                                :class="storeForm.kitchen_queue_enabled ? 'translate-x-[18px]' : 'translate-x-0.5'"
+                                                            />
+                                                        </span>
+                                                    </div>
+                                                    <p class="mt-0.5 text-xs text-slate-500 leading-snug">
+                                                        Menu Antrian Dapur di sidebar untuk mengelola antrian pesanan dapur.
+                                                    </p>
+                                                </div>
+                                            </button>
+                                            <!-- Modul Antrian -->
+                                            <button
+                                                type="button"
+                                                role="switch"
+                                                :aria-checked="storeForm.queue_module_enabled"
+                                                @click="storeForm.queue_module_enabled = !storeForm.queue_module_enabled"
+                                                class="group relative flex items-start gap-3 rounded-xl border p-3.5 text-left transition-all duration-200 cursor-pointer"
+                                                :class="storeForm.queue_module_enabled
+                                                    ? 'border-emerald-300 bg-emerald-50/80'
+                                                    : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'"
+                                            >
+                                                <div
+                                                    class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors"
+                                                    :class="storeForm.queue_module_enabled ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'"
+                                                >
+                                                    <Ticket class="h-5 w-5" />
+                                                </div>
+                                                <div class="min-w-0 flex-1">
+                                                    <div class="flex items-center justify-between gap-2">
+                                                        <span class="text-sm font-semibold" :class="storeForm.queue_module_enabled ? 'text-emerald-900' : 'text-slate-700'">Modul Antrian</span>
+                                                        <span
+                                                            class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors"
+                                                            :class="storeForm.queue_module_enabled ? 'bg-emerald-500' : 'bg-slate-300'"
+                                                        >
+                                                            <span
+                                                                class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+                                                                :class="storeForm.queue_module_enabled ? 'translate-x-[18px]' : 'translate-x-0.5'"
+                                                            />
+                                                        </span>
+                                                    </div>
+                                                    <p class="mt-0.5 text-xs text-slate-500 leading-snug">
+                                                        Antrian pelanggan (kasir, layanan, dll) di sidebar.
+                                                    </p>
+                                                </div>
+                                            </button>
+                                            <!-- Harga Grosir -->
+                                            <button
+                                                type="button"
+                                                role="switch"
+                                                :aria-checked="storeForm.wholesale_enabled"
+                                                @click="storeForm.wholesale_enabled = !storeForm.wholesale_enabled"
+                                                class="group relative flex items-start gap-3 rounded-xl border p-3.5 text-left transition-all duration-200 cursor-pointer"
+                                                :class="storeForm.wholesale_enabled
+                                                    ? 'border-emerald-300 bg-emerald-50/80'
+                                                    : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'"
+                                            >
+                                                <div
+                                                    class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors"
+                                                    :class="storeForm.wholesale_enabled ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'"
+                                                >
+                                                    <PackageOpen class="h-5 w-5" />
+                                                </div>
+                                                <div class="min-w-0 flex-1">
+                                                    <div class="flex items-center justify-between gap-2">
+                                                        <span class="text-sm font-semibold" :class="storeForm.wholesale_enabled ? 'text-emerald-900' : 'text-slate-700'">Harga Grosir</span>
+                                                        <span
+                                                            class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors"
+                                                            :class="storeForm.wholesale_enabled ? 'bg-emerald-500' : 'bg-slate-300'"
+                                                        >
+                                                            <span
+                                                                class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+                                                                :class="storeForm.wholesale_enabled ? 'translate-x-[18px]' : 'translate-x-0.5'"
+                                                            />
+                                                        </span>
+                                                    </div>
+                                                    <p class="mt-0.5 text-xs text-slate-500 leading-snug">
+                                                        Kolom Harga Grosir di Produk/Varian &amp; pilihan pelanggan Ecer/Grosir.
+                                                    </p>
+                                                </div>
+                                            </button>
+                                            <!-- Absensi -->
+                                            <button
+                                                type="button"
+                                                role="switch"
+                                                :aria-checked="storeForm.attendance_enabled"
+                                                @click="storeForm.attendance_enabled = !storeForm.attendance_enabled"
+                                                class="group relative flex items-start gap-3 rounded-xl border p-3.5 text-left transition-all duration-200 cursor-pointer"
+                                                :class="storeForm.attendance_enabled
+                                                    ? 'border-emerald-300 bg-emerald-50/80'
+                                                    : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'"
+                                            >
+                                                <div
+                                                    class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors"
+                                                    :class="storeForm.attendance_enabled ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'"
+                                                >
+                                                    <CalendarClock class="h-5 w-5" />
+                                                </div>
+                                                <div class="min-w-0 flex-1">
+                                                    <div class="flex items-center justify-between gap-2">
+                                                        <span class="text-sm font-semibold" :class="storeForm.attendance_enabled ? 'text-emerald-900' : 'text-slate-700'">Absensi</span>
+                                                        <span
+                                                            class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors"
+                                                            :class="storeForm.attendance_enabled ? 'bg-emerald-500' : 'bg-slate-300'"
+                                                        >
+                                                            <span
+                                                                class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+                                                                :class="storeForm.attendance_enabled ? 'translate-x-[18px]' : 'translate-x-0.5'"
+                                                            />
+                                                        </span>
+                                                    </div>
+                                                    <p class="mt-0.5 text-xs text-slate-500 leading-snug">
+                                                        Menu Absensi di sidebar. Perlu paket Absensi + Payroll yang aktif.
+                                                    </p>
+                                                </div>
+                                            </button>
+                                            <!-- Scan Meja -->
+                                            <button
+                                                type="button"
+                                                role="switch"
+                                                :aria-checked="storeForm.scan_meja_enabled"
+                                                @click="storeForm.scan_meja_enabled = !storeForm.scan_meja_enabled"
+                                                class="group relative flex items-start gap-3 rounded-xl border p-3.5 text-left transition-all duration-200 cursor-pointer sm:col-span-2"
+                                                :class="storeForm.scan_meja_enabled
+                                                    ? 'border-violet-300 bg-violet-50/80'
+                                                    : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'"
+                                            >
+                                                <div
+                                                    class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors"
+                                                    :class="storeForm.scan_meja_enabled ? 'bg-violet-500 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'"
+                                                >
+                                                    <ScanQrCode class="h-5 w-5" />
+                                                </div>
+                                                <div class="min-w-0 flex-1">
+                                                    <div class="flex items-center justify-between gap-2">
+                                                        <span class="text-sm font-semibold" :class="storeForm.scan_meja_enabled ? 'text-violet-900' : 'text-slate-700'">Scan Meja (Menu Digital)</span>
+                                                        <span
+                                                            class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors"
+                                                            :class="storeForm.scan_meja_enabled ? 'bg-violet-500' : 'bg-slate-300'"
+                                                        >
+                                                            <span
+                                                                class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+                                                                :class="storeForm.scan_meja_enabled ? 'translate-x-[18px]' : 'translate-x-0.5'"
+                                                            />
+                                                        </span>
+                                                    </div>
+                                                    <p class="mt-0.5 text-xs text-slate-500 leading-snug">
+                                                        Pelanggan scan QR code di meja untuk melihat menu digital dan memesan. Tersedia untuk F&amp;B / Bakery.
+                                                    </p>
+                                                </div>
+                                            </button>
+                                            <!-- Akuntansi -->
+                                            <div class="sm:col-span-2">
+                                                <button
+                                                    type="button"
+                                                    role="switch"
+                                                    :aria-checked="storeForm.accounting_enabled"
+                                                    @click="toggleAccounting"
+                                                    class="group relative flex w-full items-start gap-3 rounded-xl border p-3.5 text-left transition-all duration-200 cursor-pointer"
+                                                    :class="storeForm.accounting_enabled
+                                                        ? 'border-blue-300 bg-blue-50/80 rounded-b-none border-b-0'
+                                                        : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'"
+                                                >
+                                                    <div
+                                                        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors"
+                                                        :class="storeForm.accounting_enabled ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'"
+                                                    >
+                                                        <BookOpenCheck class="h-5 w-5" />
+                                                    </div>
+                                                    <div class="min-w-0 flex-1">
+                                                        <div class="flex items-center justify-between gap-2">
+                                                            <span class="text-sm font-semibold" :class="storeForm.accounting_enabled ? 'text-blue-900' : 'text-slate-700'">Akuntansi (Jurnal)</span>
+                                                            <span
+                                                                class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors"
+                                                                :class="storeForm.accounting_enabled ? 'bg-blue-500' : 'bg-slate-300'"
+                                                            >
+                                                                <span
+                                                                    class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+                                                                    :class="storeForm.accounting_enabled ? 'translate-x-[18px]' : 'translate-x-0.5'"
+                                                                />
+                                                            </span>
+                                                        </div>
+                                                        <p class="mt-0.5 text-xs text-slate-500 leading-snug">
+                                                            Laporan neraca, jurnal, tutup periode. Jika aktif, kasir hanya bisa bayar jika periode bulan berjalan terbuka.
+                                                        </p>
+                                                    </div>
+                                                </button>
+                                                <div v-if="storeForm.accounting_enabled" class="border border-blue-300 bg-blue-50/30 p-4 rounded-b-xl border-t-0 border-dashed">
+                                                    <div class="flex items-center gap-3">
+                                                        <label class="text-sm font-medium text-slate-700 w-1/3">Batas Backdate (Hari)</label>
+                                                        <div class="flex-1 flex items-center gap-2">
+                                                            <input
+                                                                type="number"
+                                                                v-model="storeForm.max_backdate_days"
+                                                                min="0"
+                                                                max="60"
+                                                                class="block w-24 rounded-lg border-slate-300 focus:border-blue-500 focus:ring-blue-500 text-sm"
+                                                            />
+                                                            <span class="text-xs text-slate-500">Maksimal tanggal mundur untuk pencatatan (0 = tidak bisa backdate). Default: 7.</span>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </template>
+
+                                            <!-- Hutang Piutang -->
+                                            <button
+                                                type="button"
+                                                role="switch"
+                                                :aria-checked="storeForm.receivables_enabled"
+                                                @click="storeForm.receivables_enabled = !storeForm.receivables_enabled"
+                                                class="group relative flex items-start gap-3 rounded-xl border p-3.5 text-left transition-all duration-200 cursor-pointer"
+                                                :class="storeForm.receivables_enabled
+                                                    ? 'border-amber-300 bg-amber-50/80'
+                                                    : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'"
+                                            >
+                                                <div
+                                                    class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors"
+                                                    :class="storeForm.receivables_enabled ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'"
+                                                >
+                                                    <CreditCard class="h-5 w-5" />
+                                                </div>
+                                                <div class="min-w-0 flex-1">
+                                                    <div class="flex items-center justify-between gap-2">
+                                                        <span class="text-sm font-semibold" :class="storeForm.receivables_enabled ? 'text-amber-900' : 'text-slate-700'">Hutang Piutang</span>
+                                                        <span
+                                                            class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors"
+                                                            :class="storeForm.receivables_enabled ? 'bg-amber-500' : 'bg-slate-300'"
+                                                        >
+                                                            <span
+                                                                class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+                                                                :class="storeForm.receivables_enabled ? 'translate-x-[18px]' : 'translate-x-0.5'"
+                                                            />
+                                                        </span>
+                                                    </div>
+                                                    <p class="mt-0.5 text-xs text-slate-500 leading-snug">
+                                                        Pencatatan piutang pelanggan dan transaksi kredit di POS.
+                                                    </p>
+                                                </div>
+                                            </button>
+
+                                        <!-- Manajemen Metode Pembayaran Scan Meja -->
+                                        <div v-if="storeForm.scan_meja_enabled" class="sm:col-span-2 rounded-xl border border-violet-200 bg-violet-50/60 p-4 space-y-4">
+                                            <p class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                                                <CreditCard class="h-3.5 w-3.5" />
+                                                Metode Pembayaran Meja
+                                            </p>
+
+                                            <div v-for="(method, idx) in storeForm.scan_meja_payment_methods" :key="method.type" class="rounded-xl border border-slate-200 bg-white p-3 space-y-2.5">
+                                                <!-- Header baris -->
+                                                <div class="flex items-center justify-between">
+                                                    <div class="flex items-center gap-2">
+                                                        <Banknote v-if="method.type === 'cash'" class="h-4 w-4 text-emerald-500" />
+                                                        <QrCode v-else-if="method.type === 'qris'" class="h-4 w-4 text-violet-500" />
+                                                        <Building v-else class="h-4 w-4 text-blue-500" />
+                                                        <span class="text-sm font-semibold text-slate-800">{{ method.label }}</span>
+                                                    </div>
+                                                    <label class="flex items-center gap-1.5 cursor-pointer select-none">
+                                                        <input v-model="storeForm.scan_meja_payment_methods[idx].active" type="checkbox" class="rounded border-gray-300" />
+                                                        <span class="text-xs text-slate-500">Aktif</span>
+                                                    </label>
+                                                </div>
+
+                                                <!-- Instruksi (untuk Tunai) -->
+                                                <div v-if="method.type === 'cash'">
+                                                    <label class="text-xs text-slate-500">Instruksi pembayaran</label>
+                                                    <input
+                                                        v-model="storeForm.scan_meja_payment_methods[idx].instructions"
+                                                        type="text"
+                                                        placeholder="Contoh: Bayar langsung di kasir"
+                                                        class="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-violet-300"
+                                                    />
+                                                </div>
+
+                                                <!-- Upload QRIS -->
+                                                <div v-if="method.type === 'qris'" class="space-y-2">
+                                                    <label class="text-xs text-slate-500">Gambar QR QRIS</label>
+                                                    <div class="flex items-start gap-3">
+                                                        <div class="h-20 w-20 rounded-lg border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center shrink-0">
+                                                            <img v-if="qrisImageUrl" :src="qrisImageUrl" class="h-full w-full object-contain" alt="QRIS" />
+                                                            <QrCode v-else class="h-8 w-8 text-slate-300" />
+                                                        </div>
+                                                        <div class="flex-1 space-y-1.5">
+                                                            <input
+                                                                id="qris-upload-input"
+                                                                type="file"
+                                                                accept="image/jpeg,image/png,image/webp"
+                                                                class="hidden"
+                                                                @change="onQrisImageFile"
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                @click="openQrisFilePicker"
+                                                                class="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium hover:bg-slate-50"
+                                                            >
+                                                                <Upload class="h-3.5 w-3.5" />
+                                                                Upload Gambar QRIS
+                                                            </button>
+                                                            <button
+                                                                v-if="qrisImageUrl"
+                                                                type="button"
+                                                                @click="removeQrisImage"
+                                                                class="flex items-center gap-1.5 rounded-lg border border-red-100 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100"
+                                                            >
+                                                                <Trash2 class="h-3.5 w-3.5" />
+                                                                Hapus Gambar
+                                                            </button>
+                                                            <p class="text-[10px] text-slate-400">JPG/PNG/WEBP, maks 2MB</p>
+                                                        </div>
+                                                    </div>
+                                                    <label class="text-xs text-slate-500">Instruksi pembayaran</label>
+                                                    <input
+                                                        v-model="storeForm.scan_meja_payment_methods[idx].instructions"
+                                                        type="text"
+                                                        placeholder="Contoh: Scan QR di bawah ini untuk membayar"
+                                                        class="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-violet-300"
+                                                    />
+                                                </div>
+
+                                                <!-- Transfer Bank -->
+                                                <div v-if="method.type === 'bank_transfer'" class="space-y-1.5">
+                                                    <div class="grid grid-cols-2 gap-2">
+                                                        <div>
+                                                            <label class="text-xs text-slate-500">Nama Bank</label>
+                                                            <input
+                                                                v-model="storeForm.scan_meja_payment_methods[idx].bank_name"
+                                                                type="text"
+                                                                placeholder="BCA, Mandiri, BNI, dll"
+                                                                class="mt-0.5 w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-violet-300"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label class="text-xs text-slate-500">No. Rekening</label>
+                                                            <input
+                                                                v-model="storeForm.scan_meja_payment_methods[idx].account_number"
+                                                                type="text"
+                                                                placeholder="1234567890"
+                                                                class="mt-0.5 w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-violet-300"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <label class="text-xs text-slate-500">Nama Pemilik Rekening</label>
+                                                        <input
+                                                            v-model="storeForm.scan_meja_payment_methods[idx].account_name"
+                                                            type="text"
+                                                            placeholder="Nama sesuai rekening"
+                                                            class="mt-0.5 w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-violet-300"
+                                                        />
+                                                    </div>
+                                                    <label class="text-xs text-slate-500">Instruksi pembayaran</label>
+                                                    <input
+                                                        v-model="storeForm.scan_meja_payment_methods[idx].instructions"
+                                                        type="text"
+                                                        placeholder="Contoh: Transfer ke rekening di atas, kirim bukti ke kasir"
+                                                        class="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-violet-300"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                            <!-- Login Kasir PIN -->
+                                            <button
+                                                type="button"
+                                                role="switch"
+                                                :aria-checked="storeForm.cashier_pin_enabled"
+                                                @click="storeForm.cashier_pin_enabled = !storeForm.cashier_pin_enabled"
+                                                class="group relative flex items-start gap-3 rounded-xl border p-3.5 text-left transition-all duration-200 cursor-pointer sm:col-span-2"
+                                                :class="storeForm.cashier_pin_enabled
+                                                    ? 'border-amber-300 bg-amber-50/80'
+                                                    : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'"
+                                            >
+                                                <div
+                                                    class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors"
+                                                    :class="storeForm.cashier_pin_enabled ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'"
+                                                >
+                                                    <KeyRound class="h-5 w-5" />
+                                                </div>
+                                                <div class="min-w-0 flex-1">
+                                                    <div class="flex items-center justify-between gap-2">
+                                                        <span class="text-sm font-semibold" :class="storeForm.cashier_pin_enabled ? 'text-amber-900' : 'text-slate-700'">Login Kasir (PIN)</span>
+                                                        <span
+                                                            class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors"
+                                                            :class="storeForm.cashier_pin_enabled ? 'bg-amber-500' : 'bg-slate-300'"
+                                                        >
+                                                            <span
+                                                                class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+                                                                :class="storeForm.cashier_pin_enabled ? 'translate-x-[18px]' : 'translate-x-0.5'"
+                                                            />
+                                                        </span>
+                                                    </div>
+                                                    <p class="mt-0.5 text-xs text-slate-500 leading-snug">
+                                                        Kasir login dengan PIN tanpa logout saat ganti shift.
+                                                    </p>
+                                                </div>
+                                            </button>
+
+                                            <!-- Sistem Gudang -->
+                                            <button
+                                                v-if="props.store?.location_type !== 'central_warehouse'"
+                                                type="button"
+                                                role="switch"
+                                                :aria-checked="storeForm.warehouse_enabled"
+                                                @click="storeForm.warehouse_enabled = !storeForm.warehouse_enabled"
+                                                class="group relative flex items-start gap-3 rounded-xl border p-3.5 text-left transition-all duration-200 cursor-pointer sm:col-span-2"
+                                                :class="storeForm.warehouse_enabled
+                                                    ? 'border-rose-300 bg-rose-50/80'
+                                                    : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'"
+                                            >
+                                                <div
+                                                    class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors"
+                                                    :class="storeForm.warehouse_enabled ? 'bg-rose-500 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'"
+                                                >
+                                                    <WarehouseIcon class="h-5 w-5" />
+                                                </div>
+                                                <div class="min-w-0 flex-1">
+                                                    <div class="flex items-center justify-between gap-2">
+                                                        <span class="text-sm font-semibold" :class="storeForm.warehouse_enabled ? 'text-rose-900' : 'text-slate-700'">Sistem Gudang</span>
+                                                        <span
+                                                            class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors"
+                                                            :class="storeForm.warehouse_enabled ? 'bg-rose-500' : 'bg-slate-300'"
+                                                        >
+                                                            <span
+                                                                class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+                                                                :class="storeForm.warehouse_enabled ? 'translate-x-[18px]' : 'translate-x-0.5'"
+                                                            />
+                                                        </span>
+                                                    </div>
+                                                    <p class="mt-0.5 text-xs text-slate-500 leading-snug">
+                                                        Aktif: pembelian supplier outlet dialihkan ke Gudang Pusat grup usaha; toko tidak dapat membeli mandiri.
+                                                        Nonaktif: toko dapat membeli mandiri tanpa melalui Gudang Pusat.
+                                                    </p>
+                                                    <div v-if="storeForm.errors.warehouse_enabled" class="text-sm text-red-600 mt-1">
+                                                        {{ storeForm.errors.warehouse_enabled }}
+                                                    </div>
+                                                </div>
+                                            </button>
+
+                                            <!-- Izinkan pembelian lokal outlet (sub-opsi gudang) -->
+                                            <label
+                                                v-if="props.store?.location_type !== 'central_warehouse' && storeForm.warehouse_enabled"
+                                                class="sm:col-span-2 flex items-start gap-3 rounded-xl border border-rose-100 bg-white/80 p-3.5 text-sm cursor-pointer select-none"
+                                            >
+                                                <input
+                                                    v-model="storeForm.is_allow_local_purchase"
+                                                    type="checkbox"
+                                                    class="rounded border-gray-300 mt-0.5"
+                                                />
+                                                <span>
+                                                    <span class="font-medium">Izinkan pembelian lokal outlet</span>
+                                                    <span class="block text-xs text-slate-600 font-normal mt-0.5">
+                                                        Saat aktif, outlet tetap dapat membeli persediaan sendiri (mis. bahan baku) meski sistem gudang menyala.
+                                                        Pembelian tunai otomatis dicatat sebagai pengeluaran kas dari shift kasir.
+                                                        Nonaktif: semua pembelian supplier outlet wajib melalui Gudang Pusat.
+                                                    </span>
+                                                </span>
+                                            </label>
+                                        </div>
                                     </div>
 
                                     <div class="rounded-xl border border-dashed border-violet-200 bg-violet-50/40 p-5 space-y-4">

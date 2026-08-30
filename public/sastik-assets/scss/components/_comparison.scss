@@ -1,0 +1,131 @@
+.xb-comparison-item {
+    position: relative;
+    .xb-item {
+        &--top {
+            padding: 10px;
+            background: #f1f1f1;
+            @include respond(xs) {
+                border-radius: 10px;
+                border: 1px solid rgba(255, 255, 255, 0.5);
+            }
+        }
+        &--title {
+            padding: 17px 36px;
+            @include border-radius(10px);
+            background: var(--color-white);
+            box-shadow: 0 4px 4px 0 rgba(21, 19, 19, 0.07);
+            @include respond(lg) {
+                padding: 17px 25px;
+            }
+            @media only screen and (max-width: 1023px) {
+                padding: 17px 20px;
+            }
+            h2 {
+                font-size: 25px;
+            }
+        }
+        &--list {
+            margin-top: 8px;
+            padding: 36px 40px;
+            @include border-radius(10px);
+            background: var(--color-white);
+            @include respond(lg) {
+                padding: 36px 25px;
+            }
+            li {
+                gap: 9px;
+                display: flex;
+                font-size: 18px;
+                font-weight: 500;
+                color: rgba(84, 83, 89, 0.67);
+                @media only screen and (min-width: 992px) and (max-width: 1023px) {
+                    font-size: 16px;
+                }
+                &:not(:last-child) {
+                    margin-bottom: 20px;
+                    padding-bottom: 20px;
+                }
+            }
+        }
+    }
+    &.right-item {
+        .xb-item {
+            &--top {
+                margin: 0 -5px 0;
+                border-radius: 11px;
+                background-size: 300%;
+                animation: rainbow2 5s linear infinite;
+                background: linear-gradient(119deg, rgba(104, 64, 255, 0.3) 0%, rgba(161, 255, 98, 0.3) 33.73%, rgba(181, 162, 255, 0.3) 52.21%, rgba(195, 179, 255, 0.3) 100%);
+            }
+            &--list {
+                background: linear-gradient(169deg, #e1d9ff 0%, #fff 100%);
+                li {
+                    position: relative;
+                    &::before {
+                        @include before;
+                        height: 1px;
+                        top: auto;
+                        bottom: 0;
+                        background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, #fff 50%, rgba(255, 255, 255, 0) 100%);
+                    }
+                    &:last-child {
+                        &::before {
+                            display: none;
+                        }
+                    }
+                }
+            }
+        }
+        .xb-animate-line {
+            .line {
+                &.one,
+                &.two {
+                    display: none;
+                    @include respond(md) {
+                        display: block;
+                    }
+                    
+                }
+                &.three {
+                    @include respond(md) {
+                        display: none;
+                    }
+                }
+            }
+        }
+    }
+}
+.xb-comparison-wrapr {
+    padding: 68px 73px 73px;
+    @media only screen and (max-width: 1300px) {
+        padding: 68px 65px 73px;
+    }
+    @include respond(lg) {
+        margin: 0 -50px 0 -50px;
+        padding: 68px 56px 73px;
+    }
+    @media only screen and (max-width: 1023px) {
+        padding: 68px 54px 73px;
+    }
+    @include respond(md) {
+        margin: 0 -35px 0 -35px;
+        padding: 136px 41px 143px;
+    }
+    @include respond(xs) {
+        margin: 0;
+        padding: 55px 0 84px;
+    }
+    .xb-frame {
+        .frame--2,
+        .frame--3 {
+            @include respond(md) {
+                display: none;
+            }
+        }
+    }
+}
+.xb-comparison-btn {
+    @include respond(md) {
+        margin-top: -25px;
+    }
+}

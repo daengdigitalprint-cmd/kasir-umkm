@@ -1,0 +1,47 @@
+.xb-video {
+    .btn-video {
+        position: absolute;
+        height: 150px;
+        width: 150px;
+        top: 50%;
+        left: 50%;
+        padding: 55px;
+        transform: translate(-50%, -50%);
+        display: inline-flex;
+        justify-content: center;
+        align-items: center;
+        @include border-radius(100%);
+        background: var(--color-white);
+        svg path {
+            fill: var(--color-primary);
+        }
+        &::before,
+        &::after {
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 100%;
+            content: '';
+            z-index: -2;
+            border-radius: inherit;
+            background: var(--color-white);
+        }
+        &::before {
+            display: block;
+            animation: pulse-border 1500ms ease-out infinite;
+            @include respond(xs) {
+                animation: pulse-border-small 1500ms ease-out infinite;
+            }
+        }
+        &::after {
+            animation: pulse-border-big 1500ms ease-out infinite;
+            @include respond(xs) {
+                animation: pulse-border 1500ms ease-out infinite;
+            }
+        }
+    }
+}
+
+
+

@@ -2,10 +2,12 @@
 /bootstrap/ssr
 /node_modules
 /public/build
+/public/build.zip
 /public/hot
 /public/storage
 /storage/*.key
 /storage/pail
+/storage/untracked_audit.txt
 /resources/js/actions
 /resources/js/routes
 /resources/js/wayfinder
@@ -25,6 +27,47 @@ yarn-error.log
 /.nova
 /.vscode
 /.zed
+/.trae
+/.cursor
+/.composer-cache
+/.composer-home
+/.yoyo/
 
-# YoYo AI version control directory
-.yoyo/
+# File arsip & backup
+*.zip
+UPPDATE-kasir.zip
+
+# Dump database & backup SQL (berisi data)
+*.sql
+!database/manual-migrations.sql
+backups/
+
+# Kunci privat (tidak boleh masuk repo)
+key/
+
+# Template landing page pihak ketiga (tidak dipakai aplikasi)
+Sastik/
+buyer-file/
+
+# Cache & build
+.phpunit.cache/
+.gradle/
+local.properties
+.DS_Store
+
+# File debug/arsip sementara
+temp_fonts.css
+sync_stock.php
+dbg_menus.php
+toArray())
+toArray()))
+all())
+fix_mobile_sidebar.cjs
+replace_sidebar.cjs
+
+# Aplikasi android: hanya build output yang diabaikan
+android-app/.gradle/
+android-app/build/
+android-app/app/build/
+android-app/local.properties
+android-app/app/release/

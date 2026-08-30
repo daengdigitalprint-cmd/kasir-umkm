@@ -3,7 +3,7 @@ import { Head, router } from '@inertiajs/vue3';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Button } from '@/components/ui/button';
 import { toastSuccess, toastError } from '@/lib/swal';
-import { ListOrdered, RefreshCw, ChevronRight, Clock, Package } from 'lucide-vue-next';
+import { ListOrdered, RefreshCw, ChevronRight, Clock, Package, AlertTriangle, CheckCircle2, Timer, ShoppingCart, Utensils, Hand } from 'lucide-vue-next';
 import { computed, onMounted, onUnmounted } from 'vue';
 
 interface Queue {
@@ -50,6 +50,33 @@ const refresh = () => {
 let pollId: ReturnType<typeof setInterval> | null = null;
 onMounted(() => { pollId = setInterval(refresh, 15000); });
 onUnmounted(() => { if (pollId !== null) clearInterval(pollId); });
+
+// --- Stat cards ---
+const stats = computed(() => {
+    const list = props.entries;
+    const now = Date.now();
+    const TEN_MIN = 10 * 60 * 1000;
+
+    const waiting = list.filter((e) => e.status === 'waiting');
+    const serving = list.filter((e) => e.status === 'serving');
+    const ready = list.filter((e) => e.status === 'ready');
+    const completed = list.filter((e) => e.status === 'completed');
+    const cancelled = list.filter((e) => e.status === 'cancelled');
+
+    const active = list.length - completed.length - cancelled.length;
+    const overdue = [...waiting, ...serving].filter((e) => now - new Date(e.created_at).getTime() > TEN_MIN).length;
+
+    return [
+        { label: 'Total Aktif', value: active, subtitle: 'pesanan berjalan', color: 'bg-violet-50 text-violet-600', iconBg: 'bg-violet-100' },
+        { label: 'Antrian Baru', value: waiting.length, subtitle: 'menunggu dibuat', color: 'bg-amber-50 text-amber-600', iconBg: 'bg-amber-100' },
+        { label: 'Sedang Dibuat', value: serving.length, subtitle: 'sedang diproses', color: 'bg-blue-50 text-blue-600', iconBg: 'bg-blue-100' },
+        { label: 'Siap Diserahkan', value: ready.length, subtitle: 'siap diambil', color: 'bg-emerald-50 text-emerald-600', iconBg: 'bg-emerald-100' },
+        { label: 'Selesai Hari Ini', value: completed.length, subtitle: 'hari ini', color: 'bg-slate-50 text-slate-600', iconBg: 'bg-slate-100' },
+        { label: 'Terlambat', value: overdue, subtitle: 'lebih dari 10 menit', color: 'bg-red-50 text-red-600', iconBg: 'bg-red-100' },
+    ];
+});
+
+const statIcons = [ShoppingCart, ListOrdered, Utensils, Hand, CheckCircle2, AlertTriangle];
 
 // --- Kanban columns ---
 const columns = computed(() => {
@@ -170,6 +197,24 @@ const nextStatusLabel = (status: string): string => {
                 </Button>
             </div>
 
+            <!-- Stat Cards -->
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 px-4 mt-3 shrink-0">
+                <div
+                    v-for="(stat, i) in stats"
+                    :key="stat.label"
+                    :class="['rounded-2xl border border-slate-100 bg-white p-3 flex items-center gap-3']"
+                >
+                    <div :class="['flex h-10 w-10 shrink-0 items-center justify-center rounded-xl', stat.iconBg]">
+                        <component :is="statIcons[i]" :class="['h-5 w-5', stat.color.split(' ')[1]]" />
+                    </div>
+                    <div class="min-w-0">
+                        <p class="text-[11px] font-bold text-slate-500 truncate">{{ stat.label }}</p>
+                        <p :class="['text-xl font-black tabular-nums', stat.color.split(' ')[1]]">{{ stat.value }}</p>
+                        <p class="text-[10px] text-slate-400 truncate">{{ stat.subtitle }}</p>
+                    </div>
+                </div>
+            </div>
+
             <!-- Kanban Board -->
             <div class="flex-1 overflow-x-auto mt-3 px-4 min-h-0">
                 <div class="flex gap-3 h-full min-w-max">
@@ -199,36 +244,32 @@ const nextStatusLabel = (status: string): string => {
                                 :key="entry.id"
                                 class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden"
                             >
-                                <!-- Card header -->
-                                <div class="flex items-center justify-between px-3 pt-2.5 pb-1">
-                                    <div class="flex items-center gap-1.5">
-                                        <span class="font-mono font-black text-sm text-slate-800">
-                                            {{ entry.queue_code }}-{{ entry.number }}
-                                        </span>
-                                        <span v-if="entry.order_type === 'takeaway'" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
-                                            Takeaway
-                                        </span>
-                                        <span v-else-if="entry.order_type === 'dine_in'" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
-                                            Dine-in
-                                        </span>
-                                        <span v-else-if="entry.order_type === 'online'" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">
-                                            Online
+                                <!-- Card body -->
+                                <div class="px-4 pt-3 pb-2">
+                                    <div class="flex items-start justify-between">
+                                        <div>
+                                            <p v-if="entry.customer_name" class="font-black text-lg text-slate-900">
+                                                {{ entry.customer_name }}
+                                            </p>
+                                            <span class="font-mono text-xs text-slate-400 tabular-nums">
+                                                {{ entry.queue_code }}-{{ entry.number }}
+                                            </span>
+                                        </div>
+                                        <span class="text-xs tabular-nums text-slate-400 font-medium mt-1">
+                                            {{ elapsed(entry.created_at) }}
                                         </span>
                                     </div>
-                                    <span class="text-[11px] tabular-nums text-slate-400 font-medium">
-                                        {{ elapsed(entry.created_at) }}
-                                    </span>
-                                </div>
 
-                                <!-- Items -->
-                                <div class="px-3 pb-2 space-y-0.5">
-                                    <div v-for="(item, idx) in (entry.items || [])" :key="idx" class="flex items-baseline gap-1.5 text-sm">
-                                        <span class="font-bold text-slate-800">{{ item.quantity }}×</span>
-                                        <span class="text-slate-600 truncate">{{ item.product_name }}</span>
+                                    <!-- Items -->
+                                    <div class="mt-1.5 space-y-0.5">
+                                        <div v-for="(item, idx) in (entry.items || [])" :key="idx" class="flex items-baseline gap-1 text-sm">
+                                            <span class="font-bold text-slate-800">{{ item.quantity }}×</span>
+                                            <span class="text-slate-600 truncate">{{ item.product_name }}</span>
+                                        </div>
+                                        <p v-if="!entry.items || entry.items.length === 0" class="text-xs text-slate-400 italic">
+                                            Tanpa item
+                                        </p>
                                     </div>
-                                    <p v-if="!entry.items || entry.items.length === 0" class="text-xs text-slate-400 italic">
-                                        Tanpa item
-                                    </p>
                                 </div>
 
                                 <!-- Action button -->
@@ -237,7 +278,7 @@ const nextStatusLabel = (status: string): string => {
                                         type="button"
                                         @click="advanceStatus(entry)"
                                         :class="[
-                                            'w-full px-3 py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors',
+                                            'w-full px-4 py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors',
                                             entry.status === 'waiting'
                                                 ? 'text-amber-700 hover:bg-amber-50'
                                                 : entry.status === 'serving'

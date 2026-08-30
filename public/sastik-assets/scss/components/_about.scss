@@ -1,0 +1,167 @@
+.about-image-wrap {
+    gap: 30px;
+    display: grid;
+    justify-content: space-between;
+    grid-template-columns: repeat(4, 1fr);
+    @media only screen and (max-width: 1023px) {
+        gap: 20px;
+    }
+    @include respond(xs) {
+        grid-template-columns: repeat(1, 1fr);
+    }
+    @include respond(sm) {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .img {
+        width: 100%;
+        overflow: hidden;
+        @include border-radius(15px);
+        img {
+            @include respond(xs) {
+                width: 100%;
+            }
+        }
+    }
+}
+.mission-title {
+    font-weight: 700;
+    font-size: 160px;
+    letter-spacing: -0.02em;
+    text-transform: capitalize;
+    text-align: center;
+    background: linear-gradient(180deg, #533afd 27.32%, rgba(83, 58, 253, 0) 77.96%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    @include respond(md) {
+        font-size: 110px;
+    }
+    @include respond(xs) {
+        font-size: 52px;
+    }
+    @include respond(sm) {
+        font-size: 72px;
+    }
+}
+.mission-img {
+    margin-top: -220px;
+    @include respond(laptop) {
+        margin-top: -205px;
+    }
+    @media only screen and (min-width: 1200px) and (max-width: 1300px) {
+        margin-top: -200px;
+    }
+    @include respond(lg) {
+        width: 130%;
+        left: -15%;
+        margin-top: -205px;
+        position: relative;
+    }
+    @include respond(md) {
+        margin-top: -145px;
+    }
+    @include respond(xs) {
+        margin-top: 0;
+    }
+    @include respond(sm) {
+        margin-top: -95px;
+    }
+}
+.mission-content {
+    padding: 0 215px;
+    margin-top: -280px;
+    @include respond(laptop) {
+        margin-top: -180px;
+    }
+    @media only screen and (min-width: 1200px) and (max-width: 1300px) {
+        margin-top: -150px;
+    }
+    @include respond(lg) {
+        padding: 0 180px;
+        margin-top: -175px;
+        position: relative;
+    }
+    @media only screen and (max-width: 1023px) {
+        padding: 0 85px;
+    }
+    @include respond(md) {
+        padding: 0;
+        margin-top: -130px;
+    }
+    @include respond(xs) {
+        margin-top: -55px;
+    }
+    @include respond(sm) {
+        margin-top: -85px;
+    }
+}
+.xb-card-item {
+    overflow: hidden;
+    display: inline-block;
+    @include border-radius(15px);
+    .xb-item {
+        &--inner {
+            display: flex;
+            min-height: 460px;
+            flex-direction: column;
+            padding: 30px 30px 33px;
+            justify-content: space-between;
+            background: var(--color-primary);
+            @include respond(lg) {
+                min-height: 373px;
+                padding: 30px 20px 33px;
+            }
+            @include respond(sm) {
+                
+                padding: 30px 30px 33px;
+            }
+        }
+        &--img {
+            @include respond(md) {
+                width: 100%;
+            }
+            img {
+                @include respond(md) {
+                    width: 100%;
+                }
+            }
+        }
+        &--number {
+            font-size: 38px;
+            margin-bottom: 10px;
+        }
+        &--text {
+            font-size: 20px;
+            font-weight: 500;
+        }
+        &--content {
+            font-weight: 500;
+            span {
+                font-weight: 700;
+            }
+        }
+    }
+}
+.xb-card-box {
+    gap: 27px;
+    display: grid;
+    margin-left: -30px;
+    grid-template-columns: repeat(2, 1fr);
+    @media only screen and (max-width: 1300px) {
+        margin-left: 0;
+    }
+    @include respond(xs) {
+        grid-template-columns: repeat(1, 1fr);
+    }
+}
+.bg-pink {
+    background: #e6e3fb !important;
+}
+.bg-dark {
+    background: #0d1738 !important;
+}
+.mission {
+    @include respond(xs) {
+        padding-top: 110px;
+    }
+}

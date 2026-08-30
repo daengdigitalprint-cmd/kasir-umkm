@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AccountingPeriod;
 use App\Models\Organization;
+use App\Services\ModuleService;
+use App\Support\Accounting\ChartOfAccountsBootstrap;
 use App\Support\BusinessTypePresets;
-use App\Support\StockAdjustmentApproval;
 use App\Support\StoreDefaultProductCategories;
 use App\Support\StoreLocationType;
 use App\Support\StorePlanLimits;
@@ -56,9 +58,27 @@ class StoreSettingsController extends Controller
             'kitchen_queue_enabled' => 'sometimes|boolean',
             'fnb_order_types_enabled' => 'sometimes|boolean',
             'fnb_split_bill_enabled' => 'sometimes|boolean',
+            'open_bill_enabled' => 'sometimes|boolean',
             'direct_stock_edit' => 'sometimes|boolean',
             'warehouse_enabled' => 'sometimes|boolean',
+            'is_allow_local_purchase' => 'sometimes|boolean',
             'queue_module_enabled' => 'sometimes|boolean',
+            'wholesale_enabled' => 'sometimes|boolean',
+            'attendance_enabled' => 'sometimes|boolean',
+            'scan_meja_enabled' => 'sometimes|boolean',
+            'accounting_enabled' => 'sometimes|boolean',
+            'max_backdate_days' => 'sometimes|integer|min:0|max:30',
+            'receivables_enabled' => 'sometimes|boolean',
+            'scan_meja_payment_methods' => 'sometimes|array',
+            'scan_meja_payment_methods.*.type' => 'required|string|in:cash,qris,bank_transfer',
+            'scan_meja_payment_methods.*.label' => 'required|string|max:100',
+            'scan_meja_payment_methods.*.active' => 'sometimes|boolean',
+            'scan_meja_payment_methods.*.instructions' => 'nullable|string|max:500',
+            'scan_meja_payment_methods.*.bank_name' => 'nullable|string|max:100',
+            'scan_meja_payment_methods.*.account_number' => 'nullable|string|max:50',
+            'scan_meja_payment_methods.*.account_name' => 'nullable|string|max:255',
+            'qris_image' => 'nullable|file|image|mimes:jpeg,jpg,png,webp|max:2048',
+            'cashier_login_mode' => 'sometimes|string|in:email,pin',
         ]);
 
         $settings = $store->settings ?? [];
@@ -105,6 +125,14 @@ class StoreSettingsController extends Controller
             $settings['fnb_split_bill_enabled'] = true;
         }
 
+        // Modul Open Bill (pesanan belum bayar): default off, bisa diaktifkan semua jenis usaha
+        if (array_key_exists('open_bill_enabled', $validated)) {
+            $settings['open_bill_enabled'] = (bool) $validated['open_bill_enabled'];
+            unset($validated['open_bill_enabled']);
+        } elseif (! isset($settings['open_bill_enabled'])) {
+            $settings['open_bill_enabled'] = false;
+        }
+
         // Koreksi stok: direct_stock_edit — hanya GrowUp yang boleh mengubah.
         if (StorePlanLimits::allowsAdvancedRetailFeatures($store)) {
             if (array_key_exists('direct_stock_edit', $validated)) {
@@ -134,12 +162,115 @@ class StoreSettingsController extends Controller
             unset($validated['warehouse_enabled']);
         }
 
+        // Pembelian lokal outlet: izinkan outlet membeli persediaan sendiri (uang dari kas kasir)
+        // meskipun sistem gudang aktif. Hanya bermakna untuk lokasi non-Gudang Pusat.
+        if (array_key_exists('is_allow_local_purchase', $validated)) {
+            $settings['is_allow_local_purchase'] = (bool) $validated['is_allow_local_purchase'];
+            unset($validated['is_allow_local_purchase']);
+        }
+
         // Modul antrian: default off semua tipe bisnis
         if (array_key_exists('queue_module_enabled', $validated)) {
             $settings['queue_module_enabled'] = (bool) $validated['queue_module_enabled'];
             unset($validated['queue_module_enabled']);
         } elseif (! isset($settings['queue_module_enabled'])) {
             $settings['queue_module_enabled'] = false;
+        }
+
+        // Modul harga grosir: default off semua tipe bisnis
+        if (array_key_exists('wholesale_enabled', $validated)) {
+            $settings['wholesale_enabled'] = (bool) $validated['wholesale_enabled'];
+            unset($validated['wholesale_enabled']);
+        } elseif (! isset($settings['wholesale_enabled'])) {
+            $settings['wholesale_enabled'] = false;
+        }
+
+        // Modul Scan Meja (Menu Digital): default off semua tipe bisnis
+        if (array_key_exists('scan_meja_enabled', $validated)) {
+            $settings['scan_meja_enabled'] = (bool) $validated['scan_meja_enabled'];
+            unset($validated['scan_meja_enabled']);
+        } elseif (! isset($settings['scan_meja_enabled'])) {
+            $settings['scan_meja_enabled'] = false;
+        }
+
+        // Modul Akuntansi (Jurnal): default off semua tipe bisnis.
+        // Opsi B migrasi: toko yang sudah punya histori jurnal diset true oleh migrasi.
+        if (array_key_exists('accounting_enabled', $validated)) {
+            $newValue = (bool) $validated['accounting_enabled'];
+            $oldValue = (bool) ($settings['accounting_enabled'] ?? false);
+            $settings['accounting_enabled'] = $newValue;
+            unset($validated['accounting_enabled']);
+
+            if ($newValue && ! $oldValue) {
+                self::prepareAccountingForActivation($store);
+            }
+        }
+
+        // Limit Backdate (Maksimal input mundur untuk transaksi dan jurnal)
+        if (array_key_exists('max_backdate_days', $validated)) {
+            $settings['max_backdate_days'] = (int) $validated['max_backdate_days'];
+            unset($validated['max_backdate_days']);
+        } elseif (! isset($settings['max_backdate_days'])) {
+            $settings['max_backdate_days'] = 7;
+        }
+
+        // Modul Hutang Piutang (Penjualan Kredit): default aktif (backward compatible)
+        if (array_key_exists('receivables_enabled', $validated)) {
+            $settings['receivables_enabled'] = (bool) $validated['receivables_enabled'];
+            unset($validated['receivables_enabled']);
+        } elseif (! isset($settings['receivables_enabled'])) {
+            $settings['receivables_enabled'] = true;
+        }
+
+        // Metode Pembayaran Scan Meja
+        if (array_key_exists('scan_meja_payment_methods', $validated)) {
+            $methods = $validated['scan_meja_payment_methods'];
+            $existingMethods = $settings['scan_meja_payment_methods'] ?? [];
+
+            // Upload gambar QRIS baru jika ada
+            $newQrisPath = null;
+            if ($request->hasFile('qris_image')) {
+                foreach ($existingMethods as $old) {
+                    if (($old['type'] ?? '') === 'qris' && ! empty($old['image'] ?? null)) {
+                        Storage::disk('public')->delete($old['image']);
+                    }
+                }
+                $newQrisPath = $request->file('qris_image')->store('payment-methods/'.$store->id, 'public');
+            }
+
+            foreach ($methods as &$method) {
+                if (($method['type'] ?? '') !== 'qris') {
+                    continue;
+                }
+                // Pakai gambar baru jika diunggah, selain itu pertahankan yang lama
+                $existing = collect($existingMethods)->firstWhere('type', 'qris');
+                $method['image'] = $newQrisPath
+                    ?? ($existing['image'] ?? null);
+            }
+            unset($method);
+
+            // Normalisasi nilai boolean
+            $methods = array_map(fn ($m) => array_merge($m, [
+                'active' => (bool) ($m['active'] ?? true),
+            ]), $methods);
+
+            $settings['scan_meja_payment_methods'] = $methods;
+            unset($validated['scan_meja_payment_methods']);
+        } elseif (! isset($settings['scan_meja_payment_methods'])) {
+            $settings['scan_meja_payment_methods'] = [
+                ['type' => 'cash', 'label' => 'Tunai', 'active' => true, 'instructions' => 'Bayar langsung di kasir'],
+                ['type' => 'qris', 'label' => 'QRIS', 'active' => true, 'image' => null],
+                ['type' => 'bank_transfer', 'label' => 'Transfer Bank', 'active' => false, 'bank_name' => '', 'account_number' => '', 'account_name' => ''],
+            ];
+        }
+
+        // Modul absensi: toggle aktif/nonaktif disimpan di stores.settings['attendance']['enabled'].
+        if (array_key_exists('attendance_enabled', $validated)) {
+            $settings['attendance'] = array_merge(
+                $settings['attendance'] ?? [],
+                ['enabled' => (bool) $validated['attendance_enabled']],
+            );
+            unset($validated['attendance_enabled']);
         }
 
         if (array_key_exists('website', $validated)) {
@@ -282,11 +413,48 @@ class StoreSettingsController extends Controller
             StoreDefaultProductCategories::ensureForStore($store);
         }
 
+        // Logging perubahan modul ke module_activity_logs
+        $this->logModuleChanges($store, $request);
+
         return back()->with('status', 'store-updated');
     }
 
     /**
+     * Persiapkan data akuntansi saat modul pertama kali diaktifkan:
+     * memastikan COA lengkap dan membuat periode bulan berjalan (open)
+     * jika belum ada periode yang mencakup bulan berjalan.
+     */
+    public static function prepareAccountingForActivation(\App\Models\Store $store): void
+    {
+        ChartOfAccountsBootstrap::ensureForStore($store);
+
+        $now = now();
+        $period = AccountingPeriod::query()
+            ->where('store_id', $store->id)
+            ->whereDate('start_date', '<=', $now)
+            ->whereDate('end_date', '>=', $now)
+            ->first();
+
+        if ($period) {
+            return;
+        }
+
+        $start = $now->copy()->startOfMonth();
+        $end = $now->copy()->endOfMonth();
+
+        AccountingPeriod::query()->create([
+            'store_id' => $store->id,
+            'name' => $now->format('F Y'),
+            'start_date' => $start,
+            'end_date' => $end,
+            'status' => AccountingPeriod::STATUS_OPEN,
+        ]);
+    }
+
+    /**
      * Default values untuk recipes_enabled & productions_enabled per business_type.
+     *
+     * @return array{recipes_enabled: bool, productions_enabled: bool}
      */
     public static function featureDefaultsForType(string $type): array
     {
@@ -304,5 +472,50 @@ class StoreSettingsController extends Controller
                 'productions_enabled' => false,
             ],
         };
+    }
+
+    /**
+     * Catat perubahan status modul ke module_activity_logs untuk audit trail.
+     */
+    protected function logModuleChanges(\App\Models\Store $store, \Illuminate\Http\Request $request): void
+    {
+        $moduleKeys = ModuleService::MODULES;
+        $originalSettings = $store->getOriginal('settings') ?? [];
+        $currentSettings = $store->settings ?? [];
+        $userId = auth()->id();
+        $ip = $request->ip();
+        $userAgent = $request->userAgent();
+
+        foreach ($moduleKeys as $key => $label) {
+            $statusSebelum = (bool) ($originalSettings[$key] ?? false);
+            $statusSesudah = (bool) ($currentSettings[$key] ?? false);
+
+            if ($statusSebelum !== $statusSesudah) {
+                \App\Models\ModuleActivityLog::create([
+                    'store_id' => $store->id,
+                    'user_id' => $userId,
+                    'module_name' => $key,
+                    'action' => $statusSesudah ? 'enabled' : 'disabled',
+                    'status_sebelum' => $statusSebelum,
+                    'status_sesudah' => $statusSesudah,
+                    'ip_address' => $ip,
+                    'user_agent' => $userAgent,
+                    'keterangan' => "Modul \"{$label}\" ".($statusSesudah ? 'diaktifkan' : 'dinonaktifkan'),
+                ]);
+
+                // Juga catat ke ActivityLogger (general log)
+                \App\Services\ActivityLogger::log(
+                    store: $store,
+                    action: $statusSesudah ? 'module.enabled' : 'module.disabled',
+                    description: "Modul \"{$label}\" ".($statusSesudah ? 'diaktifkan' : 'dinonaktifkan').' oleh '.(auth()->user()?->name ?? 'System'),
+                    metadata: [
+                        'module_name' => $key,
+                        'module_label' => $label,
+                        'status_sebelum' => $statusSebelum,
+                        'status_sesudah' => $statusSesudah,
+                    ],
+                );
+            }
+        }
     }
 }

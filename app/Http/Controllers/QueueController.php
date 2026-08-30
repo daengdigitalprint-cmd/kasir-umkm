@@ -10,7 +10,7 @@ use Inertia\Inertia;
 
 class QueueController extends Controller
 {
-    private function guardStore(): array
+    private function guardStore(bool $requireModule = true): array
     {
         $store = auth()->user()->store;
 
@@ -19,7 +19,7 @@ class QueueController extends Controller
                 ->with('error', 'Anda perlu membuat toko terlebih dahulu.')];
         }
 
-        if (! ($store->settings['queue_module_enabled'] ?? false)) {
+        if ($requireModule && ! ($store->settings['queue_module_enabled'] ?? false)) {
             return [null, redirect()->route('dashboard')
                 ->with('warning', 'Modul antrian belum diaktifkan. Aktifkan di Pengaturan → Tab Toko.')];
         }
@@ -69,7 +69,7 @@ class QueueController extends Controller
 
     public function index()
     {
-        [$store, $redirect] = $this->guardStore();
+        [$store, $redirect] = $this->guardStore(false);
         if ($redirect) {
             return $redirect;
         }
@@ -85,6 +85,7 @@ class QueueController extends Controller
 
         $entries = $store->queueEntries()
             ->with('queue:id,name,code')
+            ->whereNull('transaction_id')
             ->where('status', '!=', 'cancelled')
             ->whereDate('created_at', today())
             ->orderByDesc('created_at')
@@ -241,7 +242,7 @@ class QueueController extends Controller
 
     public function updateEntry(Request $request, QueueEntry $queueEntry)
     {
-        [$store, $redirect] = $this->guardStore();
+        [$store, $redirect] = $this->guardStore(false);
         if ($redirect) {
             return $redirect;
         }
@@ -255,6 +256,16 @@ class QueueController extends Controller
         ]);
 
         $newStatus = $validated['status'];
+        $allowedTransitions = [
+            'waiting' => ['serving'],
+            'serving' => ['ready'],
+            'ready' => [],
+        ];
+
+        if (! in_array($newStatus, $allowedTransitions[$queueEntry->status] ?? [], true)) {
+            abort(422, 'Perubahan status antrian tidak valid.');
+        }
+
         $updates = ['status' => $newStatus];
 
         if ($newStatus === 'serving' && $queueEntry->status === 'waiting') {
@@ -265,7 +276,21 @@ class QueueController extends Controller
             $updates['completed_at'] = now();
         }
 
-        $queueEntry->update($updates);
+        DB::transaction(function () use ($queueEntry, $updates, $newStatus) {
+            $queueEntry->update($updates);
+
+            if ($queueEntry->transaction && $newStatus === 'ready') {
+                $queueEntry->transaction->update(['order_status' => 'ready']);
+            }
+
+            if ($newStatus === 'completed' && $queueEntry->transaction) {
+                $queueEntry->transaction->update([
+                    'order_status' => 'completed',
+                    'status' => 'completed',
+                    'completed_at' => now(),
+                ]);
+            }
+        });
 
         return response()->json([
             'success' => true,

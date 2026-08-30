@@ -1,0 +1,503 @@
+@import 'tailwindcss';
+
+@import 'tw-animate-css';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+    /* Fonts - Guideline compliant */
+    --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    --font-display: 'Outfit', var(--font-sans);
+
+    /* Radius - Premium Extreme Radius per Guideline 4 */
+    --radius-3xl: 2rem;
+    --radius-2xl: 1.5rem;
+    --radius-xl: 1.25rem;
+    --radius-lg: 1rem;
+    --radius-md: 0.75rem;
+    --radius-sm: 0.5rem;
+
+    /* Colors - Semantic Palette per Guideline 2 */
+    --color-background: #F8FAFC;
+    --color-foreground: #0F172A;
+
+    --color-card: #FFFFFF;
+    --color-card-foreground: #0F172A;
+
+    --color-popover: #FFFFFF;
+    --color-popover-foreground: #0F172A;
+
+    --color-primary: #7C3AED;
+    --color-primary-foreground: #FFFFFF;
+
+    --color-secondary: #F5F3FF;
+    --color-secondary-foreground: #1E1B4B;
+
+    --color-muted: #F8FAFC;
+    --color-muted-foreground: #64748B;
+
+    --color-accent: rgba(124, 58, 237, 0.1);
+    --color-accent-foreground: #7C3AED;
+
+    --color-destructive: #EF4444;
+    --color-destructive-foreground: #FFFFFF;
+
+    --color-border: #E2E8F0;
+    --color-input: #E2E8F0;
+    --color-ring: #7C3AED;
+
+    --color-sidebar-background: #F8FAFC;
+    --color-sidebar-foreground: #1E293B;
+    --color-sidebar-primary: #7C3AED;
+    --color-sidebar-primary-foreground: #FFFFFF;
+    --color-sidebar-accent: rgba(124, 58, 237, 0.05);
+    --color-sidebar-accent-foreground: #7C3AED;
+    --color-sidebar-border: #CBD5E1;
+
+    /* Landing page (palette sama dengan landing.blade — oranye + ungu) */
+    --color-lp-surface: #f8fafc;
+    --color-lp-on-surface: #0f172a;
+    --color-lp-muted: #64748b;
+    --color-lp-elevated: #ffffff;
+    --color-lp-container: #f1f5f9;
+    --color-lp-container-high: #e2e8f0;
+    --color-lp-outline-variant: #e2e8f0;
+    --color-lp-primary-dark: #5b21b6;
+    --color-lp-primary-muted: #f5f3ff;
+    --color-lp-primary-soft: #ede9fe;
+    --color-lp-orange: #f97316;
+    --color-lp-orange-dark: #c2410c;
+    --color-lp-orange-soft: #ffedd5;
+    --color-lp-orange-muted: #fff7ed;
+    --color-lp-purple-deep: #5b21b6;
+
+    --shadow-lp-glow: 0 20px 56px -16px rgb(249 115 22 / 0.45);
+}
+
+@layer base {
+    * {
+        @apply border-border outline-ring/50;
+    }
+    
+    body {
+        @apply bg-background text-foreground font-sans antialiased;
+    }
+
+    /* Typographic Hierarchy per Guideline 3 */
+    h1, h2, h3, h4, h5, h6 {
+        @apply font-display font-bold tracking-tight text-slate-900;
+    }
+
+    h1 { @apply text-4xl lg:text-5xl font-black; }
+    h2 { @apply text-2xl lg:text-3xl; }
+
+    /* Metadata Labels - Uppercase + Font-Black + Tracking-Widest */
+    .label-metadata {
+        @apply text-[10px] font-black uppercase tracking-widest text-slate-400;
+    }
+}
+
+@layer utilities {
+    /* Glassmorphism Classes per Guideline 5 */
+    .glass {
+        @apply bg-white/70 backdrop-blur-xl border border-white/30;
+    }
+    
+    .glass-dark {
+        @apply bg-slate-950/70 backdrop-blur-xl border border-white/10;
+    }
+
+    /* Interactive Effects per Guideline 4 */
+    .btn-premium {
+        @apply transition-all duration-300 ease-in-out hover:scale-[1.02] active:scale-[0.98];
+    }
+
+    .card-premium {
+        @apply border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:shadow-indigo-500/10 hover:shadow-lg rounded-3xl;
+    }
+    
+    .animate-glow {
+        @apply shadow-[0_0_15px_rgba(79,70,229,0.2)];
+    }
+
+    .lp-blob-bg {
+        background:
+            radial-gradient(circle at 30% 20%, rgb(124 58 237 / 0.14), transparent 45%),
+            radial-gradient(circle at 78% 35%, rgb(249 115 22 / 0.12), transparent 42%),
+            radial-gradient(circle at 80% 70%, rgb(99 102 241 / 0.1), transparent 40%);
+    }
+
+    /* Hero: pola kotak garis saja (tanpa gradasi radial) */
+    .lp-hero-grid-bg {
+        background-color: var(--color-lp-surface);
+        background-image:
+            repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 31px,
+                rgb(62 31 0 / 0.08) 31px,
+                rgb(62 31 0 / 0.08) 32px
+            ),
+            repeating-linear-gradient(
+                90deg,
+                transparent,
+                transparent 31px,
+                rgb(62 31 0 / 0.08) 31px,
+                rgb(62 31 0 / 0.08) 32px
+            );
+    }
+
+    /* Login / daftar: panel kiri selaras grid + ungu landing */
+    .lp-auth-brand-bg {
+        background-color: #7c3aed;
+        background-image:
+            repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 31px,
+                rgb(255 255 255 / 0.13) 31px,
+                rgb(255 255 255 / 0.13) 32px
+            ),
+            repeating-linear-gradient(
+                90deg,
+                transparent,
+                transparent 31px,
+                rgb(62 31 0 / 0.09) 31px,
+                rgb(62 31 0 / 0.09) 32px
+            );
+    }
+
+    /* Section “Kenapa …?” saja: ungu lebih halus (saturasi lebih rendah dari brand #7C3AED) */
+    .lp-why-umkm-bg {
+        background-color: #6d5bbf;
+        background-image:
+            repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 31px,
+                rgb(255 255 255 / 0.13) 31px,
+                rgb(255 255 255 / 0.13) 32px
+            ),
+            repeating-linear-gradient(
+                90deg,
+                transparent,
+                transparent 31px,
+                rgb(62 31 0 / 0.09) 31px,
+                rgb(62 31 0 / 0.09) 32px
+            );
+    }
+
+    @keyframes lp-mascot-float {
+        0%,
+        100% {
+            transform: translateY(0);
+        }
+        50% {
+            transform: translateY(-10px);
+        }
+    }
+
+    .lp-mascot-float {
+        animation: lp-mascot-float 5s ease-in-out infinite;
+    }
+
+    .lp-material-icon {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+
+    .lp-material-icon-filled {
+        font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+
+    /* Hide scrollbar for horizontal scroll containers */
+    .scrollbar-hide {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
+    .scrollbar-hide::-webkit-scrollbar {
+        display: none;
+    }
+}
+
+html.lp-landing {
+    overflow-x: clip;
+    overscroll-behavior-y: contain;
+}
+
+html.lp-landing body {
+    overflow-x: clip;
+}
+
+/*
+ * Halaman landing: tipografi + UI “comic / tactile”
+ * Judul: Nunito extrabold | Isi: Poppins regular/medium
+ * Tombol & kartu: border coklat #3E1F00, bayangan padat
+ */
+.landing-root {
+    --comic-brown: #3e1f00;
+    --comic-purple: #7c3aed;
+    --comic-purple-hover: #6d28d9;
+    --comic-shadow-lilac: #ddd6fe;
+    --comic-shadow-orange: #fb923c;
+    --comic-cream: #fffbeb;
+    --comic-yellow: #fef08a;
+
+    font-family: 'Poppins', ui-sans-serif, system-ui, sans-serif;
+    font-weight: 400;
+}
+
+.landing-root .font-sans {
+    font-family: 'Poppins', ui-sans-serif, system-ui, sans-serif;
+}
+
+.landing-root .font-display,
+.landing-root h1,
+.landing-root h2,
+.landing-root h3,
+.landing-root h4,
+.landing-root h5,
+.landing-root h6 {
+    font-family: 'Nunito', ui-sans-serif, system-ui, sans-serif;
+    font-weight: 800;
+}
+
+.landing-root p,
+.landing-root li,
+.landing-root span.landing-body {
+    font-family: 'Poppins', ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Nominal / angka besar — Nunito extrabold */
+.landing-root .landing-price {
+    font-family: 'Nunito', ui-sans-serif, system-ui, sans-serif;
+    font-weight: 800;
+}
+
+/* Tombol tactile (pill, border coklat, bayangan padat) */
+.landing-root .landing-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    border-radius: 9999px;
+    border: 3px solid var(--comic-brown);
+    padding: 0.65rem 1.35rem;
+    font-family: 'Nunito', ui-sans-serif, system-ui, sans-serif;
+    font-weight: 800;
+    line-height: 1.25;
+    text-decoration: none;
+    cursor: pointer;
+    transition:
+        transform 0.12s ease,
+        box-shadow 0.12s ease,
+        background-color 0.12s ease,
+        color 0.12s ease;
+    box-shadow: 0 6px 0 0 var(--comic-shadow-lilac);
+}
+
+.landing-root .landing-btn:hover {
+    transform: translateY(2px);
+    box-shadow: 0 4px 0 0 var(--comic-shadow-lilac);
+}
+
+.landing-root .landing-btn:active {
+    transform: translateY(5px);
+    box-shadow: 0 0 0 0 transparent;
+}
+
+.landing-root .landing-btn:focus-visible {
+    outline: 3px solid var(--comic-purple);
+    outline-offset: 3px;
+}
+
+.landing-root .landing-btn-primary {
+    background-color: var(--comic-purple);
+    color: #fff;
+}
+
+.landing-root .landing-btn-primary:hover {
+    background-color: var(--comic-purple-hover);
+}
+
+/* CTA oranye (alternatif ungu) — bayangan oranye muda */
+.landing-root .landing-btn-orange {
+    background-color: #fb923c;
+    color: #fff;
+    box-shadow: 0 6px 0 0 #fdba74;
+}
+
+.landing-root .landing-btn-orange:hover {
+    background-color: #f97316;
+    box-shadow: 0 4px 0 0 #fdba74;
+}
+
+.landing-root .landing-btn-secondary {
+    background-color: #fff;
+    color: var(--comic-brown);
+    box-shadow: 0 6px 0 0 var(--comic-shadow-orange);
+}
+
+.landing-root .landing-btn-secondary:hover {
+    background-color: var(--comic-cream);
+    box-shadow: 0 4px 0 0 var(--comic-shadow-orange);
+}
+
+.landing-root .landing-btn-secondary:active {
+    box-shadow: 0 0 0 0 transparent;
+}
+
+.landing-root .landing-btn-yellow {
+    background-color: var(--comic-yellow);
+    color: var(--comic-brown);
+    box-shadow: 0 6px 0 0 var(--comic-shadow-orange);
+}
+
+.landing-root .landing-btn-yellow:hover {
+    background-color: #fde047;
+    box-shadow: 0 4px 0 0 var(--comic-shadow-orange);
+}
+
+/* Tombol di atas area gelap / oranye */
+.landing-root .landing-btn-ghost-light {
+    background-color: transparent;
+    color: #fff;
+    border-color: #fff;
+    box-shadow: 0 6px 0 0 rgb(255 255 255 / 0.45);
+}
+
+.landing-root .landing-btn-ghost-light:hover {
+    background-color: rgb(255 255 255 / 0.12);
+    box-shadow: 0 4px 0 0 rgb(255 255 255 / 0.35);
+}
+
+/* Kartu comic: krem + border coklat + bayangan padat */
+.landing-root .landing-card {
+    background-color: #fffef7;
+    border: 3px solid var(--comic-brown);
+    border-radius: 1.25rem;
+    box-shadow: 8px 8px 0 0 var(--comic-shadow-lilac);
+}
+
+.landing-root .landing-card-orange-shadow {
+    box-shadow: 8px 8px 0 0 var(--comic-shadow-orange);
+}
+
+.landing-root .landing-card-sm {
+    border-radius: 1rem;
+    box-shadow: 5px 5px 0 0 var(--comic-shadow-lilac);
+}
+
+/* Tab pill (fitur) */
+.landing-root .landing-tab-wrap {
+    border: 3px solid var(--comic-brown);
+    border-radius: 9999px;
+    background: var(--comic-cream);
+    padding: 0.35rem;
+    box-shadow: 5px 5px 0 0 var(--comic-shadow-orange);
+}
+
+.landing-root .landing-tab {
+    border-radius: 9999px;
+    border: 3px solid transparent;
+    box-sizing: border-box;
+    padding: 0.45rem 1rem;
+    font-family: 'Nunito', ui-sans-serif, system-ui, sans-serif;
+    font-weight: 800;
+    font-size: 0.875rem;
+    color: var(--comic-brown);
+    background: transparent;
+    cursor: pointer;
+    transition:
+        background-color 0.12s ease,
+        color 0.12s ease,
+        box-shadow 0.12s ease;
+}
+
+.landing-root .landing-tab:hover {
+    background-color: rgb(255 255 255 / 0.7);
+}
+
+.landing-root .landing-tab-active {
+    background-color: var(--comic-purple);
+    color: #fff;
+    border-color: var(--comic-brown);
+    box-shadow: 0 4px 0 0 var(--comic-shadow-lilac);
+}
+
+.landing-root .landing-tab:not(.landing-tab-active) {
+    box-shadow: none;
+}
+
+/* Ikon “chunky”: isi + outline coklat (Material Symbols FILL) */
+.landing-root .landing-icon-lg {
+    font-size: 1.5rem;
+    line-height: 1;
+}
+
+.landing-root .material-symbols-outlined.landing-icon {
+    font-variation-settings: 'FILL' 1, 'wght' 700, 'GRAD' 0, 'opsz' 24;
+    text-shadow:
+        -1.5px -1.5px 0 var(--comic-brown),
+        1.5px -1.5px 0 var(--comic-brown),
+        -1.5px 1.5px 0 var(--comic-brown),
+        1.5px 1.5px 0 var(--comic-brown),
+        -1.5px 0 0 var(--comic-brown),
+        1.5px 0 0 var(--comic-brown),
+        0 -1.5px 0 var(--comic-brown),
+        0 1.5px 0 var(--comic-brown);
+}
+
+.landing-root .landing-icon-circle {
+    border: 3px solid var(--comic-brown);
+    background: #fffef7;
+    box-shadow: 4px 4px 0 0 var(--comic-shadow-lilac);
+}
+
+/* Variable overrides for theme compatibility with Shadcn */
+:root {
+    --background: #F8FAFC;
+    --foreground: #0F172A;
+    --card: #FFFFFF;
+    --card-foreground: #0F172A;
+    --popover: #FFFFFF;
+    --popover-foreground: #0F172A;
+    --primary: #7C3AED;
+    --primary-foreground: #FFFFFF;
+    --secondary: #F5F3FF;
+    --secondary-foreground: #1E1B4B;
+    --muted: #F8FAFC;
+    --muted-foreground: #64748B;
+    --accent: rgba(124, 58, 237, 0.1);
+    --accent-foreground: #7C3AED;
+    --destructive: #EF4444;
+    --destructive-foreground: #FFFFFF;
+    --border: #E2E8F0;
+    --input: #E2E8F0;
+    --ring: #7C3AED;
+    --radius: 1rem;
+}
+
+.dark {
+    --background: #0F172A;
+    --foreground: #F8FAFC;
+    --card: #1E293B;
+    --card-foreground: #F8FAFC;
+    --popover: #1E293B;
+    --popover-foreground: #F8FAFC;
+    --primary: #6366F1;
+    --primary-foreground: #FFFFFF;
+    --secondary: #1E293B;
+    --secondary-foreground: #F1F5F9;
+    --muted: #0F172A;
+    --muted-foreground: #94A3B8;
+    --accent: rgba(99, 102, 241, 0.15);
+    --accent-foreground: #6366F1;
+    --destructive: #F87171;
+    --destructive-foreground: #FFFFFF;
+    --border: #334155;
+    --input: #334155;
+    --ring: #6366F1;
+}

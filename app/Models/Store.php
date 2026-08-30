@@ -45,6 +45,24 @@ class Store extends Model
         'pro_trial_start',
         'pro_trial_end',
         'extra_outlets',
+        'attendance_payroll_until',
+        'late_penalty_per_day',
+        'late_penalty_per_minute',
+        'late_penalty_method',
+        'overtime_rate_first_hour',
+        'overtime_rate_next_hour',
+        'overtime_rate_holiday',
+        'bpjs_enabled',
+        'bpjs_health_employee',
+        'bpjs_health_employer',
+        'bpjs_jht_employee',
+        'bpjs_jht_employer',
+        'bpjs_jp_employee',
+        'bpjs_jp_employer',
+        'bpjs_jkk',
+        'bpjs_jkm',
+        'pph21_enabled',
+        'cashier_login_mode',
     ];
 
     protected $attributes = [
@@ -65,6 +83,22 @@ class Store extends Model
         'pro_trial_start' => 'datetime',
         'pro_trial_end' => 'datetime',
         'extra_outlets' => 'integer',
+        'attendance_payroll_until' => 'datetime',
+        'late_penalty_per_day' => 'decimal:2',
+        'late_penalty_per_minute' => 'decimal:2',
+        'overtime_rate_first_hour' => 'decimal:2',
+        'overtime_rate_next_hour' => 'decimal:2',
+        'overtime_rate_holiday' => 'decimal:2',
+        'bpjs_enabled' => 'boolean',
+        'bpjs_health_employee' => 'decimal:2',
+        'bpjs_health_employer' => 'decimal:2',
+        'bpjs_jht_employee' => 'decimal:2',
+        'bpjs_jht_employer' => 'decimal:2',
+        'bpjs_jp_employee' => 'decimal:2',
+        'bpjs_jp_employer' => 'decimal:2',
+        'bpjs_jkk' => 'decimal:2',
+        'bpjs_jkm' => 'decimal:2',
+        'pph21_enabled' => 'boolean',
     ];
 
     protected static function boot()
@@ -80,6 +114,30 @@ class Store extends Model
         static::created(function (Store $store) {
             StoreDefaultProductCategories::ensureForStore($store);
             ChartOfAccountsBootstrap::ensureForStore($store);
+
+            // Owner grup usaha otomatis mendapat akses ke outlet baru
+            if ($store->organization_id) {
+                $ownerUserIds = \Illuminate\Support\Facades\DB::table('store_user')
+                    ->join('stores', 'stores.id', '=', 'store_user.store_id')
+                    ->where('stores.organization_id', $store->organization_id)
+                    ->where('store_user.role', 'owner')
+                    ->distinct()
+                    ->pluck('store_user.user_id');
+
+                foreach ($ownerUserIds as $userId) {
+                    \Illuminate\Support\Facades\DB::table('store_user')->updateOrInsert(
+                        [
+                            'store_id' => $store->id,
+                            'user_id' => $userId,
+                        ],
+                        [
+                            'role' => 'owner',
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ]
+                    );
+                }
+            }
         });
     }
 
@@ -110,7 +168,6 @@ class Store extends Model
     /**
      * Salin produk dari sumber ke toko ini.
      *
-     * @param  Store   $source
      * @param  string  $copyType  'raw_material' | 'sellable' | 'all'
      * @return array{copied: int, skipped: int, errors: string[], details: array}
      */
@@ -138,7 +195,7 @@ class Store extends Model
 
         // 'all' — tidak perlu filter, ambil semua produk aktif
 
-        $sourceProducts = $query->orderBy('name')->get();
+        $sourceProducts = $query->with('productCategory')->orderBy('name')->get();
 
         $copied = 0;
         $skipped = 0;
@@ -153,17 +210,21 @@ class Store extends Model
             if ($isDuplicate) {
                 $skipped++;
                 $details[] = ['name' => $sp->name, 'sku' => $sp->sku, 'status' => 'skipped'];
+
                 continue;
             }
 
             try {
                 $catId = null;
                 if ($sp->product_category_id) {
-                    $cat = ProductCategory::query()->firstOrCreate(
-                        ['store_id' => $this->id, 'name' => $sp->category],
-                        ['sort_order' => 0],
-                    );
-                    $catId = $cat->id;
+                    $catName = $sp->productCategory?->name ?? $sp->category;
+                    if ($catName) {
+                        $cat = ProductCategory::query()->firstOrCreate(
+                            ['store_id' => $this->id, 'name' => $catName],
+                            ['sort_order' => 0],
+                        );
+                        $catId = $cat->id;
+                    }
                 }
 
                 Product::query()->create([
@@ -172,7 +233,7 @@ class Store extends Model
                     'sku' => $sp->sku,
                     'barcode' => $sp->barcode,
                     'description' => $sp->description,
-                    'price' => 0,
+                    'price' => $sp->price,
                     'cost_price' => $sp->cost_price,
                     'average_cost' => $sp->average_cost,
                     'stock_quantity' => 0,
@@ -327,6 +388,11 @@ class Store extends Model
         return $this->hasMany(QueueEntry::class);
     }
 
+    public function tables(): HasMany
+    {
+        return $this->hasMany(Table::class);
+    }
+
     public function isSubscriptionActive(): bool
     {
         if (! $this->is_subscription_active) {
@@ -376,25 +442,38 @@ class Store extends Model
      */
     public function applyInitialStarterTrialFromPlans(): void
     {
-        $starter = SubscriptionPlan::query()
+        $now = now();
+        $trialEnd = $now->copy()->addDays(7);
+
+        // Cari paket Bisnis (Pro/GrowUp) untuk trial
+        $proPlan = SubscriptionPlan::query()
+            ->where('slug', 'bisnis')
+            ->where('is_active', true)
+            ->first();
+
+        // Fallback ke Starter jika paket Bisnis tidak ada
+        $fallbackPlan = SubscriptionPlan::query()
             ->where('slug', 'starter')
             ->where('is_active', true)
             ->orderByRaw("case when coalesce(billing_cycle, 'monthly') = 'monthly' then 0 else 1 end")
             ->orderBy('sort_order')
             ->first();
 
-        $trialDays = $starter ? max(1, (int) $starter->duration_days) : 30;
-        $now = now();
+        $plan = $proPlan ?? $fallbackPlan;
 
         $this->forceFill([
             'subscription_start' => $this->subscription_start ?? $now,
-            'subscription_end' => $now->copy()->addDays($trialDays),
-            'subscription_days' => $trialDays,
+            'subscription_end' => $trialEnd,
+            'subscription_days' => 7,
             'is_subscription_active' => true,
-            'subscription_plan_id' => $starter?->id,
-            'subscription_notes' => $starter
-                ? 'Registrasi: trial '.$starter->name." ({$trialDays} hari)."
-                : "Registrasi: trial {$trialDays} hari (paket Starter belum aktif di sistem).",
+            'subscription_plan_id' => $plan?->id,
+            'pro_trial_used' => true,
+            'pro_trial_active' => true,
+            'pro_trial_start' => $now,
+            'pro_trial_end' => $trialEnd,
+            'subscription_notes' => $proPlan
+                ? 'Registrasi: Trial Pro 7 hari otomatis.'
+                : "Registrasi: Trial 7 hari (paket Pro belum tersedia, menggunakan {$fallbackPlan?->name}).",
         ])->save();
     }
 

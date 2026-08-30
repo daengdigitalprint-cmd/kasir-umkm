@@ -2,14 +2,20 @@
 
 namespace App\Http\Middleware;
 
+use App\Http\Controllers\StoreSettingsController;
 use App\Models\QueueEntry;
 use App\Models\Store;
-use App\Http\Controllers\StoreSettingsController;
+use App\Models\Transaction;
+use App\Modules\Attendance\Support\AttendanceSettings;
+use App\Services\AttendancePayrollAddOnService;
+use App\Support\Accounting\AccountingFeatures;
+use App\Support\Accounting\AccountingPeriodGuard;
 use App\Support\FnBFeatures;
 use App\Support\LaundryFeatures;
-use App\Support\StorePlanLimits;
+use App\Support\PharmacyFeatures;
 use App\Support\StockAdjustmentApproval;
 use App\Support\StoreLocationType;
+use App\Support\StorePlanLimits;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -48,6 +54,15 @@ class HandleInertiaRequests extends Middleware
 
         $user = $request->user();
 
+        // Resolve active store with fallback to first accessible store
+        $activeStore = null;
+        if ($user) {
+            $activeStore = $user->store;
+            if (! $activeStore) {
+                $activeStore = $user->stores()->first();
+            }
+        }
+
         $accessibleStores = [];
         if ($user) {
             if ($user->isSuperAdmin()) {
@@ -85,8 +100,8 @@ class HandleInertiaRequests extends Middleware
 
         $subscriptionData = null;
         $planLimits = null;
-        if ($user && $user->store) {
-            $store = $user->store;
+        if ($user && $activeStore) {
+            $store = $activeStore;
             $store->loadMissing('subscriptionPlan');
             $plan = StorePlanLimits::planForDisplay($store);
             $daysRemaining = $store->getDaysRemaining();
@@ -124,49 +139,100 @@ class HandleInertiaRequests extends Middleware
                 'warning' => fn () => $request->session()->get('warning'),
                 'info' => fn () => $request->session()->get('info'),
                 'status' => fn () => $request->session()->get('status'),
+                'show_product_modal' => fn () => $request->session()->get('show_product_modal'),
             ],
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'auth' => [
                 'user' => $user,
+                'active_role' => $user?->getRoleForActiveStore(),
             ],
             'abilities' => [
                 'backoffice' => $user?->canAccessBackOffice() ?? false,
                 'inventory' => $user?->canAccessInventory() ?? false,
                 'stock_adjustment' => $user?->canAccessStockAdjustment() ?? false,
                 'pos' => $user?->canUsePointOfSale() ?? false,
+                'cashier' => $user?->isCashier() ?? false,
                 'manage_store_settings' => $user?->canManageStoreSettings() ?? false,
                 'owner' => $user?->canAccessOwnerPanel() ?? false,
             ],
-            'fnb_enabled' => $user && $user->store ? FnBFeatures::enabled($user->store) : false,
-            'laundry_enabled' => $user && $user->store ? LaundryFeatures::enabled($user->store) : false,
-            'recipes_enabled' => $user && $user->store
-                ? (bool) ($user->store->settings['recipes_enabled']
-                    ?? StoreSettingsController::featureDefaultsForType($user->store->business_type ?? 'general')['recipes_enabled'])
+            'allowed_menus' => $user?->allowedMenus() ?? [],
+            'fnb_enabled' => $activeStore ? FnBFeatures::enabled($activeStore) : false,
+            'pharmacy_enabled' => $activeStore ? PharmacyFeatures::enabled($activeStore) : false,
+            'laundry_enabled' => $activeStore ? LaundryFeatures::enabled($activeStore) : false,
+            'attendance_enabled' => $activeStore ? AttendanceSettings::enabled($activeStore) : false,
+            'attendance_settings' => $activeStore ? AttendanceSettings::forFrontend($activeStore) : null,
+            'payroll_enabled' => $activeStore ? AttendancePayrollAddOnService::isPurchased($activeStore) : false,
+            'recipes_enabled' => $activeStore
+                ? (bool) ($activeStore->settings['recipes_enabled']
+                    ?? StoreSettingsController::featureDefaultsForType($activeStore->business_type ?? 'general')['recipes_enabled'])
                 : false,
-            'productions_enabled' => $user && $user->store
-                ? (bool) ($user->store->settings['productions_enabled']
-                    ?? StoreSettingsController::featureDefaultsForType($user->store->business_type ?? 'general')['productions_enabled'])
+            'productions_enabled' => $activeStore
+                ? (bool) ($activeStore->settings['productions_enabled']
+                    ?? StoreSettingsController::featureDefaultsForType($activeStore->business_type ?? 'general')['productions_enabled'])
                 : false,
-            'kitchen_queue_enabled' => $user && $user->store
-                ? (bool) ($user->store->settings['kitchen_queue_enabled'] ?? false)
+            'kitchen_queue_enabled' => $activeStore
+                ? (bool) ($activeStore->settings['kitchen_queue_enabled'] ?? false)
                 : false,
-            'queue_module_enabled' => $user && $user->store
-                ? (bool) ($user->store->settings['queue_module_enabled'] ?? false)
+            'queue_module_enabled' => $activeStore
+                ? (bool) ($activeStore->settings['queue_module_enabled'] ?? false)
                 : false,
-            'pending_queue_count' => $user && $user->store && ($user->store->settings['queue_module_enabled'] ?? false)
-                ? QueueEntry::where('store_id', $user->store->id)
-                    ->whereIn('status', ['waiting', 'serving', 'ready'])
+            'scan_meja_enabled' => $activeStore
+                ? (bool) ($activeStore->settings['scan_meja_enabled'] ?? false)
+                : false,
+            'accounting_enabled' => $activeStore ? AccountingFeatures::enabled($activeStore) : false,
+            'receivables_enabled' => $activeStore
+                ? (bool) ($activeStore->settings['receivables_enabled'] ?? true)
+                : false,
+            'pending_queue_count' => $activeStore && ($activeStore->settings['queue_module_enabled'] ?? false)
+                ? QueueEntry::where('store_id', $activeStore->id)
+                    ->whereNull('transaction_id')
+                    ->where('status', 'waiting')
+                    ->whereDate('created_at', today())
                     ->count()
                 : 0,
-            'location_type' => $user && $user->store
-                ? StoreLocationType::of($user->store)
+            'pending_kitchen_order_count' => $activeStore && ($activeStore->settings['kitchen_queue_enabled'] ?? false)
+                ? QueueEntry::where('store_id', $activeStore->id)
+                    ->whereNotNull('transaction_id')
+                    ->where('status', 'waiting')
+                    ->whereDate('created_at', today())
+                    ->count()
+                : 0,
+            'pending_table_order_count' => $activeStore && ($activeStore->settings['scan_meja_enabled'] ?? false)
+                ? Transaction::where('store_id', $activeStore->id)
+                    ->where('order_status', 'pending')
+                    ->where('order_type', 'dine_in')
+                    ->where(function ($q) {
+                        $q->whereJsonContains('payment_details->source', 'scan_meja')
+                            ->orWhere('payment_details->source', 'scan_meja');
+                    })
+                    ->count()
+                : 0,
+            'location_type' => $activeStore
+                ? StoreLocationType::of($activeStore)
                 : 'outlet',
-            'direct_stock_edit' => $user && $user->store
-                ? StockAdjustmentApproval::directStockEdit($user->store)
+            'direct_stock_edit' => $activeStore
+                ? StockAdjustmentApproval::directStockEdit($activeStore)
                 : false,
             'accessible_stores' => $accessibleStores,
             'subscription' => $subscriptionData,
             'plan_limits' => $planLimits,
+            'can_access_activity_logs' => $user ? $user->canAccessActivityLogs() : false,
+            'cashier_login_mode' => $activeStore
+                ? ($activeStore->cashier_login_mode ?? 'email')
+                : 'email',
+            'active_cashier' => $user ? $request->session()->get('active_cashier') : null,
+            // Banner pengingat tutup buku: periode lampau yang masih terbuka
+            // (hanya dihitung untuk user backoffice agar POS ringan).
+            'unclosed_period_reminders' => ($user && $activeStore && $user->canAccessBackOffice())
+                ? AccountingPeriodGuard::unclosedPastPeriods($activeStore)
+                    ->map(fn ($period) => [
+                        'id' => $period->id,
+                        'name' => $period->name,
+                        'end_date' => $period->end_date->toDateString(),
+                    ])
+                    ->values()
+                    ->all()
+                : [],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'csrf_token' => csrf_token(),
             'app_url' => config('app.url'),

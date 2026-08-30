@@ -1,0 +1,321 @@
+.xb-intigration-inner {
+    min-height: 543px;
+    background: #045857;
+    padding: 125px 0 100px;
+    position: relative;
+    overflow: hidden;
+    @include border-radius(30px);
+    @include respond(xs) {
+        padding: 90px 0;
+        min-height: 510px;
+    }
+    .xb-content {
+        max-width: 334px;
+        text-align: center;
+        margin: 0 auto;
+        color: var(--color-white);
+    }
+    .sec-title--two {
+        @include respond(xs) {
+            padding: 0 20px;
+        }
+    }
+    .xb-blur-shape {
+        .shape {
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            &--1 {
+                @include respond(xs) {
+                    display: none;
+                }
+            }
+            &--2 {
+                left: auto;
+                right: 0;
+                @include respond(xs) {
+                    display: none;
+                }
+            }
+            &--3 {
+                @include respond(laptop) {
+                    bottom: 8px;
+                }
+                @media only screen and (max-width: 1300px) {
+                    bottom: 40px;
+                }
+                @include respond(lg) {
+                    bottom: 70px;
+                }
+                @include respond(md) {
+                    width: 125%;
+                    left: -11%;
+                    bottom: 87px;
+                }
+                @include respond(xs) {
+                    width: 160%;
+                    left: -26%;
+                    bottom: 144px;
+                }
+                @include respond(sm) {
+                    width: 154%;
+                    bottom: 86px;
+                }
+            }
+        }
+    }
+}
+.xb-intigration-wrapper {
+    margin-bottom: -55px;
+    padding: 130px 0 178px;
+    @include respond(xs) {
+        padding: 90px 0 178px;
+    }
+}
+.xb-intigration-logo {
+    z-index: 1;
+    padding: 22px 74px;
+    display: inline-block;
+    position: relative;
+    overflow: hidden;
+    margin: 65px 0 51px;
+    @include border-radius(57px);
+    background: rgba(1, 22, 1, 0.5);
+    @include respond(xs) {
+        padding: 12px 40px;
+    }
+    .bg_shape {
+        position: absolute;
+        left: 0;
+        top: 0;
+        z-index: -2;
+        height: 100%;
+        width: 100%;
+    }
+}
+//circle animation 
+@property --img-scale {
+  syntax:"<number>";
+  initial-value:1;
+  inherits:true
+}
+.xb-integrations-logo-inner {
+    position: absolute;
+    left: 33%;
+    bottom: 33%;
+    width: 100%;
+    @include respond(md) {
+        bottom: 32%;
+    }
+    @include respond(sm) {
+        bottom: 30%;
+    }
+}
+.xb-integrations-logo {
+    width:59px;
+    height:59px;
+    position: absolute;
+    @include center;
+    background: var(--color-white);
+    @include border-radius(100px);
+    offset-path:path("M 24 24 A 600 375.5 0 0 1 624 399.5");
+    offset-distance: 0;
+    @include respond(xs) {
+        height: 40px;
+        width: 40px;
+        padding: 10px;
+    }
+    &[data-direction=right] {
+        left: auto;
+        right: 78%;
+        offset-path:path("M 100 -90 A 950 375.5 0 0 1 550 399.5");
+        animation :move-logo-right 15s linear infinite;
+        @include respond(laptop) {
+            offset-path: path("M 100 -90 A 950 375.5 2 0 1 550 399.5");
+        }
+        @media only screen and (max-width: 1300px) {
+            offset-path: path("M 100 -92 A 950 539.5 -20 0 1 550 399.5");
+        }
+        @include respond(lg) {
+            offset-path: path("M 100 -96 A 950 510.5 -18 0 1 452 399.5");
+        }
+        @include respond(md) {
+            offset-path: path("M 50 -101 A 950 536.5 -32 0 1 452 320.5");
+        }
+        @include respond(xs) {
+            offset-path: path("M 50 -94 A 950 536.5 -32 0 1 452 320.5");
+        }
+    }
+    &[data-direction=left] {
+        offset-path:path("M -550 399.5 A 600 375.5 -25 0 1 110 -90");
+        animation: move-logo-left 15s linear infinite;
+        @include respond(laptop) {
+            offset-path: path("M -550 399.5 A 600 375.5 -30 0 1 110 -90");
+        }
+        @media only screen and (max-width: 1300px) {
+            offset-path: path("M -495 399.5 A 600 375.5 -58 0 1 110 -90");
+        }
+        @include respond(lg) {
+            offset-path: path("M -405 399.5 A 600 375.5 -70 0 1 110 -90");
+        }
+        @include respond(md) {
+            offset-path: path("M -430 275.5 A 600 315.5 -60 0 1 60 -90");
+        }
+        @include respond(xs) {
+            offset-path: path("M -430 275.5 A 600 315.5 -63 0 1 60 -90");
+        }
+    }
+    img {
+        scale: var(--img-scale);
+    }
+}
+.as-integration-wrapper {
+    background: linear-gradient(359deg, #f5effd 0%, #fffefe 100%);
+    @include respond(xs) {
+        padding-bottom: 90px;
+    }
+}
+.as-integration-list {
+    z-index: 1;
+    position: relative;
+    margin: 0 auto;
+    max-width: 1079px;
+    display: flex;
+    justify-content: center;
+    @include respond(lg) {
+        max-width: 800px;
+        padding: 0 66px;
+    }
+    @include respond(md) {
+        max-width: 658px;
+        padding: 0 52px;
+    }
+    @include respond(xs) {
+        padding: 0;
+        min-height: 300px;
+    }
+    .shape {
+        @include respond(xs) {
+            display: none;
+        }
+    }
+    .item {
+        height: 90px;
+        width: 90px;
+        @include center;
+        position: absolute;
+        box-shadow: 0 4px 4px 0 #e4dced;
+        background: rgba(255, 255, 255, 0.8), linear-gradient(180deg, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0.3) 100%);
+        @include respond(lg) {
+            width: 65px;
+            height: 65px;
+            padding: 15px;
+        }
+        @include respond(md) {
+            width: 55px;
+            height: 55px;
+            padding: 10px;
+        }
+        &--1 {
+            top: 0;
+            left: 0;
+            @include respond(xs) {
+                left: 20px;
+            }
+        }
+        &--2 {
+            top: 0;
+            left: 50%;
+            @include respond(xs) {
+                left: 42%;
+            }
+        }
+        &--3 {
+            top: 0;
+            right: 0;
+            @include respond(xs) {
+                right: 20px;
+            }
+        }
+        &--4 {
+            top: 24.9%;
+            left: 25%;
+            @include respond(xs) {
+                left: 24%;
+                top: 16.9%;
+            }
+        }
+        &--5 {
+            top: 24.9%;
+            left: 41.8%;
+            @include respond(xs) {
+                top: 35.9%;
+            }
+        }
+        &--6 {
+            top: 24.9%;
+            left: 58.4%;
+            @include respond(xs) {
+                top: 17.9%;
+                left: 60%;
+            }
+        }
+        &--7 {
+            top: 24.9%;
+            left: 75%;
+            @include respond(xs) {
+                left: 5%;
+                top: 34.9%;
+            }
+        }
+        &--8 {
+            top: 49.9%;
+            left: 16.8%;
+            @include respond(xs) {
+                top: 53.9%;
+                left: 23.8%;
+            }
+        }
+        &--9 {
+            top: 49.9%;
+            left: 66.7%;
+            @include respond(xs) {
+                top: 51.9%;
+                left: 60.7%;
+            }
+        }
+        &--10 {
+            top: 49.9%;
+            left: 83.4%;
+            @include respond(xs) {
+                top: 33.9%;
+                left: 78.4%;
+            }
+        }
+        &--11 {
+            left: 0;
+            bottom: 0;
+            @include respond(xs) {
+                left: 6%;
+                bottom: 10%;
+            }
+        }
+        &--12 {
+            bottom: 0;
+            left: 41.8%;
+            @include respond(xs) {
+                bottom: 11%;
+                left: 42.8%;
+            }
+        }
+        &--13 {
+            right: 0;
+            bottom: 0;
+            @include respond(xs) {
+                bottom: 12%;
+                right: 20px;
+            }
+        }
+    } 
+
+}

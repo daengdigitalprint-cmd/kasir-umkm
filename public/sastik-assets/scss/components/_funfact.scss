@@ -1,0 +1,76 @@
+.xb-funfact-item {
+    text-align: center;
+    .xb-item {
+        &--number {
+            font-size: 70px;
+            line-height: 1;
+            letter-spacing: -0.04em;
+            @include respond(lg) {
+                font-size: 55px;
+            }
+            @include respond(md) {
+                font-size: 40px;
+            }
+        }
+        &--text {
+            font-size: 22px;
+            font-weight: 500;
+            margin: 13px 0 42px;
+            @include respond(md) {
+                font-size: 18px;
+            }
+        }
+        &--img {
+            
+            @include respond(md) {
+                margin: 0 auto;
+                max-width: 160px;
+            }
+        }
+    }
+}
+.xb-funfact-inner {
+    padding: 50px 0;
+    overflow: hidden;
+    position: relative;
+    &::before,
+    &::after {
+        position: absolute;
+        content: '';
+        left: 0;
+        top: 0;
+        height: 2px;
+        width: 100%;
+        background: #d7f0d7;
+    }
+    &::after {
+        top: auto;
+        bottom: 0;
+    }
+    .xb-blur-shape {
+        position: absolute;
+        left: -40px;
+        top: -13px;
+        z-index: 1;
+        height: 110%;
+        width: 50px;
+        background: #fff;
+        filter: blur(5.4px);
+        &.two {
+            
+            left: auto;
+            right: -40px;
+        }
+    }
+}
+.funfact-col {
+    &:not(:last-child) {
+        border-right: 1px solid #d7f0d7;
+        @include respond(xs) {
+            border-right: none;
+            padding-bottom: 40px;
+            margin-bottom: 40px;
+            border-bottom: 1px solid #d7f0d7;
+        }
+    }
+}

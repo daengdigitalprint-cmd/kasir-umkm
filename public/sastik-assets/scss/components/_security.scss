@@ -1,0 +1,520 @@
+.fs-security-wrap {
+    .xb-item {
+        &--title {
+            font-size: 38px;
+            margin-bottom: 30px;
+            letter-spacing: -0.03em;
+            text-transform: capitalize;
+            @include respond(xs) {
+                font-size: 20px;
+            }
+            @include respond(sm) {
+                font-size: 28px;
+            }
+        }
+        &--number {
+            font-size: 140px;
+            color: var(--color-primary);
+            text-shadow: 0 44px 18px rgba(13, 23, 56, 0.04), 0 26px 10px rgba(13, 23, 56, 0.06), 0 16px 6px rgba(13, 23, 56, 0.07), 0 10px 4px rgba(13, 23, 56, 0.08), 0 6px 2px rgba(13, 23, 56, 0.08), 0 3px 1px rgba(13, 23, 56, 0.09), 0 1px 1px rgba(13, 23, 56, 0.09);
+            @include respond(md) {
+                font-size: 98px;
+            }
+            @include respond(xs) {
+                font-size: 56px;
+            }
+            @include respond(sm) {
+                font-size: 90px;
+            }
+        }
+        &--counter_box {
+            z-index: 1;
+            position: relative;
+            display: inline-block;
+        }
+        &--text {
+            gap: 10px;
+            padding: 2px 14px;
+            display: inline-block;
+            transform: rotate(18deg);
+            font-weight: 500;
+            font-size: 18px;
+            position: absolute;
+            top: 30%;
+            right: -14%;
+            letter-spacing: -0.01em;
+            text-transform: capitalize;
+            color: var(--color-heading);
+            @include border-radius(14px);
+            background: var(--color-white);
+            box-shadow: 0 44px 18px -4px rgba(13, 23, 56, 0.04), 0 26px 10px -4px rgba(13, 23, 56, 0.06), 0 16px 6px -3px rgba(13, 23, 56, 0.07), 0 10px 4px -3px rgba(13, 23, 56, 0.08), 0 6px 2px -2px rgba(13, 23, 56, 0.08), 0 3px 1px -1px rgba(13, 23, 56, 0.09), 0 1px 1px -1px rgba(13, 23, 56, 0.09), 0 0 0 1px #e9e5ff, inset 0 1px 1px 1px rgba(255, 255, 255, 0.3);
+            @include respond(md) {
+                top: 16%;
+                right: -16%;
+                font-size: 16px;
+                transform: rotate(25deg);
+            }
+            @include respond(xs) {
+                top: 1%;
+                right: -18%;
+                font-size: 8px;
+                padding: 0px 14px;
+            }
+            @include respond(sm) {
+                top: 16%;
+                right: -16%;
+                font-size: 14px;
+                transform: rotate(25deg);
+            }
+        }
+        &--earth {
+            height: 550px;
+            overflow: hidden;
+            margin-top: -60px;
+            position: relative;
+            @include respond(lg) {
+                height: 440px;
+                margin-top: -40px;
+            }
+            @include respond(md) {
+                margin-top: -15px;
+            }
+            @include respond(xs) {
+                margin-top: 15px;
+            }
+            @include respond(sm) {
+                margin-top: -20px;
+            }
+            video {
+                width: 100%;
+                margin: 0 auto;
+                opacity: 0.3;
+                @include respond(xs) {
+                    width: 155%;
+                    margin-left: -25%;
+                }
+            }
+            .cloud-shape {
+                position: absolute;
+                left: 0;
+                bottom: 13px;
+                width: 100%;
+                mix-blend-mode: hard-light;
+                @include respond(md) {
+                    bottom: 145px;
+                }
+                @include respond(xs) {
+                    top: 110px;
+                    bottom: auto;
+                }
+                @include respond(sm) {
+                    top: 165px;
+                }
+            }
+        }
+    } 
+}
+.fs-security-brand {
+    z-index: 1;
+    position: relative;
+    min-height: 164px;
+    margin-top: -164px;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    @include respond(md) {
+        min-height: 130px;
+        margin-top: -240px;
+    }
+    @include respond(xs) {
+        min-height: 100px;
+        margin-top: -290px;
+    }
+    @include respond(sm) {
+        margin-top: -220px;
+    }
+    &::before,
+    &::after {
+        position: absolute;
+        content: '';
+        left: -55px;
+        top: 0;
+        z-index: 1;
+        height: 100%;
+        width: 436px;
+        filter: blur(20.1px);
+        background: linear-gradient(222deg, #fff 0%, #c6d6ff 100%);
+        transform: rotate(-180deg);
+        @media only screen and (min-width: 1200px) and (max-width: 1300px) {
+            left: -150px;
+        }
+        @include respond(lg) {
+            left: -204px;
+        }
+        @include respond(xs) {
+            top: -32%;
+            left: -120px;
+            width: 200px;
+            height: 160%;
+        }
+        @include respond(sm) {
+            left: -42px;
+        }
+    }
+    &::after {
+        left: auto;
+        right: -55px;
+        transform: rotate(-180deg);
+        @media only screen and (min-width: 1200px) and (max-width: 1300px) {
+            right: -150px;
+        }
+        @include respond(lg) {
+            right: -204px;
+        }
+        @include respond(xs) {
+           right: -120px;
+        }
+        @include respond(sm) {
+            right: -42px;
+        }
+    }
+    .xb-item {
+        &--list {
+            gap: 40px;
+            margin-right: 40px;
+            @include respond(xs) {
+                gap: 30px;
+                margin-right: 30px;
+            }
+            li {
+                padding: 7px;
+                height: 73px;
+                width: 73px;
+                @include center;
+                background: var(--color-white);
+                @include border-radius(100%);
+                box-shadow: 0 44px 18px -4px rgba(13, 23, 56, 0.04), 0 26px 10px -4px rgba(13, 23, 56, 0.06), 0 16px 6px -3px rgba(13, 23, 56, 0.07), 0 10px 4px -3px rgba(13, 23, 56, 0.08), 0 6px 2px -2px rgba(13, 23, 56, 0.08), 0 3px 1px -1px rgba(13, 23, 56, 0.09), 0 1px 1px -1px rgba(13, 23, 56, 0.09), 0 0 0 1px #e9e5ff, inset 0 1px 1px 1px rgba(255, 255, 255, 0.3);
+                @include respond(md) {
+                    width: 63px;
+                    height: 63px;
+                }
+                @include respond(md) {
+                    width: 43px;
+                    height: 43px;
+                }
+            }
+        }
+        &--logo {
+            position: absolute;
+            left: 50%;
+            top: 0;
+            z-index: 1;
+            transform: translateX(-50%);
+            @include respond(md) {
+                max-width: 158px;
+            }
+            @include respond(xs) {
+                max-width: 121px;
+            }
+        }
+    }
+}
+.xb-security-shape .shape {
+    &--3 {
+        z-index: 2 !important;
+    }
+    &--4 {
+        z-index: 2 !important;
+    }
+    &--6 {
+        left: 157px;
+        bottom: 41%;
+        overflow: visible !important;
+        @include respond(lg) {
+            left: 50px;
+            bottom: 34%;
+        }
+        @include respond(md) {
+            max-width: 70px;
+        }
+        @include respond(xs) {
+            left: 10px;
+            bottom: 23%;
+            max-width: 50px;
+        }
+    }
+    &--5 {
+        bottom: 42%;
+        right: 157px;
+        overflow: visible !important;
+        @include respond(lg) {
+            bottom: 35%;
+            right: 50px;
+        }
+        @include respond(md) {
+            max-width: 70px;
+        }
+        @include respond(xs) {
+            right: 10px;
+            bottom: 24%;
+            max-width: 50px;
+        }
+    }
+}
+.as-security-list {
+    gap: 70px;
+    z-index: 1;
+    display: flex;
+    align-items: start;
+    position: relative;
+    padding-bottom: 108px;
+    justify-content: center;
+    @include respond(md) {
+        gap: 20px;
+    }
+    @include respond(xs) {
+        gap: 10px;
+        padding-bottom: 40px;
+    }
+    @include respond(sm) {
+        gap: 40px;
+    }
+    .shape {
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        position: absolute;
+        .img {
+            z-index: -1;
+            position: absolute;
+            @include respond(xs) {
+                max-width: 45px;
+            }
+            &--1 {
+                left: 0;
+                width: 100%;
+                bottom: 63px;
+                text-align: center; 
+                @media only screen and (max-width: 1023px) {
+                    left: 58px;
+                    width: 88%;
+                    bottom: 67px;
+                }
+                @include respond(md) {
+                    width: 82%;
+                    bottom: 79px;
+                }
+                @include respond(xs) {
+                    width: 85%;
+                    left: 25px;
+                    bottom: 21px;
+                    max-width: 100%;
+                }
+                @include respond(sm) {
+                    width: 88%;
+                    left: 30px;
+                    bottom: 17px;
+                }
+            }
+            &--2 {
+                top: 34%;
+                left: 22.9%;
+                @media only screen and (min-width: 1200px) and (max-width: 1300px) {
+                    left: 17.9%;
+                }
+                @include respond(lg) {
+                    left: 13.9%;
+                }
+                @include respond(md) {
+                    left: 14.9%;
+                }
+                @include respond(xs) {
+                    top: 50%;
+                    left: 16.9%;
+                }
+                @include respond(sm) {
+                    left: 12.9%;
+                }
+            }
+            &--3 {
+                top: 15%;
+                left: 39%;
+                @media only screen and (min-width: 1200px) and (max-width: 1300px) {
+                    left: 37%;
+                }
+                @include respond(lg) {
+                    left: 35.5%;
+                }
+                @include respond(xs) {
+                    top: 19%;
+                    left: 37.5%;
+                }
+                @include respond(sm) {
+                    left: 34.5%;
+                }
+            }
+            &--4 {
+                top: 15%;
+                right: 39.2%;
+                @media only screen and (min-width: 1200px) and (max-width: 1300px) {
+                    right: 37.2%;
+                }
+                @include respond(lg) {
+                    right: 35.5%;
+                }
+                @include respond(md) {
+                    right: 34.5%;
+                }
+                @include respond(xs) {
+                    top: 19%;
+                    right: 37.5%;
+                }
+                @include respond(sm) {
+                    right: 35.5%;
+                }
+            }
+            &--5 {
+                top: 34%;
+                right: 22.9%;
+                @media only screen and (min-width: 1200px) and (max-width: 1300px) {
+                    right: 17.9%;
+                }
+                @include respond(lg) {
+                    right: 14%;
+                }
+                @include respond(xs) {
+                    top: 50%;
+                    right: 17%;
+                }
+                @include respond(sm) {
+                    right: 14%;
+                }
+            }
+        }
+    }
+}
+.as-security-logo {
+    height: 140px;
+    width: 140px;
+    padding: 10px;
+    border: 1px solid #ebdcfe;
+    @include border-radius(10px);
+    background: rgba(255, 254, 254, 0.7);
+    @include respond(md) {
+        width: 115px;
+        height: 115px;
+    }
+    @include respond(xs) {
+        width: 55px;
+        height: 55px;
+        padding: 5px;
+    }
+    @include respond(sm) {
+        width: 80px;
+        height: 70px;
+    }
+    span {
+        background: #fffefe;
+        border-radius: inherit;
+        @include center;
+        height: 100%;
+        width: 100%;
+        display: inline-flex;
+        border: 1px solid #ebdcfe;
+        @media only screen and (max-width: 1023px) {
+            padding: 10px;
+        }
+        @include respond(md) {
+            padding: 18px;
+        }
+        @include respond(xs) {
+            padding: 7px;
+        }
+    }
+    &:nth-child(1),
+    &:nth-child(5) {
+        margin-top: 154px;
+    }
+    &:nth-child(2),
+    &:nth-child(4) {
+        margin-top: 77px;
+    }
+    &.main-logo {
+        width: 124px;
+        height: 124px;
+        position: absolute;
+        left: 50%;
+        bottom: 0;
+        transform: translateX(-50%);
+        background: var(--color-white);
+        box-shadow: 0 0 4px 0 rgba(148, 81, 245, 0.3);
+        @include respond(md) {
+            width: 100px;
+            height: 100px;
+            bottom: 30px;
+        }
+        @include respond(xs) {
+            width: 50px;
+            height: 50px;
+            bottom: 0;
+        }
+        @include respond(sm) {
+            width: 60px;
+            height: 60px;
+            bottom: -10px;
+        }
+        span {
+            border: 1px solid #ededed;
+            position: relative;
+            &::before {
+                position: absolute;
+                content: '';
+                inset: 5px;
+                border-radius: inherit;
+                border: 1px solid rgba(237, 237, 237, 0.5);
+            }
+        }
+    }
+}
+.as-security-bottom {
+    margin: 30px 0 50px;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+    @include respond(xs) {
+        margin: 20px 0 50px;
+    }
+    &::before,
+    &::after {
+        position: absolute;
+        content: '';
+        left: 0;
+        top: 50%;
+        z-index: 1;
+        height: 46px;
+        width: 129px;
+        transform:  translateY(-50%);
+        background: linear-gradient(90deg, #fff 32.83% 0%, rgba(255, 254, 254, 0));
+        @include respond(xs) {
+            width: 80px;
+        }
+    }
+    &::after {
+        left: auto;
+        right: 0;
+        transform:  translateY(-50%);
+        background: linear-gradient(90deg, rgba(255, 254, 254, 0) 0%, #fff 32.83%);
+    }
+    ul {
+        gap: 26px;
+        display: flex;
+        margin-right: 26px;
+        li {
+            gap: 8px;
+            color: #777676;
+            font-weight: 500;
+            align-items: center;
+            display: inline-flex;
+        }
+    }
+}

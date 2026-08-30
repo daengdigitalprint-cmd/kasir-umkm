@@ -1,16 +1,26 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { Home, ShoppingCart, Package, Users, BarChart3, Settings, LogOut, Crown, Clock, Tag, History, Truck, ClipboardList, ClipboardCheck, Undo2, ArrowRightLeft, ChefHat, Layers, Shirt, Gift, Building2, Eye, Wallet, ListOrdered } from 'lucide-vue-next';
+import { Home, ShoppingCart, Package, Users, BarChart3, Settings, LogOut, Crown, Clock, Tag, History, Truck, ClipboardList, ClipboardCheck, Undo2, ArrowRightLeft, ChefHat, Layers, Shirt, Gift, Building2, Eye, Wallet, ListOrdered, ReceiptText, FileText, Activity, CalendarCheck, Banknote, KeyRound, MessageCircle, QrCode, CreditCard } from 'lucide-vue-next';
 import type { LucideIcon } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 const emit = defineEmits(['close-mobile-menu']);
 const page = usePage();
 
+const isExternal = (href: string) => /^https?:\/\//.test(href);
+
 type NavItem = {
     name: string;
     href: string;
     icon: LucideIcon;
+    /** Key unik untuk hak akses dinamis dari role_menu_permissions. */
+    menuKey?: string;
+    /** Kelompok menu (header seksi) sesuai standar aplikasi kasir. */
+    section?: 'kasir' | 'produk_stok' | 'pembelian' | 'pelanggan_promo' | 'laporan_keuangan' | 'pengaturan';
+    /** Hanya tampil jika Modul Akuntansi diaktifkan di pengaturan toko. */
+    accountingOnly?: boolean;
+    /** Hanya tampil jika Modul Hutang Piutang diaktifkan di pengaturan toko. */
+    receivablesOnly?: boolean;
     /** Laporan, diskon, pelanggan — admin & manajer saja. */
     backofficeOnly?: boolean;
     /** Stok, produk, pembelian, transfer — termasuk admin gudang. */
@@ -19,6 +29,8 @@ type NavItem = {
     adjustStock?: boolean;
     /** POS & shift kasir. */
     posOnly?: boolean;
+    /** Hanya tampil jika Modul Scan Meja diaktifkan di pengaturan toko. */
+    scanMejaOnly?: boolean;
     /** Pengelolaan toko hanya untuk admin toko. */
     storeAdminOnly?: boolean;
     /** Warung makan / kafe (tipe toko F&B). */
@@ -45,8 +57,18 @@ type NavItem = {
     posAndViewStock?: boolean;
     /** Menu khusus owner. */
     ownerOnly?: boolean;
+    /** Hanya tampil jika Modul Absensi diaktifkan di pengaturan toko. */
+    attendanceOnly?: boolean;
+    /** Hanya tampil jika add-on Absensi + Payroll sudah dibeli. */
+    payrollOnly?: boolean;
+    /** Hanya tampil jika Modul Login Kasir (PIN) diaktifkan di pengaturan toko. */
+    cashierPinOnly?: boolean;
     /** Disembunyikan untuk owner (menu operasional: POS, shift, dll). */
     hideOnOwner?: boolean;
+    /** Kelas warna ikon khusus (mis. Bantuan hijau WhatsApp). */
+    iconClass?: string;
+    /** Kelas warna teks khusus (mis. Bantuan hijau WhatsApp). */
+    textClass?: string;
 };
 
 type ProcessedNavItem = NavItem & {
@@ -59,34 +81,51 @@ type ProcessedNavItem = NavItem & {
 };
 
 const navigationSource: NavItem[] = [
-    { name: 'Dashboard', href: '/dashboard', icon: Home },
-    { name: 'POS', href: '/pos', icon: ShoppingCart, posOnly: true, hideOnLaundry: true, hideOnWarehouse: true, hideOnOwner: true },
-    { name: 'Shift kasir', href: '/cash-shifts', icon: Clock, posOnly: true, advancedRetailOnly: true, hideOnWarehouse: true, hideOnOwner: true },
-    { name: 'Uang Masuk/Keluar', href: '/cash-shifts/transactions', icon: ArrowRightLeft, posOnly: true, advancedRetailOnly: true, hideOnWarehouse: true, hideOnOwner: true },
-    { name: 'Antrian dapur', href: '/kitchen', icon: ChefHat, posOnly: true, kitchenQueueOnly: true, hideOnWarehouse: true, hideOnOwner: true },
-    { name: 'Antrian', href: '/queues', icon: ListOrdered, posOnly: true, queueModuleOnly: true, hideOnWarehouse: true, hideOnOwner: true },
-    { name: 'Order Laundry', href: '/laundry-orders', icon: Shirt, posOnly: true, laundryOnly: true, hideOnWarehouse: true, hideOnOwner: true },
-    { name: 'Lihat Stok', href: '/stock-overview', icon: Eye, posAndViewStock: true, hideOnOwner: true },
-    { name: 'Produk', href: '/products', icon: Package, inventoryItem: true },
-    { name: 'Kategori', href: '/product-categories', icon: Layers, inventoryItem: true },
-    { name: 'Riwayat stok', href: '/stock-movements', icon: History, inventoryItem: true, hideOnOwner: true },
-    { name: 'Penyesuaian stok', href: '/stock-adjustments', icon: ClipboardCheck, adjustStock: true, advancedRetailOnly: true, hideOnOwner: true, hideOnDirectStockEdit: true },
-    { name: 'Stock opname', href: '/stock-opnames', icon: ClipboardList, inventoryItem: true, advancedRetailOnly: true, hideOnOwner: true, hideOnDirectStockEdit: true },
-    { name: 'Resep', href: '/recipes', icon: ChefHat, inventoryItem: true, recipesOnly: true },
-    { name: 'Produksi', href: '/productions', icon: Layers, inventoryItem: true, productionsOnly: true },
-    { name: 'Transfer stok', href: '/stock-transfers', icon: ArrowRightLeft, inventoryItem: true, advancedRetailOnly: true },
-    { name: 'Pembelian', href: '/purchases', icon: Truck, inventoryItem: true, advancedRetailOnly: true },
-    { name: 'Retur pembelian', href: '/purchase-returns', icon: Undo2, inventoryItem: true, advancedRetailOnly: true },
-    { name: 'Pre-order', href: '/pre-orders', icon: ClipboardList, inventoryItem: true, advancedRetailOnly: true },
-    { name: 'Diskon', href: '/discounts', icon: Tag, backofficeOnly: true, advancedRetailOnly: true, hideOnWarehouse: true },
-    { name: 'Pelanggan', href: '/customers', icon: Users, backofficeOnly: true, hideOnWarehouse: true },
-    { name: 'Loyalitas', href: '/loyalty', icon: Gift, backofficeOnly: true, advancedRetailOnly: true, hideOnWarehouse: true },
-    { name: 'Laporan', href: '/reports', icon: BarChart3, backofficeOnly: true },
-    { name: 'Biaya Usaha', href: '/expenses', icon: Wallet, backofficeOnly: true },
-    { name: 'Tambah Outlet/Gudang', href: '/stores/create', icon: Building2, storeAdminOnly: true },
-    { name: 'Kelola Produk', href: '/manage-products', icon: Package, storeAdminOnly: true },
-    { name: 'Tim & Akses', href: '/manage-staff', icon: Users, storeAdminOnly: true },
-    { name: 'Pengaturan', href: '/settings', icon: Settings },
+    { name: 'Dashboard', href: '/dashboard', icon: Home, menuKey: 'dashboard' },
+    // ── Kasir ──
+    { name: 'POS', href: '/pos', icon: ShoppingCart, menuKey: 'pos', section: 'kasir', posOnly: true, hideOnLaundry: true, hideOnWarehouse: true, hideOnOwner: true },
+    { name: 'Pesanan Masuk', href: '/table-orders', icon: ClipboardList, menuKey: 'table_orders', section: 'kasir', posOnly: true, scanMejaOnly: true, hideOnWarehouse: true, hideOnOwner: true },
+    { name: 'Antrian dapur', href: '/kitchen', icon: ChefHat, menuKey: 'kitchen_queue', section: 'kasir', kitchenQueueOnly: true, hideOnWarehouse: true, hideOnOwner: true },
+    { name: 'Manajemen Meja', href: '/tables', icon: QrCode, menuKey: 'tables', section: 'kasir', posOnly: true, scanMejaOnly: true, hideOnWarehouse: true, hideOnOwner: true },
+    { name: 'Antrian', href: '/queues', icon: ListOrdered, menuKey: 'queues', section: 'kasir', posOnly: true, queueModuleOnly: true, hideOnWarehouse: true, hideOnOwner: true },
+    { name: 'Shift kasir', href: '/cash-shifts', icon: Clock, menuKey: 'cash_shifts', section: 'kasir', posOnly: true, advancedRetailOnly: true, hideOnWarehouse: true, hideOnOwner: true },
+    { name: 'Kas Masuk/Keluar', href: '/cash-shifts/transactions', icon: ArrowRightLeft, menuKey: 'cash_transactions', section: 'kasir', posOnly: true, advancedRetailOnly: true, hideOnWarehouse: true, hideOnOwner: true },
+    { name: 'Riwayat Transaksi', href: '/pos/transactions', icon: ReceiptText, menuKey: 'pos_transactions', section: 'kasir', posOnly: true, hideOnWarehouse: true, hideOnOwner: true },
+    { name: 'Order Laundry', href: '/laundry-orders', icon: Shirt, menuKey: 'laundry_orders', section: 'kasir', posOnly: true, laundryOnly: true, hideOnWarehouse: true, hideOnOwner: true },
+    // ── Produk & Stok ──
+    { name: 'Lihat Stok', href: '/stock-overview', icon: Eye, menuKey: 'stock_overview', section: 'produk_stok', posAndViewStock: true, hideOnOwner: true },
+    { name: 'Produk', href: '/products', icon: Package, menuKey: 'products', section: 'produk_stok', inventoryItem: true },
+    { name: 'Kategori', href: '/product-categories', icon: Layers, menuKey: 'product_categories', section: 'produk_stok', inventoryItem: true },
+    { name: 'Riwayat stok', href: '/stock-movements', icon: History, menuKey: 'stock_movements', section: 'produk_stok', inventoryItem: true, hideOnOwner: true },
+    { name: 'Penyesuaian stok', href: '/stock-adjustments', icon: ClipboardCheck, menuKey: 'stock_adjustment', section: 'produk_stok', adjustStock: true, advancedRetailOnly: true, hideOnOwner: true, hideOnDirectStockEdit: true },
+    { name: 'Stok Opname', href: '/stock-opnames', icon: ClipboardList, menuKey: 'stock_opnames', section: 'produk_stok', inventoryItem: true, advancedRetailOnly: true, hideOnOwner: true, hideOnDirectStockEdit: true },
+    { name: 'Resep', href: '/recipes', icon: ChefHat, menuKey: 'recipes', section: 'produk_stok', recipesOnly: true },
+    { name: 'Produksi', href: '/productions', icon: Layers, menuKey: 'productions', section: 'produk_stok', productionsOnly: true },
+    // ── Pembelian & Distribusi ──
+    { name: 'Pembelian', href: '/purchases', icon: Truck, menuKey: 'purchases', section: 'pembelian', inventoryItem: true, advancedRetailOnly: true },
+    { name: 'Retur pembelian', href: '/purchase-returns', icon: Undo2, menuKey: 'purchase_returns', section: 'pembelian', inventoryItem: true, advancedRetailOnly: true },
+    { name: 'Retur penjualan', href: '/sales-returns', icon: Undo2, menuKey: 'sales_returns', section: 'pembelian', inventoryItem: true, advancedRetailOnly: true },
+    { name: 'Pre-order', href: '/pre-orders', icon: ClipboardList, menuKey: 'pre_orders', section: 'pembelian', inventoryItem: true, advancedRetailOnly: true },
+    { name: 'Transfer stok', href: '/stock-transfers', icon: ArrowRightLeft, menuKey: 'stock_transfers', section: 'pembelian', inventoryItem: true, advancedRetailOnly: true },
+    // ── Pelanggan & Promo ──
+    { name: 'Pelanggan', href: '/customers', icon: Users, menuKey: 'customers', section: 'pelanggan_promo', backofficeOnly: true, hideOnWarehouse: true },
+    { name: 'Piutang', href: '/receivables', icon: CreditCard, menuKey: 'receivables', section: 'pelanggan_promo', backofficeOnly: true, hideOnWarehouse: true, receivablesOnly: true },
+    { name: 'Loyalitas', href: '/loyalty', icon: Gift, menuKey: 'loyalty', section: 'pelanggan_promo', backofficeOnly: true, advancedRetailOnly: true, hideOnWarehouse: true },
+    { name: 'Diskon', href: '/discounts', icon: Tag, menuKey: 'discounts', section: 'pelanggan_promo', backofficeOnly: true, advancedRetailOnly: true, hideOnWarehouse: true },
+    // ── Laporan & Keuangan ──
+    { name: 'Laporan', href: '/reports', icon: BarChart3, menuKey: 'reports', section: 'laporan_keuangan' },
+    { name: 'Biaya Usaha', href: '/expenses', icon: Wallet, menuKey: 'expenses', section: 'laporan_keuangan' },
+    { name: 'Log Aktivitas', href: '/activity-logs', icon: FileText, menuKey: 'activity_logs', section: 'laporan_keuangan' },
+    { name: 'KPI', href: '/kpi', icon: Activity, menuKey: 'kpi', section: 'laporan_keuangan', storeAdminOnly: true },
+    { name: 'Payroll', href: '/payroll', icon: Banknote, menuKey: 'payroll', section: 'laporan_keuangan', backofficeOnly: true, payrollOnly: true },
+    { name: 'Absensi', href: '/attendance', icon: CalendarCheck, menuKey: 'attendance', section: 'kasir', attendanceOnly: true },
+    // ── Pengaturan ──
+    { name: 'Tambah Outlet/Gudang', href: '/stores/create', icon: Building2, menuKey: 'manage_stores', section: 'pengaturan', storeAdminOnly: true },
+    { name: 'Distribusi Produk', href: '/manage-products', icon: Package, menuKey: 'manage_products', section: 'pengaturan', storeAdminOnly: true },
+    { name: 'Tim & Akses', href: '/manage-staff', icon: Users, menuKey: 'manage_staff', section: 'pengaturan', storeAdminOnly: true },
+    { name: 'Pengaturan', href: '/settings', icon: Settings, menuKey: 'settings', section: 'pengaturan', storeAdminOnly: true },
+    { name: 'Login Kasir', href: '/settings/cashier-pin', icon: KeyRound, menuKey: 'cashier_pin_settings', section: 'pengaturan', storeAdminOnly: true, cashierPinOnly: true },
+    { name: 'Bantuan', href: 'https://wa.me/6285242766676?text=Halo%2C%20saya%20butuh%20bantuan%20dengan%20aplikasi%20kasir.', icon: MessageCircle, section: 'pengaturan', iconClass: 'text-green-600 group-hover:text-green-700', textClass: 'text-green-600 group-hover:text-green-700' },
 ];
 
 const navigationItems = computed((): ProcessedNavItem[] => {
@@ -98,102 +137,176 @@ const navigationItems = computed((): ProcessedNavItem[] => {
     const manageStoreSettings = Boolean(
         (page.props as { abilities?: { manage_store_settings?: boolean } }).abilities?.manage_store_settings,
     );
+    const canAccessActivityLogs = Boolean((page.props as { can_access_activity_logs?: boolean }).can_access_activity_logs);
     const fnb = Boolean((page.props as { fnb_enabled?: boolean }).fnb_enabled);
+    const pharmacy = Boolean((page.props as { pharmacy_enabled?: boolean }).pharmacy_enabled);
     const laundry = Boolean((page.props as { laundry_enabled?: boolean }).laundry_enabled);
     const recipesEnabled = Boolean((page.props as { recipes_enabled?: boolean }).recipes_enabled);
     const productionsEnabled = Boolean((page.props as { productions_enabled?: boolean }).productions_enabled);
     const kitchenQueueEnabled = Boolean((page.props as { kitchen_queue_enabled?: boolean }).kitchen_queue_enabled);
     const queueModuleEnabled = Boolean((page.props as { queue_module_enabled?: boolean }).queue_module_enabled);
+    const scanMejaEnabled = Boolean((page.props as { scan_meja_enabled?: boolean }).scan_meja_enabled);
+    const attendanceEnabled = Boolean((page.props as { attendance_enabled?: boolean }).attendance_enabled);
+    const payrollEnabled = Boolean((page.props as { payroll_enabled?: boolean }).payroll_enabled);
+    const cashierPinEnabled = String((page.props as { cashier_login_mode?: string }).cashier_login_mode ?? 'email') === 'pin';
+    const accountingEnabled = Boolean((page.props as { accounting_enabled?: boolean }).accounting_enabled);
+    const receivablesEnabled = Boolean((page.props as { receivables_enabled?: boolean }).receivables_enabled);
     const pendingQueueCount = Number((page.props as { pending_queue_count?: number }).pending_queue_count ?? 0);
+    const pendingTableOrderCount = Number((page.props as { pending_table_order_count?: number }).pending_table_order_count ?? 0);
+    const pendingKitchenOrderCount = Number((page.props as { pending_kitchen_order_count?: number }).pending_kitchen_order_count ?? 0);
     const locationType = String((page.props as { location_type?: string }).location_type ?? 'outlet');
     const isWarehouse = locationType === 'central_warehouse' || locationType === 'branch_warehouse';
+    const currentRole = String((page.props as { auth?: { user?: { role?: string }; active_role?: string } }).auth?.active_role ?? (page.props as { auth?: { user?: { role?: string } } }).auth?.user?.role ?? '');
+    const isKitchen = currentRole === 'kitchen';
     const planLimits = (page.props as { plan_limits?: { allows_advanced_retail?: boolean } | null }).plan_limits;
     /** Tanpa plan_limits (belum ada konteks toko): biarkan seperti legacy. Ada plan: harus eksplisit true. */
     const allowAdvanced =
         planLimits == null ? true : planLimits.allows_advanced_retail === true;
     const directStockEdit = Boolean((page.props as { direct_stock_edit?: boolean }).direct_stock_edit);
-    
+    const allowedMenus = (page.props as { allowed_menus?: string[] }).allowed_menus ?? [];
+
     return navigationSource.flatMap((item): ProcessedNavItem[] => {
-        // Sembunyikan menu operasional untuk owner
-        if (isOwner && item.hideOnOwner) {
+        // Cek apakah menu ini diizinkan secara eksplisit lewat Manage Staff
+        // Jika allowedMenus kosong, asumsikan ini legacy/belum setup (bypass filter strict)
+        const hasExplicitAccess = item.menuKey && allowedMenus.includes(item.menuKey);
+        const isStrictRoleMode = allowedMenus.length > 0;
+
+        // Khusus Log Aktivitas: tampilkan jika user punya hak akses
+        if (item.menuKey === 'activity_logs' && !canAccessActivityLogs) {
             return [];
         }
 
-        // Sembunyikan menu yang tidak punya akses
-        if (item.backofficeOnly && !backoffice) {
-            return [];
-        }
-        if (item.inventoryItem && !inventory) {
-            return [];
-        }
-        if (item.adjustStock && !stockAdjust) {
-            return [];
-        }
-        if (item.posOnly && !pos) {
-            return [];
-        }
-        if (item.storeAdminOnly && !manageStoreSettings) {
-            return [];
-        }
-        if (item.ownerOnly && !isOwner) {
-            return [];
-        }
-        if (item.fnbOnly && !fnb) {
-            return [];
-        }
-        if (item.laundryOnly && !laundry) {
-            return [];
-        }
-        if (item.hideOnLaundry && laundry) {
-            return [];
-        }
-        if (item.posAndViewStock && !pos && !inventory) {
-            return [];
-        }
-        if (item.recipesOnly && !recipesEnabled) {
-            return [];
-        }
-        if (item.productionsOnly && !productionsEnabled) {
-            return [];
-        }
-        if (item.kitchenQueueOnly && !kitchenQueueEnabled) {
-            return [];
-        }
-        if (item.queueModuleOnly && !queueModuleEnabled) {
-            return [];
-        }
-        if (item.hideOnWarehouse && isWarehouse) {
-            return [];
-        }
-        if (item.hideOnDirectStockEdit && directStockEdit) {
-            return [];
+        // 1. FILTER WAJIB (Selalu dieksekusi, bahkan jika user punya akses eksplisit)
+        // Owner tidak bisa lihat menu operasional
+        if (isOwner && item.hideOnOwner) return [];
+        // Menu gudang disembunyikan di outlet
+        if (item.hideOnWarehouse && isWarehouse) return [];
+        // Modul-modul yang bisa di-toggle di Settings
+        if (item.recipesOnly && !recipesEnabled) return [];
+        if (item.pharmacyOnly && !pharmacy) return [];
+        if (item.productionsOnly && !productionsEnabled) return [];
+        if (item.kitchenQueueOnly && !kitchenQueueEnabled && !isKitchen) return [];
+        if (item.queueModuleOnly && !queueModuleEnabled) return [];
+        if (item.scanMejaOnly && !scanMejaEnabled) return [];
+        if (item.attendanceOnly && !attendanceEnabled) return [];
+        if (item.payrollOnly && !payrollEnabled) return [];
+        if (item.cashierPinOnly && !cashierPinEnabled) return [];
+        if (item.accountingOnly && !accountingEnabled) return [];
+        if (item.receivablesOnly && !receivablesEnabled) return [];
+        if (item.fnbOnly && !fnb) return [];
+        if (item.laundryOnly && !laundry) return [];
+        if (item.hideOnLaundry && laundry) return [];
+
+        // 2. FILTER ROLE & AKSES (Pengecekan hak akses spesifik)
+        if (isStrictRoleMode) {
+            // Dalam mode strict (role dikonfigurasi), JIKA menu_key ada dan TIDAK diizinkan -> SEMBUNYIKAN
+            if (item.menuKey && !hasExplicitAccess) {
+                return [];
+            }
+            
+            // JIKA ini Stok Opname / Penyesuaian Stok DAN store pakai mode directStockEdit, 
+            // sembunyikan KECUALI jika secara eksplisit diizinkan di role permission
+            if (item.hideOnDirectStockEdit && directStockEdit && !hasExplicitAccess) {
+                return [];
+            }
+        } else {
+            // Dalam mode legacy (tanpa role_menu_permissions), gunakan filter abilities
+            if (item.hideOnDirectStockEdit && directStockEdit) return [];
+            if (item.backofficeOnly && !backoffice) return [];
+            if (item.inventoryItem && !inventory) return [];
+            if (item.adjustStock && !stockAdjust) return [];
+            if (item.posOnly && !pos) return [];
+            if (item.storeAdminOnly && !manageStoreSettings) return [];
+            if (item.ownerOnly && !isOwner) return [];
+            if (item.posAndViewStock && !pos && !inventory) return [];
         }
 
+        // 3. TRANSFORMASI & FORMATTING
         // Owner: Dashboard mengarah ke /owner/dashboard
         if (isOwner && item.name === 'Dashboard') {
             return [{ ...item, href: '/owner/dashboard' }];
         }
         
-        // Filter berdasarkan paket - untuk paket starter, tampilkan tapi disabled
+        // Filter paket berlangganan
         if (item.advancedRetailOnly && !allowAdvanced) {
             return [{ ...item, disabled: true, disabledReason: 'Upgrade ke paket berbayar untuk mengakses fitur ini' }];
         }
         
-        // Tambah badge pending count untuk menu Antrian
+        // Badge antrian dapur
+        if (item.menuKey === 'kitchen_queue' && pendingKitchenOrderCount > 0) {
+            return [{ ...item, pendingCount: pendingKitchenOrderCount }];
+        }
+
+        // Badge antrian manual
         if (item.queueModuleOnly && pendingQueueCount > 0) {
             return [{ ...item, pendingCount: pendingQueueCount }];
+        }
+
+        // Badge pesanan meja pending (Scan Meja)
+        if (item.menuKey === 'table_orders' && pendingTableOrderCount > 0) {
+            return [{ ...item, pendingCount: pendingTableOrderCount }];
         }
 
         return [item];
     });
 });
 
+/** Urutan & label header seksi menu (standar aplikasi kasir Indonesia). */
+const SECTION_META: { key: NonNullable<NavItem['section']>; label: string }[] = [
+    { key: 'kasir', label: 'Kasir' },
+    { key: 'produk_stok', label: 'Produk & Stok' },
+    { key: 'pembelian', label: 'Pembelian & Distribusi' },
+    { key: 'pelanggan_promo', label: 'Pelanggan & Promo' },
+    { key: 'laporan_keuangan', label: 'Laporan & Keuangan' },
+    { key: 'pengaturan', label: 'Pengaturan' },
+];
+
+type NavRenderEntry =
+    | { kind: 'item'; key: string; item: ProcessedNavItem }
+    | { kind: 'section'; key: string; label: string };
+
+/** Item tanpa seksi (Dashboard) di atas, lalu header seksi + itemnya berurutan. */
+const renderItems = computed<NavRenderEntry[]>(() => {
+    const out: NavRenderEntry[] = [];
+    for (const item of navigationItems.value) {
+        if (!item.section) {
+            out.push({ kind: 'item', key: item.name, item });
+        }
+    }
+    for (const meta of SECTION_META) {
+        const sectionItems = navigationItems.value.filter((i) => i.section === meta.key);
+        if (sectionItems.length === 0) {
+            continue;
+        }
+        out.push({ kind: 'section', key: meta.key, label: meta.label });
+        for (const item of sectionItems) {
+            out.push({ kind: 'item', key: item.name, item });
+        }
+    }
+    return out;
+});
+
 const isCurrentRoute = (href: string) => {
+    if (href === '/reports') {
+        return page.url.startsWith('/reports') || page.url.startsWith('/financial');
+    }
     if (href === '/dashboard' && page.url !== '/dashboard') {
         return false;
     }
     if (href === '/owner/dashboard') {
         return page.url.startsWith('/owner/dashboard');
+    }
+    if (href === '/pos' && page.url.startsWith('/pos/')) {
+        return false;
+    }
+    if (href === '/settings') {
+        return page.url === '/settings';
+    }
+    if (href === '/cash-shifts') {
+        return page.url === '/cash-shifts' || page.url.startsWith('/cash-shifts/shift');
+    }
+    if (href === '/cash-shifts/transactions') {
+        return page.url === '/cash-shifts/transactions' || page.url.startsWith('/cash-shifts/transactions/');
     }
     return page.url.startsWith(href);
 };
@@ -230,73 +343,86 @@ const subscriptionCardSoft = computed(() => {
 
 <template>
     <div class="flex flex-col h-full w-full">
-        <!-- Section Header -->
-        <div class="flex items-center px-4 mb-4 mt-2">
-            <p class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">PLATFORM UTAMA</p>
-        </div>
-        
         <nav class="space-y-1 relative">
-            <div v-for="item in navigationItems" :key="item.name" class="relative group/menu">
+            <template v-for="entry in renderItems" :key="entry.key">
+                <!-- Header seksi menu -->
+                <p
+                    v-if="entry.kind === 'section'"
+                    class="px-4 pt-6 pb-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400"
+                >
+                    {{ entry.label }}
+                </p>
+
+                <!-- Item menu -->
+                <div v-else class="relative group/menu">
                 <component
-                    :is="item.disabled ? 'div' : Link"
-                    :href="item.disabled ? undefined : item.href" 
-                    @click="!item.disabled && emit('close-mobile-menu')" 
+                    :is="entry.item.disabled ? 'div' : isExternal(entry.item.href) ? 'a' : Link"
+                    :href="entry.item.disabled ? undefined : entry.item.href" 
+                    :target="isExternal(entry.item.href) ? '_blank' : undefined"
+                    :rel="isExternal(entry.item.href) ? 'noopener noreferrer' : undefined"
+                    @click="!entry.item.disabled && emit('close-mobile-menu')" 
                     :class="[
                         'block outline-none',
-                        item.disabled ? 'cursor-not-allowed' : ''
+                        entry.item.disabled ? 'cursor-not-allowed' : ''
                     ]"
                 >
                     <div
                         :class="[
                             'flex items-center w-full h-12 px-4 rounded-2xl transition-all duration-300 group relative overflow-hidden',
-                            item.disabled 
+                            entry.item.disabled 
                                 ? 'opacity-50 cursor-not-allowed'
-                                : isCurrentRoute(item.href) 
+                                : isCurrentRoute(entry.item.href) 
                                     ? 'bg-primary/10 text-primary' 
                                     : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
                         ]"
                     >
                         <component 
-                            :is="item.icon" 
+                            :is="entry.item.icon" 
                             :class="[
                                 'size-5 mr-4 z-10',
-                                item.disabled
+                                entry.item.disabled
                                     ? 'text-slate-300'
                                     : 'transition-transform duration-300 group-hover:scale-110',
-                                !item.disabled && isCurrentRoute(item.href) ? 'text-primary' : '',
-                                !item.disabled && !isCurrentRoute(item.href) ? 'text-slate-400 group-hover:text-slate-800' : ''
+                                entry.item.iconClass
+                                    ? entry.item.iconClass
+                                    : [
+                                        !entry.item.disabled && isCurrentRoute(entry.item.href) ? 'text-primary' : '',
+                                        !entry.item.disabled && !isCurrentRoute(entry.item.href) ? 'text-slate-400 group-hover:text-slate-800' : '',
+                                    ],
                             ]"
                         />
                         <span 
                             :class="[
                                 'font-bold text-sm tracking-tight z-10',
-                                item.disabled
+                                entry.item.disabled
                                     ? 'text-slate-400'
-                                    : isCurrentRoute(item.href) 
-                                        ? 'text-primary' 
-                                        : 'text-slate-500 group-hover:text-slate-800'
+                                    : entry.item.textClass
+                                        ? entry.item.textClass
+                                        : isCurrentRoute(entry.item.href) 
+                                            ? 'text-primary' 
+                                            : 'text-slate-500 group-hover:text-slate-800'
                             ]"
                         >
-                            {{ item.name }}
+                            {{ entry.item.name }}
                         </span>
                         
                         <!-- Badge notifikasi antrian pending -->
                         <span
-                            v-if="item.pendingCount && item.pendingCount > 0"
+                            v-if="entry.item.pendingCount && entry.item.pendingCount > 0"
                             class="ml-auto flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-black z-10"
                         >
-                            {{ item.pendingCount > 99 ? '99+' : item.pendingCount }}
+                            {{ entry.item.pendingCount > 99 ? '99+' : entry.item.pendingCount }}
                         </span>
 
                         <!-- Badge Premium untuk fitur berbayar -->
                         <Crown 
-                            v-if="item.disabled && item.disabledReason?.includes('paket')"
+                            v-if="entry.item.disabled && entry.item.disabledReason?.includes('paket')"
                             class="size-4 ml-auto text-amber-400 z-10"
                         />
 
                         <!-- Active Indicator side border -->
                         <div 
-                            v-if="!item.disabled && isCurrentRoute(item.href)"
+                            v-if="!entry.item.disabled && isCurrentRoute(entry.item.href)"
                             class="absolute left-[-4px] top-2 bottom-2 w-2 bg-primary rounded-r-full shadow-[2px_0_8px_rgba(124,58,237,0.4)] z-20"
                         ></div>
                     </div>
@@ -304,14 +430,15 @@ const subscriptionCardSoft = computed(() => {
                 
                 <!-- Tooltip untuk menu disabled -->
                 <div 
-                    v-if="item.disabled && item.disabledReason"
+                    v-if="entry.item.disabled && entry.item.disabledReason"
                     class="absolute right-3 top-1/2 -translate-y-1/2 z-50 pointer-events-none opacity-0 group-hover/menu:opacity-100 transition-opacity duration-200 max-w-[160px]"
                 >
                     <div class="bg-slate-900 text-white text-[10px] px-2 py-1 rounded-lg shadow-lg text-right leading-tight">
-                        {{ item.disabledReason }}
+                        {{ entry.item.disabledReason }}
                     </div>
                 </div>
-            </div>
+                </div>
+            </template>
         </nav>
 
         <!-- Subscription Section -->

@@ -1,0 +1,681 @@
+/* Back to top - pindah ke kiri agar tidak bertabrakan dengan WhatsApp */
+.xb-backtotop {
+    right: auto !important;
+    left: 30px !important;
+}
+
+@media (min-width: 768px) {
+    .xb-backtotop {
+        left: 2rem !important;
+    }
+}
+
+/* Warning image + chart box - rata tengah di semua versi */
+.xb-item--warning_img {
+    text-align: center;
+}
+.xb-item--warning_img img {
+    display: block;
+    margin: 0 auto;
+}
+
+@media (max-width: 767px) {
+    .fs-solution-chart_box {
+        min-height: auto !important;
+    }
+    .fs-tag-list {
+        text-align: center;
+    }
+    .xb-item--warning_img {
+        max-width: 100%;
+        overflow: hidden;
+    }
+    .xb-item--warning_img img {
+        max-width: 100% !important;
+        height: auto !important;
+    }
+}
+
+/* Header tombol - beri jarak antar tombol Masuk & Coba gratis */
+.header-area--four .xb-header-btn {
+    display: flex;
+    gap: 10px;
+}
+
+/* Custom spacing overrides untuk LandingValue section */
+
+/* Hapus padding vertikal di semua breakpoint dengan specificity tinggi */
+section.section-padding,
+.section-padding {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+@media (max-width: 1199px) {
+    section.section-padding,
+    .section-padding {
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+    }
+}
+
+@media (max-width: 991px) {
+    section.section-padding,
+    .section-padding {
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+    }
+}
+
+/* Override khusus untuk section benefit */
+section.gt-feature-benefit-section.section-padding {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+@media (max-width: 1199px) {
+    section.gt-feature-benefit-section.section-padding {
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+    }
+}
+
+@media (max-width: 991px) {
+    section.gt-feature-benefit-section.section-padding {
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+    }
+}
+
+/* Tambah margin dan kurangi padding section wrapper */
+.gt-feature-focus-wrapper.section-padding {
+    padding: 60px 0 !important;
+    margin-top: 60px !important;
+    margin-bottom: 60px !important;
+}
+
+@media (max-width: 991px) {
+    .gt-feature-focus-wrapper.section-padding {
+        padding: 40px 0 !important;
+        margin-top: 40px !important;
+        margin-bottom: 40px !important;
+    }
+}
+
+/* Kurangi margin pada section title */
+.gt-feature-content .gt-section-title.style-3 {
+    margin-bottom: 20px !important;
+}
+
+.gt-feature-content .gt-section-title.style-3 h6 {
+    margin-bottom: 10px !important;
+}
+
+.gt-feature-content .gt-section-title.style-3 h2 {
+    margin-bottom: 0 !important;
+}
+
+/* Kurangi spacing counter items */
+.gt-feature-content .gt-counter-items {
+    margin-top: 20px !important;
+    padding-bottom: 20px !important;
+    margin-bottom: 20px !important;
+}
+
+/* Kurangi spacing paragraf */
+.gt-feature-content .text {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+/* Kurangi margin tombol CTA */
+.gt-feature-content .gt-btn-all {
+    margin-top: 25px !important;
+}
+
+@media (max-width: 1199px) {
+    .gt-feature-content .gt-btn-all {
+        margin-top: 20px !important;
+    }
+}
+
+/* Responsive pricing section untuk mobile & tablet */
+@media (max-width: 1199px) {
+    .gt-pricing-section-3 .row {
+        gap: 1.5rem;
+    }
+    
+    .gt-pricing-section-3 .col-xl-4 {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+    
+    .gt-pricing-box-items.pricing-style-3 {
+        margin-bottom: 0;
+    }
+}
+
+@media (max-width: 767px) {
+    .gt-pricing-section-3 .gt-section-title h2 {
+        font-size: 2rem !important;
+    }
+    
+    .gt-pricing-box-items.pricing-style-3 {
+        padding: 2rem 1.5rem !important;
+    }
+    
+    .gt-pricing-header h2 {
+        font-size: 2.5rem !important;
+    }
+    
+    .umkm-pricing-name {
+        font-size: 1.5rem !important;
+    }
+    
+    .umkm-pricing-sub {
+        font-size: 0.875rem !important;
+    }
+    
+    .gt-pricing-list {
+        font-size: 0.875rem !important;
+    }
+    
+    .pricing-two__tab .nav-tabs {
+        padding: 0.25rem !important;
+    }
+    
+    .pricing-two__tab .nav-link {
+        padding: 0.5rem 1rem !important;
+        font-size: 0.875rem !important;
+    }
+}
+
+/* Pricing - ubah warna biru ke hitam */
+.gt-pricing-box-items.pricing-style-3 .gt-pricing-header h2 {
+    color: #0E0E0C !important;
+    display: flex;
+    align-items: baseline;
+    gap: 0.25rem;
+}
+
+.gt-pricing-box-items.pricing-style-3 .gt-pricing-header sup {
+    color: #0E0E0C !important;
+    font-size: 1rem;
+    top: auto;
+    margin-right: -0.1rem;
+}
+
+.gt-pricing-box-items.pricing-style-3 .gt-pricing-header sub {
+    color: #0E0E0C !important;
+    font-size: 1rem;
+    bottom: auto;
+    position: relative;
+    margin-left: -0.15rem;
+}
+
+.gt-pricing-box-items.pricing-style-3 .gt-pricing-list li i {
+    color: #A0EA71 !important;
+}
+
+.gt-pricing-box-items.pricing-style-3 .sub-texts {
+    color: #A0EA71 !important;
+}
+
+.pricing-two__tab .nav-link.active {
+    background: #A0EA71 !important;
+    color: #0E0E0C !important;
+    border-color: #A0EA71 !important;
+}
+
+.pricing-two__tab .nav-link {
+    color: #A0EA71 !important;
+    border-color: rgba(160, 234, 113, 0.3) !important;
+}
+
+.pricing-two__tab .nav-link.active {
+    color: #0E0E0C !important;
+}
+
+.gt-pricing-box-items.pricing-style-3 .gt-pricing-toggle-btn {
+    color: #A0EA71 !important;
+    border-color: rgba(160, 234, 113, 0.3) !important;
+}
+
+.gt-pricing-box-items.pricing-style-3 .gt-pricing-toggle-btn:hover {
+    border-color: #A0EA71 !important;
+    background: rgba(160, 234, 113, 0.05) !important;
+}
+
+/* Pricing gradient - ubah ke hijau */
+.gt-pricing-box-items.pricing-style-3 .gradient-bg {
+    background: linear-gradient(180deg, #A0EA71 0%, #A0EA71 48.56%, #A0EA71 100%) !important;
+    filter: blur(62px) !important;
+}
+
+.gt-pricing-box-items.pricing-style-3::before {
+    background: linear-gradient(180deg, #A0EA71 0%, #A0EA71 48.56%, #A0EA71 100%) !important;
+}
+
+/* FAQ section - sesuaikan warna tema dan spacing */
+.gt-faq-section {
+    background-color: #0E0E0C !important;
+    background-image: none !important;
+    padding-top: 80px !important;
+    padding-bottom: 80px !important;
+    position: relative;
+    overflow: hidden;
+}
+
+@media (max-width: 991px) {
+    .gt-faq-section {
+        padding-top: 50px !important;
+        padding-bottom: 50px !important;
+    }
+}
+
+.gt-faq-section .gt-faq-wrapper-2 {
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    position: relative;
+    z-index: 1;
+}
+
+.gt-faq-section .gt-section-title h6 {
+    color: #A0EA71 !important;
+}
+
+.gt-faq-section .gt-section-title h2 {
+    color: #ffffff !important;
+}
+
+@media (max-width: 991px) {
+    .gt-faq-section .gt-section-title h2 {
+        font-size: 2rem !important;
+    }
+}
+
+/* Feature box - perkecil card dan padding */
+.feature-box-items-2 {
+    padding: 1.5rem !important;
+    margin-top: 1.5rem !important;
+}
+
+.feature-box-items-2 .icon {
+    width: 3.25rem !important;
+    height: 3.25rem !important;
+    line-height: 3.25rem !important;
+    font-size: 1.5rem !important;
+}
+
+.feature-box-items-2 .content {
+    margin-top: 0.75rem !important;
+}
+
+.feature-box-items-2 .content h3 {
+    font-size: 1rem !important;
+    font-weight: 700 !important;
+    margin-bottom: 0.35rem !important;
+}
+
+.feature-box-items-2 .content p {
+    margin-top: 0.35rem !important;
+    font-size: 0.8rem !important;
+    max-width: none !important;
+    line-height: 1.5 !important;
+}
+
+@media (max-width: 767px) {
+    .feature-box-items-2 {
+        padding: 1.25rem !important;
+        margin-top: 1rem !important;
+    }
+
+    .feature-box-items-2 .icon {
+        width: 2.75rem !important;
+        height: 2.75rem !important;
+        line-height: 2.75rem !important;
+        font-size: 1.25rem !important;
+    }
+
+    .feature-box-items-2 .content {
+        margin-top: 0.5rem !important;
+    }
+
+    .feature-box-items-2 .content h3 {
+        font-size: 0.9rem !important;
+    }
+
+    .feature-box-items-2 .content p {
+        font-size: 0.75rem !important;
+        margin-top: 0.25rem !important;
+    }
+}
+
+/* Feature box icons - konsistensi untuk icon <i> */
+.feature-box-items-2 .icon i {
+    font-size: 1.6rem !important;
+    color: var(--gt-header2, #0E0E0C) !important;
+    transition: all 0.4s ease-in-out;
+    display: inline-block;
+}
+
+.feature-box-items-2:hover .icon i {
+    transform: scaleX(-1) !important;
+}
+
+
+/* CTA section - padding atas untuk jarak dengan FAQ */
+.gt-cta-section-3 {
+    padding-top: 80px !important;
+}
+
+.gt-cta-section-3 .container {
+    max-width: 1200px;
+}
+
+@media (max-width: 991px) {
+    .gt-cta-section-3 {
+        padding-top: 60px !important;
+    }
+}
+
+/* Global section title style-2 - ukuran mobile */
+.gt-section-title.style-2.text-center h6 {
+    font-size: 0.9rem !important;
+}
+
+.gt-section-title.style-2.text-center h2 {
+    font-size: 2.2rem !important;
+}
+
+/* Ukuran lebih kecil untuk mobile kecil */
+@media (max-width: 767px) {
+    .gt-section-title.style-2.text-center h6 {
+        font-size: 0.8rem !important;
+    }
+
+    .gt-section-title.style-2.text-center h2 {
+        font-size: 1.875rem !important; /* 30px */
+    }
+}
+
+@media (max-width: 480px) {
+    .gt-section-title.style-2.text-center h2 {
+        font-size: 1.5rem !important; /* 24px */
+    }
+}
+
+/* Margin-top antar section untuk semua section */
+.gt-section-title.style-2.text-center {
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+/* Agar section memiliki jarak cukup satu sama lain */
+section.section-padding,
+.gt-cta-section,
+.gt-news-section,
+.gt-testimonial-section {
+    padding-top: 80px !important;
+    padding-bottom: 80px !important;
+}
+
+@media (max-width: 991px) {
+    section.section-padding,
+    .gt-cta-section,
+    .gt-news-section,
+    .gt-testimonial-section {
+        padding-top: 50px !important;
+        padding-bottom: 50px !important;
+    }
+}
+
+/* Hero section - kurangi padding */
+.gt-hero-section {
+    padding-top: 120px !important;
+    padding-bottom: 80px !important;
+}
+
+@media (max-width: 991px) {
+    .gt-hero-section {
+        padding-top: 100px !important;
+        padding-bottom: 50px !important;
+    }
+}
+
+/* Padding khusus untuk contact-management (audience) */
+.gt-contact-management-section.section-padding {
+    padding-top: 80px !important;
+    padding-bottom: 80px !important;
+}
+
+@media (max-width: 991px) {
+    .gt-contact-management-section.section-padding {
+        padding-top: 50px !important;
+        padding-bottom: 50px !important;
+    }
+}
+
+/* Audience grid - 2 kolom di mobile */
+@media (max-width: 575px) {
+    .gt-contact-management-section .row.g-4 {
+        --bs-gutter-x: 0.75rem;
+        --bs-gutter-y: 0.75rem;
+    }
+
+    .gt-contact-management-section .feature-box-items-2 {
+        padding: 1rem 0.75rem !important;
+    }
+
+    .gt-contact-management-section .icon {
+        width: 2.5rem !important;
+        height: 2.5rem !important;
+        line-height: 2.5rem !important;
+    }
+
+    .gt-contact-management-section .icon i {
+        font-size: 1.1rem !important;
+    }
+
+    .gt-contact-management-section .content {
+        margin-top: 0.4rem !important;
+    }
+
+    .gt-contact-management-section .content h3 {
+        font-size: 0.85rem !important;
+        margin-bottom: 0.2rem !important;
+    }
+
+    .gt-contact-management-section .content p {
+        font-size: 0.7rem !important;
+        line-height: 1.35 !important;
+        margin-top: 0.15rem !important;
+    }
+}
+
+/* ========================================
+   Fix konflik Tailwind v4 preflight dengan template Sastik
+   sudah dipindahkan ke komponen Vue (LandingValue.vue)
+   ======================================== */
+
+/* Override logo container — template membatasi max-width: 110px di mobile */
+@media (max-width: 767px) {
+    .xb-header-logo {
+        max-width: 200px !important;
+        width: auto;
+    }
+    .xb-header-logo img {
+        max-height: 48px;
+        width: auto;
+        object-fit: contain;
+    }
+
+    /* Chart landing — tampilkan bar tanpa perlu animasi scroll */
+    .xb-chart .chart-item span {
+        transform: scaleY(1) !important;
+    }
+}
+
+/* ========================================
+   Landing panduan pages (Privacy, Terms, Refund)
+   Konsisten dengan halaman Panduan — pakai
+   background solid + matikan pseudo-element
+   ======================================== */
+
+.lp-panduan-hero {
+    margin-top: 4rem !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding: 80px 0 70px !important;
+    overflow: hidden;
+    position: relative;
+    isolation: isolate;
+    background: #7c3aed !important;
+}
+
+.lp-panduan-hero::before,
+.lp-panduan-hero::after {
+    display: none !important;
+}
+
+.lp-panduan-hero .hero-circle-shape {
+    display: none !important;
+}
+
+.lp-panduan-hero .gt-hero-content {
+    position: relative;
+    z-index: 1;
+    max-width: 880px;
+    margin: 0 auto;
+}
+
+.lp-panduan-hero .gt-hero-content h1,
+.lp-panduan-hero .lp-panduan-hero-title {
+    color: #ffffff !important;
+    margin-bottom: 18px;
+    font-size: clamp(2rem, 4vw, 3.25rem);
+    line-height: 1.15;
+    font-weight: 800;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+.lp-panduan-hero .gt-hero-content p {
+    color: rgba(255, 255, 255, 0.88) !important;
+    max-width: 720px;
+    margin-left: auto;
+    margin-right: auto;
+    font-size: 1.05rem;
+    line-height: 1.7;
+    font-weight: 500;
+}
+
+.lp-panduan-hero-cta {
+    margin-top: 1.75rem;
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.lp-panduan-hero-cta .gt-theme-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.95rem 1.9rem;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    text-decoration: none;
+    transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.lp-panduan-hero-cta .gt-theme-btn:hover {
+    transform: translateY(-2px);
+}
+
+.lp-panduan-hero-cta .gt-theme-btn.bg-theme {
+    background: #ffffff !important;
+    color: #173401 !important;
+    box-shadow: 0 12px 30px -10px rgba(255, 255, 255, 0.45);
+}
+
+.lp-panduan-hero-cta .gt-theme-btn.bg-theme::before {
+    background-color: #173401 !important;
+}
+
+.lp-panduan-hero-cta .gt-theme-btn.bg-theme:hover {
+    color: #ffffff !important;
+}
+
+.lp-panduan-hero-cta .gt-theme-btn.bg-border {
+    background: transparent !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.7) !important;
+    color: #ffffff !important;
+}
+
+.lp-panduan-hero-cta .gt-theme-btn.bg-border::before {
+    background-color: #ffffff !important;
+}
+
+.lp-panduan-hero-cta .gt-theme-btn.bg-border:hover {
+    color: #0f172a !important;
+}
+
+.lp-panduan-hero-list {
+    margin-top: 1.5rem;
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    font-weight: 600;
+    color: #ffffff;
+    list-style: none;
+    padding: 0;
+}
+
+.lp-panduan-hero-list li {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #ffffff;
+}
+
+.lp-panduan-hero-list i {
+    color: #ffffff;
+}
+
+/* Footer contact — fix address span getting 38px box */
+.fs-footer-widget .xb-item--contact li span:not(:empty) {
+    width: auto !important;
+    height: auto !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    display: inline !important;
+    padding: 0 !important;
+}
+
+.fs-footer-widget .xb-item--contact li span:first-child {
+    width: 38px !important;
+    height: 38px !important;
+    border-radius: 100% !important;
+    box-shadow: 0 44px 18px -4px rgba(13, 23, 56, 0.04), 0 26px 10px -4px rgba(13, 23, 56, 0.06), 0 16px 6px -3px rgba(13, 23, 56, 0.07), 0 10px 4px -3px rgba(13, 23, 56, 0.08), 0 6px 2px -2px rgba(13, 23, 56, 0.08), 0 3px 1px -1px rgba(13, 23, 56, 0.09), 0 1px 1px -1px rgba(13, 23, 56, 0.09) !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+}
+
+.fs-footer-widget .xb-item--contact li {
+    align-items: flex-start !important;
+}
+
+/* Content area */
+.lp-panduan-content {
+    padding-top: 2rem !important;
+    padding-bottom: 5rem !important;
+}
+
+.lp-panduan-content .container {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+}

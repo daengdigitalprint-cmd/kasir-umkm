@@ -1,0 +1,101 @@
+.transaction-feed {
+    padding-top: 125px;
+    padding-bottom: 125px;
+    @include respond(laptop) {
+        padding-top: 115px;
+        padding-bottom: 115px;
+    }
+    @media only screen and (min-width: 1200px) and (max-width: 1300px) {
+        padding-top: 105px;
+        padding-bottom: 105px;
+    }
+    @include respond(lg) {
+        padding-top: 95px;
+        padding-bottom: 95px;
+    }
+    @include respond(md) {
+        padding-top: 70px;
+        padding-bottom: 70px;
+    }
+    @include respond(xs) {
+        padding-top: 120px;
+        padding-bottom: 130px;
+    }
+}
+.fs-transaction-wrapper {
+    overflow: clip;
+    min-height: 336px;
+    @include respond(xs) {
+        min-height: auto;
+    }
+}
+.fs-transaction-inner {
+    padding: 10px;
+    margin: 0 -60px;
+    display: flex;
+    z-index: 2;
+    position: relative;
+    background: #fff;
+    transform: rotate(9deg) translateY(120px);
+    border-top: 1px solid var(--color-border);
+    box-shadow: inset 0 4px 0 0 rgba(255, 255, 255, 0.6), inset 0 -8px 0 0 rgba(13, 23, 56, 0.05), 0 3px 3px 0 rgba(13, 23, 56, 0.1), 0 8px 16px 0 rgba(13, 23, 56, 0.06);
+    @include respond(xs) {
+        transform: rotate(0deg) translateY(0);
+    }
+    &:nth-child(2) {
+        z-index: 1;
+        transform: rotate(-9deg) translateY(25px);
+        @include respond(xs) {
+            transform: rotate(0deg) translateY(0);
+        }
+    }
+}
+.fs-transaction-row {
+    gap: 10px;
+    display: flex;
+    align-items: center;
+    margin-right: 10px;
+}
+.fs-transaction-item {
+    min-width: 336px;
+    display: inline-flex;
+    @include border-radius(10px);
+    padding: 10px 20px 10px 10px;
+    border: 1px solid var(--color-border);
+    .xb-item {
+        &--author {
+            gap: 8px;
+        }
+        &--avatar {
+            height: 50px;
+            width: 50px;
+            @include center;
+            @include border-radius(100%);
+        }
+        &--name {
+            font-size: 18px;
+            line-height: 1;
+        }
+        &--desig {
+            font-size: 15px;
+        }
+        &--price {
+            font-size: 20px;
+            @include respond(xs) {
+                font-size: 18px;
+            }
+        }
+    }
+}
+.bg-sky {
+    background: #bdeaff;
+}
+.bg-brown {
+    background: #ffcda5;
+}
+.bg-Pale {
+    background: #d0ff94;
+}
+.bg-Pale2 {
+    background: #dcffaf;
+}

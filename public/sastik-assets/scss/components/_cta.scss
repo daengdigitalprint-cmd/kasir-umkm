@@ -1,0 +1,355 @@
+.xb-cta-wrapper {
+    overflow: hidden;
+    padding: 100px 0 0 40px;
+    @include border-radius(30px);
+    background: var(--color-primary);
+    @include respond(laptop) {
+        margin: 0 15px;
+    }
+    @include respond(lg) {
+        margin: 0 15px;
+    }
+    @media only screen and (max-width: 1023px) {
+        margin: 0;
+    }
+    @include respond(md) {
+        padding: 60px 40px 0;
+    }
+    @include respond(xs) {
+        padding: 60px 20px 0;
+    }
+}
+.xb-cta-left {
+    .xb-content {
+        font-size: 18px;
+        font-weight: 500;
+        margin: 30px 0 50px;
+        text-transform: capitalize;
+        color: var(--color-white);
+    }
+    .xb-cta-btn {
+        gap: 25px;
+        @include respond(xs) {
+            align-items: start;
+            flex-direction: column-reverse;
+        }
+    }
+    .xb-free {
+        font-size: 14px;
+        color: var(--color-white);
+    }
+}
+.xb-cta-right {
+    text-align: center;
+    position: relative;
+    padding: 0 121px 0 88px;
+    @include respond(lg) {
+        padding: 0 40px;
+    }
+    @include respond(xs) {
+        padding: 0 25px;
+    }
+    &::before {
+        @include before;
+        height: 49px;
+        top: auto;
+        bottom: -15px;
+        background: #075a59;
+        filter: blur(17.7px);
+    }
+    .xb-img img {
+        border-radius: 30px 30px 0 0;
+    }
+    .xb-icon {
+        .icon {
+            position: absolute;
+            animation: updown 5s linear infinite;
+            &--1 {
+                left: 12%;
+                top: -45px;
+                animation: updown 2s linear infinite;
+                @include respond(lg) {
+                    left: 3%;
+                    top: -25px;
+                }
+                @include respond(md) {
+                    left: 12%;
+                }
+                @include respond(xs) {
+                    left: 1%;
+                    max-width: 60px;
+                }
+            }
+            &--2 {
+                left: 10%;
+                top: 20%;
+                animation: updown 3s linear infinite;
+                @include respond(lg) {
+                    top: 25%;
+                    left: -1%;
+                }
+                @include respond(md) {
+                    left: 12%;
+                }
+                @include respond(xs) {
+                    left: -1%;
+                    max-width: 75px;
+                }
+            }
+            &--3 {
+                top: -27px;
+                left: 43%;
+                animation: updown 4s linear infinite;
+                @include respond(lg) {
+                    left: 40%;
+                    bottom: 105px;
+                }
+                @include respond(md) {
+                    left: 45%;
+                }
+                @include respond(xs) {
+                    left: 40%;
+                }
+            }
+            &--4 {
+                right: 15%;
+                top: -70px;
+                animation: updown 6s linear infinite;
+                @include respond(lg) {
+                    right: 6%;
+                    top: -56px;
+                }
+                @include respond(md) {
+                    right: 12%;
+                }
+                @include respond(xs) {
+                    right: 1%;
+                    top: -48px;
+                    max-width: 80px;
+                }
+            }
+            &--5 {
+                right: 12%;
+                bottom: 120px;
+                animation: updown 4s linear infinite;
+                @include respond(lg) {
+                    right: 0%;
+                }
+                @include respond(md) {
+                    right: 10%;
+                }
+                @include respond(xs) {
+                    right: -3%;
+                    bottom: 50px;
+                    max-width: 70px;
+                }
+                @include respond(sm) {
+                    right: 2%;
+                    bottom: 135px;
+                }
+            }
+            &--6 {
+                left: 3%;
+                bottom: 16.5%;
+                @include respond(lg) {
+                    left: -11%;
+                    bottom: 14.5%;
+                }
+                @include respond(md) {
+                    left: 4%;
+                }
+                @include respond(xs) {
+                    left: -7%;
+                    max-width: 125px;
+                }
+                @include respond(sm) {
+                    left: -4%;
+                    bottom: 17.5%;
+                    max-width: 160px;
+                }
+            }
+        }
+    }
+}
+.cta-section {
+    z-index: 2;
+    position: relative;
+    margin-bottom: -241px;
+}
+.as-cta-inner {
+    .xb-item {
+        &--inner {
+            max-width: 680px;
+            padding-top: 95px;
+            @include respond(laptop) {
+                padding-top: 200px;
+                
+            }
+            @media only screen and (min-width: 1200px) and (max-width: 1300px) {
+                padding-top: 175px;
+            }
+            @include respond(lg) {
+                padding-top: 190px;
+            }
+            @include respond(xs) {
+                padding-top: 140px;
+            }
+        }
+        &--btn {
+            gap: 30px;
+            @include respond(xs) {
+                gap: 10px;
+            }
+        }
+    }
+    .sec-title {
+        .title {
+            font-weight: 500;
+            font-size: 55px;
+            letter-spacing: -0.03em;
+            background: linear-gradient(158deg, #fff 22.95%, #6101ea 100%);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            @include respond(xs) {
+                font-size: 38px;
+            }
+        }
+        .content {
+            margin-top: 20px;
+            color: var(--color-white);
+        }
+    }
+}
+.as-cta-wrapper {
+    z-index: 1;
+    min-height: 712px;
+    overflow: hidden;
+    &::before {
+        @include before;
+        z-index: -1;
+        background-image: url(../img/shape/cta-blur-bg01.png);
+        background-repeat: no-repeat;
+        @include respond(xs) {
+            left: -90px;
+        }
+        @include respond(sm) {
+            left: 0;
+        }
+    }
+    &:after {
+        position: absolute;
+        content: '';
+        right: 95px;
+        right: 200px;
+        top: 15px;
+        z-index: -1;
+        width: 618px;
+        height: 700px;
+        background: rgba(41, 3, 93, 0.6);
+        filter: blur(300px);
+        @include border-radius(100%);
+        transform: rotate(33.37deg);
+        @include respond(md) {
+            right: -265px;
+        }
+    }
+    .blur-bottom-shape {
+        position: absolute;
+        left: 0;
+        bottom: 0;
+        width: 100%;
+        height: 195px;
+        background: linear-gradient(0deg, #000 18.07%, rgba(0, 0, 0, 0) 100%);
+    }
+}
+.cta-bg-video {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: -2;
+    height: 100%;
+    width: 100%;
+    video {
+        height: 100%;
+        width: 100%;
+        object-fit: cover;
+        object-position: center;
+    }
+}
+.as-sec-shape {
+    .shape {
+        z-index: 1;
+        position: absolute;
+        &--1 {
+            left: 0;
+            bottom: -40px;
+            @include respond(md) {
+                bottom: -28px;
+                max-width: 110px;
+            }
+            @include respond(xs) {
+                display: none;
+            }
+        }
+        &--2 {
+            right: 0;
+            bottom: -38px;
+            @include respond(md) {
+                bottom: -28px;
+                max-width: 84px;
+            }
+            @include respond(xs) {
+                display: none;
+            }
+        }
+        &--3 {
+            left: 0;
+            bottom: -80px;
+            @include respond(md) {
+                bottom: -50px;
+                max-width: 100px;
+            }
+            @include respond(xs) {
+                bottom: -30px;
+                max-width: 60px;
+            }
+        }
+        &--4 {
+            right: 0;
+            bottom: -37px;
+            @include respond(md) {
+                bottom: -25px;
+                max-width: 100px;
+            }
+            @include respond(xs) {
+                bottom: -15px;
+                max-width: 60px;
+            }
+        }
+        &--5 {
+            left: 0;
+            top: -80px;
+            @include respond(md) {
+                top: -50px;
+                max-width: 100px;
+            }
+            @include respond(xs) {
+                top: -30px;
+                max-width: 60px;
+            }
+        }
+        &--6 {
+            right: 0;
+            top: -37px;
+            @include respond(md) {
+                top: -27px;
+                max-width: 110px;
+            }
+            @include respond(xs) {
+                top: -17px;
+                max-width: 70px;
+            }
+        }
+    }
+}

@@ -1,0 +1,113 @@
+/*----------------------------------------*/
+/*  28. sec-title
+/*----------------------------------------*/
+.sec-title {
+    .title {
+        font-size: 56px;
+        font-weight: 700;
+        line-height: 1;
+        letter-spacing: -0.03em;
+        text-transform: capitalize;
+        color: var(--color-heading);
+        font-family: var(--font-heading);
+        @include respond(md) {
+            
+            font-size: 48px;
+        }
+        @include respond(xs) {
+            font-size: 38px;
+        }
+        span {
+            color: var(--color-primary);
+        }
+    }
+    .sub-title {
+        font-size: 16px;
+        font-weight: 400;
+        padding-left: 20px;
+        position: relative;
+        display: inline-block;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        color: var(--color-heading);
+        &::before,
+        &::after {
+            position: absolute;
+            content: '';
+            left: 0;
+            top: 50%;
+            height: 12px;
+            width: 12px;
+            @include border-radius(100px);
+            transform: translateY(-50%);
+            background: var(--color-primary);
+        }
+        &::after {
+            display: none;
+            left: auto;
+            right: -20px;
+        }
+    }
+    .xb-holder {
+        flex-grow: 1;
+        flex-basis: 0;
+        transform: translateY(-5px);
+        @include respond(md) {
+            flex-grow: unset;
+            flex-basis: unset;
+            transform: translateY(0);
+        }
+    }
+    &--two {
+        .title {
+            letter-spacing: -0.05em;
+            @include respond(md) {
+                font-size: 50px;
+            }
+            @include respond(xs) {
+                font-size: 38px;
+            }
+            @include respond(sm) {
+                font-size: 44px;
+                
+            }
+        }
+    }
+    &--three {
+        .title {
+            font-size: 55px;
+            font-weight: 500;
+            line-height: 1.17;
+            color: #1e0442;
+            @include respond(md) {
+                font-size: 48px;
+            }
+            @include respond(xs) {
+                font-size: 38px;
+            }
+        }
+        .sub-title {
+            padding-left: 0;
+            align-items: center;
+            display: inline-flex;
+            margin-bottom: 38px;
+            text-transform: capitalize;
+            span {
+                padding: 7px 20px;
+                color: var(--color-heading);
+                @include border-radius(100px);
+                background: linear-gradient(180deg, #fff 0%, #f4f1fd 52.05%);
+                box-shadow: 0 0 0 2px #EDE8FB, 0 4px 7px 0 rgba(38, 14, 95, 0.05);
+            }
+            &::before {
+                display: none;
+            }
+        }
+        .content {
+            font-size: 18px;
+            font-weight: 500;
+            margin-top: 12px;
+            color: var(--color-heading);
+        }
+    }
+}

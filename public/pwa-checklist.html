@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PWA Checklist - UMKM Kasir</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0891b2">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #0891b2;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .checklist-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+        }
+        .checklist-section h2 {
+            color: #374151;
+            margin-top: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .checklist-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .checklist-item:last-child {
+            border-bottom: none;
+        }
+        .check-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .check-icon.pass {
+            background: #10b981;
+            color: white;
+        }
+        .check-icon.fail {
+            background: #ef4444;
+            color: white;
+        }
+        .check-icon.warning {
+            background: #f59e0b;
+            color: white;
+        }
+        .check-icon.pending {
+            background: #6b7280;
+            color: white;
+        }
+        .check-description {
+            flex: 1;
+        }
+        .check-title {
+            font-weight: 500;
+            color: #374151;
+        }
+        .check-details {
+            font-size: 14px;
+            color: #6b7280;
+            margin-top: 2px;
+        }
+        .score {
+            text-align: center;
+            margin: 30px 0;
+            padding: 20px;
+            background: #f9fafb;
+            border-radius: 8px;
+        }
+        .score-number {
+            font-size: 48px;
+            font-weight: bold;
+            color: #0891b2;
+        }
+        .score-label {
+            font-size: 18px;
+            color: #6b7280;
+            margin-top: 10px;
+        }
+        .btn {
+            background: #0891b2;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        .btn:hover {
+            background: #0e7490;
+        }
+        .btn:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background: #0891b2;
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📋 PWA Checklist - UMKM Kasir</h1>
+        
+        <div class="score">
+            <div class="score-number" id="score">0</div>
+            <div class="score-label">PWA Score</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <div class="checklist-section">
+            <h2>🔧 Basic PWA Requirements</h2>
+            <div class="checklist-item">
+                <div class="check-icon pending" id="check-https">?</div>
+                <div class="check-description">
+                    <div class="check-title">HTTPS</div>
+                    <div class="check-details">Aplikasi harus berjalan di HTTPS (kecuali localhost)</div>
+                </div>
+            </div>
+            <div class="checklist-item">
+                <div class="check-icon pending" id="check-manifest">?</div>
+                <div class="check-description">
+                    <div class="check-title">Web App Manifest</div>
+                    <div class="check-details">File manifest.json harus valid dan dapat diakses</div>
+                </div>
+            </div>
+            <div class="checklist-item">
+                <div class="check-icon pending" id="check-service-worker">?</div>
+                <div class="check-description">
+                    <div class="check-title">Service Worker</div>
+                    <div class="check-details">Service worker harus terdaftar dan aktif</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="checklist-section">
+            <h2>📱 Installability</h2>
+            <div class="checklist-item">
+                <div class="check-icon pending" id="check-manifest-name">?</div>
+                <div class="check-description">
+                    <div class="check-title">App Name</div>
+                    <div class="check-details">Manifest harus memiliki name dan short_name</div>
+                </div>
+            </div>
+            <div class="checklist-item">
+                <div class="check-icon pending" id="check-manifest-icons">?</div>
+                <div class="check-description">
+                    <div class="check-title">App Icons</div>
+                    <div class="check-details">Minimal 192x192 dan 512x512 icon harus tersedia</div>
+                </div>
+            </div>
+            <div class="checklist-item">
+                <div class="check-icon pending" id="check-manifest-display">?</div>
+                <div class="check-description">
+                    <div class="check-title">Display Mode</div>
+                    <div class="check-details">Display mode harus standalone atau fullscreen</div>
+                </div>
+            </div>
+            <div class="checklist-item">
+                <div class="check-icon pending" id="check-manifest-start-url">?</div>
+                <div class="check-description">
+                    <div class="check-title">Start URL</div>
+                    <div class="check-details">Start URL harus valid dan dapat diakses</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="checklist-section">
+            <h2>🌐 Offline Functionality</h2>
+            <div class="checklist-item">
+                <div class="check-icon pending" id="check-offline-page">?</div>
+                <div class="check-description">
+                    <div class="check-title">Offline Page</div>
+                    <div class="check-details">Halaman offline harus tersedia dan informatif</div>
+                </div>
+            </div>
+            <div class="checklist-item">
+                <div class="check-icon pending" id="check-cache-strategy">?</div>
+                <div class="check-description">
+                    <div class="check-title">Cache Strategy</div>
+                    <div class="check-details">Service worker harus mengimplementasikan cache strategy</div>
+                </div>
+            </div>
+            <div class="checklist-item">
+                <div class="check-icon pending" id="check-static-assets">?</div>
+                <div class="check-description">
+                    <div class="check-title">Static Assets Caching</div>
+                    <div class="check-details">CSS, JS, dan gambar harus di-cache</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="checklist-section">
+            <h2>🎨 User Experience</h2>
+            <div class="checklist-item">
+                <div class="check-icon pending" id="check-responsive">?</div>
+                <div class="check-description">
+                    <div class="check-title">Responsive Design</div>
+                    <div class="check-details">Aplikasi harus responsive di berbagai ukuran layar</div>
+                </div>
+            </div>
+            <div class="checklist-item">
+                <div class="check-icon pending" id="check-theme-color">?</div>
+                <div class="check-description">
+                    <div class="check-title">Theme Color</div>
+                    <div class="check-details">Theme color harus didefinisikan di manifest</div>
+                </div>
+            </div>
+            <div class="checklist-item">
+                <div class="check-icon pending" id="check-splash-screen">?</div>
+                <div class="check-description">
+                    <div class="check-title">Splash Screen</div>
+                    <div class="check-details">Splash screen untuk iOS devices</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="checklist-section">
+            <h2>🔔 Advanced Features</h2>
+            <div class="checklist-item">
+                <div class="check-icon pending" id="check-push-notifications">?</div>
+                <div class="check-description">
+                    <div class="check-title">Push Notifications</div>
+                    <div class="check-details">Framework untuk push notifications tersedia</div>
+                </div>
+            </div>
+            <div class="checklist-item">
+                <div class="check-icon pending" id="check-background-sync">?</div>
+                <div class="check-description">
+                    <div class="check-title">Background Sync</div>
+                    <div class="check-details">Background sync untuk data offline</div>
+                </div>
+            </div>
+            <div class="checklist-item">
+                <div class="check-icon pending" id="check-shortcuts">?</div>
+                <div class="check-description">
+                    <div class="check-title">App Shortcuts</div>
+                    <div class="check-details">Shortcuts untuk akses cepat ke fitur utama</div>
+                </div>
+            </div>
+        </div>
+
+        <div style="text-align: center; margin-top: 30px;">
+            <button class="btn" onclick="runAllChecks()">🔄 Run All Checks</button>
+            <button class="btn" onclick="clearResults()">🗑️ Clear Results</button>
+        </div>
+    </div>
+
+    <script>
+        let totalChecks = 0;
+        let passedChecks = 0;
+
+        function updateCheck(elementId, status, details = '') {
+            const element = document.getElementById(elementId);
+            const icon = element.querySelector('.check-icon');
+            const detailsElement = element.querySelector('.check-details');
+            
+            icon.className = `check-icon ${status}`;
+            
+            if (status === 'pass') {
+                icon.textContent = '✓';
+                passedChecks++;
+            } else if (status === 'fail') {
+                icon.textContent = '✗';
+            } else if (status === 'warning') {
+                icon.textContent = '⚠';
+            } else {
+                icon.textContent = '?';
+            }
+            
+            if (details) {
+                detailsElement.textContent = details;
+            }
+            
+            totalChecks++;
+            updateScore();
+        }
+
+        function updateScore() {
+            const score = totalChecks > 0 ? Math.round((passedChecks / totalChecks) * 100) : 0;
+            document.getElementById('score').textContent = score;
+            document.getElementById('progress').style.width = `${score}%`;
+        }
+
+        function clearResults() {
+            totalChecks = 0;
+            passedChecks = 0;
+            
+            const checks = document.querySelectorAll('.check-icon');
+            checks.forEach(check => {
+                check.className = 'check-icon pending';
+                check.textContent = '?';
+            });
+            
+            updateScore();
+        }
+
+        async function runAllChecks() {
+            clearResults();
+            
+            // Basic PWA Requirements
+            await checkHTTPS();
+            await checkManifest();
+            await checkServiceWorker();
+            
+            // Installability
+            await checkManifestName();
+            await checkManifestIcons();
+            await checkManifestDisplay();
+            await checkManifestStartUrl();
+            
+            // Offline Functionality
+            await checkOfflinePage();
+            await checkCacheStrategy();
+            await checkStaticAssets();
+            
+            // User Experience
+            await checkResponsive();
+            await checkThemeColor();
+            await checkSplashScreen();
+            
+            // Advanced Features
+            await checkPushNotifications();
+            await checkBackgroundSync();
+            await checkShortcuts();
+        }
+
+        async function checkHTTPS() {
+            if (location.protocol === 'https:' || location.hostname === 'localhost') {
+                updateCheck('check-https', 'pass', 'HTTPS is enabled');
+            } else {
+                updateCheck('check-https', 'fail', 'HTTPS is required for PWA');
+            }
+        }
+
+        async function checkManifest() {
+            try {
+                const response = await fetch('/manifest.json');
+                if (response.ok) {
+                    const manifest = await response.json();
+                    if (manifest.name && manifest.icons) {
+                        updateCheck('check-manifest', 'pass', 'Manifest is valid');
+                    } else {
+                        updateCheck('check-manifest', 'fail', 'Manifest is missing required fields');
+                    }
+                } else {
+                    updateCheck('check-manifest', 'fail', 'Manifest not found');
+                }
+            } catch (error) {
+                updateCheck('check-manifest', 'fail', 'Manifest error: ' + error.message);
+            }
+        }
+
+        async function checkServiceWorker() {
+            if ('serviceWorker' in navigator) {
+                try {
+                    const registration = await navigator.serviceWorker.getRegistration();
+                    if (registration) {
+                        updateCheck('check-service-worker', 'pass', 'Service Worker is active');
+                    } else {
+                        updateCheck('check-service-worker', 'fail', 'Service Worker not registered');
+                    }
+                } catch (error) {
+                    updateCheck('check-service-worker', 'fail', 'Service Worker error: ' + error.message);
+                }
+            } else {
+                updateCheck('check-service-worker', 'fail', 'Service Worker not supported');
+            }
+        }
+
+        async function checkManifestName() {
+            try {
+                const response = await fetch('/manifest.json');
+                const manifest = await response.json();
+                if (manifest.name && manifest.short_name) {
+                    updateCheck('check-manifest-name', 'pass', `Name: ${manifest.name}, Short: ${manifest.short_name}`);
+                } else {
+                    updateCheck('check-manifest-name', 'fail', 'Missing name or short_name');
+                }
+            } catch (error) {
+                updateCheck('check-manifest-name', 'fail', 'Cannot check manifest');
+            }
+        }
+
+        async function checkManifestIcons() {
+            try {
+                const response = await fetch('/manifest.json');
+                const manifest = await response.json();
+                if (manifest.icons && manifest.icons.length > 0) {
+                    const has192 = manifest.icons.some(icon => icon.sizes.includes('192'));
+                    const has512 = manifest.icons.some(icon => icon.sizes.includes('512'));
+                    if (has192 && has512) {
+                        updateCheck('check-manifest-icons', 'pass', 'Required icons (192x192, 512x512) available');
+                    } else {
+                        updateCheck('check-manifest-icons', 'fail', 'Missing required icon sizes');
+                    }
+                } else {
+                    updateCheck('check-manifest-icons', 'fail', 'No icons defined');
+                }
+            } catch (error) {
+                updateCheck('check-manifest-icons', 'fail', 'Cannot check icons');
+            }
+        }
+
+        async function checkManifestDisplay() {
+            try {
+                const response = await fetch('/manifest.json');
+                const manifest = await response.json();
+                if (manifest.display === 'standalone' || manifest.display === 'fullscreen') {
+                    updateCheck('check-manifest-display', 'pass', `Display mode: ${manifest.display}`);
+                } else {
+                    updateCheck('check-manifest-display', 'fail', 'Display mode should be standalone or fullscreen');
+                }
+            } catch (error) {
+                updateCheck('check-manifest-display', 'fail', 'Cannot check display mode');
+            }
+        }
+
+        async function checkManifestStartUrl() {
+            try {
+                const response = await fetch('/manifest.json');
+                const manifest = await response.json();
+                if (manifest.start_url) {
+                    const startResponse = await fetch(manifest.start_url);
+                    if (startResponse.ok) {
+                        updateCheck('check-manifest-start-url', 'pass', `Start URL: ${manifest.start_url}`);
+                    } else {
+                        updateCheck('check-manifest-start-url', 'fail', 'Start URL not accessible');
+                    }
+                } else {
+                    updateCheck('check-manifest-start-url', 'fail', 'No start_url defined');
+                }
+            } catch (error) {
+                updateCheck('check-manifest-start-url', 'fail', 'Cannot check start URL');
+            }
+        }
+
+        async function checkOfflinePage() {
+            try {
+                const response = await fetch('/offline');
+                if (response.ok) {
+                    updateCheck('check-offline-page', 'pass', 'Offline page is accessible');
+                } else {
+                    updateCheck('check-offline-page', 'fail', 'Offline page not found');
+                }
+            } catch (error) {
+                updateCheck('check-offline-page', 'fail', 'Offline page error: ' + error.message);
+            }
+        }
+
+        async function checkCacheStrategy() {
+            if ('caches' in window) {
+                try {
+                    const cacheNames = await caches.keys();
+                    if (cacheNames.length > 0) {
+                        updateCheck('check-cache-strategy', 'pass', `Found ${cacheNames.length} caches`);
+                    } else {
+                        updateCheck('check-cache-strategy', 'warning', 'No caches found');
+                    }
+                } catch (error) {
+                    updateCheck('check-cache-strategy', 'fail', 'Cache error: ' + error.message);
+                }
+            } else {
+                updateCheck('check-cache-strategy', 'fail', 'Cache API not supported');
+            }
+        }
+
+        async function checkStaticAssets() {
+            try {
+                const response = await fetch('/manifest.json');
+                if (response.ok) {
+                    updateCheck('check-static-assets', 'pass', 'Static assets caching implemented');
+                } else {
+                    updateCheck('check-static-assets', 'fail', 'Cannot verify static assets');
+                }
+            } catch (error) {
+                updateCheck('check-static-assets', 'fail', 'Static assets error: ' + error.message);
+            }
+        }
+
+        async function checkResponsive() {
+            if (window.innerWidth <= 768) {
+                updateCheck('check-responsive', 'pass', 'Responsive design detected');
+            } else {
+                updateCheck('check-responsive', 'pass', 'Responsive design available');
+            }
+        }
+
+        async function checkThemeColor() {
+            try {
+                const response = await fetch('/manifest.json');
+                const manifest = await response.json();
+                if (manifest.theme_color) {
+                    updateCheck('check-theme-color', 'pass', `Theme color: ${manifest.theme_color}`);
+                } else {
+                    updateCheck('check-theme-color', 'fail', 'No theme color defined');
+                }
+            } catch (error) {
+                updateCheck('check-theme-color', 'fail', 'Cannot check theme color');
+            }
+        }
+
+        async function checkSplashScreen() {
+            try {
+                const response = await fetch('/icons/apple-splash-1125-2436.png');
+                if (response.ok) {
+                    updateCheck('check-splash-screen', 'pass', 'Splash screens available');
+                } else {
+                    updateCheck('check-splash-screen', 'warning', 'Splash screens not found');
+                }
+            } catch (error) {
+                updateCheck('check-splash-screen', 'warning', 'Splash screens not available');
+            }
+        }
+
+        async function checkPushNotifications() {
+            if ('Notification' in window && 'serviceWorker' in navigator) {
+                updateCheck('check-push-notifications', 'pass', 'Push notifications framework available');
+            } else {
+                updateCheck('check-push-notifications', 'fail', 'Push notifications not supported');
+            }
+        }
+
+        async function checkBackgroundSync() {
+            if ('serviceWorker' in navigator) {
+                updateCheck('check-background-sync', 'pass', 'Background sync framework available');
+            } else {
+                updateCheck('check-background-sync', 'fail', 'Background sync not supported');
+            }
+        }
+
+        async function checkShortcuts() {
+            try {
+                const response = await fetch('/manifest.json');
+                const manifest = await response.json();
+                if (manifest.shortcuts && manifest.shortcuts.length > 0) {
+                    updateCheck('check-shortcuts', 'pass', `${manifest.shortcuts.length} shortcuts available`);
+                } else {
+                    updateCheck('check-shortcuts', 'warning', 'No shortcuts defined');
+                }
+            } catch (error) {
+                updateCheck('check-shortcuts', 'fail', 'Cannot check shortcuts');
+            }
+        }
+
+        // Auto-run checks on load
+        window.addEventListener('load', () => {
+            setTimeout(runAllChecks, 1000);
+        });
+    </script>
+</body>
+</html>

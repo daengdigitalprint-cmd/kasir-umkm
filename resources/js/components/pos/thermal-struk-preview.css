@@ -1,0 +1,181 @@
+/* Pratinjau struk di modal — selaras dengan cetak thermal (thermalReceipt.ts) */
+.thermal-receipt-preview {
+    display: flex;
+    justify-content: center;
+    background: #f8fafc;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    max-height: min(58vh, 520px);
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.thermal-receipt-preview .struk {
+    box-sizing: border-box;
+    width: 100%;
+    margin: 0;
+    padding: 0.65rem 0.75rem 0.85rem;
+    font-family: ui-monospace, 'Cascadia Mono', 'Consolas', 'Courier New', monospace;
+    line-height: 1.35;
+    color: #0f172a;
+    background: #fff;
+    border: 1px dashed #cbd5e1;
+    border-radius: 0.35rem;
+    box-shadow: 0 1px 2px rgb(15 23 42 / 0.06);
+}
+
+.thermal-receipt-preview--80 .struk {
+    max-width: 20rem;
+    font-size: 11px;
+}
+
+.thermal-receipt-preview--58 .struk {
+    max-width: 15rem;
+    font-size: 9px;
+}
+
+.thermal-receipt-preview--80 .struk-success {
+    font-size: 13px;
+}
+
+.thermal-receipt-preview--58 .struk-success {
+    font-size: 11px;
+}
+
+.thermal-receipt-preview--80 .struk-small,
+.thermal-receipt-preview--80 .struk-item-math {
+    font-size: 10px;
+}
+
+.thermal-receipt-preview--58 .struk-small,
+.thermal-receipt-preview--58 .struk-item-math {
+    font-size: 8px;
+}
+
+.thermal-receipt-preview--80 .struk-title {
+    font-size: 12px;
+}
+
+.thermal-receipt-preview--58 .struk-title {
+    font-size: 10px;
+}
+
+.thermal-receipt-preview--80 .struk-total {
+    font-size: 12px;
+}
+
+.thermal-receipt-preview--58 .struk-total {
+    font-size: 10px;
+}
+
+.thermal-receipt-preview--80 .struk-foot2,
+.thermal-receipt-preview--80 .struk-printed {
+    font-size: 9px;
+}
+
+.thermal-receipt-preview--58 .struk-foot2,
+.thermal-receipt-preview--58 .struk-printed {
+    font-size: 7px;
+}
+
+.thermal-receipt-preview .struk-success {
+    text-align: center;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    margin-bottom: 2px;
+}
+
+.thermal-receipt-preview .struk-txn {
+    text-align: center;
+    font-family: ui-monospace, monospace;
+    margin-top: 2px;
+    margin-bottom: 4px;
+    word-break: break-all;
+}
+
+.thermal-receipt-preview .struk-logo-wrap {
+    text-align: center;
+    margin-bottom: 3px;
+}
+
+.thermal-receipt-preview .struk-logo {
+    display: block;
+    margin: 0 auto;
+    max-height: 40px;
+    max-width: 85%;
+    object-fit: contain;
+}
+
+.thermal-receipt-preview .struk-title {
+    text-align: center;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    margin-bottom: 2px;
+}
+
+.thermal-receipt-preview .struk-sub {
+    text-align: center;
+    margin-bottom: 3px;
+}
+
+.thermal-receipt-preview .struk-meta {
+    text-align: center;
+    white-space: pre-wrap;
+}
+
+.thermal-receipt-preview .struk-rule {
+    border: 0;
+    border-top: 1px dashed #0f172a;
+    margin: 5px 0;
+}
+
+.thermal-receipt-preview .struk-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 6px;
+    margin: 2px 0;
+}
+
+.thermal-receipt-preview .struk-item {
+    margin: 5px 0 6px;
+}
+
+.thermal-receipt-preview .struk-item-name {
+    font-weight: 600;
+    word-wrap: break-word;
+}
+
+.thermal-receipt-preview .struk-item-math {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 1px;
+}
+
+.thermal-receipt-preview .struk-item-tot {
+    font-weight: 700;
+}
+
+.thermal-receipt-preview .struk-total {
+    font-weight: 800;
+    margin-top: 4px;
+    padding-top: 3px;
+    border-top: 1px solid #0f172a;
+}
+
+.thermal-receipt-preview .struk-bold {
+    font-weight: 700;
+}
+
+.thermal-receipt-preview .struk-foot,
+.thermal-receipt-preview .struk-foot2 {
+    text-align: center;
+    margin: 4px 0 2px;
+}
+
+.thermal-receipt-preview .struk-printed {
+    text-align: center;
+    color: #64748b;
+    margin-top: 6px;
+}

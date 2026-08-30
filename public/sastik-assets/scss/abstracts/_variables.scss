@@ -1,0 +1,42 @@
+// variable
+:root {
+    --font-body: "Inter", sans-serif;
+    --font-heading: 'BwGradual';
+    --font-secondary: "Playfair Display", serif;
+    --font-caveat: "Caveat", cursive;
+
+    --color-primary: #6840ff;
+    --color-secondary: #a1ff62;
+    --color-heading:  #140f26;
+
+    --color-default:  #403A56; 
+    --color-white: #fff;
+    --color-black: #000;
+    --color-body: #fff;
+
+    --easing: cubic-bezier(0.67, 0.04, 0.3, 0.91);
+}
+.help-desk {
+    --color-primary: #045857;
+    --color-secondary: #7afd7a;
+    --color-heading:  #045857;
+    --color-default: #3f6c6b;
+}
+.fintech-saas {
+    --color-primary: #533afd;
+    --color-secondary: #d4ceff;
+    --color-heading:  #0d1738;
+    --color-default: #5a5869;
+    --color-border: #e9e5ff;
+}
+.automation-saas {
+    --color-primary: #781afe;
+    --color-heading:  #131313;
+    --color-default:  #777676; 
+}
+.inner-page {
+    --color-primary: #533afd;
+    --color-secondary: #e6e3fb;
+    --color-heading:  #0d1738;
+    --color-default:  #0d1738; 
+}

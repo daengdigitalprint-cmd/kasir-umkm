@@ -5,9 +5,10 @@ const toastBase = {
     position: 'top-end' as const,
     showConfirmButton: false,
     timerProgressBar: true,
+    padding: '0.6rem 0.9rem',
     customClass: {
-        popup: 'rounded-2xl shadow-lg font-sans',
-        title: 'text-sm font-bold',
+        popup: 'rounded-xl shadow-lg font-sans',
+        title: 'text-sm font-semibold',
     },
 };
 
@@ -19,8 +20,8 @@ export type InertiaFlash = {
     status?: string | null;
 };
 
-/** Toast hijau (sukses). `timer` default 4000 ms; pakai lebih pendek sebelum reload. */
-export function toastSuccess(title: string, timer = 4000) {
+/** Toast hijau (sukses). `timer` default 2500 ms; pakai lebih pendek sebelum reload. */
+export function toastSuccess(title: string, timer = 2500) {
     return Swal.fire({
         ...toastBase,
         icon: 'success',
@@ -91,10 +92,11 @@ export function popupSuccessCenter(title: string, timer = 1200) {
         showConfirmButton: false,
         timer,
         timerProgressBar: true,
-        width: '20rem',
+        width: '16rem',
         customClass: {
-            popup: 'rounded-2xl shadow-2xl font-sans !p-4',
-            title: 'text-base font-bold text-slate-900',
+            popup: 'rounded-xl shadow-lg font-sans !p-3',
+            title: '!text-[20px] font-semibold text-slate-800',
+            icon: '!scale-75',
         },
     });
 }
@@ -221,11 +223,27 @@ export async function toastSuccessThenReload(title: string, waitMs = 1600) {
     window.location.reload();
 }
 
-/** Proses flash Inertia satu kali per navigasi (prioritas: error → warning → success). */
+/**
+ * Proses flash Inertia satu kali per navigasi (prioritas: error → warning → success).
+ *
+ * Flash di-dedup agar pesan yang sama tidak di-toast berulang kali. Ini penting
+ * karena shared prop `flash` ikut terkirim pada partial reload (mis. polling
+ * `router.reload({ only: [...] })` di halaman POS) — tanpa dedup, toast sukses
+ * (mis. "Shift kasir dibuka") akan muncul berulang setiap kali polling berjalan.
+ */
+let lastFlashProcessed = '';
 export function processInertiaFlash(flash: InertiaFlash | undefined | null) {
     if (!flash || typeof flash !== 'object') {
         return;
     }
+    const flashKey = [flash.error, flash.warning, flash.success, flash.info, flash.status].join('|');
+    if (!flashKey) {
+        return;
+    }
+    if (flashKey === lastFlashProcessed) {
+        return;
+    }
+    lastFlashProcessed = flashKey;
     if (flash.error) {
         toastError(flash.error);
         return;
