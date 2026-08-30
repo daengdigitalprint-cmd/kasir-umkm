@@ -735,6 +735,15 @@ Route::prefix('superadmin')->name('superadmin.')->middleware(['auth', 'superadmi
     Route::delete('/vouchers/{voucher}', [SuperAdminController::class, 'deleteVoucher'])->name('vouchers.delete');
     Route::post('/stores/{store}/use-voucher', [SuperAdminController::class, 'useVoucher'])->name('stores.use-voucher');
     Route::get('/voucher-usages', [SuperAdminController::class, 'voucherUsages'])->name('voucher-usages');
+
+    // AI Auditor (read-only analysis, khusus Super Admin)
+    Route::get('/ai-auditor', [App\Http\Controllers\AiAuditorController::class, 'index'])->name('ai-auditor.index');
+    Route::post('/ai-auditor/analyze', [App\Http\Controllers\AiAuditorController::class, 'analyze'])->name('ai-auditor.analyze');
+
+    // Pengaturan AI (provider & API key) dari halaman Super Admin
+    Route::get('/ai-settings', [App\Http\Controllers\AiSettingController::class, 'index'])->name('ai-settings.index');
+    Route::put('/ai-settings', [App\Http\Controllers\AiSettingController::class, 'update'])->name('ai-settings.update');
+    Route::delete('/ai-settings', [App\Http\Controllers\AiSettingController::class, 'destroy'])->name('ai-settings.destroy');
 });
 
 require __DIR__.'/settings.php';
