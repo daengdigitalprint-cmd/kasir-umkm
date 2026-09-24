@@ -20,6 +20,7 @@ class AiSettingUpdateRequest extends FormRequest
         'openrouter',
         'xai',
         'ollama',
+        'custom',
     ];
 
     /**
@@ -32,6 +33,8 @@ class AiSettingUpdateRequest extends FormRequest
         return [
             'provider' => ['required', 'string', Rule::in(self::SUPPORTED_PROVIDERS)],
             'api_key' => ['nullable', 'string', 'max:500'],
+            'url' => ['nullable', 'string', 'url', 'max:500'],
+            'model' => ['nullable', 'string', 'max:255'],
         ];
     }
 

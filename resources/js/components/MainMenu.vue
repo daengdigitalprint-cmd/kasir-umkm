@@ -1,7 +1,42 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { Home, ShoppingCart, Package, Users, BarChart3, Settings, LogOut, Crown, Clock, Tag, History, Truck, ClipboardList, ClipboardCheck, Undo2, ArrowRightLeft, ChefHat, Layers, Shirt, Gift, Building2, Eye, Wallet, ListOrdered, ReceiptText, FileText, Activity, CalendarCheck, Banknote, KeyRound, MessageCircle, QrCode, CreditCard } from 'lucide-vue-next';
 import type { LucideIcon } from 'lucide-vue-next';
+import {
+    Activity,
+    ArrowRight,
+    ArrowRightLeft,
+    Banknote,
+    BarChart3,
+    Building2,
+    CalendarCheck,
+    ChefHat,
+    ClipboardCheck,
+    ClipboardList,
+    Clock,
+    CreditCard,
+    Crown,
+    Eye,
+    FileText,
+    Gift,
+    History,
+    Home,
+    KeyRound,
+    Layers,
+    ListOrdered,
+    LogOut,
+    MessageCircle,
+    Package,
+    QrCode,
+    ReceiptText,
+    Settings,
+    Shirt,
+    ShoppingCart,
+    Tag,
+    Truck,
+    Undo2,
+    Users,
+    Wallet,
+} from 'lucide-vue-next';
 import { computed } from 'vue';
 
 const emit = defineEmits(['close-mobile-menu']);
@@ -83,35 +118,226 @@ type ProcessedNavItem = NavItem & {
 const navigationSource: NavItem[] = [
     { name: 'Dashboard', href: '/dashboard', icon: Home, menuKey: 'dashboard' },
     // ── Kasir ──
-    { name: 'POS', href: '/pos', icon: ShoppingCart, menuKey: 'pos', section: 'kasir', posOnly: true, hideOnLaundry: true, hideOnWarehouse: true, hideOnOwner: true },
-    { name: 'Pesanan Masuk', href: '/table-orders', icon: ClipboardList, menuKey: 'table_orders', section: 'kasir', posOnly: true, scanMejaOnly: true, hideOnWarehouse: true, hideOnOwner: true },
-    { name: 'Antrian dapur', href: '/kitchen', icon: ChefHat, menuKey: 'kitchen_queue', section: 'kasir', kitchenQueueOnly: true, hideOnWarehouse: true, hideOnOwner: true },
-    { name: 'Manajemen Meja', href: '/tables', icon: QrCode, menuKey: 'tables', section: 'kasir', posOnly: true, scanMejaOnly: true, hideOnWarehouse: true, hideOnOwner: true },
-    { name: 'Antrian', href: '/queues', icon: ListOrdered, menuKey: 'queues', section: 'kasir', posOnly: true, queueModuleOnly: true, hideOnWarehouse: true, hideOnOwner: true },
-    { name: 'Shift kasir', href: '/cash-shifts', icon: Clock, menuKey: 'cash_shifts', section: 'kasir', posOnly: true, advancedRetailOnly: true, hideOnWarehouse: true, hideOnOwner: true },
-    { name: 'Kas Masuk/Keluar', href: '/cash-shifts/transactions', icon: ArrowRightLeft, menuKey: 'cash_transactions', section: 'kasir', posOnly: true, advancedRetailOnly: true, hideOnWarehouse: true, hideOnOwner: true },
-    { name: 'Riwayat Transaksi', href: '/pos/transactions', icon: ReceiptText, menuKey: 'pos_transactions', section: 'kasir', posOnly: true, hideOnWarehouse: true, hideOnOwner: true },
-    { name: 'Order Laundry', href: '/laundry-orders', icon: Shirt, menuKey: 'laundry_orders', section: 'kasir', posOnly: true, laundryOnly: true, hideOnWarehouse: true, hideOnOwner: true },
+    {
+        name: 'POS',
+        href: '/pos',
+        icon: ShoppingCart,
+        menuKey: 'pos',
+        section: 'kasir',
+        posOnly: true,
+        hideOnLaundry: true,
+        hideOnWarehouse: true,
+        hideOnOwner: true,
+    },
+    {
+        name: 'Order Laundry',
+        href: '/laundry-orders',
+        icon: Shirt,
+        menuKey: 'laundry_orders',
+        section: 'kasir',
+        posOnly: true,
+        laundryOnly: true,
+        hideOnWarehouse: true,
+        hideOnOwner: true,
+    },
+    {
+        name: 'Pesanan Masuk',
+        href: '/table-orders',
+        icon: ClipboardList,
+        menuKey: 'table_orders',
+        section: 'kasir',
+        posOnly: true,
+        scanMejaOnly: true,
+        hideOnWarehouse: true,
+        hideOnOwner: true,
+    },
+    {
+        name: 'Antrian dapur',
+        href: '/kitchen',
+        icon: ChefHat,
+        menuKey: 'kitchen_queue',
+        section: 'kasir',
+        kitchenQueueOnly: true,
+        hideOnWarehouse: true,
+        hideOnOwner: true,
+    },
+    {
+        name: 'Antrian',
+        href: '/queues',
+        icon: ListOrdered,
+        menuKey: 'queues',
+        section: 'kasir',
+        posOnly: true,
+        queueModuleOnly: true,
+        hideOnWarehouse: true,
+        hideOnOwner: true,
+    },
+    {
+        name: 'Riwayat Transaksi',
+        href: '/pos/transactions',
+        icon: ReceiptText,
+        menuKey: 'pos_transactions',
+        section: 'kasir',
+        posOnly: true,
+        hideOnWarehouse: true,
+        hideOnOwner: true,
+    },
+    {
+        name: 'Shift kasir',
+        href: '/cash-shifts',
+        icon: Clock,
+        menuKey: 'cash_shifts',
+        section: 'kasir',
+        posOnly: true,
+        advancedRetailOnly: true,
+        hideOnWarehouse: true,
+        hideOnOwner: true,
+    },
+    {
+        name: 'Kas Masuk/Keluar',
+        href: '/cash-shifts/transactions',
+        icon: ArrowRightLeft,
+        menuKey: 'cash_transactions',
+        section: 'kasir',
+        posOnly: true,
+        advancedRetailOnly: true,
+        hideOnWarehouse: true,
+        hideOnOwner: true,
+    },
+    {
+        name: 'Manajemen Meja',
+        href: '/tables',
+        icon: QrCode,
+        menuKey: 'tables',
+        section: 'kasir',
+        posOnly: true,
+        scanMejaOnly: true,
+        hideOnWarehouse: true,
+        hideOnOwner: true,
+    },
     // ── Produk & Stok ──
-    { name: 'Lihat Stok', href: '/stock-overview', icon: Eye, menuKey: 'stock_overview', section: 'produk_stok', posAndViewStock: true, hideOnOwner: true },
+    {
+        name: 'Lihat Stok',
+        href: '/stock-overview',
+        icon: Eye,
+        menuKey: 'stock_overview',
+        section: 'produk_stok',
+        posAndViewStock: true,
+        hideOnOwner: true,
+    },
     { name: 'Produk', href: '/products', icon: Package, menuKey: 'products', section: 'produk_stok', inventoryItem: true },
     { name: 'Kategori', href: '/product-categories', icon: Layers, menuKey: 'product_categories', section: 'produk_stok', inventoryItem: true },
-    { name: 'Riwayat stok', href: '/stock-movements', icon: History, menuKey: 'stock_movements', section: 'produk_stok', inventoryItem: true, hideOnOwner: true },
-    { name: 'Penyesuaian stok', href: '/stock-adjustments', icon: ClipboardCheck, menuKey: 'stock_adjustment', section: 'produk_stok', adjustStock: true, advancedRetailOnly: true, hideOnOwner: true, hideOnDirectStockEdit: true },
-    { name: 'Stok Opname', href: '/stock-opnames', icon: ClipboardList, menuKey: 'stock_opnames', section: 'produk_stok', inventoryItem: true, advancedRetailOnly: true, hideOnOwner: true, hideOnDirectStockEdit: true },
+    {
+        name: 'Riwayat stok',
+        href: '/stock-movements',
+        icon: History,
+        menuKey: 'stock_movements',
+        section: 'produk_stok',
+        inventoryItem: true,
+        hideOnOwner: true,
+    },
+    {
+        name: 'Penyesuaian stok',
+        href: '/stock-adjustments',
+        icon: ClipboardCheck,
+        menuKey: 'stock_adjustment',
+        section: 'produk_stok',
+        adjustStock: true,
+        advancedRetailOnly: true,
+        hideOnOwner: true,
+        hideOnDirectStockEdit: true,
+    },
+    {
+        name: 'Stok Opname',
+        href: '/stock-opnames',
+        icon: ClipboardList,
+        menuKey: 'stock_opnames',
+        section: 'produk_stok',
+        inventoryItem: true,
+        advancedRetailOnly: true,
+        hideOnOwner: true,
+        hideOnDirectStockEdit: true,
+    },
     { name: 'Resep', href: '/recipes', icon: ChefHat, menuKey: 'recipes', section: 'produk_stok', recipesOnly: true },
     { name: 'Produksi', href: '/productions', icon: Layers, menuKey: 'productions', section: 'produk_stok', productionsOnly: true },
     // ── Pembelian & Distribusi ──
     { name: 'Pembelian', href: '/purchases', icon: Truck, menuKey: 'purchases', section: 'pembelian', inventoryItem: true, advancedRetailOnly: true },
-    { name: 'Retur pembelian', href: '/purchase-returns', icon: Undo2, menuKey: 'purchase_returns', section: 'pembelian', inventoryItem: true, advancedRetailOnly: true },
-    { name: 'Retur penjualan', href: '/sales-returns', icon: Undo2, menuKey: 'sales_returns', section: 'pembelian', inventoryItem: true, advancedRetailOnly: true },
-    { name: 'Pre-order', href: '/pre-orders', icon: ClipboardList, menuKey: 'pre_orders', section: 'pembelian', inventoryItem: true, advancedRetailOnly: true },
-    { name: 'Transfer stok', href: '/stock-transfers', icon: ArrowRightLeft, menuKey: 'stock_transfers', section: 'pembelian', inventoryItem: true, advancedRetailOnly: true },
+    {
+        name: 'Retur pembelian',
+        href: '/purchase-returns',
+        icon: Undo2,
+        menuKey: 'purchase_returns',
+        section: 'pembelian',
+        inventoryItem: true,
+        advancedRetailOnly: true,
+    },
+    {
+        name: 'Retur penjualan',
+        href: '/sales-returns',
+        icon: Undo2,
+        menuKey: 'sales_returns',
+        section: 'pembelian',
+        inventoryItem: true,
+        advancedRetailOnly: true,
+    },
+    {
+        name: 'Pre-order',
+        href: '/pre-orders',
+        icon: ClipboardList,
+        menuKey: 'pre_orders',
+        section: 'pembelian',
+        inventoryItem: true,
+        advancedRetailOnly: true,
+    },
+    {
+        name: 'Transfer stok',
+        href: '/stock-transfers',
+        icon: ArrowRightLeft,
+        menuKey: 'stock_transfers',
+        section: 'pembelian',
+        inventoryItem: true,
+        advancedRetailOnly: true,
+    },
     // ── Pelanggan & Promo ──
-    { name: 'Pelanggan', href: '/customers', icon: Users, menuKey: 'customers', section: 'pelanggan_promo', backofficeOnly: true, hideOnWarehouse: true },
-    { name: 'Piutang', href: '/receivables', icon: CreditCard, menuKey: 'receivables', section: 'pelanggan_promo', backofficeOnly: true, hideOnWarehouse: true, receivablesOnly: true },
-    { name: 'Loyalitas', href: '/loyalty', icon: Gift, menuKey: 'loyalty', section: 'pelanggan_promo', backofficeOnly: true, advancedRetailOnly: true, hideOnWarehouse: true },
-    { name: 'Diskon', href: '/discounts', icon: Tag, menuKey: 'discounts', section: 'pelanggan_promo', backofficeOnly: true, advancedRetailOnly: true, hideOnWarehouse: true },
+    {
+        name: 'Pelanggan',
+        href: '/customers',
+        icon: Users,
+        menuKey: 'customers',
+        section: 'pelanggan_promo',
+        backofficeOnly: true,
+        hideOnWarehouse: true,
+    },
+    {
+        name: 'Piutang',
+        href: '/receivables',
+        icon: CreditCard,
+        menuKey: 'receivables',
+        section: 'pelanggan_promo',
+        backofficeOnly: true,
+        hideOnWarehouse: true,
+        receivablesOnly: true,
+    },
+    {
+        name: 'Loyalitas',
+        href: '/loyalty',
+        icon: Gift,
+        menuKey: 'loyalty',
+        section: 'pelanggan_promo',
+        backofficeOnly: true,
+        advancedRetailOnly: true,
+        hideOnWarehouse: true,
+    },
+    {
+        name: 'Diskon',
+        href: '/discounts',
+        icon: Tag,
+        menuKey: 'discounts',
+        section: 'pelanggan_promo',
+        backofficeOnly: true,
+        advancedRetailOnly: true,
+        hideOnWarehouse: true,
+    },
     // ── Laporan & Keuangan ──
     { name: 'Laporan', href: '/reports', icon: BarChart3, menuKey: 'reports', section: 'laporan_keuangan' },
     { name: 'Biaya Usaha', href: '/expenses', icon: Wallet, menuKey: 'expenses', section: 'laporan_keuangan' },
@@ -124,8 +350,23 @@ const navigationSource: NavItem[] = [
     { name: 'Distribusi Produk', href: '/manage-products', icon: Package, menuKey: 'manage_products', section: 'pengaturan', storeAdminOnly: true },
     { name: 'Tim & Akses', href: '/manage-staff', icon: Users, menuKey: 'manage_staff', section: 'pengaturan', storeAdminOnly: true },
     { name: 'Pengaturan', href: '/settings', icon: Settings, menuKey: 'settings', section: 'pengaturan', storeAdminOnly: true },
-    { name: 'Login Kasir', href: '/settings/cashier-pin', icon: KeyRound, menuKey: 'cashier_pin_settings', section: 'pengaturan', storeAdminOnly: true, cashierPinOnly: true },
-    { name: 'Bantuan', href: 'https://wa.me/6285242766676?text=Halo%2C%20saya%20butuh%20bantuan%20dengan%20aplikasi%20kasir.', icon: MessageCircle, section: 'pengaturan', iconClass: 'text-green-600 group-hover:text-green-700', textClass: 'text-green-600 group-hover:text-green-700' },
+    {
+        name: 'Login Kasir',
+        href: '/settings/cashier-pin',
+        icon: KeyRound,
+        menuKey: 'cashier_pin_settings',
+        section: 'pengaturan',
+        storeAdminOnly: true,
+        cashierPinOnly: true,
+    },
+    {
+        name: 'Bantuan',
+        href: 'https://wa.me/6285242766676?text=Halo%2C%20saya%20butuh%20bantuan%20dengan%20aplikasi%20kasir.',
+        icon: MessageCircle,
+        section: 'pengaturan',
+        iconClass: 'text-green-600 group-hover:text-green-700',
+        textClass: 'text-green-600 group-hover:text-green-700',
+    },
 ];
 
 const navigationItems = computed((): ProcessedNavItem[] => {
@@ -134,9 +375,7 @@ const navigationItems = computed((): ProcessedNavItem[] => {
     const stockAdjust = Boolean((page.props as { abilities?: { stock_adjustment?: boolean } }).abilities?.stock_adjustment);
     const pos = Boolean((page.props as { abilities?: { pos?: boolean } }).abilities?.pos);
     const isOwner = Boolean((page.props as { abilities?: { owner?: boolean } }).abilities?.owner);
-    const manageStoreSettings = Boolean(
-        (page.props as { abilities?: { manage_store_settings?: boolean } }).abilities?.manage_store_settings,
-    );
+    const manageStoreSettings = Boolean((page.props as { abilities?: { manage_store_settings?: boolean } }).abilities?.manage_store_settings);
     const canAccessActivityLogs = Boolean((page.props as { can_access_activity_logs?: boolean }).can_access_activity_logs);
     const fnb = Boolean((page.props as { fnb_enabled?: boolean }).fnb_enabled);
     const pharmacy = Boolean((page.props as { pharmacy_enabled?: boolean }).pharmacy_enabled);
@@ -156,12 +395,15 @@ const navigationItems = computed((): ProcessedNavItem[] => {
     const pendingKitchenOrderCount = Number((page.props as { pending_kitchen_order_count?: number }).pending_kitchen_order_count ?? 0);
     const locationType = String((page.props as { location_type?: string }).location_type ?? 'outlet');
     const isWarehouse = locationType === 'central_warehouse' || locationType === 'branch_warehouse';
-    const currentRole = String((page.props as { auth?: { user?: { role?: string }; active_role?: string } }).auth?.active_role ?? (page.props as { auth?: { user?: { role?: string } } }).auth?.user?.role ?? '');
+    const currentRole = String(
+        (page.props as { auth?: { user?: { role?: string }; active_role?: string } }).auth?.active_role ??
+            (page.props as { auth?: { user?: { role?: string } } }).auth?.user?.role ??
+            '',
+    );
     const isKitchen = currentRole === 'kitchen';
     const planLimits = (page.props as { plan_limits?: { allows_advanced_retail?: boolean } | null }).plan_limits;
     /** Tanpa plan_limits (belum ada konteks toko): biarkan seperti legacy. Ada plan: harus eksplisit true. */
-    const allowAdvanced =
-        planLimits == null ? true : planLimits.allows_advanced_retail === true;
+    const allowAdvanced = planLimits == null ? true : planLimits.allows_advanced_retail === true;
     const directStockEdit = Boolean((page.props as { direct_stock_edit?: boolean }).direct_stock_edit);
     const allowedMenus = (page.props as { allowed_menus?: string[] }).allowed_menus ?? [];
 
@@ -203,8 +445,8 @@ const navigationItems = computed((): ProcessedNavItem[] => {
             if (item.menuKey && !hasExplicitAccess) {
                 return [];
             }
-            
-            // JIKA ini Stok Opname / Penyesuaian Stok DAN store pakai mode directStockEdit, 
+
+            // JIKA ini Stok Opname / Penyesuaian Stok DAN store pakai mode directStockEdit,
             // sembunyikan KECUALI jika secara eksplisit diizinkan di role permission
             if (item.hideOnDirectStockEdit && directStockEdit && !hasExplicitAccess) {
                 return [];
@@ -226,12 +468,12 @@ const navigationItems = computed((): ProcessedNavItem[] => {
         if (isOwner && item.name === 'Dashboard') {
             return [{ ...item, href: '/owner/dashboard' }];
         }
-        
+
         // Filter paket berlangganan
         if (item.advancedRetailOnly && !allowAdvanced) {
             return [{ ...item, disabled: true, disabledReason: 'Upgrade ke paket berbayar untuk mengakses fitur ini' }];
         }
-        
+
         // Badge antrian dapur
         if (item.menuKey === 'kitchen_queue' && pendingKitchenOrderCount > 0) {
             return [{ ...item, pendingCount: pendingKitchenOrderCount }];
@@ -261,9 +503,7 @@ const SECTION_META: { key: NonNullable<NavItem['section']>; label: string }[] = 
     { key: 'pengaturan', label: 'Pengaturan' },
 ];
 
-type NavRenderEntry =
-    | { kind: 'item'; key: string; item: ProcessedNavItem }
-    | { kind: 'section'; key: string; label: string };
+type NavRenderEntry = { kind: 'item'; key: string; item: ProcessedNavItem } | { kind: 'section'; key: string; label: string };
 
 /** Item tanpa seksi (Dashboard) di atas, lalu header seksi + itemnya berurutan. */
 const renderItems = computed<NavRenderEntry[]>(() => {
@@ -322,14 +562,16 @@ const subscriptionStatusText = computed(() => {
     if (!subscription.value) return '';
     if (isStarterPlan.value && subscription.value.is_active) return 'Aktif';
     switch (subscription.value.status) {
-        case 'active': return 'Aktif';
+        case 'active':
+            return 'Aktif';
         case 'expiring':
-            return subscription.value.days_remaining != null
-                ? `${subscription.value.days_remaining} hari lagi`
-                : 'Akan berakhir';
-        case 'expired': return 'Expired';
-        case 'unlimited': return 'Unlimited';
-        default: return 'Nonaktif';
+            return subscription.value.days_remaining != null ? `${subscription.value.days_remaining} hari lagi` : 'Akan berakhir';
+        case 'expired':
+            return 'Expired';
+        case 'unlimited':
+            return 'Unlimited';
+        default:
+            return 'Nonaktif';
     }
 });
 
@@ -342,136 +584,138 @@ const subscriptionCardSoft = computed(() => {
 </script>
 
 <template>
-    <div class="flex flex-col h-full w-full">
-        <nav class="space-y-1 relative">
+    <div class="flex h-full w-full flex-col">
+        <nav class="relative space-y-1">
             <template v-for="entry in renderItems" :key="entry.key">
                 <!-- Header seksi menu -->
-                <p
-                    v-if="entry.kind === 'section'"
-                    class="px-4 pt-6 pb-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400"
-                >
+                <p v-if="entry.kind === 'section'" class="px-4 pt-6 pb-2 text-[10px] font-black tracking-[0.2em] text-slate-400 uppercase">
                     {{ entry.label }}
                 </p>
 
                 <!-- Item menu -->
-                <div v-else class="relative group/menu">
-                <component
-                    :is="entry.item.disabled ? 'div' : isExternal(entry.item.href) ? 'a' : Link"
-                    :href="entry.item.disabled ? undefined : entry.item.href" 
-                    :target="isExternal(entry.item.href) ? '_blank' : undefined"
-                    :rel="isExternal(entry.item.href) ? 'noopener noreferrer' : undefined"
-                    @click="!entry.item.disabled && emit('close-mobile-menu')" 
-                    :class="[
-                        'block outline-none',
-                        entry.item.disabled ? 'cursor-not-allowed' : ''
-                    ]"
-                >
-                    <div
-                        :class="[
-                            'flex items-center w-full h-12 px-4 rounded-2xl transition-all duration-300 group relative overflow-hidden',
-                            entry.item.disabled 
-                                ? 'opacity-50 cursor-not-allowed'
-                                : isCurrentRoute(entry.item.href) 
-                                    ? 'bg-primary/10 text-primary' 
-                                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-                        ]"
+                <div v-else class="group/menu relative">
+                    <component
+                        :is="entry.item.disabled ? 'div' : isExternal(entry.item.href) ? 'a' : Link"
+                        :href="entry.item.disabled ? undefined : entry.item.href"
+                        :target="isExternal(entry.item.href) ? '_blank' : undefined"
+                        :rel="isExternal(entry.item.href) ? 'noopener noreferrer' : undefined"
+                        @click="!entry.item.disabled && emit('close-mobile-menu')"
+                        :class="['block outline-none', entry.item.disabled ? 'cursor-not-allowed' : '']"
                     >
-                        <component 
-                            :is="entry.item.icon" 
+                        <div
                             :class="[
-                                'size-5 mr-4 z-10',
+                                'group relative flex h-12 w-full items-center overflow-hidden rounded-2xl px-4 transition-all duration-300',
                                 entry.item.disabled
-                                    ? 'text-slate-300'
-                                    : 'transition-transform duration-300 group-hover:scale-110',
-                                entry.item.iconClass
-                                    ? entry.item.iconClass
-                                    : [
-                                        !entry.item.disabled && isCurrentRoute(entry.item.href) ? 'text-primary' : '',
-                                        !entry.item.disabled && !isCurrentRoute(entry.item.href) ? 'text-slate-400 group-hover:text-slate-800' : '',
-                                    ],
-                            ]"
-                        />
-                        <span 
-                            :class="[
-                                'font-bold text-sm tracking-tight z-10',
-                                entry.item.disabled
-                                    ? 'text-slate-400'
-                                    : entry.item.textClass
-                                        ? entry.item.textClass
-                                        : isCurrentRoute(entry.item.href) 
-                                            ? 'text-primary' 
-                                            : 'text-slate-500 group-hover:text-slate-800'
+                                    ? 'cursor-not-allowed opacity-50'
+                                    : entry.item.href === '/pos'
+                                      ? 'bg-violet-600 text-white shadow-md shadow-violet-200 hover:bg-violet-700'
+                                      : isCurrentRoute(entry.item.href)
+                                        ? 'bg-primary/10 text-primary'
+                                        : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800',
                             ]"
                         >
-                            {{ entry.item.name }}
-                        </span>
-                        
-                        <!-- Badge notifikasi antrian pending -->
-                        <span
-                            v-if="entry.item.pendingCount && entry.item.pendingCount > 0"
-                            class="ml-auto flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-black z-10"
-                        >
-                            {{ entry.item.pendingCount > 99 ? '99+' : entry.item.pendingCount }}
-                        </span>
+                            <component
+                                :is="entry.item.icon"
+                                :class="[
+                                    'z-10 mr-4 size-5',
+                                    entry.item.disabled ? 'text-slate-300' : 'transition-transform duration-300 group-hover:scale-110',
+                                    entry.item.href === '/pos'
+                                        ? 'text-white'
+                                        : entry.item.iconClass
+                                          ? entry.item.iconClass
+                                          : [
+                                                !entry.item.disabled && isCurrentRoute(entry.item.href) ? 'text-primary' : '',
+                                                !entry.item.disabled && !isCurrentRoute(entry.item.href)
+                                                    ? 'text-slate-400 group-hover:text-slate-800'
+                                                    : '',
+                                            ],
+                                ]"
+                            />
+                            <span
+                                :class="[
+                                    'z-10 text-sm font-bold tracking-tight',
+                                    entry.item.disabled
+                                        ? 'text-slate-400'
+                                        : entry.item.href === '/pos'
+                                          ? 'text-white'
+                                          : entry.item.textClass
+                                            ? entry.item.textClass
+                                            : isCurrentRoute(entry.item.href)
+                                              ? 'text-primary'
+                                              : 'text-slate-500 group-hover:text-slate-800',
+                                ]"
+                            >
+                                {{ entry.item.name }}
+                            </span>
+                            <span
+                                v-if="entry.item.href === '/pos'"
+                                class="z-10 ml-auto flex size-7 items-center justify-center rounded-full bg-gradient-to-br from-violet-500/90 to-transparent shadow-sm shadow-purple-900/20 transition-transform duration-300 group-hover:translate-x-0.5"
+                            >
+                                <ArrowRight class="size-4 text-white" />
+                            </span>
 
-                        <!-- Badge Premium untuk fitur berbayar -->
-                        <Crown 
-                            v-if="entry.item.disabled && entry.item.disabledReason?.includes('paket')"
-                            class="size-4 ml-auto text-amber-400 z-10"
-                        />
+                            <!-- Badge notifikasi antrian pending -->
+                            <span
+                                v-if="entry.item.pendingCount && entry.item.pendingCount > 0"
+                                class="z-10 ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-black text-white"
+                            >
+                                {{ entry.item.pendingCount > 99 ? '99+' : entry.item.pendingCount }}
+                            </span>
 
-                        <!-- Active Indicator side border -->
-                        <div 
-                            v-if="!entry.item.disabled && isCurrentRoute(entry.item.href)"
-                            class="absolute left-[-4px] top-2 bottom-2 w-2 bg-primary rounded-r-full shadow-[2px_0_8px_rgba(124,58,237,0.4)] z-20"
-                        ></div>
+                            <!-- Badge Premium untuk fitur berbayar -->
+                            <Crown
+                                v-if="entry.item.disabled && entry.item.disabledReason?.includes('paket')"
+                                class="z-10 ml-auto size-4 text-amber-400"
+                            />
+
+                            <!-- Active Indicator side border -->
+                            <div
+                                v-if="!entry.item.disabled && isCurrentRoute(entry.item.href)"
+                                class="absolute top-2 bottom-2 left-[-4px] z-20 w-2 rounded-r-full bg-primary shadow-[2px_0_8px_rgba(124,58,237,0.4)]"
+                            ></div>
+                        </div>
+                    </component>
+
+                    <!-- Tooltip untuk menu disabled -->
+                    <div
+                        v-if="entry.item.disabled && entry.item.disabledReason"
+                        class="pointer-events-none absolute top-1/2 right-3 z-50 max-w-[160px] -translate-y-1/2 opacity-0 transition-opacity duration-200 group-hover/menu:opacity-100"
+                    >
+                        <div class="rounded-lg bg-slate-900 px-2 py-1 text-right text-[10px] leading-tight text-white shadow-lg">
+                            {{ entry.item.disabledReason }}
+                        </div>
                     </div>
-                </component>
-                
-                <!-- Tooltip untuk menu disabled -->
-                <div 
-                    v-if="entry.item.disabled && entry.item.disabledReason"
-                    class="absolute right-3 top-1/2 -translate-y-1/2 z-50 pointer-events-none opacity-0 group-hover/menu:opacity-100 transition-opacity duration-200 max-w-[160px]"
-                >
-                    <div class="bg-slate-900 text-white text-[10px] px-2 py-1 rounded-lg shadow-lg text-right leading-tight">
-                        {{ entry.item.disabledReason }}
-                    </div>
-                </div>
                 </div>
             </template>
         </nav>
 
         <!-- Subscription Section -->
-        <p class="px-4 text-[10px] font-black uppercase tracking-[0.2em] text-violet-400/90 mb-4 mt-8">SUBSCRIPTION</p>
-        
+        <p class="mt-8 mb-4 px-4 text-[10px] font-black tracking-[0.2em] text-violet-400/90 uppercase">SUBSCRIPTION</p>
+
         <!-- Subscription Status Card -->
-        <Link 
-            href="/subscription" 
-            @click="emit('close-mobile-menu')" 
-            class="block outline-none mx-1"
-        >
-            <div :class="[
-                'relative overflow-hidden rounded-2xl p-4 min-h-[118px] transition-all duration-300 group cursor-pointer ring-1 ring-inset',
-                subscriptionCardSoft
-                    ? [
-                        'bg-gradient-to-br from-violet-100 via-purple-50 to-fuchsia-100/90 ring-violet-200/70',
-                        isCurrentRoute('/subscription')
-                            ? 'shadow-lg shadow-violet-300/35 scale-[1.02]'
-                            : 'hover:shadow-lg hover:shadow-violet-200/50 hover:scale-[1.01]',
-                    ]
-                    : [
-                        'ring-white/15',
-                        isCurrentRoute('/subscription')
-                            ? 'shadow-lg scale-[1.02]'
-                            : 'hover:shadow-lg hover:scale-[1.01]',
-                        subscription?.status === 'expiring' ? 'bg-gradient-to-br from-amber-500 to-orange-600' : '',
-                        subscription?.status === 'expired' ? 'bg-gradient-to-br from-red-500 to-rose-600' : '',
-                    ],
-            ]">
+        <Link href="/subscription" @click="emit('close-mobile-menu')" class="mx-1 block outline-none">
+            <div
+                :class="[
+                    'group relative min-h-[118px] cursor-pointer overflow-hidden rounded-2xl p-4 ring-1 transition-all duration-300 ring-inset',
+                    subscriptionCardSoft
+                        ? [
+                              'bg-gradient-to-br from-violet-100 via-purple-50 to-fuchsia-100/90 ring-violet-200/70',
+                              isCurrentRoute('/subscription')
+                                  ? 'scale-[1.02] shadow-lg shadow-violet-300/35'
+                                  : 'hover:scale-[1.01] hover:shadow-lg hover:shadow-violet-200/50',
+                          ]
+                        : [
+                              'ring-white/15',
+                              isCurrentRoute('/subscription') ? 'scale-[1.02] shadow-lg' : 'hover:scale-[1.01] hover:shadow-lg',
+                              subscription?.status === 'expiring' ? 'bg-gradient-to-br from-amber-500 to-orange-600' : '',
+                              subscription?.status === 'expired' ? 'bg-gradient-to-br from-red-500 to-rose-600' : '',
+                          ],
+                ]"
+            >
                 <!-- Decorative circle -->
                 <div
                     :class="[
-                        'absolute top-0 right-0 w-20 h-20 rounded-full -translate-y-10 translate-x-10 z-[0]',
+                        'absolute top-0 right-0 z-[0] h-20 w-20 translate-x-10 -translate-y-10 rounded-full',
                         subscriptionCardSoft ? 'bg-violet-300/25' : 'bg-white/10',
                     ]"
                 ></div>
@@ -484,70 +728,56 @@ const subscriptionCardSoft = computed(() => {
                     loading="lazy"
                     decoding="async"
                     :class="[
-                        'pointer-events-none select-none absolute -right-1 bottom-0 z-[1] h-[5.75rem] w-auto object-contain object-bottom group-hover:scale-105 group-hover:-translate-y-0.5 transition-transform duration-300',
-                        subscriptionCardSoft
-                            ? 'drop-shadow-[0_4px_12px_rgba(91,33,182,0.15)]'
-                            : 'drop-shadow-[0_6px_16px_rgba(0,0,0,0.2)]',
+                        'pointer-events-none absolute -right-1 bottom-0 z-[1] h-[5.75rem] w-auto object-contain object-bottom transition-transform duration-300 select-none group-hover:-translate-y-0.5 group-hover:scale-105',
+                        subscriptionCardSoft ? 'drop-shadow-[0_4px_12px_rgba(91,33,182,0.15)]' : 'drop-shadow-[0_6px_16px_rgba(0,0,0,0.2)]',
                     ]"
                 />
-                <div class="relative z-10 max-w-[72%] pr-1 overflow-hidden">
-                    <div class="flex items-center gap-2.5 mb-2">
-                        <Crown
-                            :class="[
-                                'h-5 w-5 shrink-0 drop-shadow-sm',
-                                subscriptionCardSoft ? 'text-violet-500' : 'text-amber-200',
-                            ]"
-                        />
-                        <span
-                            :class="[
-                                'font-black text-sm leading-tight',
-                                subscriptionCardSoft ? 'text-violet-950' : 'text-white',
-                            ]"
-                        >
+                <div class="relative z-10 max-w-[72%] overflow-hidden pr-1">
+                    <div class="mb-2 flex items-center gap-2.5">
+                        <Crown :class="['h-5 w-5 shrink-0 drop-shadow-sm', subscriptionCardSoft ? 'text-violet-500' : 'text-amber-200']" />
+                        <span :class="['text-sm leading-tight font-black', subscriptionCardSoft ? 'text-violet-950' : 'text-white']">
                             Subscription
                         </span>
                     </div>
                     <div class="flex items-center justify-between gap-2">
-                        <div class="flex items-center gap-1.5 min-w-0">
+                        <div class="flex min-w-0 items-center gap-1.5">
                             <Clock
-                                v-if="subscription?.days_remaining != null && subscription.days_remaining > 0 && !subscription?.starter_free && !isStarterPlan"
+                                v-if="
+                                    subscription?.days_remaining != null &&
+                                    subscription.days_remaining > 0 &&
+                                    !subscription?.starter_free &&
+                                    !isStarterPlan
+                                "
                                 :class="['h-3 w-3 shrink-0', subscriptionCardSoft ? 'text-violet-500/80' : 'text-white/70']"
                             />
                             <span
-                            :class="[
-                                'text-xs font-semibold leading-snug truncate',
-                                subscriptionCardSoft ? 'text-violet-800/90' : 'text-white/90',
-                            ]"
-                        >
-                            {{ subscriptionStatusText || 'Lihat Paket' }}
-                        </span>
+                                :class="[
+                                    'truncate text-xs leading-snug font-semibold',
+                                    subscriptionCardSoft ? 'text-violet-800/90' : 'text-white/90',
+                                ]"
+                            >
+                                {{ subscriptionStatusText || 'Lihat Paket' }}
+                            </span>
                         </div>
                         <div
                             v-if="subscription?.has_pending_payment"
-                            :class="[
-                                'w-2 h-2 rounded-full animate-pulse shrink-0',
-                                subscriptionCardSoft ? 'bg-amber-500' : 'bg-yellow-300',
-                            ]"
+                            :class="['h-2 w-2 shrink-0 animate-pulse rounded-full', subscriptionCardSoft ? 'bg-amber-500' : 'bg-yellow-300']"
                         ></div>
                     </div>
                 </div>
             </div>
         </Link>
-        
+
         <!-- System Section -->
-        <p class="px-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4 mt-8">SISTEM</p>
-        
+        <p class="mt-8 mb-4 px-4 text-[10px] font-black tracking-[0.2em] text-slate-400 uppercase">SISTEM</p>
+
         <!-- Logout Button -->
-        <Link
-            href="/logout"
-            method="post"
-            as="button"
-            class="w-full text-left outline-none"
-            @click="emit('close-mobile-menu')"
-        >
-            <div class="flex items-center w-full h-12 px-4 text-red-600 hover:bg-red-50 rounded-2xl transition-all duration-300 group group-hover:scale-105">
-                <LogOut class="size-5 mr-4 transition-transform duration-300 group-hover:scale-110" />
-                <span class="font-bold text-sm tracking-tight">Keluar</span>
+        <Link href="/logout" method="post" as="button" class="w-full text-left outline-none" @click="emit('close-mobile-menu')">
+            <div
+                class="group flex h-12 w-full items-center rounded-2xl px-4 text-red-600 transition-all duration-300 group-hover:scale-105 hover:bg-red-50"
+            >
+                <LogOut class="mr-4 size-5 transition-transform duration-300 group-hover:scale-110" />
+                <span class="text-sm font-bold tracking-tight">Keluar</span>
             </div>
         </Link>
     </div>

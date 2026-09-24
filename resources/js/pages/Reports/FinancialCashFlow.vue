@@ -51,7 +51,7 @@ watch(
 
 const applyFilter = () => {
     router.get(
-        '/reports/financial/cash-flow',
+        '/financial/cash-flow',
         { start_date: filterStart.value, end_date: filterEnd.value },
         { preserveState: true, preserveScroll: true },
     );

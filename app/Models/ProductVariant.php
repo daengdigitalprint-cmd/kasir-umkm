@@ -22,6 +22,7 @@ class ProductVariant extends Model
         'min_stock_level',
         'is_active',
         'sort_order',
+        'allow_negative_stock',
     ];
 
     protected function casts(): array
@@ -33,6 +34,7 @@ class ProductVariant extends Model
             'stock_quantity' => 'decimal:4',
             'min_stock_level' => 'decimal:4',
             'is_active' => 'boolean',
+            'allow_negative_stock' => 'boolean',
         ];
     }
 

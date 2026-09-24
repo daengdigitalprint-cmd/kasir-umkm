@@ -13,41 +13,35 @@ const page = usePage();
 
 <template>
     <SidebarGroup class="px-2 py-0">
-        <SidebarGroupLabel class="px-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4 mt-8">PLATFORM</SidebarGroupLabel>
+        <SidebarGroupLabel class="mt-8 mb-4 px-4 text-[10px] font-black tracking-[0.2em] text-slate-400 uppercase">PLATFORM</SidebarGroupLabel>
         <SidebarMenu class="space-y-1">
             <SidebarMenuItem v-for="item in items" :key="item.title">
-                <SidebarMenuButton 
-                    as-child 
-                    :is-active="urlIsActive(item.href, page.url)" 
+                <SidebarMenuButton
+                    as-child
+                    :is-active="urlIsActive(item.href, page.url)"
                     :tooltip="item.title"
-                    class="h-12 px-2 rounded-2xl transition-all duration-300 group hover:bg-slate-50 relative overflow-hidden"
+                    class="group relative h-12 overflow-hidden rounded-2xl px-2 transition-all duration-300 hover:bg-slate-50"
                 >
-                    <Link 
-                        :href="item.href"
-                        class="flex items-center w-full"
-                    >
+                    <Link :href="item.href" class="flex w-full items-center">
                         <!-- Active Background Shadow (Optional visual polish) -->
-                        <div 
-                            v-if="urlIsActive(item.href, page.url)"
-                            class="absolute inset-0 bg-primary/10 rounded-2xl"
-                        ></div>
+                        <div v-if="urlIsActive(item.href, page.url)" class="absolute inset-0 rounded-2xl bg-primary/10"></div>
 
-                        <component 
-                            :is="item.icon" 
-                            class="size-5 transition-transform duration-300 group-hover:scale-110 ml-2 z-10" 
+                        <component
+                            :is="item.icon"
+                            class="z-10 size-5 transition-transform duration-300 group-hover:scale-110"
                             :class="urlIsActive(item.href, page.url) ? 'text-primary' : 'text-slate-400 group-hover:text-slate-800'"
                         />
-                        <span 
-                            class="ml-4 font-bold text-sm tracking-tight z-10 transition-colors duration-300"
+                        <span
+                            class="z-10 ml-4 text-sm font-bold tracking-tight transition-colors duration-300"
                             :class="urlIsActive(item.href, page.url) ? 'text-primary' : 'text-slate-500 group-hover:text-slate-800'"
                         >
                             {{ item.title }}
                         </span>
 
                         <!-- Active Indicator (4px Side Border) -->
-                        <div 
+                        <div
                             v-if="urlIsActive(item.href, page.url)"
-                            class="absolute left-0 top-2 bottom-2 w-1 bg-primary rounded-r-full shadow-[2px_0_8px_rgba(124,58,237,0.4)] z-20"
+                            class="absolute top-2 bottom-2 left-0 z-20 w-1 rounded-r-full bg-primary shadow-[2px_0_8px_rgba(124,58,237,0.4)]"
                         ></div>
                     </Link>
                 </SidebarMenuButton>

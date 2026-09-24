@@ -18,6 +18,7 @@ use App\Services\ProductImportService;
 use App\Support\BaseUnit;
 use App\Support\BatchTracking;
 use App\Support\BusinessTypePresets;
+use App\Support\CacheKeys;
 use App\Support\InventoryType;
 use App\Support\PharmacyFeatures;
 use App\Support\ProductQuantity;
@@ -27,6 +28,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -91,15 +93,19 @@ class ProductController extends Controller
             return $product;
         });
 
-        // Daftar kategori unik yang dipakai di toko ini
-        $categories = $store->products()
-            ->whereNotNull('category')
-            ->where('category', '!=', '')
-            ->distinct()
-            ->pluck('category')
-            ->sort()
-            ->values()
-            ->all();
+        // Daftar kategori unik yang dipakai di toko ini (cached — daftar master)
+        $categories = Cache::remember(
+            CacheKeys::productCategories((int) $store->id),
+            CacheKeys::MASTER_TTL_SECONDS,
+            fn () => $store->products()
+                ->whereNotNull('category')
+                ->where('category', '!=', '')
+                ->distinct()
+                ->pluck('category')
+                ->sort()
+                ->values()
+                ->all()
+        );
 
         // Jumlah produk stok rendah di seluruh toko (konsisten dengan dashboard)
         $lowStockCount = $store->products()
@@ -324,6 +330,7 @@ class ProductController extends Controller
         $request->merge([
             'track_stock' => $request->boolean('track_stock'),
             'unlimited_stock' => $request->boolean('unlimited_stock'),
+            'allow_negative_stock' => $request->boolean('allow_negative_stock'),
             'allows_decimal' => $request->boolean('allows_decimal'),
             'has_variants' => $request->boolean('has_variants'),
             'is_bundle' => $request->boolean('is_bundle'),
@@ -342,7 +349,7 @@ class ProductController extends Controller
             'sku' => 'nullable|string|max:255|unique:products,sku,NULL,id,store_id,'.$store->id,
             'barcode' => 'nullable|string|max:255|unique:products,barcode,NULL,id,store_id,'.$store->id,
             'description' => 'nullable|string',
-            'price' => 'required|numeric|min:0',
+            'price' => [Rule::requiredIf(! $request->boolean('has_variants')), 'nullable', 'numeric', 'min:0'],
             'wholesale_price' => 'nullable|numeric|min:0',
             'cost_price' => 'nullable|numeric|min:0',
             'stock_quantity' => 'required|numeric|min:0',
@@ -359,6 +366,7 @@ class ProductController extends Controller
             'tax_rate' => 'nullable|numeric|min:0|max:100',
             'track_stock' => 'boolean',
             'unlimited_stock' => 'boolean',
+            'allow_negative_stock' => 'boolean',
             'allows_decimal' => 'boolean',
             'has_variants' => 'boolean',
             'is_bundle' => 'boolean',
@@ -437,7 +445,7 @@ class ProductController extends Controller
             'sku' => $validated['sku'] ?? null,
             'barcode' => $validated['barcode'] ?? null,
             'description' => $validated['description'] ?? null,
-            'price' => (float) $validated['price'],
+            'price' => isset($validated['price']) && is_numeric($validated['price']) ? (float) $validated['price'] : 0,
             'wholesale_price' => ($store->settings['wholesale_enabled'] ?? false)
                 && isset($validated['wholesale_price']) && is_numeric($validated['wholesale_price']) && (float) $validated['wholesale_price'] > 0
                 ? (float) $validated['wholesale_price']
@@ -461,6 +469,7 @@ class ProductController extends Controller
                 : 0,
             'track_stock' => $isBundle ? false : (bool) ($validated['track_stock'] ?? false),
             'unlimited_stock' => $isBundle ? false : (bool) ($validated['unlimited_stock'] ?? false),
+            'allow_negative_stock' => $isBundle ? false : (bool) ($validated['allow_negative_stock'] ?? false),
             'allows_decimal' => $allowsDecimal,
             'has_variants' => $hasVariants && ! $isBundle,
             'is_bundle' => $isBundle,
@@ -611,6 +620,7 @@ class ProductController extends Controller
             'tax_rate' => $product->tax_rate ?? 0,
             'track_stock' => $product->track_stock ?? false,
             'unlimited_stock' => $product->unlimited_stock ?? false,
+            'allow_negative_stock' => $product->allow_negative_stock ?? false,
             'allows_decimal' => $product->allows_decimal ?? false,
             'has_variants' => $product->has_variants ?? false,
             'is_bundle' => $product->is_bundle ?? false,
@@ -757,6 +767,7 @@ class ProductController extends Controller
             'has_variants' => $request->boolean('has_variants'),
             'is_bundle' => $request->boolean('is_bundle'),
             'unlimited_stock' => filter_var($request->input('unlimited_stock'), FILTER_VALIDATE_BOOLEAN),
+            'allow_negative_stock' => filter_var($request->input('allow_negative_stock'), FILTER_VALIDATE_BOOLEAN),
             'track_stock' => filter_var($request->input('track_stock'), FILTER_VALIDATE_BOOLEAN),
             'product_category_id' => $request->filled('product_category_id')
                 ? (int) $request->input('product_category_id')
@@ -774,7 +785,7 @@ class ProductController extends Controller
             'sku' => 'nullable|string|max:255|unique:products,sku,'.$product->id.',id,store_id,'.$product->store_id,
             'barcode' => 'nullable|string|max:255|unique:products,barcode,'.$product->id.',id,store_id,'.$product->store_id,
             'description' => 'nullable|string',
-            'price' => 'required|numeric|min:0',
+            'price' => [Rule::requiredIf(! $request->boolean('has_variants')), 'nullable', 'numeric', 'min:0'],
             'wholesale_price' => 'nullable|numeric|min:0',
             'cost_price' => 'nullable|numeric|min:0',
             'stock_quantity' => 'required|numeric|min:0',
@@ -791,6 +802,7 @@ class ProductController extends Controller
             'tax_rate' => 'nullable|numeric|min:0|max:100',
             'track_stock' => 'boolean',
             'unlimited_stock' => 'boolean',
+            'allow_negative_stock' => 'boolean',
             'allows_decimal' => 'boolean',
             'has_variants' => 'boolean',
             'is_bundle' => 'boolean',
@@ -884,7 +896,7 @@ class ProductController extends Controller
             'sku' => $validated['sku'],
             'barcode' => $validated['barcode'],
             'description' => $validated['description'],
-            'price' => (float) $validated['price'],
+            'price' => isset($validated['price']) && is_numeric($validated['price']) ? (float) $validated['price'] : 0,
             'wholesale_price' => ($product->store->settings['wholesale_enabled'] ?? false)
                 && isset($validated['wholesale_price']) && is_numeric($validated['wholesale_price']) && (float) $validated['wholesale_price'] > 0
                 ? (float) $validated['wholesale_price']
@@ -910,6 +922,7 @@ class ProductController extends Controller
             'tax_rate' => $validated['tax_rate'] ? (float) $validated['tax_rate'] : 0,
             'track_stock' => $isBundle ? false : (bool) $request->input('track_stock'),
             'unlimited_stock' => $isBundle ? false : (bool) $request->input('unlimited_stock'),
+            'allow_negative_stock' => $isBundle ? false : (bool) $request->input('allow_negative_stock'),
             'allows_decimal' => $allowsDecimal,
             'has_variants' => $hasVariants && ! $isBundle,
             'is_bundle' => $isBundle,

@@ -222,7 +222,7 @@ class OutletAddOnTest extends TestCase
 
         $this->assertEquals('outlet_addon', $payment->type);
         $this->assertEquals(3, $payment->extra_outlets_count);
-        $this->assertEquals(165000, $payment->amount);
+        $this->assertEquals(255000, $payment->amount);
         $this->assertEquals('pending', $payment->status);
     }
 

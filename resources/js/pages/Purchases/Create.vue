@@ -405,7 +405,9 @@ function addManualLine(name: string) {
 }
 
 function addChargeLine(name: string) {
+    const idx = chargeDrafts.value.length;
     chargeDrafts.value.push({ name, amount: '', notes: '' });
+    formattedCharges.value[idx] = '';
     resetSearch();
 }
 
@@ -465,10 +467,10 @@ const formattedCosts = ref<Record<number, string>>({});
 // Formatted PPN
 const formattedPPN = ref(formatIDR(form.ppn_amount));
 
-function onPPNInput() {
-    const raw = formattedPPN.value.replace(/[^\d.,]/g, '');
-    formattedPPN.value = raw;
-    form.ppn_amount = Number(parseIDR(raw)) || 0;
+function onPPNInput(e: Event) {
+    const val = (e.target as HTMLInputElement).value;
+    formattedPPN.value = val;
+    form.ppn_amount = Number(parseIDR(val)) || 0;
 }
 
 function onPPNBlur() {
@@ -486,10 +488,10 @@ function setChargeDisplay(idx: number, val: string) {
     formattedCharges.value[idx] = val;
 }
 
-function onChargeAmountInput(idx: number, c: ChargeDraft) {
-    const raw = getChargeDisplay(idx).replace(/[^\d.,]/g, '');
-    setChargeDisplay(idx, raw);
-    c.amount = parseIDR(raw);
+function onChargeAmountInput(idx: number, c: ChargeDraft, e: Event) {
+    const val = (e.target as HTMLInputElement).value;
+    setChargeDisplay(idx, val);
+    c.amount = parseIDR(val);
 }
 
 function syncChargeDisplay(idx: number, val: number | '') {
@@ -519,11 +521,10 @@ function setCostDisplay(idx: number, val: string) {
     formattedCosts.value[idx] = val;
 }
 
-function onCostInput(idx: number, row: LineDraft) {
-    // Simpan raw input, parse ke number
-    const raw = getCostDisplay(idx).replace(/[^\d.,]/g, '');
-    setCostDisplay(idx, raw);
-    row.unit_cost = parseIDR(raw);
+function onCostInput(idx: number, row: LineDraft, e: Event) {
+    const val = (e.target as HTMLInputElement).value;
+    setCostDisplay(idx, val);
+    row.unit_cost = parseIDR(val);
 }
 
 function initCostDisplay(idx: number, val: number | '') {
@@ -615,7 +616,7 @@ function buildServerLines():
             }
             const uc = row.unit_cost === '' || row.unit_cost === null ? null : Math.max(0, Number(row.unit_cost));
             out.push({
-                product_id: 0,
+                product_id: null,
                 new_product: {
                     name: row.new_product.name.trim(),
                     sku: row.new_product.sku.trim() || undefined,
@@ -1133,7 +1134,7 @@ function submit() {
                                                 :value="getCostDisplay(idx)"
                                                 placeholder="0"
                                                 aria-label="Harga beli per satuan"
-                                                @input="onCostInput(idx, row)"
+                                                @input="onCostInput(idx, row, $event)"
                                                 @blur="() => syncCostDisplay(idx, row.unit_cost)"
                                             />
                                         </td>
@@ -1187,7 +1188,7 @@ function submit() {
                                                 :value="getChargeDisplay(ci)"
                                                 placeholder="0"
                                                 aria-label="Nominal biaya"
-                                                @input="onChargeAmountInput(ci, c)"
+                                                @input="onChargeAmountInput(ci, c, $event)"
                                                 @blur="() => syncChargeDisplay(ci, c.amount)"
                                             />
                                         </td>

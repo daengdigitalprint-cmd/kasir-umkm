@@ -91,7 +91,7 @@ test('konsumsi penjualan tidak boleh untuk produk bundle', function () {
     expect(SaleConsumptionConfig::supportsConfiguration($bundle))->toBeFalse();
 });
 
-test('komponen harus production_output atau packaging', function () {
+test('komponen boleh production_output, packaging, dan raw material', function () {
     [$store] = makeConsumeOrg('SC3');
     $sellable = makeConsumeProduct($store, [
         'name' => 'Es Teh',
@@ -103,10 +103,12 @@ test('komponen harus production_output atau packaging', function () {
         'inventory_type' => InventoryType::RAW_MATERIAL,
     ]);
 
-    $this->expectException(\Illuminate\Validation\ValidationException::class);
     SaleConsumptionConfig::replaceForProduct($sellable, $store, [
         ['component_product_id' => $rawMaterial->id, 'quantity' => '120', 'input_unit' => 'gram'],
     ]);
+
+    expect(ProductSaleConsumption::where('product_id', $sellable->id)->count())->toBe(1)
+        ->and(ProductSaleConsumption::where('component_product_id', $rawMaterial->id)->exists())->toBeTrue();
 });
 
 test('dimensi satuan konsumsi harus kompatibel dengan komponen', function () {
@@ -295,7 +297,7 @@ test('mengubah base_unit komponen yang direferensikan ditolak', function () {
     expect(SaleConsumptionConfig::isReferencedAsComponent($output))->toBeTrue();
 });
 
-test('katalog komponen hanya menampilkan output produksi dan kemasan', function () {
+test('katalog komponen menampilkan output produksi, kemasan, dan raw material', function () {
     [$store] = makeConsumeOrg('SC13');
     $output = makeConsumeProduct($store, [
         'name' => 'Biang Teh',
@@ -315,8 +317,8 @@ test('katalog komponen hanya menampilkan output produksi dan kemasan', function 
     $catalog = SaleConsumptionConfig::componentCatalogForStore($store);
     $ids = $catalog->pluck('id')->toArray();
 
-    expect($catalog)->toHaveCount(2)
+    expect($catalog)->toHaveCount(3)
         ->and(in_array($output->id, $ids))->toBeTrue()
         ->and(in_array($packaging->id, $ids))->toBeTrue()
-        ->and(in_array($rawMaterial->id, $ids))->toBeFalse();
+        ->and(in_array($rawMaterial->id, $ids))->toBeTrue();
 });

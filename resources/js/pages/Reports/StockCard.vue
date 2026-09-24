@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import ReportExportButton from '@/components/ReportExportButton.vue';
 import ReportTabs from '@/components/ReportTabs.vue';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import AdminLayout from '@/layouts/AdminLayout.vue';
@@ -158,6 +159,12 @@ const formatWhen = (iso: string | null) =>
 
 const qtyClass = (n: number) => (n < 0 ? 'text-red-600' : n > 0 ? 'text-emerald-600' : 'text-slate-400');
 
+const balanceClass = (n: number) => {
+    if (n < 0) return 'text-red-600 font-bold';
+    if (n === 0) return 'text-amber-600';
+    return 'text-slate-800 font-semibold';
+};
+
 const typeClass: Record<string, string> = {
     sale: 'bg-blue-100 text-blue-800',
     purchase: 'bg-emerald-100 text-emerald-800',
@@ -280,9 +287,18 @@ const typeClass: Record<string, string> = {
             <Card class="rounded-2xl border-slate-200 shadow-sm">
                 <CardContent class="pt-6">
                     <p class="text-xs font-semibold tracking-wide text-slate-500 uppercase">Saldo akhir</p>
-                    <p class="mt-1 text-xl font-black text-slate-900 tabular-nums">
+                    <p
+                        class="mt-1 text-xl font-black tabular-nums"
+                        :class="props.summary.closing_balance < 0 ? 'text-red-600' : 'text-slate-900'"
+                    >
                         {{ formatQty(props.summary.closing_balance) }}
                         <span class="text-sm font-semibold text-slate-400">{{ props.product.unit }}</span>
+                        <Badge
+                            v-if="props.summary.closing_balance < 0"
+                            class="ml-2 text-[10px] font-bold bg-red-100 text-red-700"
+                        >
+                            Saldo negatif
+                        </Badge>
                     </p>
                 </CardContent>
             </Card>
@@ -317,7 +333,10 @@ const typeClass: Record<string, string> = {
                         <tbody>
                             <tr class="border-b border-slate-100 bg-slate-50/60">
                                 <td class="py-2.5 pr-4 text-xs font-semibold text-slate-500" colspan="3">Saldo awal</td>
-                                <td class="py-2.5 pr-4 text-right font-bold text-slate-700 tabular-nums">
+                                <td
+                                    class="py-2.5 pr-4 text-right font-bold tabular-nums"
+                                    :class="balanceClass(props.summary.opening_balance)"
+                                >
                                     {{ formatQty(props.summary.opening_balance) }}
                                 </td>
                                 <td class="py-2.5" colspan="2"></td>
@@ -336,7 +355,7 @@ const typeClass: Record<string, string> = {
                                 <td class="py-3 pr-4 text-right font-bold tabular-nums" :class="qtyClass(m.quantity_change)">
                                     {{ formatQty(m.quantity_change, true) }}
                                 </td>
-                                <td class="py-3 pr-4 text-right font-semibold text-slate-800 tabular-nums">
+                                <td class="py-3 pr-4 text-right tabular-nums" :class="balanceClass(m.balance_after)">
                                     {{ formatQty(m.balance_after) }}
                                 </td>
                                 <td class="py-3 pr-4 text-slate-500">{{ m.notes ?? '—' }}</td>

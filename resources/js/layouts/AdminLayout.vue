@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { getInitials } from '@/composables/useInitials';
 import { resolveProfileImageSrc } from '@/lib/profileAvatar';
+import { toastWarning } from '@/lib/swal';
 import { Head, usePage, router } from '@inertiajs/vue3';
 import { BarChart3, Bell, CalendarCheck, Crown, History, Home, Menu, Package, Settings, ShoppingCart, Store, Users, X, PanelLeft, Shirt, ReceiptText, Clock, ArrowRightLeft } from 'lucide-vue-next';
 import { computed, ref, onMounted, onUnmounted } from 'vue';
@@ -117,11 +118,96 @@ const showDesktopSidebar = computed(() => {
     return !isMobileOrTablet.value;
 });
 
+// ─── Peringatan AI proaktif (bell + push real-time WebSocket) ────────
+interface AiAlertItem {
+    id: number;
+    type: string;
+    title: string;
+    message: string;
+    is_read: boolean;
+    created_at: string | null;
+}
+
+const aiAlerts = ref<AiAlertItem[]>([]);
+const unreadAiAlertCount = computed(() => aiAlerts.value.filter((a) => !a.is_read).length);
+let aiAlertUnsubscribe: (() => void) | null = null;
+
+function aiCsrfHeaders(): Record<string, string> {
+    // Cookie XSRF-TOKEN selalu diperbarui tiap response; nilainya ter-encrypt,
+    // jadi dikirim via header X-XSRF-TOKEN (didecrypt VerifyCsrfToken).
+    const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+    if (match) {
+        try {
+            return { 'X-XSRF-TOKEN': decodeURIComponent(match[1]) };
+        } catch {
+            // lanjut ke fallback meta tag
+        }
+    }
+    return {
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+    };
+}
+
+async function refreshAiAlerts(): Promise<void> {
+    if (!activeUserId.value) return;
+    try {
+        const res = await fetch('/ai/alerts', {
+            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest', ...aiCsrfHeaders() },
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as { alerts?: AiAlertItem[] };
+        aiAlerts.value = data.alerts ?? [];
+    } catch (e) {
+        console.debug('Gagal memuat peringatan AI:', e);
+    }
+}
+
+async function markAiAlertRead(alert: AiAlertItem): Promise<void> {
+    if (alert.is_read) return;
+    try {
+        const res = await fetch(`/ai/alerts/${alert.id}/read`, {
+            method: 'POST',
+            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest', ...aiCsrfHeaders() },
+        });
+        if (res.ok) {
+            alert.is_read = true;
+        }
+    } catch (e) {
+        console.debug('Gagal menandai peringatan AI:', e);
+    }
+}
+
+const setupAiAlertEcho = () => {
+    const echo = (typeof window !== 'undefined' && window.Echo) || null;
+    if (!echo || !activeUserId.value) return;
+
+    const channelName = `App.Models.User.${activeUserId.value}`;
+    const channel = echo.private(channelName);
+
+    channel.listen('.ai.alert.created', (payload: { title?: string; message?: string }) => {
+        if (!payload) return;
+        void refreshAiAlerts();
+        const head = payload.title || 'Peringatan AI';
+        const detail = payload.message ? ` — ${payload.message}` : '';
+        toastWarning(`${head}${detail}`.slice(0, 180), 6000);
+    });
+
+    aiAlertUnsubscribe = () => {
+        try {
+            echo.leave(channelName);
+        } catch {
+            // noop
+        }
+    };
+};
+
 onMounted(() => {
     checkOrientation();
     window.addEventListener('resize', checkOrientation);
     window.addEventListener('orientationchange', checkOrientation);
     pendingOrderPollId = setInterval(refreshPendingOrders, 10000);
+    void refreshAiAlerts();
+    setupAiAlertEcho();
 });
 
 onUnmounted(() => {
@@ -129,6 +215,10 @@ onUnmounted(() => {
     window.removeEventListener('orientationchange', checkOrientation);
     if (pendingOrderPollId !== null) {
         clearInterval(pendingOrderPollId);
+    }
+    if (aiAlertUnsubscribe) {
+        aiAlertUnsubscribe();
+        aiAlertUnsubscribe = null;
     }
 });
 
@@ -221,6 +311,40 @@ const isCurrentRoute = (href: string) => {
                             <span class="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-600 px-1 text-[10px] font-bold leading-5 text-white">{{ pendingTableOrderCount > 99 ? '99+' : pendingTableOrderCount }}</span>
                             <span class="sr-only">{{ pendingTableOrderCount }} pesanan masuk</span>
                         </Button>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger as-child>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    class="relative size-9 rounded-2xl p-0 text-slate-600"
+                                    title="Peringatan AI"
+                                >
+                                    <Bell class="h-5 w-5" />
+                                    <span
+                                        v-if="unreadAiAlertCount > 0"
+                                        class="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-600 px-1 text-[10px] font-bold leading-5 text-white"
+                                    >{{ unreadAiAlertCount > 99 ? '99+' : unreadAiAlertCount }}</span>
+                                    <span class="sr-only">Peringatan AI</span>
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" class="z-[60] w-80 rounded-2xl border border-slate-200 p-2 shadow-lg">
+                                <p class="px-2 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">Peringatan AI</p>
+                                <p v-if="!aiAlerts.length" class="px-2 py-6 text-center text-sm text-slate-400">Belum ada peringatan.</p>
+                                <button
+                                    v-for="alert in aiAlerts"
+                                    :key="alert.id"
+                                    type="button"
+                                    class="flex w-full items-start gap-2 rounded-xl px-2 py-2 text-left hover:bg-slate-50"
+                                    @click="markAiAlertRead(alert)"
+                                >
+                                    <span class="mt-1.5 size-2 shrink-0 rounded-full" :class="alert.is_read ? 'bg-slate-300' : 'bg-red-500'"></span>
+                                    <span class="min-w-0 flex-1">
+                                        <span class="block truncate text-sm font-bold text-slate-800">{{ alert.title }}</span>
+                                        <span class="mt-0.5 line-clamp-2 block text-xs leading-relaxed text-slate-500">{{ alert.message }}</span>
+                                    </span>
+                                </button>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                         <slot name="mobile-header-actions" />
                         <DropdownMenu v-if="authUser">
                             <DropdownMenuTrigger as-child>
@@ -392,6 +516,40 @@ const isCurrentRoute = (href: string) => {
                             </div>
                             <div class="flex items-center gap-6">
                                 <ConnectionStatus :store-id="activeStoreId" :cashier-id="activeUserId" />
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger as-child>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            class="relative size-10 rounded-2xl p-0 text-slate-600"
+                                            title="Peringatan AI"
+                                        >
+                                            <Bell class="h-5 w-5" />
+                                            <span
+                                                v-if="unreadAiAlertCount > 0"
+                                                class="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-600 px-1 text-[10px] font-bold leading-5 text-white"
+                                            >{{ unreadAiAlertCount > 99 ? '99+' : unreadAiAlertCount }}</span>
+                                            <span class="sr-only">Peringatan AI</span>
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" class="z-[60] w-80 rounded-2xl border border-slate-200 p-2 shadow-lg">
+                                        <p class="px-2 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">Peringatan AI</p>
+                                        <p v-if="!aiAlerts.length" class="px-2 py-6 text-center text-sm text-slate-400">Belum ada peringatan.</p>
+                                        <button
+                                            v-for="alert in aiAlerts"
+                                            :key="alert.id"
+                                            type="button"
+                                            class="flex w-full items-start gap-2 rounded-xl px-2 py-2 text-left hover:bg-slate-50"
+                                            @click="markAiAlertRead(alert)"
+                                        >
+                                            <span class="mt-1.5 size-2 shrink-0 rounded-full" :class="alert.is_read ? 'bg-slate-300' : 'bg-red-500'"></span>
+                                            <span class="min-w-0 flex-1">
+                                                <span class="block truncate text-sm font-bold text-slate-800">{{ alert.title }}</span>
+                                                <span class="mt-0.5 line-clamp-2 block text-xs leading-relaxed text-slate-500">{{ alert.message }}</span>
+                                            </span>
+                                        </button>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                                 <Button
                                     v-if="pendingTableOrderCount > 0"
                                     variant="ghost"

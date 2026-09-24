@@ -68,6 +68,28 @@ test('kasir pertama dapat membuka shift di outlet', function () {
     expect($shift->isOpen())->toBeTrue();
 });
 
+test('nomor shift tetap unik setelah shift sebelumnya ditutup', function () {
+    [$store, $cashierA] = makeShiftOrg('S1B');
+
+    openShiftRequest($cashierA, ['opening_cash' => 100000]);
+    $firstShift = CashShift::query()->where('store_id', $store->id)->latest('id')->first();
+
+    $this->actingAs($cashierA)
+        ->withSession(['_token' => 'csrf-token'])
+        ->post("/cash-shifts/{$firstShift->id}/close", [
+            '_token' => 'csrf-token',
+            'closing_cash_counted' => 100000,
+        ])
+        ->assertRedirect();
+
+    openShiftRequest($cashierA, ['opening_cash' => 50000]);
+    $secondShift = CashShift::query()->where('store_id', $store->id)->latest('id')->first();
+
+    expect($secondShift->shift_number)->not->toBe($firstShift->shift_number);
+    expect((int) str()->afterLast($secondShift->shift_number, '-'))
+        ->toBe((int) str()->afterLast($firstShift->shift_number, '-') + 1);
+});
+
 // ═══════════════════════════════════════════════════════
 // Skenario 2: Kasir kedua diblokir saat shift kasir lain masih aktif
 // ═══════════════════════════════════════════════════════
@@ -114,7 +136,7 @@ test('admin dapat menutup shift yang dibuka oleh kasir lain', function () {
             'closing_cash_counted' => 100000,
             'closing_notes' => 'Tutup paksa oleh admin',
         ]);
-    
+
     $response->assertRedirect();
     $shift->refresh();
     expect($shift->isOpen())->toBeFalse();
@@ -136,7 +158,7 @@ test('owner dapat menutup shift yang dibuka oleh kasir lain', function () {
             'closing_cash_counted' => 100000,
             'closing_notes' => 'Tutup paksa oleh owner',
         ]);
-    
+
     $response->assertRedirect();
     $shift->refresh();
     expect($shift->isOpen())->toBeFalse();

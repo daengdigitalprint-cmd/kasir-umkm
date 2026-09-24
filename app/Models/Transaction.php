@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\SalesChannel;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -34,6 +35,9 @@ class Transaction extends Model
         'order_type',
         'table_reference',
         'tip_amount',
+        'sales_channel',
+        'commission_percent',
+        'commission_amount',
         'completed_at',
         'offline_sale_id',
         'debt_due_at',
@@ -54,6 +58,9 @@ class Transaction extends Model
         'amount_paid' => 'decimal:2',
         'change_amount' => 'decimal:2',
         'payment_details' => 'array',
+        'sales_channel' => SalesChannel::class,
+        'commission_percent' => 'decimal:2',
+        'commission_amount' => 'decimal:2',
         'completed_at' => 'datetime',
         'accepted_at' => 'datetime',
         'debt_due_at' => 'datetime',
@@ -68,6 +75,20 @@ class Transaction extends Model
         static::creating(function ($transaction) {
             if (empty($transaction->transaction_number)) {
                 $transaction->transaction_number = 'TXN-'.date('Ymd').'-'.Str::upper(Str::random(6));
+            }
+        });
+
+        static::updating(function ($transaction) {
+            $statusChanged = $transaction->isDirty('status') && $transaction->getOriginal('status') !== 'completed';
+            $completedWithoutVoid = $transaction->status === 'completed' && ! $transaction->is_void;
+
+            if ($statusChanged && $completedWithoutVoid && $transaction->customer_id) {
+                Customer::query()
+                    ->where('id', $transaction->customer_id)
+                    ->update([
+                        'last_purchase_at' => $transaction->completed_at ?? $transaction->freshTimestamp(),
+                        'last_purchase_amount' => $transaction->total_amount,
+                    ]);
             }
         });
     }
@@ -123,7 +144,7 @@ class Transaction extends Model
 
     public function scopeToday($query)
     {
-        return $query->whereDate('created_at', today());
+        return $query->whereBetween('created_at', [now()->startOfDay(), now()->endOfDay()]);
     }
 
     public function scopeThisWeek($query)
@@ -133,8 +154,7 @@ class Transaction extends Model
 
     public function scopeThisMonth($query)
     {
-        return $query->whereMonth('created_at', now()->month)
-            ->whereYear('created_at', now()->year);
+        return $query->whereBetween('created_at', [now()->startOfMonth(), now()->endOfMonth()]);
     }
 
     public function scopeNotVoided($query)

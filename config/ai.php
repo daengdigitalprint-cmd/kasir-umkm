@@ -4,140 +4,133 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Default AI Provider Names
+    | Default AI Provider
     |--------------------------------------------------------------------------
     |
-    | Here you may specify which of the AI providers below should be the
-    | default for AI operations when no explicit provider is provided
-    | for the operation. This should be any provider defined below.
-    |
-    */
-
-    'default' => 'openai',
-    'default_for_images' => 'gemini',
-    'default_for_audio' => 'openai',
-    'default_for_transcription' => 'openai',
-    'default_for_embeddings' => 'openai',
-    'default_for_reranking' => 'cohere',
-
-    /*
-    |--------------------------------------------------------------------------
-    | Caching
-    |--------------------------------------------------------------------------
-    |
-    | Below you may configure caching strategies for AI related operations
-    | such as embedding generation. You are free to adjust these values
-    | based on your application's available caching stores and needs.
+    | Provider default yang digunakan jika tidak ada konfigurasi spesifik
+    | per outlet. Bisa di-override dari database (ai_configurations).
     |
     */
 
-    'caching' => [
-        'embeddings' => [
-            'cache' => false,
-            'store' => env('CACHE_STORE', 'database'),
-        ],
-    ],
+    'default_provider' => env('AI_PROVIDER', 'openai'),
 
     /*
     |--------------------------------------------------------------------------
-    | AI Providers
+    | Providers Configuration
     |--------------------------------------------------------------------------
     |
-    | Below are each of your AI providers defined for this application. Each
-    | represents an AI provider and API key combination which can be used
-    | to perform tasks like text, image, and audio creation via agents.
+    | Konfigurasi untuk setiap provider AI yang didukung.
+    | User bisa menambah custom provider dari admin panel.
     |
     */
 
     'providers' => [
-        'anthropic' => [
-            'driver' => 'anthropic',
-            'key' => env('ANTHROPIC_API_KEY'),
-            'url' => env('ANTHROPIC_URL', 'https://api.anthropic.com/v1'),
-        ],
-
-        'azure' => [
-            'driver' => 'azure',
-            'key' => env('AZURE_OPENAI_API_KEY'),
-            'url' => env('AZURE_OPENAI_URL'),
-            'api_version' => env('AZURE_OPENAI_API_VERSION', '2025-04-01-preview'),
-            'deployment' => env('AZURE_OPENAI_DEPLOYMENT', 'gpt-4o'),
-            'embedding_deployment' => env('AZURE_OPENAI_EMBEDDING_DEPLOYMENT', 'text-embedding-3-small'),
-            'image_deployment' => env('AZURE_OPENAI_IMAGE_DEPLOYMENT', 'gpt-image-1'),
-        ],
-
-        'bedrock' => [
-            'driver' => 'bedrock',
-            'region' => env('AWS_BEDROCK_REGION', 'us-east-1'),
-            'key' => env('AWS_BEARER_TOKEN_BEDROCK'),
-            'access_key_id' => env('AWS_ACCESS_KEY_ID'),
-            'secret_access_key' => env('AWS_SECRET_ACCESS_KEY'),
-            'session_token' => env('AWS_SESSION_TOKEN'),
-            'use_default_credential_provider' => env('AWS_USE_DEFAULT_CREDENTIALS', true),
-        ],
-
-        'cohere' => [
-            'driver' => 'cohere',
-            'key' => env('COHERE_API_KEY'),
-        ],
-
-        'deepseek' => [
-            'driver' => 'deepseek',
-            'key' => env('DEEPSEEK_API_KEY'),
-        ],
-
-        'eleven' => [
-            'driver' => 'eleven',
-            'key' => env('ELEVENLABS_API_KEY'),
-        ],
-
-        'gemini' => [
-            'driver' => 'gemini',
-            'key' => env('GEMINI_API_KEY'),
-            'url' => env('GEMINI_URL', 'https://generativelanguage.googleapis.com/v1beta/'),
-        ],
-
-        'groq' => [
-            'driver' => 'groq',
-            'key' => env('GROQ_API_KEY'),
-        ],
-
-        'jina' => [
-            'driver' => 'jina',
-            'key' => env('JINA_API_KEY'),
-        ],
-
-        'mistral' => [
-            'driver' => 'mistral',
-            'key' => env('MISTRAL_API_KEY'),
-        ],
-
-        'ollama' => [
-            'driver' => 'ollama',
-            'key' => env('OLLAMA_API_KEY', ''),
-            'url' => env('OLLAMA_URL', 'http://localhost:11434'),
-        ],
 
         'openai' => [
             'driver' => 'openai',
-            'key' => env('OPENAI_API_KEY'),
-            'url' => env('OPENAI_URL', 'https://api.openai.com/v1'),
+            'key' => env('AI_OPENAI_API_KEY'),
+            'url' => env('AI_OPENAI_BASE_URL', 'https://api.openai.com/v1'),
+            'base_url' => env('AI_OPENAI_BASE_URL', 'https://api.openai.com/v1'),
+            'model_id' => env('AI_OPENAI_MODEL', 'gpt-4o'),
+            'api_key' => env('AI_OPENAI_API_KEY'),
+            'max_tokens' => (int) env('AI_OPENAI_MAX_TOKENS', 4096),
+            'temperature' => (float) env('AI_OPENAI_TEMPERATURE', 0.7),
         ],
 
-        'openrouter' => [
-            'driver' => 'openrouter',
-            'key' => env('OPENROUTER_API_KEY'),
+        'anthropic' => [
+            'driver' => 'anthropic',
+            'key' => env('AI_ANTHROPIC_API_KEY'),
+            'url' => env('AI_ANTHROPIC_BASE_URL', 'https://api.anthropic.com/v1'),
+            'base_url' => env('AI_ANTHROPIC_BASE_URL', 'https://api.anthropic.com/v1'),
+            'model_id' => env('AI_ANTHROPIC_MODEL', 'claude-sonnet-4-20250514'),
+            'api_key' => env('AI_ANTHROPIC_API_KEY'),
+            'max_tokens' => (int) env('AI_ANTHROPIC_MAX_TOKENS', 4096),
+            'temperature' => (float) env('AI_ANTHROPIC_TEMPERATURE', 0.7),
         ],
 
-        'voyageai' => [
-            'driver' => 'voyageai',
-            'key' => env('VOYAGEAI_API_KEY'),
-        ],
-
-        'xai' => [
-            'driver' => 'xai',
-            'key' => env('XAI_API_KEY'),
-        ],
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Request Timeout (detik)
+    |--------------------------------------------------------------------------
+    |
+    | Durasi tunggu maksimum untuk respons provider AI (OpenAI/Gemini/dll).
+    | Jika melebihi batas ini, aplikasi membalas error ramah alih-alih
+    | membiarkan HTTP membeku sampai timeout Nginx/PHP-FPM.
+    |
+    */
+
+    'timeout' => (int) env('AI_TIMEOUT', 45),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Rate Limiting
+    |--------------------------------------------------------------------------
+    |
+    | Batasan rate limit per user untuk mencegah abuse.
+    |
+    */
+
+    'rate_limit' => [
+        'max_requests' => (int) env('AI_RATE_LIMIT_MAX', 100),
+        'per_minutes' => (int) env('AI_RATE_LIMIT_PERIOD', 60),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | System Prompt
+    |--------------------------------------------------------------------------
+    |
+    | Prompt dasar yang dikirim ke AI untuk memberikan konteks aplikasi.
+    | Bisa di-override per outlet.
+    |
+    */
+
+    'system_prompt' => env('AI_SYSTEM_PROMPT', 'Kamu adalah Macca, asisten AI untuk aplikasi POS UMKM. Jawab singkat, langsung, dan praktis. Gunakan tabel Markdown untuk data numerik.
+
+ATURAN TOOL:
+- Jika user sudah menyebut NAMA PRODUK + HARGA (minimal), langsung eksekusi tool terkait.
+- Jangan minta formulir atau konfirmasi. Jangan balas dengan prompt "isi informasi".
+- Ekstrak semua info dari pesan user. Mapping: harga jual=price, HPP/harga modal=cost, stok=stock, kategori=category, satuan=unit.
+- Jika ada kalimat seperti "Tambah produk X, harga jual ..., modal ..., kategori ..., stok ..., satuan ...", langsung panggil create_product.
+- Jika user meminta beli/beliin/pesan/restock barang (ada "dari supplier" atau "bayar cash/kredit"), pakai create_purchase_order, bukan create_product.
+- Jangan panggil create_product tanpa field price.
+- Setelah tool dijalankan, cukup lapor hasil tool secara ringkas.
+
+Gunakan bahasa Indonesia ramah.'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Audit Logging
+    |--------------------------------------------------------------------------
+    |
+    | Aktifkan/nonaktifkan audit log untuk semua aksi AI.
+    |
+    */
+
+    'audit_log_enabled' => (bool) env('AI_AUDIT_LOG_ENABLED', true),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Confirmation Required
+    |--------------------------------------------------------------------------
+    |
+    | Jika true, semua aksi yang mengubah data harus dikonfirmasi user.
+    |
+    */
+
+    'confirmation_required' => (bool) env('AI_CONFIRMATION_REQUIRED', true),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Confirmation Tools
+    |--------------------------------------------------------------------------
+    |
+    | Tool yang selalu memerlukan persetujuan user sebelum dieksekusi.
+    |
+    */
+
+    'confirmation_tools' => ['create_product', 'update_product', 'update_stock', 'update_stock_bulk', 'create_purchase_order'],
 
 ];

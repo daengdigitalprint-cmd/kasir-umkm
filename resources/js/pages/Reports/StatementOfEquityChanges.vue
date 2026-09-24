@@ -59,7 +59,7 @@ watch(
 
 const applyFilter = () => {
     router.get(
-        '/reports/financial/statement-of-equity-changes',
+        '/financial/statement-of-equity-changes',
         { start_date: filterStart.value, end_date: filterEnd.value },
         { preserveState: true, preserveScroll: true },
     );

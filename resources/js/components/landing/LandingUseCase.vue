@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { computed } from 'vue';
 
-const props = defineProps<{
+// Dipertahankan agar caller (Landing/Index.vue) tetap bisa mengirim
+// `assets-base` tanpa error — tidak dipakai di template.
+defineProps<{
     assetsBase?: string;
 }>();
-
-const assetsBase = computed(() => props.assetsBase ?? '/sastik-assets');
 
 type UseCase = {
     icon: string;

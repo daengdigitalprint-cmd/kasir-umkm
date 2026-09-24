@@ -1,14 +1,10 @@
 <?php
 
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\StoreController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\SuperAdminController;
-use App\Support\BatchTracking;
-use App\Support\ExpiringProductBatches;
-use App\Support\FnBFeatures;
 use App\Support\LandingSeo;
-use App\Support\PharmacyFeatures;
-use App\Support\ReceiptSettings;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -139,109 +135,9 @@ Route::get('/terms', function () {
     ]);
 })->name('terms');
 
-Route::get('dashboard', function () {
-    $user = auth()->user();
-    $store = $user->store;
-
-    if (! $store) {
-        return Inertia::render('Dashboard');
-    }
-
-    // Check if store is active
-    if (! $store->is_active) {
-        return Inertia::render('Dashboard', [
-            'store' => null,
-            'storeInactive' => true,
-            'storeName' => $store->name,
-        ]);
-    }
-
-    $todaySales = $store->transactions()
-        ->whereDate('created_at', today())
-        ->where('status', 'completed')
-        ->sum('total_amount');
-
-    $lastMonthOmset = $store->transactions()
-        ->where('status', 'completed')
-        ->whereBetween('created_at', [now()->startOfMonth()->subMonth(), now()->endOfMonth()->subMonth()])
-        ->sum('total_amount');
-
-    $todayTransactions = $store->transactions()
-        ->whereDate('created_at', today())
-        ->where('status', 'completed')
-        ->count();
-
-    $recentTransactions = $store->transactions()
-        ->with('customer')
-        ->whereDate('created_at', today())
-        ->where('status', 'completed')
-        ->latest()
-        ->limit(5)
-        ->get();
-
-    // Total produk stok rendah (tanpa batas, untuk angka statistik)
-    $lowStockCount = $store->products()
-        ->whereColumn('stock_quantity', '<=', 'min_stock_level')
-        ->where('track_stock', true)
-        ->where('unlimited_stock', false)
-        ->count();
-
-    // Daftar singkat untuk sidebar/strip (maks 5)
-    $lowStockProducts = $store->products()
-        ->whereColumn('stock_quantity', '<=', 'min_stock_level')
-        ->where('track_stock', true)
-        ->where('unlimited_stock', false)
-        ->limit(5)
-        ->get();
-
-    // Check for pending payments
-    $pendingPayment = $store->subscriptionPayments()
-        ->where('status', 'pending')
-        ->latest()
-        ->first();
-
-    $expiringBatches = [];
-    $batchExpiryWarnDays = null;
-    if (BatchTracking::enabled($store)) {
-        $warnDays = BatchTracking::expiryWarnDays($store);
-        $batchExpiryWarnDays = $warnDays;
-        $expiringBatches = ExpiringProductBatches::alertPayload($store, 10);
-    }
-
-    $pendingKitchenOrderCount = $store->queueEntries()
-        ->whereDate('created_at', today())
-        ->whereIn('status', ['waiting', 'serving'])
-        ->count();
-
-    return Inertia::render('Dashboard', [
-        'is_kitchen' => $user->getRoleForActiveStore() === 'kitchen',
-        'pending_kitchen_order_count' => $pendingKitchenOrderCount,
-        'store' => [
-            'id' => $store->id,
-            'name' => $store->name,
-            'description' => $store->description,
-            'currency' => $store->currency,
-            'products_count' => $store->products()->count(),
-            'customers_count' => $store->customers()->count(),
-            'today_sales' => $todaySales,
-            'today_transactions' => $todayTransactions,
-            'last_month_omset' => $lastMonthOmset,
-            'subscription_end' => $store->subscription_end,
-            'is_subscription_active' => $store->is_subscription_active,
-            'subscription_days' => $store->subscription_days,
-            'tax_name' => $store->tax_name ?? 'PPN',
-            'receipt' => ReceiptSettings::payload($store),
-            'pharmacy_enabled' => PharmacyFeatures::enabled($store),
-            'fnb_enabled' => FnBFeatures::enabled($store),
-        ],
-        'recentTransactions' => $recentTransactions,
-        'lowStockProducts' => $lowStockProducts,
-        'lowStockCount' => $lowStockCount,
-        'expiringBatches' => $expiringBatches,
-        'batch_expiry_warn_days' => $batchExpiryWarnDays,
-        'pendingPayment' => $pendingPayment,
-    ]);
-})->middleware(['auth', 'verified'])->name('dashboard');
+Route::get('dashboard', DashboardController::class)
+    ->middleware(['auth', 'verified'])
+    ->name('dashboard');
 
 Route::get('payment', function () {
     $user = auth()->user();
@@ -743,6 +639,7 @@ Route::prefix('superadmin')->name('superadmin.')->middleware(['auth', 'superadmi
     // Pengaturan AI (provider & API key) dari halaman Super Admin
     Route::get('/ai-settings', [App\Http\Controllers\AiSettingController::class, 'index'])->name('ai-settings.index');
     Route::put('/ai-settings', [App\Http\Controllers\AiSettingController::class, 'update'])->name('ai-settings.update');
+    Route::post('/ai-settings/test-connection', [App\Http\Controllers\AiSettingController::class, 'testConnection'])->name('ai-settings.test-connection');
     Route::delete('/ai-settings', [App\Http\Controllers\AiSettingController::class, 'destroy'])->name('ai-settings.destroy');
 });
 
@@ -766,6 +663,42 @@ Route::prefix('api/guest')->name('guest.')->group(function () {
     Route::get('/order/{statusToken}/status', [App\Http\Controllers\GuestOrderController::class, 'status'])
         ->name('order.status');
 });
+
+// AI Assistant Routes
+Route::middleware(['auth', 'throttle:30,1'])->prefix('ai')->name('ai.')->group(function () {
+    // Chat
+    Route::get('/chat', fn () => Inertia::render('Ai/Chat'))->name('chat.page');
+    Route::post('/chat', [App\Http\Controllers\Ai\AiChatController::class, 'chat'])->name('chat');
+    Route::post('/chat/stream', [App\Http\Controllers\Ai\AiChatController::class, 'chatStream'])->name('chat.stream');
+    Route::post('/chat/confirm', [App\Http\Controllers\Ai\AiChatController::class, 'confirm'])->name('chat.confirm');
+    Route::post('/chat/reject', [App\Http\Controllers\Ai\AiChatController::class, 'reject'])->name('chat.reject');
+    Route::get('/conversations', [App\Http\Controllers\Ai\AiChatController::class, 'conversations'])->name('conversations');
+    Route::get('/conversations/new', [App\Http\Controllers\Ai\AiChatController::class, 'newConversation'])->name('conversations.new');
+    Route::get('/conversations/{conversation}', [App\Http\Controllers\Ai\AiChatController::class, 'messages'])->name('conversations.messages');
+    Route::delete('/conversations/{conversation}', [App\Http\Controllers\Ai\AiChatController::class, 'deleteConversation'])->name('conversations.delete');
+    Route::post('/messages/{message}/feedback', [App\Http\Controllers\Ai\AiChatController::class, 'feedback'])->name('messages.feedback');
+
+    // Peringatan proaktif in-app (push real-time via WebSocket)
+    Route::get('/alerts', [App\Http\Controllers\Ai\AiAlertController::class, 'index'])->name('alerts.index');
+    Route::post('/alerts/{alert}/read', [App\Http\Controllers\Ai\AiAlertController::class, 'markRead'])->name('alerts.read');
+
+    // Admin Settings (butuh permission khusus)
+    Route::middleware(['role:superadmin,store_admin'])->prefix('settings')->name('settings.')->group(function () {
+        Route::get('/', [App\Http\Controllers\Ai\AiConfigController::class, 'index'])->name('index');
+        Route::post('/', [App\Http\Controllers\Ai\AiConfigController::class, 'store'])->name('store');
+        Route::put('/{config}', [App\Http\Controllers\Ai\AiConfigController::class, 'update'])->name('update');
+        Route::delete('/{config}', [App\Http\Controllers\Ai\AiConfigController::class, 'destroy'])->name('destroy');
+        Route::post('/test-connection', [App\Http\Controllers\Ai\AiConfigController::class, 'testConnection'])->name('test-connection');
+        Route::post('/get-models', [App\Http\Controllers\Ai\AiConfigController::class, 'getModels'])->name('get-models');
+    });
+
+    // History & Audit
+    Route::get('/history', [App\Http\Controllers\Ai\AiHistoryController::class, 'conversations'])->name('history');
+    Route::get('/history/{conversation}', [App\Http\Controllers\Ai\AiHistoryController::class, 'conversationDetail'])->name('history.detail');
+    Route::get('/audit-logs', [App\Http\Controllers\Ai\AiHistoryController::class, 'auditLogs'])->name('audit-logs');
+    Route::get('/stats', [App\Http\Controllers\Ai\AiHistoryController::class, 'getStats'])->name('stats');
+});
+
 require __DIR__.'/attendance.php';
 require __DIR__.'/payroll.php';
 require __DIR__.'/cashier_pin.php';

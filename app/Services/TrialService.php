@@ -129,10 +129,21 @@ final class TrialService
             ->where('pro_trial_end', '<', now())
             ->get();
 
+        if ($expiredStores->isEmpty()) {
+            return 0;
+        }
+
+        // Load plan sekali saja untuk semua toko
+        $starterPlan = SubscriptionPlan::where('slug', 'starter')
+            ->where('is_active', true)
+            ->orderByRaw("case when coalesce(billing_cycle, 'monthly') = 'monthly' then 0 else 1 end")
+            ->orderBy('sort_order')
+            ->first();
+
         $count = 0;
 
         foreach ($expiredStores as $store) {
-            self::expire($store);
+            self::expire($store, $starterPlan);
             $count++;
         }
 
@@ -150,20 +161,27 @@ final class TrialService
             ->with('users')
             ->get();
 
+        if ($expiringStores->isEmpty()) {
+            return 0;
+        }
+
+        // Batch-load recent reminders to avoid N+1 queries
+        $storeIds = $expiringStores->pluck('id')->values();
+        $recentReminderStoreIds = TrialNotification::query()
+            ->whereIn('store_id', $storeIds)
+            ->where('type', 'trial_expiring_soon')
+            ->whereNull('read_at')
+            ->where('created_at', '>=', now()->subHours(12))
+            ->pluck('store_id')
+            ->flip();
+
         foreach ($expiringStores as $store) {
-            $hoursLeft = now()->diffInHours($store->pro_trial_end, false);
-            $hoursText = max(1, (int) $hoursLeft);
-
-            // Cegah duplikasi: skip jika sudah ada notifikasi 'trial_expiring_soon' yang belum dibaca dalam 12 jam terakhir
-            $recentReminder = TrialNotification::where('store_id', $store->id)
-                ->where('type', 'trial_expiring_soon')
-                ->whereNull('read_at')
-                ->where('created_at', '>=', now()->subHours(12))
-                ->exists();
-
-            if ($recentReminder) {
+            if ($recentReminderStoreIds->has($store->id)) {
                 continue;
             }
+
+            $hoursLeft = now()->diffInHours($store->pro_trial_end, false);
+            $hoursText = max(1, (int) $hoursLeft);
 
             TrialNotification::create([
                 'store_id' => $store->id,
@@ -179,13 +197,15 @@ final class TrialService
         return $expiringStores->count();
     }
 
-    private static function expire(Store $store): void
+    private static function expire(Store $store, ?\App\Models\SubscriptionPlan $starterPlan = null): void
     {
-        $starterPlan = SubscriptionPlan::where('slug', 'starter')
-            ->where('is_active', true)
-            ->orderByRaw("case when coalesce(billing_cycle, 'monthly') = 'monthly' then 0 else 1 end")
-            ->orderBy('sort_order')
-            ->first();
+        if (! $starterPlan) {
+            $starterPlan = SubscriptionPlan::where('slug', 'starter')
+                ->where('is_active', true)
+                ->orderByRaw("case when coalesce(billing_cycle, 'monthly') = 'monthly' then 0 else 1 end")
+                ->orderBy('sort_order')
+                ->first();
+        }
 
         DB::transaction(function () use ($store, $starterPlan) {
             $store->update([

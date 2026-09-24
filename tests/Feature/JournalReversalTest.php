@@ -1,7 +1,6 @@
 <?php
 
 use App\Models\AccountingPeriod;
-use App\Models\ChartOfAccount;
 use App\Models\JournalEntry;
 use App\Models\JournalLine;
 use App\Models\Store;
@@ -21,7 +20,9 @@ function makeReversalStore(): array
         'is_active' => true,
         'is_subscription_active' => true,
         // Tes ini menguji perilaku posting jurnal → modul harus aktif.
-        'settings' => ['accounting_enabled' => true],
+        // Tanggal uji statis (2026-08/09) di masa lalu, longgarkan limit backdate
+        // default 7 hari agar lolos AccountingPeriodGuard.
+        'settings' => ['accounting_enabled' => true, 'max_backdate_days' => 9999],
     ]);
 
     $user = User::factory()->create([
@@ -117,10 +118,10 @@ it('menampilkan daftar jurnal dan membuat pembalik lewat endpoint', function () 
     [$store, $user] = makeReversalStore();
     $original = makeReversalEntry($store, $user->id);
 
-    $this->actingAs($user)->get('/reports/financial/journal')->assertOk();
+    $this->actingAs($user)->get('/financial/journal')->assertOk();
 
     $this->actingAs($user)
-        ->post("/reports/financial/journal/{$original->id}/reverse", [
+        ->post("/financial/journal/{$original->id}/reverse", [
             'entry_date' => '2026-09-01',
             'note' => 'Koreksi salah catat',
         ])

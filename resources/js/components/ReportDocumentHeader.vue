@@ -30,7 +30,7 @@ watch(
 
 const saveReviewer = () => {
     router.post(
-        '/reports/financial/report-reviewer',
+        '/financial/report-reviewer',
         {
             report_type: props.reportType,
             period_end: props.periodEnd,

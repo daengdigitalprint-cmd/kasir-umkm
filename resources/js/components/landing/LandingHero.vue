@@ -8,7 +8,6 @@ const props = defineProps<{
 }>();
 
 const assetsBase = computed(() => props.assetsBase ?? '/');
-const maskotUrl = computed(() => props.maskotUrl ?? '/logo-macca.png');
 </script>
 
 <template>
@@ -32,10 +31,10 @@ const maskotUrl = computed(() => props.maskotUrl ?? '/logo-macca.png');
         </div>
         <div class="xb-hero-shape">
             <div class="shape shape--1 xb-blur-title xbFadeUpItem" data-animation-delay="250ms">
-                <img class="updown" :src="`${assetsBase}/img/hero/icon-img01.png`" alt="icon" loading="lazy" decoding="async">
+                <img class="updown" :src="`${assetsBase}/img/hero/icon-img01.png`" alt="icon" loading="lazy" decoding="async" width="80" height="80">
             </div>
             <div class="shape shape--2 xb-blur-title xbFadeUpItem" data-animation-delay="350ms">
-                <img class="updown-2" :src="`${assetsBase}/img/hero/icon-img02.png`" alt="icon" loading="lazy" decoding="async">
+                <img class="updown-2" :src="`${assetsBase}/img/hero/icon-img02.png`" alt="icon" loading="lazy" decoding="async" width="80" height="80">
             </div>
         </div>
     </section>

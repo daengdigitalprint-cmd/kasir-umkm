@@ -36,16 +36,29 @@ class AiAuditorController extends Controller
         // Daftar akun pemilik bisnis/penjual (user non-superadmin) untuk dropdown filter.
         $users = User::query()
             ->where('is_super_admin', false)
+            ->with(['store.organization', 'stores.organization'])
             ->orderBy('name')
             ->get(['id', 'name', 'email', 'store_id', 'role'])
-            ->map(fn (User $u) => [
-                'id' => $u->id,
-                'name' => $u->name,
-                'email' => $u->email,
-                'store_id' => $u->store_id,
-                'store_name' => $u->store?->name,
-                'role' => $u->role,
-            ]);
+            ->map(function (User $u) {
+                // Prioritaskan toko dari pivot (multi-outlet), fallback ke store_id legacy.
+                $organization = null;
+                if ($u->stores->isNotEmpty()) {
+                    $organization = $u->stores->firstWhere('organization_id', '!=', null)?->organization;
+                }
+                if (! $organization && $u->store) {
+                    $organization = $u->store->organization;
+                }
+
+                return [
+                    'id' => $u->id,
+                    'name' => $u->name,
+                    'email' => $u->email,
+                    'store_id' => $u->store_id,
+                    'store_name' => $u->store?->name,
+                    'role' => $u->role,
+                    'group_name' => $organization?->name ?? 'Tanpa Grup',
+                ];
+            });
 
         return Inertia::render('AiAuditor/Index', [
             'users' => $users,
@@ -160,14 +173,26 @@ class AiAuditorController extends Controller
         ];
 
         try {
-            $response = AuditorAgent::make()->prompt(json_encode($payload, JSON_UNESCAPED_UNICODE));
+            $model = AiSetting::get('model');
+            $response = AuditorAgent::make()->prompt(
+                json_encode($payload, JSON_UNESCAPED_UNICODE),
+                model: $model ?: null,
+            );
             $structured = $response->structured;
         } catch (Throwable $e) {
             report($e);
 
+            $provider = AiSetting::activeProvider();
+            $displayModel = $model ?: 'default';
+
+            $hint = '';
+            if (str_contains($e->getMessage(), 'model_not_found')) {
+                $hint = ' Model "'.$displayModel.'" tidak tersedia di provider '.$provider.'. Periksa halaman Pengaturan AI dan gunakan model yang didukung oleh provider Anda.';
+            }
+
             return response()->json([
                 'success' => false,
-                'message' => 'Analisa AI gagal dijalankan: '.$e->getMessage(),
+                'message' => 'Analisa AI gagal dijalankan: '.$e->getMessage().$hint,
             ], 500);
         }
 

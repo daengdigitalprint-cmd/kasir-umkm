@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\KitchenQueueUpdated;
 use App\Models\CashShift;
 use App\Models\QueueEntry;
 use App\Models\Transaction;
@@ -172,7 +173,7 @@ class TableOrderController extends Controller
                 $queue = $store->queues()->create(['name' => 'Kasir', 'code' => 'Q001', 'is_active' => true]);
             }
 
-            QueueEntry::firstOrCreate(
+            $queueEntry = QueueEntry::firstOrCreate(
                 ['transaction_id' => $transaction->id],
                 [
                     'queue_id' => $queue->id,
@@ -187,6 +188,8 @@ class TableOrderController extends Controller
                     ])->values()->all(),
                 ],
             );
+
+            KitchenQueueUpdated::dispatch(KitchenQueueUpdated::fromEntry($queueEntry->load('transaction:id,transaction_number,order_type,table_reference')));
         }
 
         return redirect()->back()->with('success', 'Pesanan diterima dan diteruskan ke dapur.');
@@ -235,7 +238,11 @@ class TableOrderController extends Controller
             'user_id' => auth()->id(),
         ]);
 
-        QueueEntry::where('transaction_id', $transaction->id)->update(['status' => 'completed']);
+        $queueEntries = QueueEntry::where('transaction_id', $transaction->id)->get();
+        foreach ($queueEntries as $entry) {
+            $entry->update(['status' => 'completed']);
+            event(KitchenQueueUpdated::fromEntry($entry->load('transaction:id,transaction_number,order_type,table_reference')));
+        }
 
         return redirect()->back()->with('success', 'Pembayaran pesanan berhasil.');
     }
@@ -256,7 +263,12 @@ class TableOrderController extends Controller
             return response()->json(['message' => 'Pesanan harus dibayar sebelum diselesaikan.'], 422);
         }
         $transaction->update(['order_status' => 'completed', 'status' => 'completed', 'completed_at' => now()]);
-        QueueEntry::where('transaction_id', $transaction->id)->update(['status' => 'completed']);
+
+        $queueEntries = QueueEntry::where('transaction_id', $transaction->id)->get();
+        foreach ($queueEntries as $entry) {
+            $entry->update(['status' => 'completed']);
+            event(KitchenQueueUpdated::fromEntry($entry->load('transaction:id,transaction_number,order_type,table_reference')));
+        }
 
         return redirect()->back()->with('success', 'Pesanan ditandai selesai.');
     }
@@ -283,6 +295,12 @@ class TableOrderController extends Controller
             'notes' => $transaction->notes."\n[Ditolak kasir: ".($validated['reason'] ?? 'Tidak ada alasan').']',
             'user_id' => auth()->id(),
         ]);
+
+        $queueEntries = QueueEntry::where('transaction_id', $transaction->id)->get();
+        foreach ($queueEntries as $entry) {
+            $entry->update(['status' => 'cancelled']);
+            event(KitchenQueueUpdated::fromEntry($entry->load('transaction:id,transaction_number,order_type,table_reference')));
+        }
 
         return redirect()->back()->with('success', 'Pesanan ditolak.');
     }

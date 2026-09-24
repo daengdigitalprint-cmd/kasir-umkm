@@ -153,7 +153,7 @@ class AttendanceController extends Controller
 
         return Attendance::query()
             ->where('employee_id', $employee->id)
-            ->where('work_date', $today)
+            ->whereDate('work_date', $today)
             ->first();
     }
 

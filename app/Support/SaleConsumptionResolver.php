@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Exceptions\ComponentStockInsufficientException;
 use App\Models\Product;
 use App\Models\ProductionBatch;
 use App\Models\ProductSaleConsumption;
@@ -51,6 +52,10 @@ final class SaleConsumptionResolver
     /**
      * Validasi ketersediaan stok semua komponen konsumsi.
      *
+     * Mengumpulkan SEMUA komponen bermasalah terlebih dahulu sebelum melempar exception,
+     * sehingga UI dapat menampilkan detail seluruh komponen yang bermasalah sekaligus.
+     *
+     * @throws ComponentStockInsufficientException
      * @throws \RuntimeException
      */
     public static function validateStock(
@@ -64,6 +69,8 @@ final class SaleConsumptionResolver
             return;
         }
 
+        $issues = [];
+
         foreach ($rows as $row) {
             $component = $row->component;
             if (! $component) {
@@ -74,33 +81,43 @@ final class SaleConsumptionResolver
 
             $need = bcmul($saleQuantity, $row->quantity, ProductQuantity::SCALE);
 
+            // Produk induk allow_negative_stock → semua komponen otomatis diizinkan minus
+            if ($product->allow_negative_stock) {
+                continue;
+            }
+
             if (InventoryType::isProductionOutput($component)) {
                 $available = ProductionBatch::where('product_id', $component->id)
                     ->where('store_id', $store->id)
                     ->where('status', ProductionBatch::STATUS_COMPLETED)
                     ->sum('output_quantity_remaining');
 
-                if (ProductQuantity::cmp($available, $need) < 0) {
-                    $deficit = ProductQuantity::sub($need, $available);
+                if (ProductQuantity::cmp($available, $need) < 0 && ! $component->allow_negative_stock) {
                     $unit = $row->base_unit ?? $component->base_unit ?? 'pcs';
-                    throw new \RuntimeException(
-                        "Stok \"{$component->name}\" tidak mencukupi. "
-                        ."Dibutuhkan {$need} {$unit}, tersedia {$available} {$unit}. "
-                        ."Kekurangan {$deficit} {$unit}."
-                    );
+                    $issues[] = [
+                        'component_name' => $component->name,
+                        'needed' => $need,
+                        'available' => (string) $available,
+                        'unit' => $unit,
+                    ];
                 }
             } else {
-                if ($component->track_stock && ! $component->unlimited_stock) {
+                if ($component->track_stock && ! $component->unlimited_stock && ! $component->allow_negative_stock) {
                     if (ProductQuantity::cmp($component->stock_quantity, $need) < 0) {
-                        $deficit = ProductQuantity::sub($need, $component->stock_quantity);
                         $unit = $component->base_unit ?: 'pcs';
-                        throw new \RuntimeException(
-                            "Stok \"{$component->name}\" tidak mencukupi. "
-                            ."Kekurangan {$deficit} {$unit}."
-                        );
+                        $issues[] = [
+                            'component_name' => $component->name,
+                            'needed' => $need,
+                            'available' => (string) $component->stock_quantity,
+                            'unit' => $unit,
+                        ];
                     }
                 }
             }
+        }
+
+        if ($issues !== []) {
+            throw new ComponentStockInsufficientException($product->name, $issues);
         }
     }
 
@@ -131,16 +148,19 @@ final class SaleConsumptionResolver
             $component = $row->component;
             $need = bcmul($saleQuantity, $row->quantity, ProductQuantity::SCALE);
 
+            // Produk induk allow_negative_stock → komponen juga diizinkan minus
+            $allowNegative = $product->allow_negative_stock || $component->allow_negative_stock;
+
             if (InventoryType::isProductionOutput($component)) {
                 $totalCost = bcadd(
                     $totalCost,
-                    self::consumeProductionOutput($store, $user, $component, $need, $transactionItem, $transactionNumber),
+                    self::consumeProductionOutput($store, $user, $component, $need, $transactionItem, $transactionNumber, $allowNegative),
                     InventoryCosting::COST_SCALE,
                 );
             } else {
                 $totalCost = bcadd(
                     $totalCost,
-                    self::consumePackaging($store, $user, $component, $need, $transactionItem, $transactionNumber),
+                    self::consumePackaging($store, $user, $component, $need, $transactionItem, $transactionNumber, $allowNegative),
                     InventoryCosting::COST_SCALE,
                 );
             }
@@ -169,6 +189,7 @@ final class SaleConsumptionResolver
         string $need,
         TransactionItem $transactionItem,
         string $transactionNumber,
+        bool $allowNegative = false,
     ): string {
         $remaining = $need;
         $totalCost = '0.000000';
@@ -215,9 +236,36 @@ final class SaleConsumptionResolver
         }
 
         if (ProductQuantity::cmp($remaining, '0') > 0) {
-            throw new \RuntimeException(
-                "Stok batch \"{$component->name}\" tidak mencukupi saat pemrosesan penjualan."
-            );
+            if (! $allowNegative) {
+                throw new \RuntimeException(
+                    "Stok batch \"{$component->name}\" tidak mencukupi saat pemrosesan penjualan."
+                );
+            }
+
+            // allow_negative_stock: kurangi batch terakhir menjadi negatif dan catat alokasi.
+            $lastBatch = ProductionBatch::where('product_id', $component->id)
+                ->where('store_id', $store->id)
+                ->where('status', ProductionBatch::STATUS_COMPLETED)
+                ->orderByDesc('id')
+                ->first();
+
+            if ($lastBatch) {
+                $lastBatch->decrement('output_quantity_remaining', $remaining);
+
+                $lineCost = InventoryCosting::extendedCost($remaining, $lastBatch->unit_cost, 2);
+                $totalCost = bcadd($totalCost, $lineCost, InventoryCosting::COST_SCALE);
+
+                SaleConsumptionAllocation::create([
+                    'transaction_item_id' => $transactionItem->id,
+                    'production_batch_id' => $lastBatch->id,
+                    'component_product_id' => $component->id,
+                    'quantity_consumed' => $remaining,
+                    'unit_cost' => $lastBatch->unit_cost,
+                    'total_cost' => $lineCost,
+                ]);
+            }
+
+            $remaining = '0';
         }
 
         // Sinkronkan stok produk dari total batch
@@ -256,6 +304,7 @@ final class SaleConsumptionResolver
         string $need,
         TransactionItem $transactionItem,
         string $transactionNumber,
+        bool $allowNegative = false,
     ): string {
         if ($component->track_stock && ! $component->unlimited_stock) {
             $component->decrement('stock_quantity', $need);

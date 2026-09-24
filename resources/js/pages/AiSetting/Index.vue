@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { AlertTriangle, CheckCircle2, Eye, EyeOff, KeyRound, Loader2, LogOut, Save, Settings2, Shield, Trash2 } from 'lucide-vue-next';
+import { AlertTriangle, CheckCircle2, Eye, EyeOff, KeyRound, Loader2, LogOut, Save, Settings2, Shield, Trash2, Wifi } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 import { toastSuccess } from '@/lib/swal';
 
@@ -25,16 +25,38 @@ interface Props {
     hasApiKey: boolean;
     source: 'database' | 'env';
     user: { name: string };
+    url?: string | null;
+    model?: string | null;
 }
 
 const props = defineProps<Props>();
 
 const provider = ref<string>(props.activeProvider);
 const apiKey = ref<string>('');
+const apiUrl = ref<string>(props.url || '');
+const apiModel = ref<string>(props.model || '');
 const showKey = ref(false);
 const saving = ref(false);
 const deleting = ref(false);
+const testing = ref(false);
+const testResult = ref<string>('');
+const testSuccess = ref<boolean | null>(null);
 const errorMessage = ref<string>('');
+
+const defaultModelByProvider: Record<string, string> = {
+    openai: 'gpt-4o-mini',
+    anthropic: 'claude-3-5-haiku-20241022',
+    gemini: 'gemini-1.5-flash',
+    groq: 'llama-3.1-8b-instant',
+    deepseek: 'deepseek-chat',
+    mistral: 'mistral-small-latest',
+    openrouter: 'openai/gpt-4o-mini',
+    xai: 'grok-2-1212',
+    ollama: 'llama3.2',
+    custom: '',
+};
+
+const modelPlaceholder = computed(() => defaultModelByProvider[provider.value] || 'Contoh: gpt-4o-mini');
 
 const isDirty = computed(() => provider.value !== props.activeProvider || apiKey.value.trim() !== '');
 
@@ -60,13 +82,20 @@ async function save() {
             body: JSON.stringify({
                 provider: provider.value,
                 api_key: apiKey.value.trim() || null,
+                url: apiUrl.value.trim() || null,
+                model: apiModel.value.trim() || null,
             }),
         });
 
         const data = await res.json().catch(() => ({}));
 
         if (!res.ok || !data.success) {
-            errorMessage.value = data.message || 'Gagal menyimpan pengaturan AI.';
+            if (data.errors) {
+                const firstErrors = Object.values(data.errors).flat();
+                errorMessage.value = String(firstErrors[0] || 'Gagal menyimpan pengaturan AI.');
+            } else {
+                errorMessage.value = data.message || 'Gagal menyimpan pengaturan AI.';
+            }
             return;
         }
 
@@ -108,6 +137,53 @@ async function removeKey() {
         errorMessage.value = 'Koneksi ke server terputus. Periksa jaringan Anda lalu coba lagi.';
     } finally {
         deleting.value = false;
+    }
+}
+
+async function testConnection() {
+    testing.value = true;
+    testResult.value = '';
+    testSuccess.value = null;
+    errorMessage.value = '';
+
+    try {
+        const res = await fetch('/superadmin/ai-settings/test-connection', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken(),
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify({
+                provider: provider.value,
+                api_key: apiKey.value.trim() || null,
+                url: apiUrl.value.trim() || null,
+                model: apiModel.value.trim() || null,
+            }),
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+            // Tampilkan pesan error validasi atau error umum
+            if (data.errors) {
+                const firstErrors = Object.values(data.errors).flat();
+                testResult.value = String(firstErrors[0] || 'Validasi gagal.');
+            } else {
+                testResult.value = data.message || 'Gagal terhubung.';
+            }
+            testSuccess.value = false;
+            return;
+        }
+
+        testSuccess.value = data.success === true;
+        testResult.value = data.message || (data.success ? 'Koneksi berhasil!' : 'Gagal terhubung.');
+    } catch {
+        testSuccess.value = false;
+        testResult.value = 'Koneksi ke server terputus. Periksa jaringan Anda lalu coba lagi.';
+    } finally {
+        testing.value = false;
     }
 }
 
@@ -180,6 +256,26 @@ async function removeKey() {
                         </select>
                     </div>
 
+                    <template v-if="provider === 'custom'">
+                        <div class="space-y-1.5">
+                            <Label>Base URL Endpoint</Label>
+                            <Input v-model="apiUrl" placeholder="Contoh: https://api.openai.com/v1" class="bg-background" />
+                            <p class="text-xs text-slate-500">
+                                Pastikan URL mendukung format (kompatibel dengan) OpenAI API. Jangan diisi apabila menggunakan default.
+                            </p>
+                        </div>
+                    </template>
+
+                    <div class="space-y-1.5">
+                        <Label>Model ID</Label>
+                        <Input v-model="apiModel" :placeholder="modelPlaceholder" class="bg-background" />
+                        <p class="text-xs text-slate-500">
+                            {{ provider === 'custom'
+                                ? 'Nama/ID model spesifik yang harus dikirim ke custom URL di atas.'
+                                : 'Model default: ' + (modelPlaceholder || '-') + '. Kosongkan jika ingin menggunakan default provider.' }}
+                        </p>
+                    </div>
+
                     <div class="space-y-1.5">
                         <Label for="api_key">API Key Baru</Label>
                         <div class="relative">
@@ -205,12 +301,32 @@ async function removeKey() {
                         </p>
                     </div>
 
+                    <!-- Hasil test koneksi -->
+                    <div v-if="testResult" :class="[
+                        'flex items-start gap-3 rounded-2xl p-4',
+                        testSuccess ? 'bg-emerald-50 border border-emerald-200' : 'bg-red-50 border border-red-200'
+                    ]">
+                        <CheckCircle2 v-if="testSuccess" class="h-5 w-5 text-emerald-600 mt-0.5 shrink-0" />
+                        <AlertTriangle v-else class="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
+                        <p :class="['text-sm', testSuccess ? 'text-emerald-800' : 'text-red-800']">{{ testResult }}</p>
+                    </div>
+
                     <div v-if="errorMessage" class="flex items-start gap-3 bg-red-50 border border-red-200 rounded-2xl p-4">
                         <AlertTriangle class="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
                         <p class="text-sm text-red-800">{{ errorMessage }}</p>
                     </div>
 
                     <div class="flex flex-col sm:flex-row gap-3">
+                        <Button
+                            @click="testConnection"
+                            :disabled="testing || !provider"
+                            variant="outline"
+                            class="flex-1 rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50 font-bold"
+                        >
+                            <Loader2 v-if="testing" class="h-4 w-4 mr-2 animate-spin" />
+                            <Wifi v-else class="h-4 w-4 mr-2" />
+                            {{ testing ? 'Menguji Koneksi...' : 'Test Koneksi' }}
+                        </Button>
                         <Button
                             @click="save"
                             :disabled="!canSave"

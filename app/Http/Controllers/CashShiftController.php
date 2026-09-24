@@ -6,6 +6,7 @@ use App\Models\CashShift;
 use App\Models\Transaction;
 use App\Services\ActivityLogger;
 use App\Support\StorePlanLimits;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -292,7 +293,22 @@ class CashShiftController extends Controller
             $shiftData['employee_id'] = $activeCashier['employee_id'];
         }
 
-        CashShift::create($shiftData);
+        $shift = new CashShift($shiftData);
+
+        for ($attempt = 0; $attempt < 3; $attempt++) {
+            try {
+                $shift->shift_number = null;
+                $shift->save();
+
+                break;
+            } catch (UniqueConstraintViolationException $exception) {
+                if ($attempt === 2) {
+                    throw $exception;
+                }
+
+                $shift = new CashShift($shiftData);
+            }
+        }
 
         return redirect()
             ->route('pos.index')
@@ -414,8 +430,8 @@ class CashShiftController extends Controller
      * Helper: kirim redirect sebagai response normal untuk form submit,
      * atau sebagai JSON untuk permintaan AJAX (POS inline close shift).
      *
-     * @param \Illuminate\Http\RedirectResponse $redirect
-     * @param array<string, mixed> $extra
+     * @param  \Illuminate\Http\RedirectResponse  $redirect
+     * @param  array<string, mixed>  $extra
      * @return \Illuminate\Http\RedirectResponse|\Illuminate\Http\JsonResponse
      */
     private function jsonRedirect(Request $request, $redirect, array $extra = [])

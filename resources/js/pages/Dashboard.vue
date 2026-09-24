@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
 import AdminLayout from '@/layouts/AdminLayout.vue';
+import AiAssistantSidebar from '@/components/ai/AiAssistantSidebar.vue';
 import ThermalReceiptStruk from '@/components/pos/ThermalReceiptStruk.vue';
 import { mergeReceiptConfig, printThermalReceipt, type ReceiptConfig } from '@/lib/thermalReceipt';
 import { imageUrlToEscPosRaster, printableDotsFor, receiptLinesToEscPos } from '@/lib/escPosEncode';
@@ -15,11 +16,15 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import DashboardLowStockCard from '@/components/dashboard/DashboardLowStockCard.vue';
 import DashboardExpiringBatchesCard from '@/components/dashboard/DashboardExpiringBatchesCard.vue';
+import DashboardTrendChart from '@/components/dashboard/DashboardTrendChart.vue';
+import DashboardPeakHours from '@/components/dashboard/DashboardPeakHours.vue';
+import DashboardTopProducts from '@/components/dashboard/DashboardTopProducts.vue';
 import {
     ShoppingCart,
     Package,
     Users,
     TrendingUp,
+    TrendingDown,
     Plus,
     Eye,
     DollarSign,
@@ -37,12 +42,20 @@ import {
     ArrowDownCircle,
     ArrowUpCircle,
     Warehouse,
+    ShoppingBag,
 } from 'lucide-vue-next';
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 
 const page = usePage();
 
 const subscriptionBannerDismissed = ref(false);
+const showAiSidebar = ref(false);
+const showAiFullscreen = ref(false);
+
+function closeAiSidebar() {
+    showAiSidebar.value = false;
+    showAiFullscreen.value = false;
+}
 
 // Tampilkan modal ajakan buat produk pertama setelah user berhasil membuat toko baru.
 const showProductModal = ref(!!page.props.flash?.show_product_modal);
@@ -57,6 +70,8 @@ interface Props {
         customers_count?: number;
         today_sales?: number;
         today_transactions?: number;
+        yesterday_sales?: number;
+        yesterday_transactions?: number;
         last_month_omset?: number;
         today_stock_in?: number;
         pending_incoming_transfers?: number;
@@ -114,6 +129,23 @@ interface Props {
         invoice_number: string;
         status: string;
     };
+    weeklyTrend?: Array<{
+        date: string;
+        revenue: number;
+        count: number;
+    }>;
+    peakHours?: Array<{
+        hour: number;
+        label: string;
+        count: number;
+        revenue: number;
+    }>;
+    topProducts?: Array<{
+        id: number;
+        name: string;
+        quantity: number;
+        revenue: number;
+    }>;
 }
 
 const {
@@ -127,6 +159,9 @@ const {
     storeInactive,
     storeName,
     pendingPayment,
+    weeklyTrend,
+    peakHours,
+    topProducts,
 } = defineProps<Props>();
 
 const isWarehouse = computed(() => {
@@ -160,7 +195,16 @@ const {
 
 onMounted(() => {
     void initializePrinter();
+    document.addEventListener('keydown', _aiShortcut);
 });
+onUnmounted(() => document.removeEventListener('keydown', _aiShortcut));
+
+function _aiShortcut(e: KeyboardEvent) {
+    if (e.ctrlKey && e.shiftKey && e.key === 'A') {
+        e.preventDefault();
+        showAiSidebar.value = !showAiSidebar.value;
+    }
+}
 
 const receiptModalOpen = ref(false);
 const receiptLoading = ref(false);
@@ -354,6 +398,22 @@ const fmtQty = (val: string | number) => {
 
 /** Omset bulan lalu (dari backend, range startOfMonth - endOfMonth bulan sebelumnya). */
 const lastMonthOmset = computed(() => store?.last_month_omset ?? 0);
+
+/** Growth penjualan hari ini vs kemarin. */
+const salesGrowthPercent = computed(() => {
+    const today = store?.today_sales ?? 0;
+    const yesterday = store?.yesterday_sales ?? 0;
+    if (yesterday === 0) return null;
+    return ((today - yesterday) / yesterday) * 100;
+});
+
+/** Growth jumlah transaksi hari ini vs kemarin. */
+const transactionsGrowthPercent = computed(() => {
+    const today = store?.today_transactions ?? 0;
+    const yesterday = store?.yesterday_transactions ?? 0;
+    if (yesterday === 0) return null;
+    return ((today - yesterday) / yesterday) * 100;
+});
 
 // Format date helper
 const formatDate = (dateString: string) => {
@@ -667,14 +727,14 @@ const daysUntilExpiry = (dateString: string) => {
                             <!-- Stok Masuk Hari Ini -->
                             <div class="p-[2px] bg-gradient-to-br from-green-400/80 to-emerald-400/60 rounded-[2.2rem] shadow-lg hover:shadow-xl transition-all duration-300">
                                 <Card class="bg-gradient-to-br from-green-50 to-white rounded-[2rem] border-0 h-full">
-                                    <CardContent class="p-4 md:p-6">
-                                <div class="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-4">
-                                        <div class="flex items-center justify-center w-8 h-8 md:w-10 md:h-10 bg-green-500/15 rounded-full shrink-0">
+                                    <CardContent class="px-3 py-2 md:px-4 md:py-3">
+                                        <div class="flex items-start gap-3 mb-3">
+                                            <div class="flex items-center justify-center w-8 h-8 md:w-10 md:h-10 bg-green-500/15 rounded-full shrink-0">
                                                 <ArrowDownCircle class="h-4 w-4 md:h-5 md:w-5 text-green-600" />
                                             </div>
-                                            <div class="text-right">
+                                            <div class="flex-1 min-w-0">
                                                 <p class="label-metadata mb-1">Stok Masuk Hari Ini</p>
-                                                <p class="@max-[320px]:text-base @[320px]:text-xl md:@[320px]:text-2xl font-black text-green-700 font-display">{{ fmtQty(store?.today_stock_in ?? 0) }}</p>
+                                                <p class="text-base sm:text-lg md:text-xl lg:text-2xl font-black text-green-700 font-display truncate">{{ fmtQty(store?.today_stock_in ?? 0) }}</p>
                                             </div>
                                         </div>
                                         <div class="flex items-center justify-end">
@@ -690,14 +750,14 @@ const daysUntilExpiry = (dateString: string) => {
                             <!-- Transfer Menunggu Diterima -->
                             <div class="p-[2px] bg-gradient-to-br from-amber-400/70 to-white/10 rounded-[2.2rem] shadow-lg hover:shadow-xl transition-all duration-300">
                                 <Card class="bg-white rounded-[2rem] border-0 h-full">
-                                    <CardContent class="p-4 md:p-6">
-                                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-4">
+                                    <CardContent class="px-3 py-2 md:px-4 md:py-3">
+                                        <div class="flex items-start gap-3 mb-3">
                                             <div class="flex items-center justify-center w-8 h-8 md:w-10 md:h-10 bg-amber-500/10 rounded-full shrink-0">
                                                 <Truck class="h-4 w-4 md:h-5 md:w-5 text-amber-600" />
                                             </div>
-                                            <div class="text-right">
+                                            <div class="flex-1 min-w-0">
                                                 <p class="label-metadata mb-1">Transfer Masuk Pending</p>
-                                                <p class="@max-[320px]:text-base @[320px]:text-xl md:@[320px]:text-2xl font-black text-amber-600 font-display">{{ store?.pending_incoming_transfers ?? 0 }}</p>
+                                                <p class="text-base sm:text-lg md:text-xl lg:text-2xl font-black text-amber-600 font-display truncate">{{ store?.pending_incoming_transfers ?? 0 }}</p>
                                             </div>
                                         </div>
                                         <div class="flex items-center justify-end">
@@ -714,14 +774,14 @@ const daysUntilExpiry = (dateString: string) => {
                             <div class="p-[2px] bg-gradient-to-br from-red-400/70 to-white/10 rounded-[2.2rem] shadow-lg hover:shadow-xl transition-all duration-300">
                                 <Card class="bg-white rounded-[2rem] border-0 h-full">
                                     <CardContent class="p-4 md:p-6">
-                                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-4">
+                                        <div class="flex items-start gap-3 mb-3">
                                             <div class="flex items-center justify-center w-8 h-8 md:w-10 md:h-10 bg-red-500/10 rounded-full shrink-0">
                                                 <ArrowUpCircle class="h-4 w-4 md:h-5 md:w-5 text-red-600" />
                                             </div>
-                                            <div class="text-right">
-                                                <p class="label-metadata mb-1">Transfer Keluar Hari Ini</p>
-                                                <p class="@max-[320px]:text-base @[320px]:text-xl md:@[320px]:text-2xl font-black text-red-600 font-display">{{ store?.today_transfers_out ?? 0 }}</p>
-                                            </div>
+                                        </div>
+                                            <div class="flex-1 min-w-0">
+                                            <p class="label-metadata mb-1">Transfer Keluar Hari Ini</p>
+                                            <p class="text-base sm:text-lg md:text-xl lg:text-2xl font-black text-red-600 font-display truncate">{{ store?.today_transfers_out ?? 0 }}</p>
                                         </div>
                                         <div class="flex items-center justify-end">
                                             <div class="flex items-center text-red-600 bg-red-50 px-2 py-1 rounded-full text-xs font-bold">
@@ -736,14 +796,14 @@ const daysUntilExpiry = (dateString: string) => {
                             <!-- Total Produk -->
                             <div class="p-[2px] bg-gradient-to-br from-purple-400/70 to-white/10 rounded-[2.2rem] shadow-lg hover:shadow-xl transition-all duration-300">
                                 <Card class="bg-white rounded-[2rem] border-0 h-full">
-                                    <CardContent class="p-4 md:p-6">
-                                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-4">
+                                    <CardContent class="px-3 py-2 md:px-4 md:py-3">
+                                        <div class="flex items-start gap-3 mb-3">
                                             <div class="flex items-center justify-center w-8 h-8 md:w-10 md:h-10 bg-purple-500/10 rounded-full shrink-0">
                                                 <Warehouse class="h-4 w-4 md:h-5 md:w-5 text-purple-600" />
                                             </div>
-                                            <div class="text-right">
+                                            <div class="flex-1 min-w-0">
                                                 <p class="label-metadata mb-1">Total Produk</p>
-                                                <p class="@max-[320px]:text-base @[320px]:text-xl md:@[320px]:text-2xl font-black text-foreground font-display">{{ store?.products_count ?? 0 }}</p>
+                                                <p class="text-base sm:text-lg md:text-xl lg:text-2xl font-black text-foreground font-display truncate">{{ store?.products_count ?? 0 }}</p>
                                             </div>
                                         </div>
                                         <div class="flex items-center justify-end">
@@ -758,19 +818,17 @@ const daysUntilExpiry = (dateString: string) => {
                         </div>
 
                         <!-- Stats Cards — Outlet/POS -->
-                        <div v-else-if="!isWarehouse" class="grid @container/card-grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8 overflow-hidden dashboard-stat-cards">
+                        <div v-else-if="!isWarehouse" class="grid @container/card-grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-8 overflow-hidden dashboard-stat-cards">
                             <!-- Total Pendapatan -->
                             <div class="p-[2px] bg-gradient-to-br from-emerald-400/80 to-cyan-400/60 rounded-[2.2rem] shadow-lg hover:shadow-xl transition-all duration-300 lg:col-span-1">
-                                <Card class="bg-gradient-to-br from-emerald-50 to-white rounded-[2rem] border-0 h-full">
-                                    <CardContent class="p-4 md:p-6">
-                                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-4">
-                                            <div class="flex items-center justify-center w-8 h-8 md:w-10 md:h-10 bg-emerald-500/15 rounded-full shrink-0">
-                                                <Wallet class="h-4 w-4 md:h-5 md:w-5 text-emerald-600" />
-                                            </div>
-                                            <div class="text-right">
-                                                <p class="label-metadata mb-1">Omset Bulan Lalu</p>
-                                                <p class="@max-[320px]:text-base @[320px]:text-xl md:@[320px]:text-2xl font-black text-emerald-700 font-display">Rp {{ formatCurrency(lastMonthOmset) }}</p>
-                                            </div>
+                                <Card class="bg-gradient-to-br from-emerald-50 to-white rounded-[2rem] border-0 h-full relative overflow-hidden">
+                                    <div class="absolute -right-4 -top-4 flex items-center justify-center w-24 h-24 md:w-32 md:h-32 bg-emerald-500/[.03] rounded-full pointer-events-none">
+                                        <Wallet class="h-12 w-12 md:h-16 md:w-16 text-emerald-500/[.08]" />
+                                    </div>
+                                    <CardContent class="relative px-3 py-1.5 md:px-4 md:py-2">
+                                        <div class="relative min-w-0 mb-2">
+                                            <p class="label-metadata mb-0.5 text-xs">Omset Bulan Lalu</p>
+                                            <p class="text-lg sm:text-xl md:text-2xl font-black text-emerald-700 font-display truncate">Rp {{ formatCurrency(lastMonthOmset) }}</p>
                                         </div>
                                         <div class="flex items-center justify-end">
                                             <div class="flex items-center text-emerald-700 bg-emerald-100 px-2 py-1 rounded-full text-xs font-bold">
@@ -784,69 +842,83 @@ const daysUntilExpiry = (dateString: string) => {
 
                             <!-- Today's Sales -->
                             <div class="p-[2px] bg-gradient-to-br from-green-400/70 to-white/10 rounded-[2.2rem] shadow-lg hover:shadow-xl transition-all duration-300">
-                                <Card class="bg-white rounded-[2rem] border-0 h-full">
-                                    <CardContent class="p-4 md:p-6">
-                                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-4">
-                                        <div class="flex items-center justify-center w-8 h-8 md:w-10 md:h-10 bg-green-500/10 rounded-full shrink-0">
-                                            <DollarSign class="h-4 w-4 md:h-5 md:w-5 text-green-600" />
-                                        </div>
-                                        <div class="text-right">
-                                            <p class="label-metadata mb-1">Penjualan Hari Ini</p>
-                                            <p class="@max-[320px]:text-base @[320px]:text-xl md:@[320px]:text-2xl font-black text-foreground font-display">{{ formatCurrency(store.today_sales) }}</p>
-                                        </div>
+                                <Card class="bg-white rounded-[2rem] border-0 h-full relative overflow-hidden">
+                                    <div class="absolute -right-4 -top-4 flex items-center justify-center w-24 h-24 md:w-32 md:h-32 bg-green-500/[.03] rounded-full pointer-events-none">
+                                        <DollarSign class="h-12 w-12 md:h-16 md:w-16 text-green-500/[.08]" />
                                     </div>
-                                    <div class="flex items-center justify-end">
-                                        <div class="flex items-center text-green-600 bg-green-50 px-2 py-1 rounded-full text-xs font-bold">
-                                            <TrendingUp class="h-3 w-3 mr-1" />
-                                            <span>Hari ini</span>
+                                    <CardContent class="relative px-3 py-1.5 md:px-4 md:py-2">
+                                        <div class="relative min-w-0 mb-2">
+                                            <p class="label-metadata mb-0.5 text-xs">Penjualan Hari Ini</p>
+                                            <p class="text-lg sm:text-xl md:text-2xl font-black text-foreground font-display truncate">{{ formatCurrency(store.today_sales ?? 0) }}</p>
                                         </div>
-                                    </div>
+                                        <div class="flex items-center justify-end">
+                                            <div
+                                                v-if="salesGrowthPercent !== null"
+                                                class="flex items-center text-xs font-bold px-2 py-1 rounded-full"
+                                                :class="salesGrowthPercent >= 0
+                                                    ? 'text-emerald-600 bg-emerald-50'
+                                                    : 'text-red-600 bg-red-50'"
+                                            >
+                                                <component :is="salesGrowthPercent >= 0 ? TrendingUp : TrendingDown" class="h-3 w-3 mr-1" />
+                                                <span>{{ salesGrowthPercent >= 0 ? '+' : '' }}{{ salesGrowthPercent.toFixed(1) }}%</span>
+                                            </div>
+                                            <div v-else class="flex items-center text-green-600 bg-green-50 px-2 py-1 rounded-full text-xs font-bold">
+                                                <TrendingUp class="h-3 w-3 mr-1" />
+                                                <span>Hari ini</span>
+                                            </div>
+                                        </div>
                                     </CardContent>
                                 </Card>
                             </div>
 
-                            <!-- Total Products -->
-                            <div class="p-[2px] bg-gradient-to-br from-blue-400/70 to-white/10 rounded-[2.2rem] shadow-lg hover:shadow-xl transition-all duration-300">
-                                <Card class="bg-white rounded-[2rem] border-0 h-full">
-                                    <CardContent class="p-4 md:p-6">
-                                    <div class="flex items-center justify-between mb-4">
-                                        <div class="flex items-center justify-center w-8 h-8 md:w-10 md:h-10 bg-blue-500/10 rounded-full shrink-0">
-                                            <Package class="h-4 w-4 md:h-5 md:w-5 text-primary" />
-                                        </div>
-                                        <div class="text-right">
-                                            <p class="label-metadata mb-1">Total Produk</p>
-                                            <p class="@max-[320px]:text-base @[320px]:text-xl md:@[320px]:text-2xl font-black text-foreground font-display">{{ store.products_count }}</p>
-                                        </div>
+                            <!-- Today's Transactions -->
+                            <div class="p-[2px] bg-gradient-to-br from-cyan-400/70 to-white/10 rounded-[2.2rem] shadow-lg hover:shadow-xl transition-all duration-300">
+                                <Card class="bg-white rounded-[2rem] border-0 h-full relative overflow-hidden">
+                                    <div class="absolute -right-4 -top-4 flex items-center justify-center w-24 h-24 md:w-32 md:h-32 bg-cyan-500/[.03] rounded-full pointer-events-none">
+                                        <ShoppingBag class="h-12 w-12 md:h-16 md:w-16 text-cyan-500/[.08]" />
                                     </div>
-                                    <div class="flex items-center justify-end">
-                                        <div class="flex items-center text-primary bg-blue-50 px-2 py-1 rounded-full text-xs font-bold">
-                                            <Package class="h-3 w-3 mr-1" />
-                                            <span>Tersedia</span>
+                                    <CardContent class="relative px-3 py-1.5 md:px-4 md:py-2">
+                                        <div class="relative min-w-0 mb-2">
+                                            <p class="label-metadata mb-0.5 text-xs">Transaksi Hari Ini</p>
+                                            <p class="text-lg sm:text-xl md:text-2xl font-black text-foreground font-display truncate">{{ store.today_transactions ?? 0 }}</p>
                                         </div>
-                                    </div>
+                                        <div class="flex items-center justify-end">
+                                            <div
+                                                v-if="transactionsGrowthPercent !== null"
+                                                class="flex items-center text-xs font-bold px-2 py-1 rounded-full"
+                                                :class="transactionsGrowthPercent >= 0
+                                                    ? 'text-emerald-600 bg-emerald-50'
+                                                    : 'text-red-600 bg-red-50'"
+                                            >
+                                                <component :is="transactionsGrowthPercent >= 0 ? TrendingUp : TrendingDown" class="h-3 w-3 mr-1" />
+                                                <span>{{ transactionsGrowthPercent >= 0 ? '+' : '' }}{{ transactionsGrowthPercent.toFixed(1) }}%</span>
+                                            </div>
+                                            <div v-else class="flex items-center text-cyan-600 bg-cyan-50 px-2 py-1 rounded-full text-xs font-bold">
+                                                <ShoppingBag class="h-3 w-3 mr-1" />
+                                                <span>Hari ini</span>
+                                            </div>
+                                        </div>
                                     </CardContent>
                                 </Card>
                             </div>
 
                             <!-- Low Stock Alert -->
                             <div class="p-[2px] bg-gradient-to-br from-orange-400/70 to-white/10 rounded-[2.2rem] shadow-lg hover:shadow-xl transition-all duration-300">
-                                <Card class="bg-white rounded-[2rem] border-0 h-full">
-                                    <CardContent class="p-4 md:p-6">
-                                    <div class="flex items-center justify-between mb-4">
-                                        <div class="flex items-center justify-center w-8 h-8 md:w-10 md:h-10 bg-orange-500/10 rounded-full shrink-0">
-                                            <AlertTriangle class="h-4 w-4 md:h-5 md:w-5 text-orange-600" />
-                                        </div>
-                                        <div class="text-right">
-                                            <p class="label-metadata mb-1">Stok Rendah</p>
-                                            <p class="@max-[320px]:text-base @[320px]:text-xl md:@[320px]:text-2xl font-black text-orange-600 font-display">{{ lowStockCount ?? 0 }}</p>
-                                        </div>
+                                <Card class="bg-white rounded-[2rem] border-0 h-full relative overflow-hidden">
+                                    <div class="absolute -right-4 -top-4 flex items-center justify-center w-24 h-24 md:w-32 md:h-32 bg-orange-500/[.03] rounded-full pointer-events-none">
+                                        <AlertTriangle class="h-12 w-12 md:h-16 md:w-16 text-orange-500/[.08]" />
                                     </div>
-                                    <div class="flex items-center justify-end">
-                                        <div class="flex items-center text-orange-600 bg-orange-50 px-2 py-1 rounded-full text-xs font-bold">
-                                            <AlertTriangle class="h-3 w-3 mr-1" />
-                                            <span>Perhatian</span>
+                                    <CardContent class="relative px-3 py-1.5 md:px-4 md:py-2">
+                                        <div class="relative min-w-0 mb-2">
+                                            <p class="label-metadata mb-0.5 text-xs">Stok Rendah</p>
+                                            <p class="text-lg sm:text-xl md:text-2xl font-black text-orange-600 font-display truncate">{{ lowStockCount ?? 0 }}</p>
                                         </div>
-                                    </div>
+                                        <div class="flex items-center justify-end">
+                                            <div class="flex items-center text-orange-600 bg-orange-50 px-2 py-1 rounded-full text-xs font-bold">
+                                                <AlertTriangle class="h-3 w-3 mr-1" />
+                                                <span>Perhatian</span>
+                                            </div>
+                                        </div>
                                     </CardContent>
                                 </Card>
                             </div>
@@ -911,8 +983,14 @@ const daysUntilExpiry = (dateString: string) => {
                             </div>
                         </div>
 
+                        <!-- Dashboard Insight Widgets — Outlet/POS -->
+                        <div v-if="!isWarehouse" class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                            <DashboardTrendChart :data="weeklyTrend ?? []" />
+                            <DashboardPeakHours :data="peakHours ?? []" />
+                        </div>
+
                         <!-- Main Content Grid — Outlet/POS -->
-                        <div v-else class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div v-if="!isWarehouse" class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                             <!-- Recent Transactions -->
                             <div class="lg:col-span-2">
                                 <Card class="border-0 shadow-lg">
@@ -995,6 +1073,8 @@ const daysUntilExpiry = (dateString: string) => {
 
                             <!-- Low Stock & Expiring Batches -->
                             <div class="space-y-8">
+                                <DashboardTopProducts :data="topProducts ?? []" />
+
                                 <DashboardLowStockCard :products="lowStockProducts" :low-stock-count="lowStockCount" />
 
                                 <DashboardExpiringBatchesCard
@@ -1068,6 +1148,24 @@ const daysUntilExpiry = (dateString: string) => {
         </Dialog>
         </template>
     </AdminLayout>
+
+    <!-- Floating AI Assistant Button -->
+    <button
+        type="button"
+        class="fixed bottom-24 right-4 z-50 flex h-20 w-20 items-center justify-center transition-all hover:scale-105 sm:bottom-24 sm:right-6 sm:h-20 sm:w-20 lg:bottom-6 lg:h-24 lg:w-24"
+        title="AI Assistant (Ctrl+Shift+A)"
+        @click="showAiSidebar = !showAiSidebar"
+    >
+        <img src="/mas.webp" alt="AI Assistant" class="h-16 w-16 object-contain sm:h-18 sm:w-18 lg:h-20 lg:w-20" />
+    </button>
+
+    <!-- AI Assistant Sidebar -->
+    <AiAssistantSidebar
+        :is-open="showAiSidebar"
+        :fullscreen="showAiFullscreen"
+        @expand="showAiFullscreen = true"
+        @close="closeAiSidebar"
+    />
 </template>
 
 <style scoped>
@@ -1076,6 +1174,38 @@ const daysUntilExpiry = (dateString: string) => {
  * area konten sempit. Grid 4 kolom + gap-6 menghasilkan kartu ~164px.
  * Skala font diturunkan proporsional agar semua teks tetap dalam batas kartu.
  */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .dashboard-stat-cards {
+    gap: 0.75rem;
+  }
+
+  .dashboard-stat-cards > div {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .dashboard-stat-cards :deep(.label-metadata) {
+    font-size: 10px;
+    line-height: 1.3;
+  }
+
+  .dashboard-stat-cards :deep(.font-display.font-black) {
+    font-size: 1rem !important;
+    line-height: 1.2;
+    word-wrap: break-word;
+  }
+
+  .dashboard-stat-cards :deep(.flex.items-center.justify-end > .rounded-full) {
+    padding: 0.25rem 0.5rem !important;
+    font-size: 10px !important;
+  }
+
+  .dashboard-stat-cards :deep(.flex.items-center.justify-end > .rounded-full > svg) {
+    width: 10px !important;
+    height: 10px !important;
+  }
+}
+
 @media (min-width: 1024px) and (max-width: 1279px) and (orientation: landscape) {
   .dashboard-stat-cards {
     gap: 1rem;

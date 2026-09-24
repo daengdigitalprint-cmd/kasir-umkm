@@ -52,6 +52,7 @@ interface Props {
         tax_rate: number;
         track_stock: boolean;
         unlimited_stock?: boolean;
+        allow_negative_stock?: boolean;
         allows_decimal?: boolean;
         has_variants?: boolean;
         is_bundle?: boolean;
@@ -254,6 +255,7 @@ const form = useForm({
     tax_rate: typeof product.tax_rate === 'string' ? parseFloat(product.tax_rate) : (product.tax_rate ?? 0),
     track_stock: product.track_stock ?? false,
     unlimited_stock: product.unlimited_stock ?? false,
+    allow_negative_stock: product.allow_negative_stock ?? false,
     allows_decimal: product.allows_decimal ?? false,
     has_variants: product.has_variants ?? false,
     is_bundle: product.is_bundle ?? false,
@@ -569,6 +571,31 @@ function buildSaleConsumptionsPayload(): string {
     return JSON.stringify(payload);
 }
 
+/** Estimasi HPP dari total biaya komponen konsumsi penjualan (qty × average_cost). */
+const estimatedHpp = computed<number>(() => {
+    if (!consumptionEnabled.value) return 0;
+    return consumptionRows.value.reduce((total, row) => {
+        if (!row.component_product_id) return total;
+        const cat = props.saleConsumptionCatalog.find((c) => c.id === Number(row.component_product_id));
+        const cost = parseFloat(cat?.average_cost ?? '0') || 0;
+        return total + row.quantity * cost;
+    }, 0);
+});
+
+watch(estimatedHpp, (val) => {
+    if (consumptionEnabled.value && val > 0) {
+        form.cost_price = Math.round(val);
+    }
+});
+
+watch(consumptionEnabled, (enabled) => {
+    if (!enabled) return;
+    const val = estimatedHpp.value;
+    if (val > 0) {
+        form.cost_price = Math.round(val);
+    }
+});
+
 function initBatchRows(): BatchRow[] {
     if (product.has_variants || product.is_bundle) {
         return [];
@@ -618,6 +645,16 @@ const batchStockSum = computed(() =>
         }
         return s + n;
     }, 0),
+);
+
+// Reset allow_negative_stock saat unlimited_stock diaktifkan
+watch(
+    () => form.unlimited_stock,
+    (val) => {
+        if (val) {
+            form.allow_negative_stock = false;
+        }
+    },
 );
 
 watch(
@@ -847,6 +884,7 @@ const submit = () => {
         tax_rate: form.tax_rate || 0,
         track_stock: Boolean(form.track_stock),
         unlimited_stock: Boolean(form.unlimited_stock),
+        allow_negative_stock: Boolean(form.allow_negative_stock),
         allows_decimal: Boolean(form.allows_decimal),
         has_variants: Boolean(form.has_variants),
         is_bundle: Boolean(form.is_bundle),
@@ -867,6 +905,7 @@ const submit = () => {
     // FORCE boolean for reka-ui indeterminate fallback (jangan overwrite json fields yang sudah di-set)
     form.track_stock = Boolean(normalizedData.track_stock);
     form.unlimited_stock = Boolean(normalizedData.unlimited_stock);
+    form.allow_negative_stock = Boolean(normalizedData.allow_negative_stock);
     form.allows_decimal = Boolean(normalizedData.allows_decimal);
     form.has_variants = Boolean(normalizedData.has_variants);
     form.is_bundle = Boolean(normalizedData.is_bundle);
@@ -916,6 +955,7 @@ const submit = () => {
         formData.append('tax_rate', String(normalizedData.tax_rate || 0));
         formData.append('track_stock', normalizedData.track_stock ? '1' : '0');
         formData.append('unlimited_stock', normalizedData.unlimited_stock ? '1' : '0');
+        formData.append('allow_negative_stock', normalizedData.allow_negative_stock ? '1' : '0');
         formData.append('allows_decimal', normalizedData.allows_decimal ? '1' : '0');
         formData.append('has_variants', normalizedData.has_variants ? '1' : '0');
         formData.append('is_bundle', normalizedData.is_bundle ? '1' : '0');
@@ -970,6 +1010,7 @@ const submit = () => {
         // Force strict boolean explicitly before put just in case
         form.track_stock = Boolean(form.track_stock);
         form.unlimited_stock = Boolean(form.unlimited_stock);
+        form.allow_negative_stock = Boolean(form.allow_negative_stock);
         form.allows_decimal = Boolean(form.allows_decimal);
         form.has_variants = Boolean(form.has_variants);
         form.is_bundle = Boolean(form.is_bundle);
@@ -1198,13 +1239,13 @@ const submit = () => {
                     <CardContent class="space-y-6">
                         <div class="grid gap-6 md:grid-cols-2">
                             <div class="space-y-2">
-                                <Label for="price">Harga Jual *</Label>
+                                <Label for="price">Harga Jual {{ form.has_variants ? '' : '*' }}</Label>
                                 <Input
                                     id="price"
                                     v-model="formattedPrice"
                                     type="text"
                                     :placeholder="formatCurrency(0)"
-                                    required
+                                    :required="!form.has_variants"
                                 />
                                 <div v-if="form.errors.price" class="text-sm text-red-600">
                                     {{ form.errors.price }}
@@ -1233,6 +1274,10 @@ const submit = () => {
                                     type="text"
                                     :placeholder="formatCurrency(0)"
                                 />
+                                <p v-if="consumptionEnabled && estimatedHpp > 0" class="text-xs text-violet-700 font-medium">
+                                    Estimasi dari komponen: Rp {{ Math.round(estimatedHpp).toLocaleString('id-ID') }}
+                                    <span class="text-muted-foreground font-normal">(diisi otomatis, bisa diubah manual)</span>
+                                </p>
                                 <div v-if="form.errors.cost_price" class="text-sm text-red-600">
                                     {{ form.errors.cost_price }}
                                 </div>
@@ -1432,7 +1477,10 @@ const submit = () => {
                                     id="track_stock"
                                     v-model="form.track_stock"
                                     @change="(e) => {
-                                        if (!e.target.checked) form.unlimited_stock = false;
+                                        if (!e.target.checked) {
+                                            form.unlimited_stock = false;
+                                            form.allow_negative_stock = false;
+                                        }
                                     }"
                                     class="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
                                 />
@@ -1459,6 +1507,22 @@ const submit = () => {
                             </div>
                             <p class="text-xs text-muted-foreground ml-7 -mt-2">
                                 Produk akan selalu tersedia tanpa batasan stok
+                            </p>
+
+                            <div v-if="form.track_stock" class="flex items-center space-x-2">
+                                <input
+                                    type="checkbox"
+                                    id="allow_negative_stock"
+                                    v-model="form.allow_negative_stock"
+                                    :disabled="form.unlimited_stock"
+                                    class="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                                />
+                                <Label for="allow_negative_stock" class="text-sm" :class="{ 'opacity-50': form.unlimited_stock }">
+                                    Izinkan Penjualan Stok Habis
+                                </Label>
+                            </div>
+                            <p v-if="form.track_stock" class="text-xs text-muted-foreground ml-7 -mt-2" :class="{ 'opacity-50': form.unlimited_stock }">
+                                Produk tetap bisa dijual meskipun stok habis. Stok akan menjadi negatif.
                             </p>
 
                             <template v-if="showDecimalBlock">

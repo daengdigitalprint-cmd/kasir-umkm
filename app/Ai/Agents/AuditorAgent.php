@@ -2,7 +2,6 @@
 
 namespace App\Ai\Agents;
 
-use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasStructuredOutput;
@@ -66,7 +65,7 @@ INSTRUCTIONS;
     /**
      * Get the agent's structured output schema definition.
      */
-    public function schema(JsonSchema $schema): array
+    public function schema($schema): array
     {
         return [
             'summary' => $schema->string()

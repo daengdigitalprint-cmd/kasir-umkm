@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\SalesChannel;
+use App\Exceptions\ComponentStockInsufficientException;
 use App\Models\CashShift;
 use App\Models\CashTransaction;
 use App\Models\Customer;
@@ -16,6 +18,7 @@ use App\Models\Store;
 use App\Models\Transaction;
 use App\Models\TransactionItem;
 use App\Models\User;
+use App\Modules\CashierPin\Services\CashierPinService;
 use App\Services\LoyaltyService;
 use App\Support\Accounting\AccountingPeriodGuard;
 use App\Support\Accounting\JournalPoster;
@@ -28,7 +31,6 @@ use App\Support\LoyaltySettings;
 use App\Support\PharmacyFeatures;
 use App\Support\ProductQuantity;
 use App\Support\ReceiptSettings;
-use App\Modules\CashierPin\Services\CashierPinService;
 use App\Support\SaleConsumptionResolver;
 use App\Support\StorePlanLimits;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -66,7 +68,7 @@ class POSController extends Controller
             ->select([
                 'id', 'store_id', 'name', 'sku', 'barcode', 'price', 'wholesale_price', 'stock_quantity',
                 'category', 'product_category_id', 'inventory_type', 'unit', 'is_active', 'images', 'modifier_options', 'allows_decimal', 'has_variants', 'is_bundle',
-                'track_stock', 'unlimited_stock', 'pharmacy_sale_class',
+                'track_stock', 'unlimited_stock', 'allow_negative_stock', 'pharmacy_sale_class',
             ])
             ->with([
                 'variants' => fn ($q) => $q->where('is_active', true)->orderBy('sort_order')->orderBy('id'),
@@ -80,7 +82,7 @@ class POSController extends Controller
                     'id', 'product_id', 'product_variant_id', 'component_product_id', 'quantity', 'base_unit', 'sort_order',
                 )->with([
                     'component' => fn ($q2) => $q2->select(
-                        'id', 'stock_quantity', 'track_stock', 'unlimited_stock', 'inventory_type',
+                        'id', 'name', 'stock_quantity', 'track_stock', 'unlimited_stock', 'inventory_type', 'base_unit',
                     ),
                 ]),
             ])
@@ -216,11 +218,16 @@ class POSController extends Controller
                 'fnb_order_types_enabled' => FnBFeatures::orderTypesEnabled($store),
                 'fnb_split_bill_enabled' => FnBFeatures::splitBillEnabled($store),
                 'open_bill_enabled' => FnBFeatures::openBillEnabled($store),
+                'cup_label_enabled' => (bool) ($store->settings['cup_label_enabled'] ?? false),
                 'pharmacy_enabled' => PharmacyFeatures::enabled($store),
                 'default_service_charge_percent' => FnBFeatures::defaultServiceChargePercent($store),
                 'receipt' => ReceiptSettings::payload($store),
                 'pos_show_barcode' => (bool) ($store->settings['pos_show_barcode'] ?? false),
                 'wholesale_enabled' => (bool) ($store->settings['wholesale_enabled'] ?? false),
+                'online_sales_enabled' => (bool) ($store->settings['online_sales_enabled'] ?? false),
+                'online_commission_gofood' => (float) ($store->settings['online_commission_gofood'] ?? 20),
+                'online_commission_grabfood' => (float) ($store->settings['online_commission_grabfood'] ?? 20),
+                'online_commission_shopeefood' => (float) ($store->settings['online_commission_shopeefood'] ?? 15),
             ],
             'activeDiscounts' => $activeDiscounts,
             'businessTypeLabel' => BusinessTypePresets::TYPES[$bt] ?? BusinessTypePresets::TYPES['general'],
@@ -248,11 +255,16 @@ class POSController extends Controller
         $startDate = $request->input('date_from', now()->startOfMonth()->format('Y-m-d'));
         $endDate = $request->input('date_to', now()->format('Y-m-d'));
 
-        $transactions = Transaction::where('store_id', $store->id)
-            ->where('user_id', $user->id)
+        $query = Transaction::where('store_id', $store->id)
             ->where('status', 'completed')
-            ->with('customer:id,name,phone')
-            ->whereBetween('created_at', [$startDate.' 00:00:00', $endDate.' 23:59:59'])
+            ->whereBetween('created_at', [$startDate.' 00:00:00', $endDate.' 23:59:59']);
+
+        // Cashier hanya melihat transaksi sendiri, admin/owner/superadmin melihat semua
+        if ($user->isCashier()) {
+            $query->where('user_id', $user->id);
+        }
+
+        $transactions = $query->with('customer:id,name,phone')
             ->latest()
             ->paginate(20)
             ->withQueryString();
@@ -347,7 +359,16 @@ class POSController extends Controller
             ], 422);
         }
 
-        if ($product->track_stock && ! $product->unlimited_stock && ProductQuantity::lt((string) $product->stock_quantity, $qty)) {
+        // Produk dengan konfigurasi konsumsi komponen (F&B) — stok dikelola di level komponen,
+        // validasi dilakukan di processPayment(). Skip validasi stok produk induk.
+        $store = auth()->user()->store;
+        $hasConsumptionConfig = $store && SaleConsumptionResolver::hasConfig(
+            $store,
+            $product,
+            null,
+        );
+
+        if (! $hasConsumptionConfig && $product->track_stock && ! $product->unlimited_stock && ! $product->allow_negative_stock && ProductQuantity::lt((string) $product->stock_quantity, $qty)) {
             return response()->json([
                 'error' => 'Stok tidak mencukupi',
             ], 400);
@@ -399,6 +420,8 @@ class POSController extends Controller
                 'customer_type' => 'nullable|in:ecer,grosir',
                 'discount_code' => 'nullable|string|max:100',
                 'order_type' => 'nullable|in:dine_in,takeaway,delivery',
+                'sales_channel' => 'nullable|string|in:'.implode(',', array_column(SalesChannel::cases(), 'value')),
+                'commission_percent' => 'nullable|numeric|min:0|max:100',
                 'table_reference' => 'nullable|string|max:64',
                 'service_charge_percent' => 'nullable|numeric|min:0|max:100',
                 'tip_amount' => 'nullable|numeric|min:0',
@@ -576,7 +599,7 @@ class POSController extends Controller
                         if (ProductQuantity::cmp($need, '0.0000') <= 0) {
                             continue;
                         }
-                        if (! $comp->track_stock || $comp->unlimited_stock) {
+                        if (! $comp->track_stock || $comp->unlimited_stock || $comp->allow_negative_stock) {
                             continue;
                         }
 
@@ -621,8 +644,8 @@ class POSController extends Controller
                         $variant->refresh();
                     }
 
-                    if ($product->track_stock && ! $product->unlimited_stock) {
-                        if ($variant) {
+                    if ($product->track_stock && ! $product->unlimited_stock && ! $product->allow_negative_stock) {
+                        if ($variant && ! $variant->allow_negative_stock) {
                             if (ProductQuantity::lt((string) $variant->stock_quantity, $qty)) {
                                 throw new \Exception("Stok varian {$product->name} ({$variant->name}) tidak mencukupi");
                             }
@@ -808,6 +831,28 @@ class POSController extends Controller
                 $tableRef = null;
             }
 
+            // Sales channel: dari mana transaksi datang (walk_in, gofood, dll).
+            $salesChannel = SalesChannel::tryFrom((string) $request->input('sales_channel', SalesChannel::WalkIn->value))
+                ?? SalesChannel::WalkIn;
+
+            // Guard: aggregator (GoFood/GrabFood/ShopeeFood) hanya tersedia jika modul online aktif.
+            if ($salesChannel->isAggregator() && ! (bool) ($store->settings['online_sales_enabled'] ?? false)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'sales_channel' => 'Modul penjualan online belum diaktifkan. Aktifkan di Pengaturan > Toko.',
+                ]);
+            }
+
+            // Komisi aggregator: default per channel, bisa di-override dari input.
+            $commissionPercent = 0.0;
+            $commissionAmount = 0.0;
+            if ($salesChannel->isAggregator()) {
+                $inputPercent = (float) $request->input('commission_percent', $salesChannel->defaultCommissionPercent());
+                $commissionPercent = max(0.0, min(100.0, round($inputPercent, 2)));
+                if ($commissionPercent > 0) {
+                    $commissionAmount = round($totalAmount * $commissionPercent / 100, 2);
+                }
+            }
+
             $customer = null;
             if ($request->customer_name) {
                 $customer = Customer::firstOrCreate([
@@ -896,8 +941,8 @@ class POSController extends Controller
             $outstandingAmount = max(0, round($balanceDue - $amountPaid, 2));
             $paymentStatus = match (true) {
                 $outstandingAmount <= 0.009 => 'paid',
-                $amountPaid > 0.009         => 'partial',
-                default                     => 'unpaid',
+                $amountPaid > 0.009 => 'partial',
+                default => 'unpaid',
             };
 
             $debtDueAt = ($paymentStatus !== 'paid' && $request->filled('debt_due_at'))
@@ -916,6 +961,9 @@ class POSController extends Controller
                 'payment_status' => $paymentStatus,
                 'order_type' => $orderType,
                 'table_reference' => $tableRef,
+                'sales_channel' => $salesChannel->value,
+                'commission_percent' => $commissionPercent,
+                'commission_amount' => $commissionAmount,
                 'subtotal' => $subtotal,
                 'tax_amount' => $taxAmount,
                 'discount_amount' => $discountAmount,
@@ -1105,6 +1153,14 @@ class POSController extends Controller
                 'success' => false,
                 'message' => is_string($firstError) ? $firstError : 'Data tidak valid',
                 'errors' => $e->errors(),
+            ], 422);
+        } catch (ComponentStockInsufficientException $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'component_stock_issues' => $e->getIssues(),
             ], 422);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -1864,7 +1920,7 @@ class POSController extends Controller
                     $remaining = ProductQuantity::sub($remaining, $take);
                 }
             }
-            if (ProductQuantity::cmp($remaining, '0.0000') > 0) {
+            if (ProductQuantity::cmp($remaining, '0.0000') > 0 && ! $product->allow_negative_stock) {
                 throw new \Exception("Stok batch produk {$product->name} tidak mencukupi.");
             }
             $synced = (string) ProductBatch::where('product_id', $product->id)->sum('quantity_remaining');

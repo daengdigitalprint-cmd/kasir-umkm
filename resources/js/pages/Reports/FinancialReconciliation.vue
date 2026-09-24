@@ -37,7 +37,7 @@ watch(
 
 const applyFilter = () => {
     router.get(
-        '/reports/financial/reconciliation',
+        '/financial/reconciliation',
         { as_of: filterAsOf.value },
         { preserveState: true, preserveScroll: true },
     );

@@ -6,7 +6,9 @@ use App\Models\KpiSnapshot;
 use App\Models\KpiTarget;
 use App\Models\Store;
 use App\Models\Transaction;
+use App\Support\CacheKeys;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
 
 class KPIService
 {
@@ -29,9 +31,16 @@ class KPIService
 
         $growth = $previousTarget?->growth_percentage ?? self::DEFAULT_GROWTH;
 
-        // Baseline performa bulan sebelumnya
-        $previousRevenue = (float) $this->revenueQuery($store, $previousMonth, $previousMonth->copy()->endOfMonth());
-        $previousTransactions = $this->transactionsQuery($store, $previousMonth, $previousMonth->copy()->endOfMonth())->count();
+        // Baseline performa bulan sebelumnya (satu query gabungan)
+        $prevStats = Transaction::query()
+            ->where('store_id', $store->id)
+            ->where('status', 'completed')
+            ->whereBetween('created_at', [$previousMonth, $previousMonth->copy()->endOfMonth()])
+            ->selectRaw('COALESCE(SUM(total_amount), 0) as revenue, COUNT(*) as transactions')
+            ->first();
+
+        $previousRevenue = (float) $prevStats->revenue;
+        $previousTransactions = (int) $prevStats->transactions;
 
         $targetRevenue = $previousRevenue > 0
             ? round($previousRevenue * (1 + ((float) $growth / 100)), 2)
@@ -61,15 +70,46 @@ class KPIService
     /**
      * Hitung KPI bulanan untuk outlet & periode tertentu.
      *
+     * Hasil laporan di-cache 5 menit (REPORT_TTL_SECONDS). Saat transaksi
+     * berubah, TransactionObserver langsung mem-flush cache via version bump,
+     * sehingga dashboard selalu menampilkan data terkini.
+     *
      * @return array<string, mixed>
      */
     public function calculateMonthlyKPI(Store $store, string $period): array
     {
+        $key = CacheKeys::kpiMonthly((int) $store->id, $period);
+
+        return Cache::remember($key, CacheKeys::REPORT_TTL_SECONDS, function () use ($store, $period) {
+            return $this->calculateMonthlyKPIFresh($store, $period);
+        });
+    }
+
+    /**
+     * Perhitungan KPI aktual (dipanggil saat cache kosong/kedaluwarsa).
+     *
+     * @return array<string, mixed>
+     */
+    private function calculateMonthlyKPIFresh(Store $store, string $period): array
+    {
         $monthStart = Carbon::createFromFormat('Y-m', $period)->startOfMonth();
         $monthEnd = $monthStart->copy()->endOfMonth();
 
-        $revenue = (float) $this->revenueQuery($store, $monthStart, $monthEnd);
-        $transactions = $this->transactionsQuery($store, $monthStart, $monthEnd)->count();
+        // Satu query gabungan: revenue, jumlah transaksi, & pelanggan aktif
+        $stats = \App\Models\Transaction::query()
+            ->where('store_id', $store->id)
+            ->where('status', 'completed')
+            ->whereBetween('created_at', [$monthStart, $monthEnd])
+            ->selectRaw('
+                COALESCE(SUM(total_amount), 0) as revenue,
+                COUNT(*) as transactions,
+                COUNT(DISTINCT customer_id) as active_customers
+            ')
+            ->first();
+
+        $revenue = (float) $stats->revenue;
+        $transactions = (int) $stats->transactions;
+        $activeCustomers = (int) $stats->active_customers;
         $avgTransaction = $transactions > 0 ? $revenue / $transactions : 0;
 
         // Hitung HPP (COGS) dan Gross Profit Margin
@@ -82,15 +122,6 @@ class KPIService
 
         $grossProfit = $revenue - $cogs;
         $grossMarginPercentage = $revenue > 0 ? ($grossProfit / $revenue) * 100 : 0;
-
-        // Metrik Pelanggan
-        $activeCustomers = \App\Models\Transaction::query()
-            ->where('store_id', $store->id)
-            ->where('status', 'completed')
-            ->whereBetween('created_at', [$monthStart, $monthEnd])
-            ->whereNotNull('customer_id')
-            ->distinct('customer_id')
-            ->count('customer_id');
 
         $newCustomers = \App\Models\Customer::query()
             ->where('store_id', $store->id)
@@ -188,12 +219,22 @@ class KPIService
         $start = $date->copy()->startOfDay();
         $end = $date->copy()->endOfDay();
 
-        $revenue = (float) $this->revenueQuery($store, $start, $end);
-        $transactions = $this->transactionsQuery($store, $start, $end)->count();
-        $activeCustomers = $this->transactionsQuery($store, $start, $end)
-            ->whereNotNull('customer_id')
-            ->distinct('customer_id')
-            ->count('customer_id');
+        // Satu query gabungan untuk revenue, transaksi, & pelanggan aktif hari ini
+        $stats = Transaction::query()
+            ->where('store_id', $store->id)
+            ->where('status', 'completed')
+            ->whereBetween('created_at', [$start, $end])
+            ->selectRaw('
+                COALESCE(SUM(total_amount), 0) as revenue,
+                COUNT(*) as transactions,
+                COUNT(DISTINCT customer_id) as active_customers
+            ')
+            ->first();
+
+        $revenue = (float) $stats->revenue;
+        $transactions = (int) $stats->transactions;
+        $activeCustomers = (int) $stats->active_customers;
+
         $newCustomers = \App\Models\Customer::query()
             ->where('store_id', $store->id)
             ->whereBetween('created_at', [$start, $end])
@@ -228,6 +269,20 @@ class KPIService
      * Ambil Top 10 produk terlaris berdasarkan quantity dan revenue
      */
     public function getTopProducts(Store $store, string $period, int $limit = 10): array
+    {
+        $key = CacheKeys::kpiTopProducts((int) $store->id, $period, $limit);
+
+        return Cache::remember($key, CacheKeys::REPORT_TTL_SECONDS, function () use ($store, $period, $limit) {
+            return $this->getTopProductsFresh($store, $period, $limit);
+        });
+    }
+
+    /**
+     * Query Top Produk aktual (dipanggil saat cache kosong/kedaluwarsa).
+     *
+     * @return array<int, array{id: int|string, name: string, quantity: float, revenue: float}>
+     */
+    private function getTopProductsFresh(Store $store, string $period, int $limit): array
     {
         $start = Carbon::createFromFormat('Y-m', $period)->startOfMonth();
         $end = $start->copy()->endOfMonth();

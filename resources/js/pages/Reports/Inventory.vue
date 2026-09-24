@@ -110,6 +110,33 @@ const fmtCurrency = (n: number | string | null | undefined) => {
     if (Number.isNaN(num)) return 'Rp 0';
     return 'Rp ' + new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(num);
 };
+
+const stockQty = (q: number | string): number => {
+    const n = typeof q === 'string' ? parseFloat(q) : q;
+    return Number.isNaN(n) ? 0 : n;
+};
+
+const stockClass = (q: number | string): string => {
+    const n = stockQty(q);
+    if (n < 0) {
+        return 'text-red-600 font-bold';
+    }
+    if (n === 0) {
+        return 'text-amber-600 font-semibold';
+    }
+    return 'text-emerald-600';
+};
+
+const stockBadge = (q: number | string): { text: string; class: string } | null => {
+    const n = stockQty(q);
+    if (n < 0) {
+        return { text: 'Stok negatif', class: 'bg-red-100 text-red-700' };
+    }
+    if (n === 0) {
+        return { text: 'Stok habis', class: 'bg-amber-100 text-amber-700' };
+    }
+    return null;
+};
 </script>
 
 <template>
@@ -238,13 +265,29 @@ const fmtCurrency = (n: number | string | null | undefined) => {
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="p in products.data" :key="p.id" class="border-b border-slate-100">
+                        <tr
+                            v-for="p in products.data"
+                            :key="p.id"
+                            class="border-b border-slate-100"
+                            :class="{
+                                'bg-red-50/60': stockQty(p.stock_quantity) < 0,
+                                'bg-amber-50/40': stockQty(p.stock_quantity) === 0,
+                            }"
+                        >
                             <td class="py-3 pr-4">
                                 <span class="font-medium text-slate-900">{{ p.name }}</span>
                                 <span v-if="p.unit" class="text-xs text-slate-500"> · {{ p.unit }}</span>
                             </td>
                             <td class="py-3 pr-4 font-mono text-xs text-slate-600">{{ p.sku || '—' }}</td>
-                            <td class="py-3 pr-4 text-right tabular-nums">{{ formatQty(p.stock_quantity) }}</td>
+                            <td class="py-3 pr-4 text-right tabular-nums">
+                                <span :class="stockClass(p.stock_quantity)">{{ formatQty(p.stock_quantity) }}</span>
+                                <Badge
+                                    v-if="stockBadge(p.stock_quantity)"
+                                    :class="['ml-2 text-[10px] font-bold', stockBadge(p.stock_quantity)!.class]"
+                                >
+                                    {{ stockBadge(p.stock_quantity)!.text }}
+                                </Badge>
+                            </td>
                             <td class="py-3 pr-4 text-right tabular-nums text-slate-600">{{ formatQty(p.min_stock_level) }}</td>
                             <td class="py-3 pr-4 text-right tabular-nums font-medium">{{ formatQty(p.total_sold) }}</td>
                         </tr>
@@ -294,13 +337,26 @@ const fmtCurrency = (n: number | string | null | undefined) => {
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="b in batches.data" :key="b.id" class="border-b border-slate-100">
+                        <tr
+                            v-for="b in batches.data"
+                            :key="b.id"
+                            class="border-b border-slate-100"
+                            :class="{ 'bg-red-50/60': stockQty(b.quantity_remaining) < 0 }"
+                        >
                             <td class="py-3 pr-4">
                                 <span class="font-medium text-slate-900">{{ b.product_name }}</span>
                                 <span v-if="b.unit" class="text-xs text-slate-500"> · {{ b.unit }}</span>
                             </td>
                             <td class="py-3 pr-4 font-mono text-xs">{{ b.batch_code || '—' }}</td>
-                            <td class="py-3 pr-4 text-right tabular-nums">{{ formatQty(b.quantity_remaining) }}</td>
+                            <td class="py-3 pr-4 text-right tabular-nums">
+                                <span :class="stockClass(b.quantity_remaining)">{{ formatQty(b.quantity_remaining) }}</span>
+                                <Badge
+                                    v-if="stockQty(b.quantity_remaining) < 0"
+                                    class="ml-2 text-[10px] font-bold bg-red-100 text-red-700"
+                                >
+                                    Stok negatif
+                                </Badge>
+                            </td>
                             <td class="py-3 pr-4 whitespace-nowrap">{{ formatDate(b.expiry_date) }}</td>
                             <td class="py-3 pr-4">
                                 <Badge :variant="statusVariant(b.expiry_status)" class="text-xs">

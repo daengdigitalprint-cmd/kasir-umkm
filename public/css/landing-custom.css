@@ -4,6 +4,65 @@
     left: 30px !important;
 }
 
+/* ============================================================
+   Heading font — Plus Jakarta Sans (Google Fonts)
+   BwGradual sebelumnya punya x-height lebih kecil; Plus Jakarta
+   Sans terasa lebih besar, jadi ukuran & line-height heading
+   global dikoreksi agar rapi di semua section landing.
+   ============================================================ */
+h1, h2, h3, h4, h5, h6 {
+    letter-spacing: -0.015em !important;
+}
+
+.gt-hero-section h1 {
+    font-size: clamp(2.5rem, 5vw, 4.25rem) !important;
+    line-height: 1.05 !important;
+}
+
+.gt-section-title h2 {
+    font-size: clamp(1.75rem, 3vw, 2.5rem) !important;
+    line-height: 1.15 !important;
+}
+
+.gt-section-title h6 {
+    font-size: 0.95rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.06em !important;
+    text-transform: uppercase;
+}
+
+.gt-pricing-header h2,
+.gt-pricing-box-items.pricing-style-3 .gt-pricing-header h2 {
+    font-size: 2rem !important;
+}
+
+/* Harga */
+.gt-pricing-box-items.pricing-style-3 .gt-pricing-header h2 .price,
+.gt-pricing-box-items.pricing-style-3 .gt-pricing-header .price {
+    font-size: 2.75rem !important;
+}
+
+@media (max-width: 991px) {
+    .gt-hero-section h1 {
+        font-size: clamp(2.25rem, 8vw, 3.25rem) !important;
+    }
+
+    .gt-section-title h2 {
+        font-size: clamp(1.5rem, 5vw, 2rem) !important;
+    }
+}
+
+@media (max-width: 575px) {
+    .gt-section-title h2 {
+        font-size: 1.5rem !important;
+    }
+
+    .gt-pricing-box-items.pricing-style-3 .gt-pricing-header h2 {
+        font-size: 1.75rem !important;
+    }
+}
+
+
 @media (min-width: 768px) {
     .xb-backtotop {
         left: 2rem !important;

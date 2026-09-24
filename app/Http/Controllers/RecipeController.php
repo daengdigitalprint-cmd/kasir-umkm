@@ -19,7 +19,6 @@ class RecipeController extends Controller
     public function index(Request $request): Response|RedirectResponse
     {
         $store = $request->user()->store;
-        abort_unless(PharmacyFeatures::enabled($store), 404);
         if (! $store) {
             return redirect()->route('stores.create')->with('error', 'Anda perlu membuat toko terlebih dahulu.');
         }

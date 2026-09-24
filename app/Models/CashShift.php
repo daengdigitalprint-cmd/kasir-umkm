@@ -39,7 +39,21 @@ class CashShift extends Model
     {
         static::creating(function (CashShift $shift) {
             if (empty($shift->shift_number)) {
-                $shift->shift_number = 'STR-'.now()->format('Ymd').'-'.Str::upper(Str::random(4));
+                // Ambil nama kasir: prioritaskan employee (PIN mode), fallback ke user
+                $shift->loadMissing(['employee', 'user']);
+                $name = $shift->employee?->name ?? $shift->user?->name ?? 'KASIR';
+                $firstName = Str::before($name, ' ');
+                $code = Str::upper(Str::slug($firstName, ''));
+
+                $lastShiftNumber = self::query()
+                    ->where('shift_number', 'like', $code.'-%')
+                    ->orderByDesc('id')
+                    ->value('shift_number');
+                $nextNumber = $lastShiftNumber
+                    ? ((int) Str::afterLast($lastShiftNumber, '-') + 1)
+                    : 1;
+
+                $shift->shift_number = $code.'-'.str_pad((string) $nextNumber, 3, '0', STR_PAD_LEFT);
             }
         });
     }

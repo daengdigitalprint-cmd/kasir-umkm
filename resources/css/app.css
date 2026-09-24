@@ -30,31 +30,31 @@
     --color-popover: #FFFFFF;
     --color-popover-foreground: #0F172A;
 
-    --color-primary: #7C3AED;
+    --color-primary: #7943e5;
     --color-primary-foreground: #FFFFFF;
 
-    --color-secondary: #F5F3FF;
-    --color-secondary-foreground: #1E1B4B;
+    --color-secondary: #a0ea71;
+    --color-secondary-foreground: #1a3a0a;
 
     --color-muted: #F8FAFC;
     --color-muted-foreground: #64748B;
 
-    --color-accent: rgba(124, 58, 237, 0.1);
-    --color-accent-foreground: #7C3AED;
+    --color-accent: rgba(121, 67, 229, 0.1);
+    --color-accent-foreground: #7943e5;
 
     --color-destructive: #EF4444;
     --color-destructive-foreground: #FFFFFF;
 
     --color-border: #E2E8F0;
     --color-input: #E2E8F0;
-    --color-ring: #7C3AED;
+    --color-ring: #7943e5;
 
     --color-sidebar-background: #F8FAFC;
     --color-sidebar-foreground: #1E293B;
-    --color-sidebar-primary: #7C3AED;
+    --color-sidebar-primary: #7943e5;
     --color-sidebar-primary-foreground: #FFFFFF;
-    --color-sidebar-accent: rgba(124, 58, 237, 0.05);
-    --color-sidebar-accent-foreground: #7C3AED;
+    --color-sidebar-accent: rgba(121, 67, 229, 0.05);
+    --color-sidebar-accent-foreground: #7943e5;
     --color-sidebar-border: #CBD5E1;
 
     /* Landing page (palette sama dengan landing.blade — oranye + ungu) */
@@ -464,19 +464,19 @@ html.lp-landing body {
     --card-foreground: #0F172A;
     --popover: #FFFFFF;
     --popover-foreground: #0F172A;
-    --primary: #7C3AED;
+    --primary: #7943e5;
     --primary-foreground: #FFFFFF;
-    --secondary: #F5F3FF;
-    --secondary-foreground: #1E1B4B;
+    --secondary: #a0ea71;
+    --secondary-foreground: #1a3a0a;
     --muted: #F8FAFC;
     --muted-foreground: #64748B;
-    --accent: rgba(124, 58, 237, 0.1);
-    --accent-foreground: #7C3AED;
+    --accent: rgba(121, 67, 229, 0.1);
+    --accent-foreground: #7943e5;
     --destructive: #EF4444;
     --destructive-foreground: #FFFFFF;
     --border: #E2E8F0;
     --input: #E2E8F0;
-    --ring: #7C3AED;
+    --ring: #7943e5;
     --radius: 1rem;
 }
 
@@ -500,4 +500,38 @@ html.lp-landing body {
     --border: #334155;
     --input: #334155;
     --ring: #6366F1;
+}
+
+/* POS checkout dialog: fade-only animation (no zoom) to prevent visual shift.
+   The default zoom-in-95 overrides the translate(-50%, -50%) centering transform
+   during animation, causing the dialog to shift after opening. */
+.pos-checkout-dialog[data-state='open'] {
+    animation: pos-dialog-fade-in 200ms ease-out both !important;
+}
+.pos-checkout-dialog[data-state='closed'] {
+    animation: pos-dialog-fade-out 150ms ease-in both !important;
+}
+
+@keyframes pos-dialog-fade-in {
+    from {
+        opacity: 0;
+    }
+}
+
+@keyframes pos-dialog-fade-out {
+    to {
+        opacity: 0;
+    }
+}
+
+/* POS invoice popup: smooth fade-in + subtle scale to prevent visual shift */
+.pos-invoice-popup {
+    animation: pos-invoice-in 250ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes pos-invoice-in {
+    from {
+        opacity: 0;
+        transform: scale(0.97) translateY(8px);
+    }
 }

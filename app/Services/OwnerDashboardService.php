@@ -41,7 +41,7 @@ class OwnerDashboardService
     public function revenueData(User $user, string $period, string $startDate, string $endDate, ?int $storeId = null): array
     {
         $storeIds = $this->resolveStoreIds($user, $storeId);
-        $cacheKey = 'owner_rev_{$user->id}_{$period}_{$startDate}_{$endDate}_'.md5(implode(',', $storeIds));
+        $cacheKey = "owner_rev_{$user->id}_{$period}_{$startDate}_{$endDate}_".md5(implode(',', $storeIds));
 
         return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($user, $storeIds, $period, $startDate, $endDate) {
             $start = Carbon::parse($startDate)->startOfDay();

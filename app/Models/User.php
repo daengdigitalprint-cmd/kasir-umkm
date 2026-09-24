@@ -21,6 +21,7 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
+        'phone',
         'business_type',
         'password',
         'store_id',
@@ -276,7 +277,7 @@ class User extends Authenticatable
         ]);
         // endregion debug-point 6
 
-        return $this->role;
+        return $this->role ?? 'cashier';
     }
 
     /** Cek apakah user boleh akses menu_key tertentu. */

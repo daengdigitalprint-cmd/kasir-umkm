@@ -53,7 +53,7 @@ watch(
 
 const applyFilter = () => {
     router.get(
-        '/reports/financial/calk',
+        '/financial/calk',
         { as_of: filterAsOf.value },
         { preserveState: true, preserveScroll: true },
     );

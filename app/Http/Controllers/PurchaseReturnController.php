@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Purchases\StorePurchaseReturnRequest;
 use App\Models\Product;
 use App\Models\ProductBatch;
 use App\Models\ProductVariant;
@@ -212,7 +213,7 @@ class PurchaseReturnController extends Controller
         ]);
     }
 
-    public function store(Request $request)
+    public function store(StorePurchaseReturnRequest $request)
     {
         $store = auth()->user()->store;
 
@@ -225,17 +226,7 @@ class PurchaseReturnController extends Controller
                 ->with('warning', 'Paket Starter tidak mencakup retur pembelian. Upgrade ke paket GrowUp di halaman langganan.');
         }
 
-        $validated = $request->validate([
-            'purchase_id' => 'nullable|integer|exists:purchases,id',
-            'supplier_id' => 'nullable|exists:suppliers,id',
-            'returned_at' => 'nullable|date',
-            'notes' => 'nullable|string|max:2000',
-            'lines' => 'required|array|min:1',
-            'lines.*.product_id' => 'required|exists:products,id',
-            'lines.*.product_variant_id' => 'nullable|integer|exists:product_variants,id',
-            'lines.*.product_batch_id' => 'nullable|integer|exists:product_batches,id',
-            'lines.*.quantity' => ['required', 'numeric', 'min:0.0001'],
-        ]);
+        $validated = $request->validated();
 
         if (isset($validated['supplier_id'])) {
             $supplierOk = Supplier::query()

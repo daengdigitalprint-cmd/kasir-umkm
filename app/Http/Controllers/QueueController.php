@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\KitchenQueueUpdated;
 use App\Models\Queue;
 use App\Models\QueueEntry;
 use Illuminate\Http\Request;
@@ -237,6 +238,8 @@ class QueueController extends Controller
             'items' => $validated['items'] ?? null,
         ]);
 
+        event(KitchenQueueUpdated::fromEntry($entry->load('transaction:id,transaction_number,order_type,table_reference')));
+
         return back()->with('success', "Nomor antrian #{$entry->number} berhasil dibuat.");
     }
 
@@ -292,6 +295,8 @@ class QueueController extends Controller
             }
         });
 
+        KitchenQueueUpdated::dispatch(KitchenQueueUpdated::fromEntry($queueEntry->load('transaction:id,transaction_number,order_type,table_reference')));
+
         return response()->json([
             'success' => true,
             'message' => "Antrian #{$queueEntry->number} → {$newStatus}",
@@ -309,7 +314,11 @@ class QueueController extends Controller
             abort(404);
         }
 
+        $storeId = (int) $queueEntry->store_id;
+        $entryId = (int) $queueEntry->id;
         $queueEntry->delete();
+
+        event(KitchenQueueUpdated::deleted($storeId, $entryId));
 
         return response()->json([
             'success' => true,

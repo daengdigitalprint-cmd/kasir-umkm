@@ -37,6 +37,7 @@ class Product extends Model
         'is_active',
         'track_stock',
         'unlimited_stock',
+        'allow_negative_stock',
         'allows_decimal',
         'has_variants',
         'is_bundle',
@@ -62,6 +63,7 @@ class Product extends Model
         'is_active' => 'boolean',
         'track_stock' => 'boolean',
         'unlimited_stock' => 'boolean',
+        'allow_negative_stock' => 'boolean',
         'allows_decimal' => 'boolean',
         'has_variants' => 'boolean',
         'is_bundle' => 'boolean',
@@ -121,17 +123,13 @@ class Product extends Model
         return $query->whereNull('product_variant_id');
     }
 
-    public function getImageUrlAttribute()
+    public function getImageUrlAttribute(): ?string
     {
-        if ($this->images && count($this->images) > 0) {
-            $imagePath = $this->images[0];
-            // Check if image exists in storage
-            if (Storage::disk('public')->exists($imagePath)) {
-                return Storage::disk('public')->url($imagePath);
-            }
+        if (! $this->images || count($this->images) === 0) {
+            return null;
         }
 
-        return null;
+        return Storage::disk('public')->url($this->images[0]);
     }
 
     public function getIsLowStockAttribute()

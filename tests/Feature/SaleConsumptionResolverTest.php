@@ -483,6 +483,68 @@ test('penjualan ukuran 250 ml mengurangi batch tepat 250 ml', function () {
     expect((float) $batch->output_quantity_remaining)->toBe(750.0);
 });
 
+test('validateStock lolos untuk production_output dengan allow_negative_stock', function () {
+    [$store] = makeResOrg('VAN1');
+    $sellable = makeResProduct($store, ['name' => 'Es Teh']);
+    $output = makeResProduct($store, [
+        'name' => 'Biang Teh',
+        'inventory_type' => InventoryType::PRODUCTION_OUTPUT,
+        'base_unit' => BaseUnit::MILLILITER,
+        'allow_negative_stock' => true,
+    ]);
+
+    SaleConsumptionConfig::replaceForProduct($sellable, $store, [
+        ['component_product_id' => $output->id, 'quantity' => '200.0000', 'input_unit' => 'ml'],
+    ]);
+
+    // Batch dengan 100ml, butuh 200ml → normalnya gagal, tapi allow_negative_stock=true → lolos
+    createCompletedBatch($store, $output, '100.0000', '0.066667');
+
+    SaleConsumptionResolver::validateStock($store, $sellable, null, '1.0000');
+    expect(true)->toBeTrue();
+});
+
+test('validateStock lolos untuk packaging dengan allow_negative_stock', function () {
+    [$store] = makeResOrg('VAN2');
+    $sellable = makeResProduct($store, ['name' => 'Es Teh']);
+    $packaging = makeResProduct($store, [
+        'name' => 'Cup Plastik',
+        'inventory_type' => InventoryType::PACKAGING,
+        'base_unit' => BaseUnit::PIECE,
+        'stock_quantity' => '3.0000',
+        'track_stock' => true,
+        'allow_negative_stock' => true,
+    ]);
+
+    SaleConsumptionConfig::replaceForProduct($sellable, $store, [
+        ['component_product_id' => $packaging->id, 'quantity' => '5.0000', 'input_unit' => 'pcs'],
+    ]);
+
+    // Stok 3, butuh 5 → normalnya gagal, tapi allow_negative_stock=true → lolos
+    SaleConsumptionResolver::validateStock($store, $sellable, null, '1.0000');
+    expect(true)->toBeTrue();
+});
+
+test('validateStock tetap gagal untuk packaging tanpa allow_negative_stock', function () {
+    [$store] = makeResOrg('VAN3');
+    $sellable = makeResProduct($store, ['name' => 'Es Teh']);
+    $packaging = makeResProduct($store, [
+        'name' => 'Cup Plastik',
+        'inventory_type' => InventoryType::PACKAGING,
+        'base_unit' => BaseUnit::PIECE,
+        'stock_quantity' => '3.0000',
+        'track_stock' => true,
+        'allow_negative_stock' => false,
+    ]);
+
+    SaleConsumptionConfig::replaceForProduct($sellable, $store, [
+        ['component_product_id' => $packaging->id, 'quantity' => '5.0000', 'input_unit' => 'pcs'],
+    ]);
+
+    $this->expectException(\RuntimeException::class);
+    SaleConsumptionResolver::validateStock($store, $sellable, null, '1.0000');
+});
+
 test('beberapa ukuran berbeda mengonsumsi batch yang sama', function () {
     [$store, $user] = makeResOrg('CO8');
     $output = makeResProduct($store, [

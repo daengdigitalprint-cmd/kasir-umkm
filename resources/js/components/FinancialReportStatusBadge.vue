@@ -16,7 +16,7 @@ const props = defineProps<{
 
 const setStatus = (status: 'draft' | 'final') => {
     router.post(
-        '/reports/financial/report-status',
+        '/financial/report-status',
         {
             report_type: props.reportType,
             period_end: props.periodEnd,

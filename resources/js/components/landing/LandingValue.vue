@@ -45,6 +45,12 @@ const tabs = computed<DashboardTab[]>(() => [
         active: false,
     },
 ]);
+
+/**
+ * Gambar tab aktif (default) adalah kandidat LCP — tidak perlu
+ * loading="lazy"; atribut width/height (rasio 16:10) di bawah
+ * mencegah layout shift saat gambar dimuat.
+ */
 </script>
 
 <template>
@@ -71,15 +77,26 @@ const tabs = computed<DashboardTab[]>(() => [
                 </ul>
                 <div class="tab-content fs-dashboard-img-wrap" id="pills-tabContent">
                     <div
+                        v-for="tab in tabs"
+                        :key="tab.id"
                         class="tab-pane fade"
                         :class="{ 'show active': tab.active }"
                         :id="`pills-${tab.id}`"
                         role="tabpanel"
                         :aria-labelledby="`pills-${tab.id}-tab`"
-                        v-for="tab in tabs"
-                        :key="tab.id"
                     >
-                        <div><img :src="tab.src" alt="image" loading="lazy" decoding="async"></div>
+                        <div>
+                            <img
+                                :src="tab.src"
+                                alt="image"
+                                :fetchpriority="tab.active ? 'high' : undefined"
+                                :loading="tab.active ? undefined : 'lazy'"
+                                decoding="async"
+                                width="1280"
+                                height="800"
+                                style="max-width: 100%; height: auto;"
+                            >
+                        </div>
                     </div>
                 </div>
                 <div class="xb-section-shape dashboard-shape">

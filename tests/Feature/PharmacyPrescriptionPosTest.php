@@ -130,7 +130,7 @@ test('POS apotek menerima payload legacy tanpa items lalu menyimpan snapshot car
     ))->assertOk()->assertJsonPath('success', true);
 
     expect(Transaction::query()->sole()->payment_details['pharmacy']['prescription']['items'])
-        ->toBe([['quantity' => '1', 'product_id' => $product->id]]);
+        ->toBe([['product_id' => $product->id, 'quantity' => '1']]);
 });
 
 test('POS non-apotek mengabaikan payload resep', function () {

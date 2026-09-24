@@ -37,6 +37,14 @@ class ProductImportService
     public const MAX_REPORTED_ERRORS = 30;
 
     /**
+     * Cache id kategori (case-insensitive by store) agar impor tidak query DB
+     * berulang kali untuk kategori yang sama.
+     *
+     * @var array<int, array<string, int>>
+     */
+    private array $categoryIdCache = [];
+
+    /**
      * @param  list<list<mixed>>  $rows  Baris mentah termasuk header pada indeks 0.
      * @return array{created: int, updated: int, errors: list<string>}
      */
@@ -77,9 +85,12 @@ class ProductImportService
         $errors = [];
         $prepared = [];
 
+        // Pre-load semua produk toko untuk lookup in-memory (hindari N+1 per baris)
+        $storeProductIndex = $this->buildStoreProductIndex($store);
+
         foreach ($dataRows as $line => $row) {
             $rowErrors = [];
-            $item = $this->prepareRow($store, $context, $headerMap, $row, $rowErrors);
+            $item = $this->prepareRow($store, $context, $storeProductIndex, $headerMap, $row, $rowErrors);
 
             if ($rowErrors !== []) {
                 foreach ($rowErrors as $message) {
@@ -123,7 +134,7 @@ class ProductImportService
                     continue;
                 }
 
-                $this->updateProduct($item['product'], $item, $userId);
+                $this->updateProduct($store, $item['product'], $item, $userId);
                 $updated++;
             }
         });
@@ -358,13 +369,56 @@ class ProductImportService
     }
 
     /**
+     * Build in-memory index semua produk toko untuk lookup cepat tanpa query.
+     *
+     * Saat ada duplikat (case-insensitive) pada satu kunci, produk dengan id terkecil
+     * yang dipakai — konsisten dengan orderBy('id')->first() pada query lama.
+     *
+     * @return array{bySku: array<string, Product>, byBarcode: array<string, Product>, byName: array<string, Product>}
+     */
+    private function buildStoreProductIndex(Store $store): array
+    {
+        $products = $store->products()->orderBy('id')->get();
+        $bySku = [];
+        $byBarcode = [];
+        $byName = [];
+
+        foreach ($products as $product) {
+            $this->indexProduct($bySku, $product, $product->sku);
+            $this->indexProduct($byBarcode, $product, $product->barcode);
+            $this->indexProduct($byName, $product, $product->name);
+        }
+
+        return ['bySku' => $bySku, 'byBarcode' => $byBarcode, 'byName' => $byName];
+    }
+
+    /**
+     * Simpan produk ke index hanya bila belum ada atau id-nya lebih kecil
+     * (id terkecil menang, konsisten dengan orderBy('id')->first()).
+     *
+     * @param  array<string, Product>  $index
+     */
+    private function indexProduct(array &$index, Product $product, mixed $value): void
+    {
+        if ($value === null || (is_string($value) && $value === '')) {
+            return;
+        }
+
+        $key = mb_strtolower((string) $value);
+        if (! isset($index[$key]) || (int) $product->id < (int) $index[$key]->id) {
+            $index[$key] = $product;
+        }
+    }
+
+    /**
      * @param  array<string, array<string, true>>  $context
+     * @param  array{bySku: array<string, Product>, byBarcode: array<string, Product>, byName: array<string, Product>}  $storeProductIndex
      * @param  array<string, int>  $headerMap
      * @param  list<mixed>  $row
      * @param  list<string>  $errors
      * @return array<string, mixed>|null
      */
-    private function prepareRow(Store $store, array &$context, array $headerMap, array $row, array &$errors): ?array
+    private function prepareRow(Store $store, array &$context, array $storeProductIndex, array $headerMap, array $row, array &$errors): ?array
     {
         $name = $this->stringValue($row, $headerMap, ProductImportSchema::COL_NAME);
         if ($name === null) {
@@ -398,7 +452,7 @@ class ProductImportService
             $errors[] = "Nama produk «{$name}» tanpa SKU/Barcode muncul lebih dari satu kali di file ini.";
         }
 
-        $product = $this->matchProduct($store, $sku, $barcode, $name);
+        $product = $this->matchProductFromIndex($storeProductIndex, $sku, $barcode, $name);
 
         if ($product !== null && ! $this->markOnce($context, 'product', (string) $product->id)) {
             $errors[] = "Beberapa baris mengarah ke produk yang sama («{$product->name}»). Gabungkan menjadi satu baris.";
@@ -411,10 +465,10 @@ class ProductImportService
             $errors[] = "Produk «{$product->name}» adalah produk paket sehingga tidak dapat diperbarui lewat impor. Ubah melalui halaman Edit Produk.";
         }
 
-        if ($sku !== null && $this->conflictsWithOtherProduct($store, 'sku', $sku, $product?->id)) {
+        if ($sku !== null && $this->conflictsWithOtherProductIndex($storeProductIndex, 'sku', $sku, $product?->id)) {
             $errors[] = "SKU «{$sku}» sudah dipakai produk lain di toko ini.";
         }
-        if ($barcode !== null && $this->conflictsWithOtherProduct($store, 'barcode', $barcode, $product?->id)) {
+        if ($barcode !== null && $this->conflictsWithOtherProductIndex($storeProductIndex, 'barcode', $barcode, $product?->id)) {
             $errors[] = "Barcode «{$barcode}» sudah dipakai produk lain di toko ini.";
         }
 
@@ -643,9 +697,8 @@ class ProductImportService
     /**
      * @param  array<string, mixed>  $item
      */
-    private function updateProduct(Product $product, array $item, ?int $userId): void
+    private function updateProduct(Store $store, Product $product, array $item, ?int $userId): void
     {
-        $store = $product->store;
         $payload = $item['payload'];
         $oldStock = ProductQuantity::normalizeStorageAmount($product, $product->stock_quantity);
 
@@ -741,9 +794,14 @@ class ProductImportService
             return null;
         }
 
+        $key = mb_strtolower($name);
+        if (isset($this->categoryIdCache[$store->id][$key])) {
+            return $this->categoryIdCache[$store->id][$key];
+        }
+
         $category = ProductCategory::query()
             ->where('store_id', $store->id)
-            ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])
+            ->whereRaw('LOWER(name) = ?', [$key])
             ->first();
 
         if ($category === null) {
@@ -754,7 +812,7 @@ class ProductImportService
             ]);
         }
 
-        return (int) $category->id;
+        return $this->categoryIdCache[$store->id][$key] = (int) $category->id;
     }
 
     /**
@@ -774,34 +832,39 @@ class ProductImportService
     }
 
     /**
-     * Pencocokan baris ke produk lama: SKU bila diisi, lalu Barcode, lalu Nama Produk.
+     * Pencocokan baris ke produk lama via in-memory index.
      *
-     * Bila SKU diisi tetapi belum ada di toko, baris dianggap produk baru. Barcode milik
-     * produk lain akan ditolak oleh pemeriksaan keunikan supaya identitas produk lama
-     * tidak tertimpa secara tidak sengaja.
+     * Perilaku harus identik dengan query lama:
+     * - Bila SKU diisi, hanya dicocokkan berdasarkan SKU; bila tidak ditemukan, baris
+     *   dianggap produk baru (tidak fallback ke barcode/nama).
+     * - Tanpa SKU, dicocokkan berdasarkan Barcode bila diisi, lalu Nama Produk.
+     *
+     * @param  array{bySku: array<string, Product>, byBarcode: array<string, Product>, byName: array<string, Product>}  $index
      */
-    private function matchProduct(Store $store, ?string $sku, ?string $barcode, string $name): ?Product
+    private function matchProductFromIndex(array $index, ?string $sku, ?string $barcode, string $name): ?Product
     {
         if ($sku !== null) {
-            return $store->products()->where('sku', $sku)->orderBy('id')->first();
+            return $index['bySku'][mb_strtolower($sku)] ?? null;
         }
 
         if ($barcode !== null) {
-            return $store->products()->where('barcode', $barcode)->orderBy('id')->first();
+            return $index['byBarcode'][mb_strtolower($barcode)] ?? null;
         }
 
-        return $store->products()
-            ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])
-            ->orderBy('id')
-            ->first();
+        return $index['byName'][mb_strtolower($name)] ?? null;
     }
 
-    private function conflictsWithOtherProduct(Store $store, string $column, string $value, ?int $ignoreId): bool
+    /**
+     * Cek konflik dengan produk lain via in-memory index.
+     *
+     * @param  array{bySku: array<string, Product>, byBarcode: array<string, Product>, byName: array<string, Product>}  $index
+     */
+    private function conflictsWithOtherProductIndex(array $index, string $column, string $value, ?int $ignoreId): bool
     {
-        return $store->products()
-            ->where($column, $value)
-            ->when($ignoreId !== null, fn ($q) => $q->whereKeyNot($ignoreId))
-            ->exists();
+        $bucket = $column === 'sku' ? 'bySku' : 'byBarcode';
+        $existing = $index[$bucket][mb_strtolower($value)] ?? null;
+
+        return $existing !== null && (int) $existing->id !== (int) $ignoreId;
     }
 
     /**

@@ -229,6 +229,7 @@ const bulkDelete = async () => {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'X-XSRF-TOKEN': decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/) || [])[1] || ''),
                 'X-CSRF-TOKEN': getCsrfToken(),
                 'Accept': 'application/json',
             },
@@ -240,7 +241,7 @@ const bulkDelete = async () => {
         const response = await res.json();
         const deleted = response?.deleted ?? 0;
         selectedIds.value = new Set();
-        router.reload({ only: ['products'], preserveScroll: true });
+        router.reload({ only: ['products'] });
         alertSuccess('Berhasil', `${deleted} produk berhasil dihapus`);
     } catch {
         // error ditangkap di akhir
@@ -474,16 +475,16 @@ function submitImport() {
         </div>
 
         <!-- Tabs: Kategori (muncul jika ada kategori) -->
-        <div v-if="categoriesList.length > 0" class="mb-4 lg:mb-6 -mx-1 overflow-x-auto scrollbar-none">
-            <div class="flex gap-1.5 px-1 min-w-max">
-                <span class="inline-flex items-center px-2 py-1 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+        <div v-if="categoriesList.length > 0" class="mb-4 lg:mb-6">
+            <div class="flex gap-1.5 items-center flex-wrap overflow-x-auto scrollbar-none lg:overflow-visible">
+                <span class="inline-flex items-center px-2 py-1 text-[10px] font-semibold text-gray-500 uppercase tracking-wider shrink-0">
                     Kategori:
                 </span>
                 <button
                     v-for="cat in categoriesList"
                     :key="cat"
                     @click="setCategory(cat)"
-                    class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap"
+                    class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap shrink-0"
                     :class="activeCategory === cat
                         ? 'bg-emerald-600 text-white shadow-md'
                         : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'"

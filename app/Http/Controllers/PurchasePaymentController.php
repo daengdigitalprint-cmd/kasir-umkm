@@ -6,6 +6,7 @@ use App\Models\JournalEntry;
 use App\Models\JournalLine;
 use App\Models\Purchase;
 use App\Models\PurchasePayment;
+use App\Support\Accounting\AccountingFeatures;
 use App\Support\Accounting\AccountingPeriodGuard;
 use App\Support\Accounting\ChartOfAccountsBootstrap;
 use Illuminate\Http\Request;

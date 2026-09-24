@@ -2,8 +2,49 @@
  * Service worker — cache ringan, tahan deploy (tanpa hash file build).
  * Install tidak boleh gagal total jika satu aset hilang (VPS / path berbeda).
  */
-const CACHE_NAME = 'umkm-kasir-v1.0.6';
+const CACHE_NAME = 'umkm-kasir-v1.0.9';
 const OFFLINE_URL = '/offline.html';
+
+/**
+ * TTL cache per kategori aset (detik).
+ * Aset versioned/hash dari Vite & file statis publik aman di-cache
+ * lama; HTML navigasi tidak di-cache kecuali app shell /login.
+ */
+const CACHE_TTL = {
+  image: 60 * 60 * 24 * 365, // 1 tahun
+  font: 60 * 60 * 24 * 365, // 1 tahun
+  css: 60 * 60 * 24 * 30, // 1 bulan
+  js: 60 * 60 * 24 * 30, // 1 bulan
+  default: 60 * 60 * 24 * 7, // 1 minggu
+};
+
+function ttlForRequest(request) {
+  const path = new URL(request.url).pathname;
+  if (/\.(?:jpe?g|png|gif|webp|svg|ico|bmp|avif)(?:\?|$)/i.test(path)) return CACHE_TTL.image;
+  if (/\.(?:woff2?|ttf|otf|eot)(?:\?|$)/i.test(path)) return CACHE_TTL.font;
+  if (/\.css(?:\?|$)/i.test(path)) return CACHE_TTL.css;
+  if (/\.js(?:\?|$)/i.test(path)) return CACHE_TTL.js;
+  return CACHE_TTL.default;
+}
+
+/**
+ * Fetch dengan retry — server lokal / VPS kadang butuh waktu bangun dari
+ * idle (sleep), jadi satu kegagalan jaringan tidak langsung dianggap offline.
+ */
+async function fetchWithRetry(request, retries = 2, delayMs = 1000) {
+  let lastError;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fetch(request);
+    } catch (error) {
+      lastError = error;
+      if (attempt < retries) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+  throw lastError;
+}
 
 /**
  * App Shell URL — halaman yang di-cache saat install agar bisa dibuka
@@ -167,13 +208,18 @@ async function handleStaticAsset(request) {
   try {
     const cachedResponse = await caches.match(request);
     if (cachedResponse) {
+      // Aset statis versioned (Vite hash / path publik tetap) — cache
+      // hit boleh langsung dikembalikan untuk kunjungan berulang.
       return cachedResponse;
     }
 
     const networkResponse = await fetch(request);
     if (networkResponse.ok) {
       const cache = await caches.open(CACHE_NAME);
-      cache.put(request, networkResponse.clone());
+      const cloned = networkResponse.clone();
+      const responseToCache = new Response(cloned.body, cloned);
+      responseToCache.headers.set('Cache-Control', `max-age=${ttlForRequest(request)}`);
+      await cache.put(request, responseToCache);
     }
     return networkResponse;
   } catch (error) {
@@ -184,7 +230,7 @@ async function handleStaticAsset(request) {
 
 async function handleApiRequest(request) {
   try {
-    const networkResponse = await fetch(request);
+    const networkResponse = await fetchWithRetry(request);
     if (networkResponse.ok) {
       const cache = await caches.open(CACHE_NAME);
       cache.put(request, networkResponse.clone());
@@ -217,7 +263,7 @@ async function handleNavigationRequest(request) {
   // Hindari menyajikan app shell yang stale (bisa mengandung halaman
   // yang sudah tidak valid saat session kadaluarsa → menyebabkan hydration error & WSOD).
   try {
-    const networkResponse = await fetch(request);
+    const networkResponse = await fetchWithRetry(request);
 
     // Cache app shell hanya untuk navigasi pertama kali, dengan batasan:
     // - hanya cache /pos, bukan path yang mengandung query auth
@@ -272,7 +318,7 @@ async function handleNavigationRequest(request) {
 
 async function handleOtherRequest(request) {
   try {
-    return await fetch(request);
+    return await fetchWithRetry(request);
   } catch (error) {
     const cachedResponse = await caches.match(request);
     if (cachedResponse) {
@@ -303,7 +349,16 @@ async function handleOtherRequest(request) {
       );
     }
     
-    return new Response('', { status: 503, statusText: 'Network Unavailable' });
+    // Body HTML ringan — jika response ini berakhir dirender sebagai dokumen,
+    // halaman tidak jadi layar putih dan ada tombol untuk mencoba lagi.
+    return new Response(
+      '<!doctype html><html lang="id"><meta charset="utf-8"><title>Koneksi terputus</title>' +
+        '<body style="margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:system-ui,sans-serif;background:#f8fafc;color:#0f172a;text-align:center">' +
+        '<div><h1 style="font-size:20px;margin:0 0 8px">Tidak dapat terhubung ke server</h1>' +
+        '<p style="margin:0 0 20px;color:#475569">Periksa koneksi Anda, lalu coba lagi.</p>' +
+        '<button onclick="location.reload()" style="padding:10px 20px;border:0;border-radius:10px;background:#2563eb;color:#fff;font-weight:600;cursor:pointer">Coba Lagi</button></div></body></html>',
+      { status: 503, statusText: 'Network Unavailable', headers: { 'Content-Type': 'text/html; charset=utf-8' } },
+    );
   }
 }
 

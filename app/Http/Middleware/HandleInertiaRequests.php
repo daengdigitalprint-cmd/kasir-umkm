@@ -217,6 +217,8 @@ class HandleInertiaRequests extends Middleware
             'subscription' => $subscriptionData,
             'plan_limits' => $planLimits,
             'can_access_activity_logs' => $user ? $user->canAccessActivityLogs() : false,
+            'can_use_ai_assistant' => $user ? ($user->isSuperAdmin() || $user->isAdmin() || $user->isManager() || $user->isCashier() || $user->isOwner()) : false,
+            'can_manage_ai_settings' => $user ? ($user->isSuperAdmin() || $user->isAdmin()) : false,
             'cashier_login_mode' => $activeStore
                 ? ($activeStore->cashier_login_mode ?? 'email')
                 : 'email',

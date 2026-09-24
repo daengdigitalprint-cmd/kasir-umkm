@@ -24,6 +24,8 @@ class Customer extends Model
         'points_redeemed_total',
         'notes',
         'is_active',
+        'last_purchase_at',
+        'last_purchase_amount',
     ];
 
     protected $casts = [
@@ -34,6 +36,8 @@ class Customer extends Model
         'points_redeemed_total' => 'integer',
         'notes' => 'array',
         'is_active' => 'boolean',
+        'last_purchase_at' => 'datetime',
+        'last_purchase_amount' => 'decimal:2',
     ];
 
     public function store(): BelongsTo
@@ -72,9 +76,15 @@ class Customer extends Model
 
     public function getLastPurchaseAttribute()
     {
-        $lastTransaction = $this->transactions()->latest()->first();
+        return $this->last_purchase_at?->format('Y-m-d');
+    }
 
-        return $lastTransaction ? $lastTransaction->created_at->format('Y-m-d') : null;
+    public function updateLastPurchase(float $amount): void
+    {
+        $this->update([
+            'last_purchase_at' => now(),
+            'last_purchase_amount' => $amount,
+        ]);
     }
 
     public function scopeActive($query)

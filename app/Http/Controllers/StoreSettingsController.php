@@ -31,6 +31,7 @@ class StoreSettingsController extends Controller
             'description' => 'nullable|string',
             'address' => 'nullable|string|max:500',
             'phone' => 'nullable|string|max:30',
+            'alert_whatsapp_numbers' => 'nullable|string|max:500',
             'email' => 'nullable|email|max:255',
             'website' => 'nullable|string|max:255',
             'business_type' => 'required|string|in:'.implode(',', array_keys(BusinessTypePresets::TYPES)),
@@ -62,10 +63,15 @@ class StoreSettingsController extends Controller
             'direct_stock_edit' => 'sometimes|boolean',
             'warehouse_enabled' => 'sometimes|boolean',
             'is_allow_local_purchase' => 'sometimes|boolean',
+            'online_sales_enabled' => 'sometimes|boolean',
+            'online_commission_gofood' => 'sometimes|numeric|min:0|max:100',
+            'online_commission_grabfood' => 'sometimes|numeric|min:0|max:100',
+            'online_commission_shopeefood' => 'sometimes|numeric|min:0|max:100',
             'queue_module_enabled' => 'sometimes|boolean',
             'wholesale_enabled' => 'sometimes|boolean',
             'attendance_enabled' => 'sometimes|boolean',
             'scan_meja_enabled' => 'sometimes|boolean',
+            'cup_label_enabled' => 'sometimes|boolean',
             'accounting_enabled' => 'sometimes|boolean',
             'max_backdate_days' => 'sometimes|integer|min:0|max:30',
             'receivables_enabled' => 'sometimes|boolean',
@@ -169,12 +175,35 @@ class StoreSettingsController extends Controller
             unset($validated['is_allow_local_purchase']);
         }
 
+        // Penjualan online (aggregator F&B): GoFood, GrabFood, ShopeeFood.
+        // Saat nonaktif, channel aggregator tidak muncul di POS & ditolak di backend.
+        if (array_key_exists('online_sales_enabled', $validated)) {
+            $settings['online_sales_enabled'] = (bool) $validated['online_sales_enabled'];
+            unset($validated['online_sales_enabled']);
+        }
+
+        // Persentase komisi default per aggregator (dapat diatur di halaman pengaturan).
+        foreach (['online_commission_gofood', 'online_commission_grabfood', 'online_commission_shopeefood'] as $field) {
+            if (array_key_exists($field, $validated)) {
+                $settings[$field] = (float) $validated[$field];
+                unset($validated[$field]);
+            }
+        }
+
         // Modul antrian: default off semua tipe bisnis
         if (array_key_exists('queue_module_enabled', $validated)) {
             $settings['queue_module_enabled'] = (bool) $validated['queue_module_enabled'];
             unset($validated['queue_module_enabled']);
         } elseif (! isset($settings['queue_module_enabled'])) {
             $settings['queue_module_enabled'] = false;
+        }
+
+        // Modul cetak label cup / stiker pesanan: default off (atau default on untuk fnb)
+        if (array_key_exists('cup_label_enabled', $validated)) {
+            $settings['cup_label_enabled'] = (bool) $validated['cup_label_enabled'];
+            unset($validated['cup_label_enabled']);
+        } elseif (! isset($settings['cup_label_enabled'])) {
+            $settings['cup_label_enabled'] = false;
         }
 
         // Modul harga grosir: default off semua tipe bisnis
@@ -276,6 +305,17 @@ class StoreSettingsController extends Controller
         if (array_key_exists('website', $validated)) {
             $settings['website'] = $validated['website'] ?: null;
             unset($validated['website']);
+        }
+
+        if (array_key_exists('alert_whatsapp_numbers', $validated)) {
+            $normalized = self::normalizeWhatsappNumbers((string) $validated['alert_whatsapp_numbers']);
+            $settings['alert_whatsapp_numbers'] = $normalized;
+            // sinkronkan ke kolom stores.phone jika kosong (untuk kompatibilitas POS/struk)
+            if ($normalized !== '' && empty($validated['phone'] ?? $store->phone)) {
+                $first = explode(',', $normalized)[0];
+                $validated['phone'] = trim($first);
+            }
+            unset($validated['alert_whatsapp_numbers']);
         }
 
         $receiptKeys = [
@@ -472,6 +512,31 @@ class StoreSettingsController extends Controller
                 'productions_enabled' => false,
             ],
         };
+    }
+
+    /**
+     * Normalisasi nomor WhatsApp: bersihkan, pisah koma, dedup, kosong = ''.
+     */
+    public static function normalizeWhatsappNumbers(string $raw): string
+    {
+        $parts = array_filter(array_map('trim', explode(',', $raw)));
+        $out = [];
+        foreach ($parts as $p) {
+            $digits = preg_replace('/\D+/', '', $p) ?? '';
+            if ($digits === '' && str_contains($p, '@')) {
+                // JID utuh seperti 628xx@s.whatsapp.net — biarkan
+                $digits = trim($p);
+                if ($digits === '') {
+                    continue;
+                }
+                $out[] = $digits;
+            } elseif ($digits !== '') {
+                $out[] = $digits;
+            }
+        }
+        $out = array_values(array_unique(array_filter($out)));
+
+        return implode(',', $out);
     }
 
     /**

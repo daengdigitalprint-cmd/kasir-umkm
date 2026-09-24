@@ -2,14 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\SalesChannel;
+use App\Models\AccountingPeriod;
 use App\Models\CashShift;
 use App\Models\ChartOfAccount;
-use App\Models\AccountingPeriod;
 use App\Models\FinancialReportStatus;
 use App\Models\ProductBatch;
 use App\Models\ProductCategory;
 use App\Models\Store;
-use App\Models\StockMovement;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Support\Accounting\AccountingFeatures;
@@ -41,6 +41,7 @@ class ReportController extends Controller
             abort(404);
         }
     }
+
     /**
      * Resolve store IDs untuk laporan.
      * Owner bisa pilih outlet tertentu atau semua outlet.
@@ -197,7 +198,7 @@ class ReportController extends Controller
         $completedTxInRange = Transaction::whereIn('store_id', $storeIds)
             ->whereBetween('created_at', [$startDate, $endDate.' 23:59:59'])
             ->where('status', 'completed')
-            ->get(['created_at', 'total_amount', 'payment_method', 'discount_amount', 'tax_amount']);
+            ->get(['created_at', 'total_amount', 'payment_method', 'discount_amount', 'tax_amount', 'sales_channel', 'commission_amount']);
 
         $totalsByDay = $completedTxInRange->groupBy(fn ($t) => $t->created_at->format('Y-m-d'))
             ->map(fn ($rows) => round((float) $rows->sum('total_amount'), 2));
@@ -239,6 +240,28 @@ class ReportController extends Controller
                     'total_amount' => round((float) $rows->sum('total_amount'), 2),
                 ];
             })->values()->sortByDesc('total_amount')->values()->all();
+
+        $channelBreakdown = $completedTxInRange->groupBy('sales_channel')
+            ->map(function ($rows, $channel) {
+                $enum = SalesChannel::tryFrom((string) $channel) ?? SalesChannel::WalkIn;
+                $gross = (float) $rows->sum('total_amount');
+                $commission = (float) $rows->sum('commission_amount');
+
+                return [
+                    'channel' => $enum->value,
+                    'label' => $enum->label(),
+                    'group' => $enum->group(),
+                    'is_aggregator' => $enum->isAggregator(),
+                    'transaction_count' => $rows->count(),
+                    'gross_revenue' => round($gross, 2),
+                    'commission_amount' => round($commission, 2),
+                    'net_revenue' => round($gross - $commission, 2),
+                ];
+            })->values()->sortByDesc('gross_revenue')->values()->all();
+
+        $channelOfflineTotal = collect($channelBreakdown)->where('group', 'offline')->sum('gross_revenue');
+        $channelOnlineTotal = collect($channelBreakdown)->where('group', 'online')->sum('gross_revenue');
+        $channelTotalCommission = collect($channelBreakdown)->sum('commission_amount');
 
         $categoryExpr = "CASE WHEN products.category IS NULL OR TRIM(products.category) = '' THEN 'Tanpa kategori' ELSE products.category END";
 
@@ -355,6 +378,10 @@ class ReportController extends Controller
             'recentTransactions' => $recentTransactions,
             'salesTrend' => $salesTrend,
             'paymentBreakdown' => $paymentBreakdown,
+            'channelBreakdown' => $channelBreakdown,
+            'channelOfflineTotal' => round($channelOfflineTotal, 2),
+            'channelOnlineTotal' => round($channelOnlineTotal, 2),
+            'channelTotalCommission' => round($channelTotalCommission, 2),
             'categoryRevenue' => $categoryRevenue,
         ]);
     }
@@ -409,6 +436,34 @@ class ReportController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
+        // Breakdown per sales channel (online vs offline + komisi aggregator).
+        $salesChannelRows = Transaction::whereIn('store_id', $storeIds)
+            ->whereBetween('created_at', [$startDate, $endDate.' 23:59:59'])
+            ->where('status', 'completed')
+            ->selectRaw('sales_channel, COUNT(*) as tx_count, SUM(total_amount) as gross, SUM(commission_amount) as commission')
+            ->groupBy('sales_channel')
+            ->get();
+
+        $channelBreakdown = $salesChannelRows->map(function ($row) {
+            $rawChannel = $row->sales_channel instanceof SalesChannel
+                ? $row->sales_channel->value
+                : (string) $row->sales_channel;
+            $enum = SalesChannel::tryFrom($rawChannel) ?? SalesChannel::WalkIn;
+            $gross = (float) $row->gross;
+            $commission = (float) $row->commission;
+
+            return [
+                'channel' => $enum->value,
+                'label' => $enum->label(),
+                'group' => $enum->group(),
+                'is_aggregator' => $enum->isAggregator(),
+                'transaction_count' => (int) $row->tx_count,
+                'gross_revenue' => round($gross, 2),
+                'commission_amount' => round($commission, 2),
+                'net_revenue' => round($gross - $commission, 2),
+            ];
+        })->sortByDesc('gross_revenue')->values()->all();
+
         return Inertia::render('Reports/Sales', [
             'store' => [
                 'id' => $store->id,
@@ -430,6 +485,7 @@ class ReportController extends Controller
                 'total_gross_profit' => $hppSummary->total_gross_profit,
                 'items_with_hpp' => $hppSummary->items_with_hpp,
             ],
+            'channelBreakdown' => $channelBreakdown,
         ]);
     }
 
@@ -1816,7 +1872,7 @@ class ReportController extends Controller
             $validated['note'] ?? null,
         );
 
-        return redirect()->route('reports.financial.balance-sheet')
+        return redirect()->route('financial.balance-sheet')
             ->with('success', 'Setoran modal berhasil dicatat.');
     }
 

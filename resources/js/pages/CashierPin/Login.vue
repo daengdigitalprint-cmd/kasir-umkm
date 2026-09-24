@@ -1,12 +1,10 @@
 <script setup lang="ts">
-import { Head, useForm, usePage } from '@inertiajs/vue3';
-import { computed, ref, watch } from 'vue';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Lock, User, Store as StoreIcon } from 'lucide-vue-next';
-import { toastError, toastSuccess } from '@/lib/swal';
+import { toastError } from '@/lib/swal';
+import { Head, useForm, usePage } from '@inertiajs/vue3';
+import { Store as StoreIcon, User } from 'lucide-vue-next';
+import { computed, ref, watch } from 'vue';
 
 interface Cashier {
     id: number;
@@ -23,12 +21,11 @@ const props = defineProps<{
 const page = usePage();
 
 const selectedCashier = ref<Cashier | null>(null);
-const pinInput = ref<HTMLInputElement | null>(null);
 const pin = ref('');
 const error = ref('');
 const isSubmitting = ref(false);
 
-const cashiersWithPin = computed(() => props.cashiers.filter(c => c.has_pin));
+const cashiersWithPin = computed(() => props.cashiers.filter((c) => c.has_pin));
 
 const flashError = computed(() => (page.props as { flash?: { error?: string } }).flash?.error);
 
@@ -40,7 +37,6 @@ function selectCashier(cashier: Cashier) {
     selectedCashier.value = cashier;
     pin.value = '';
     error.value = '';
-    setTimeout(() => pinInput.value?.focus(), 100);
 }
 
 function backToSelection() {
@@ -50,17 +46,29 @@ function backToSelection() {
 }
 
 function appendDigit(d: string) {
-    if (pin.value.length < 6) {
-        pin.value += d;
-        error.value = '';
+    if (isSubmitting.value || pin.value.length >= 6) {
+        return;
+    }
+
+    pin.value += d;
+    error.value = '';
+
+    if (pin.value.length === 6) {
+        submitPin();
     }
 }
 
 function removeDigit() {
-    pin.value = pin.value.slice(0, -1);
+    if (!isSubmitting.value) {
+        pin.value = pin.value.slice(0, -1);
+    }
 }
 
 function submitPin() {
+    if (isSubmitting.value) {
+        return;
+    }
+
     if (!selectedCashier.value || pin.value.length < 4) {
         error.value = 'PIN minimal 4 digit';
         return;
@@ -79,8 +87,10 @@ function submitPin() {
             isSubmitting.value = false;
         },
         onError: (errors) => {
-            error.value = (errors.pin as string) || 'PIN salah';
+            const message = (errors.pin as string) || 'PIN salah';
+            error.value = message;
             pin.value = '';
+            void toastError(message);
         },
     });
 }
@@ -97,14 +107,14 @@ const pinDots = computed(() => {
 <template>
     <Head title="Login Kasir" />
 
-    <div class="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center p-4">
+    <div class="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 p-4">
         <div class="w-full max-w-md">
-            <div class="text-center mb-8">
-                <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white/10 backdrop-blur mb-4">
+            <div class="mb-8 text-center">
+                <div class="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 backdrop-blur">
                     <StoreIcon class="h-8 w-8 text-white" />
                 </div>
                 <h1 class="text-2xl font-bold text-white">{{ store_name }}</h1>
-                <p class="text-blue-200 text-sm mt-1">Login Kasir - Masukkan PIN Anda</p>
+                <p class="mt-1 text-sm text-blue-200">Login Kasir - Masukkan PIN Anda</p>
             </div>
 
             <Card v-if="!selectedCashier" class="border-0 shadow-2xl">
@@ -116,20 +126,20 @@ const pinDots = computed(() => {
                     <CardDescription>Pilih nama Anda untuk masuk shift</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <div v-if="cashiersWithPin.length === 0" class="text-center py-8">
+                    <div v-if="cashiersWithPin.length === 0" class="py-8 text-center">
                         <p class="text-slate-500">Belum ada kasir yang terdaftar.</p>
-                        <p class="text-sm text-slate-400 mt-1">Hubungi admin untuk mengatur PIN.</p>
+                        <p class="mt-1 text-sm text-slate-400">Hubungi admin untuk mengatur PIN.</p>
                     </div>
                     <div v-else class="grid gap-2">
                         <button
                             v-for="cashier in cashiersWithPin"
                             :key="cashier.id"
                             type="button"
-                            class="flex items-center gap-3 p-4 rounded-xl border border-slate-200 hover:border-primary hover:bg-primary/5 transition-all text-left"
+                            class="flex items-center gap-3 rounded-xl border border-slate-200 p-4 text-left transition-all hover:border-primary hover:bg-primary/5"
                             @click="selectCashier(cashier)"
                         >
-                            <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                                <span class="text-primary font-bold text-lg">{{ cashier.name.charAt(0).toUpperCase() }}</span>
+                            <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                                <span class="text-lg font-bold text-primary">{{ cashier.name.charAt(0).toUpperCase() }}</span>
                             </div>
                             <div>
                                 <p class="font-semibold text-slate-900">{{ cashier.name }}</p>
@@ -154,8 +164,8 @@ const pinDots = computed(() => {
                             <div
                                 v-for="(filled, i) in pinDots"
                                 :key="i"
-                                class="w-4 h-4 rounded-full transition-all"
-                                :class="filled ? 'bg-primary scale-110' : 'bg-slate-200'"
+                                class="h-4 w-4 rounded-full transition-all"
+                                :class="filled ? 'scale-110 bg-primary' : 'bg-slate-200'"
                             />
                         </div>
 
@@ -166,38 +176,27 @@ const pinDots = computed(() => {
                                 v-for="n in [1, 2, 3, 4, 5, 6, 7, 8, 9]"
                                 :key="n"
                                 variant="outline"
-                                class="h-16 text-2xl font-bold rounded-xl"
+                                class="h-16 rounded-xl text-2xl font-bold"
+                                :disabled="isSubmitting"
                                 @click="appendDigit(String(n))"
                             >
                                 {{ n }}
                             </Button>
                             <div />
-                            <Button
-                                variant="outline"
-                                class="h-16 text-2xl font-bold rounded-xl"
-                                @click="appendDigit('0')"
-                            >
+                            <Button variant="outline" class="h-16 rounded-xl text-2xl font-bold" :disabled="isSubmitting" @click="appendDigit('0')">
                                 0
                             </Button>
-                            <Button
-                                variant="ghost"
-                                class="h-16 rounded-xl"
-                                @click="removeDigit"
-                            >
+                            <Button variant="ghost" class="h-16 rounded-xl" :disabled="isSubmitting" @click="removeDigit">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 12l7-7 11 11H3z" />
+                                    <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        stroke-width="2"
+                                        d="M12 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 12l7-7 11 11H3z"
+                                    />
                                 </svg>
                             </Button>
                         </div>
-
-                        <Button
-                            class="w-full h-12 text-lg rounded-xl"
-                            :disabled="pin.length < 4 || isSubmitting"
-                            @click="submitPin"
-                        >
-                            <Lock class="h-5 w-5 mr-2" />
-                            Masuk Shift
-                        </Button>
                     </div>
                 </CardContent>
             </Card>

@@ -71,12 +71,12 @@ class ProductBatchStatusTest extends TestCase
         $product = $batch->product;
         $this->actingAs($user)->post(route('product-batches.destroy', $batch), ['quantity' => 2, 'reason' => 'Rusak'])->assertSessionHas('success');
         $this->assertSame('3.0000', $batch->fresh()->quantity_remaining);
-        $this->assertSame('8.0000', $product->fresh()->stock_quantity);
+        $this->assertSame('3.0000', $product->fresh()->stock_quantity);
         $this->assertDatabaseHas('stock_movements', ['type' => StockMovement::TYPE_DAMAGE, 'quantity_change' => '-2.0000']);
 
         $this->actingAs($user)->post(route('product-batches.destroy', $batch), ['quantity' => 3, 'reason' => 'Musnah'])->assertSessionHas('success');
         $this->assertSame(ProductBatch::STATUS_DESTROYED, $batch->fresh()->status);
-        $this->assertSame('5.0000', $product->fresh()->stock_quantity);
+        $this->assertSame('0.0000', $product->fresh()->stock_quantity);
     }
 
     public function test_destroy_rejects_overbalance_and_wrong_store(): void
@@ -84,15 +84,16 @@ class ProductBatchStatusTest extends TestCase
         [$store, $user, $batch] = $this->makeBatch();
         $this->actingAs($user)->post(route('product-batches.destroy', $batch), ['quantity' => 6, 'reason' => 'Rusak'])->assertStatus(422);
         $other = User::factory()->create(['store_id' => Store::create(['name' => 'Lain', 'slug' => uniqid(), 'business_type' => 'pharmacy', 'is_active' => true, 'is_subscription_active' => true])->id, 'role' => 'admin', 'email_verified_at' => now()]);
-        $this->actingAs($other)->post(route('product-batches.destroy', $batch), ['quantity' => 1, 'reason' => 'Rusak'])->assertRedirect(route('dashboard'));
+        $this->actingAs($other)->post(route('product-batches.destroy', $batch), ['quantity' => 1, 'reason' => 'Rusak'])->assertForbidden();
     }
 
     private function makeBatch(array $overrides = []): array
     {
         $store = Store::create(['name' => 'Apotek', 'slug' => uniqid(), 'business_type' => 'pharmacy', 'is_active' => true, 'is_subscription_active' => true]);
         $user = User::factory()->create(['store_id' => $store->id, 'role' => 'admin', 'email_verified_at' => now()]);
-        $product = Product::create(['store_id' => $store->id, 'name' => 'Obat', 'price' => 1000, 'stock_quantity' => 10]);
+        $product = Product::create(['store_id' => $store->id, 'name' => 'Obat', 'price' => 1000, 'stock_quantity' => 5]);
         $batch = ProductBatch::create(array_merge(['store_id' => $store->id, 'product_id' => $product->id, 'quantity_remaining' => 5, 'expiry_date' => today()->addMonth(), 'status' => ProductBatch::STATUS_AVAILABLE], $overrides));
+
         return [$store, $user, $batch];
     }
 }

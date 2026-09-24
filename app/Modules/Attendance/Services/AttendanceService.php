@@ -92,7 +92,7 @@ class AttendanceService
             /** @var Attendance|null $locked */
             $locked = Attendance::query()
                 ->where('employee_id', $employee->id)
-                ->where('work_date', $workDate)
+                ->whereDate('work_date', $workDate)
                 ->lockForUpdate()
                 ->first();
 
@@ -296,23 +296,33 @@ class AttendanceService
             ->whereBetween('opened_at', [$dayStart, $dayEnd])
             ->get();
 
+        // Batch-load employees to avoid N+1 queries
+        $employeeIds = $shifts->pluck('employee_id')->filter()->unique()->values();
+        $userIds = $shifts->pluck('user_id')->filter()->unique()->values();
+
+        $employeeById = Employee::query()
+            ->where('store_id', $store->id)
+            ->whereIn('id', $employeeIds)
+            ->get()
+            ->keyBy('id');
+
+        $employeeByUserId = Employee::query()
+            ->where('store_id', $store->id)
+            ->whereIn('user_id', $userIds)
+            ->get()
+            ->keyBy('user_id');
+
         $processed = 0;
 
         foreach ($shifts as $shift) {
             $employee = null;
 
             if ($shift->employee_id) {
-                $employee = Employee::query()
-                    ->where('store_id', $store->id)
-                    ->where('id', $shift->employee_id)
-                    ->first();
+                $employee = $employeeById->get($shift->employee_id);
             }
 
             if (! $employee) {
-                $employee = Employee::query()
-                    ->where('store_id', $store->id)
-                    ->where('user_id', $shift->user_id)
-                    ->first();
+                $employee = $employeeByUserId->get($shift->user_id);
             }
 
             if (! $employee) {
@@ -374,26 +384,56 @@ class AttendanceService
             ->where('is_active', true)
             ->get();
 
+        $employeeIds = $employees->pluck('id')->values();
+
+        // Batch-load existing attendance and leave requests for the date
+        $existingAttendanceEmployeeIds = Attendance::query()
+            ->where('store_id', $store->id)
+            ->whereDate('work_date', $dateString)
+            ->whereIn('employee_id', $employeeIds)
+            ->pluck('employee_id')
+            ->flip();
+
+        $leaveEmployeeIds = LeaveRequest::query()
+            ->where('store_id', $store->id)
+            ->where('status', 'approved')
+            ->whereDate('start_date', '<=', $dateString)
+            ->whereDate('end_date', '>=', $dateString)
+            ->whereIn('employee_id', $employeeIds)
+            ->pluck('employee_id')
+            ->flip();
+
+        // Batch-load all schedules for these employees
+        $allSchedules = WorkSchedule::query()
+            ->where('is_active', true)
+            ->whereIn('employee_id', $employeeIds)
+            ->get()
+            ->groupBy('employee_id');
+
         foreach ($employees as $employee) {
-            $schedule = $this->findScheduleFor($employee->id, $workDate);
+            $schedule = null;
+            $dayOfWeek = $workDate->dayOfWeek;
+            $iso = $dayOfWeek === 0 ? 7 : $dayOfWeek;
+
+            $schedules = $allSchedules->get($employee->id, collect());
+            foreach ($schedules as $s) {
+                $validFromOk = ! $s->valid_from || $s->valid_from <= $dateString;
+                $validToOk = ! $s->valid_to || $s->valid_to >= $dateString;
+                if ($validFromOk && $validToOk && in_array($iso, $s->work_days, true)) {
+                    $schedule = $s;
+                    break;
+                }
+            }
 
             if (! $schedule) {
                 continue;
             }
 
-            if (Attendance::query()
-                ->where('employee_id', $employee->id)
-                ->whereDate('work_date', $dateString)
-                ->exists()) {
+            if ($existingAttendanceEmployeeIds->has($employee->id)) {
                 continue;
             }
 
-            if (LeaveRequest::query()
-                ->where('employee_id', $employee->id)
-                ->where('status', 'approved')
-                ->whereDate('start_date', '<=', $dateString)
-                ->whereDate('end_date', '>=', $dateString)
-                ->exists()) {
+            if ($leaveEmployeeIds->has($employee->id)) {
                 continue;
             }
 

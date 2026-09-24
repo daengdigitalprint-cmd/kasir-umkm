@@ -51,7 +51,7 @@ class AiSetting extends Model
             return $provider;
         }
 
-        return (string) config('ai.default');
+        return (string) config('ai.default_provider', 'openai');
     }
 
     /**
@@ -74,21 +74,64 @@ class AiSetting extends Model
 
     /**
      * Terapkan provider & API key dari database ke config runtime
-     * agar Laravel AI SDK memakainya saat analisa dijalankan.
+     * agar seluruh jalur AI (chat, auditor, analisa) memakainya.
      */
     public static function applyToRuntime(): string
     {
         $provider = static::activeProvider();
 
-        config(['ai.default' => $provider]);
+        config(['ai.default_provider' => $provider]);
 
         $key = static::apiKey();
 
         if ($key !== null) {
             config(["ai.providers.{$provider}.key" => $key]);
+            config(["ai.providers.{$provider}.api_key" => $key]);
+        }
+
+        $url = static::get('url');
+
+        if ($url !== null) {
+            $baseUrl = rtrim((string) preg_replace('#/chat/completions$#', '', $url), '/');
+
+            config(["ai.providers.{$provider}.url" => $baseUrl]);
+            config(["ai.providers.{$provider}.base_url" => $baseUrl]);
+        } elseif (! config()->has("ai.providers.{$provider}.base_url")) {
+            $defaultBase = static::defaultBaseUrls()[$provider] ?? null;
+
+            if ($defaultBase !== null) {
+                config(["ai.providers.{$provider}.url" => $defaultBase]);
+                config(["ai.providers.{$provider}.base_url" => $defaultBase]);
+            }
+        }
+
+        $model = static::get('model');
+
+        if ($model !== null) {
+            config(["ai.providers.{$provider}.model" => $model]);
+            config(["ai.providers.{$provider}.model_id" => $model]);
         }
 
         return $provider;
+    }
+
+    /**
+     * Base URL default untuk provider yang belum terdaftar di config/ai.php.
+     *
+     * @return array<string, string>
+     */
+    private static function defaultBaseUrls(): array
+    {
+        return [
+            'groq' => 'https://api.groq.com/openai/v1',
+            'deepseek' => 'https://api.deepseek.com/v1',
+            'mistral' => 'https://api.mistral.ai/v1',
+            'openrouter' => 'https://openrouter.ai/api/v1',
+            'xai' => 'https://api.x.ai/v1',
+            'ollama' => 'http://localhost:11434/v1',
+            'gemini' => 'https://generativelanguage.googleapis.com/v1beta/openai',
+            'custom' => 'https://api.openai.com/v1',
+        ];
     }
 
     /**

@@ -101,7 +101,8 @@
 .thermal-receipt-preview .struk-logo {
     display: block;
     margin: 0 auto;
-    max-height: 40px;
+    height: 40px !important;
+    width: auto !important;
     max-width: 85%;
     object-fit: contain;
 }

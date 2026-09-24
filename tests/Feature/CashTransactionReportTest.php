@@ -90,6 +90,8 @@ test('laporan kas masuk keluar dapat diakses admin', function () {
         'status' => 'completed',
         'subtotal' => 75000,
         'total_amount' => 75000,
+        'amount_paid' => 75000,
+        'change_amount' => 0,
         'completed_at' => now(),
     ]);
 

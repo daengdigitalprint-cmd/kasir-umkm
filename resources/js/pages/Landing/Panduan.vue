@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import LandingFooter from '@/components/landing/LandingFooter.vue';
 import LandingNav from '@/components/landing/LandingNav.vue';
-import PwaInstallBanner from '@/components/PwaInstallBanner.vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { computed, onMounted, onUnmounted, provide } from 'vue';
 
@@ -406,7 +405,6 @@ onUnmounted(() => {
             <link rel="stylesheet" :href="`${buyerAssetsBase}/css/swiper.min.css`" />
             <link rel="stylesheet" :href="`${buyerAssetsBase}/css/odometer.css`" />
             <link rel="stylesheet" :href="`${buyerAssetsBase}/css/nice-select.css`" />
-            <link rel="stylesheet" :href="`${buyerAssetsBase}/css/custom-fonts.css`" />
             <link rel="stylesheet" :href="`${buyerAssetsBase}/css/main.css`" />
 
             <link rel="canonical" :href="canonicalUrl" />
@@ -446,7 +444,7 @@ onUnmounted(() => {
 
         <div id="smooth-wrapper">
             <div id="smooth-content" class="lp-panduan-root">
-                <LandingNav :maskot-url="maskotUrl" :assets-base="buyerAssetsBase" />
+                <LandingNav :maskot-url="maskotUrl" />
 
                 <!-- Hero ala landing (gradient gelap) -->
                 <section class="lp-panduan-hero gt-hero-3">

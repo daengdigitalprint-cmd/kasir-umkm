@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Purchases\StorePurchaseRequest;
 use App\Models\CashShift;
 use App\Models\CashTransaction;
 use App\Models\JournalEntry;
@@ -177,7 +178,7 @@ class PurchaseController extends Controller
         return array_values($merged);
     }
 
-    public function store(Request $request)
+    public function store(StorePurchaseRequest $request)
     {
         $store = auth()->user()->store;
 
@@ -194,37 +195,7 @@ class PurchaseController extends Controller
             return back()->withErrors(['store' => 'Paket Starter tidak mencakup modul pembelian.'])->withInput();
         }
 
-        $validated = $request->validate([
-            'supplier_id' => 'nullable|exists:suppliers,id',
-            'purchased_at' => 'nullable|date',
-            'notes' => 'nullable|string|max:2000',
-            'lines' => 'nullable|array',
-            'lines.*.product_id' => 'nullable|integer|exists:products,id',
-            'lines.*.new_product' => 'nullable|array',
-            'lines.*.new_product.name' => 'required_with:lines.*.new_product|string|max:255',
-            'lines.*.new_product.sku' => 'nullable|string|max:255',
-            'lines.*.new_product.barcode' => 'nullable|string|max:255',
-            'lines.*.new_product.inventory_type' => 'nullable|string|in:'.implode(',', array_keys(InventoryType::LABELS)),
-            'lines.*.new_product.base_unit' => 'nullable|string|in:'.implode(',', array_keys(BaseUnit::LABELS)),
-            'lines.*.new_product.unit' => 'nullable|string|max:50',
-            'lines.*.new_product.allows_decimal' => 'nullable|boolean',
-            'lines.*.product_variant_id' => 'nullable|integer|exists:product_variants,id',
-            'lines.*.quantity' => ['required', 'numeric', 'min:0.0001'],
-            'lines.*.input_unit' => 'required|string|max:20',
-            'lines.*.unit_cost' => 'nullable|numeric|min:0',
-            'lines.*.batch_expiry_date' => 'nullable|date',
-            'lines.*.batch_code' => 'nullable|string|max:120',
-            'charges' => 'nullable|array',
-            'charges.*.name' => 'required|string|max:255',
-            'charges.*.amount' => 'required|numeric|min:0.01',
-            'charges.*.notes' => 'nullable|string|max:1000',
-            'ppn_amount' => 'nullable|numeric|min:0',
-            'supplier_tax_invoice_no' => 'nullable|string|max:120',
-            'is_paid' => 'nullable|boolean',
-            'payment_method' => 'nullable|string|in:cash,transfer,ewallet',
-            'amount_paid' => 'nullable|numeric|min:0',
-            'due_date' => 'nullable|date',
-        ]);
+        $validated = $request->validated();
 
         $validated['lines'] = $validated['lines'] ?? [];
         $validated['charges'] = $validated['charges'] ?? [];
@@ -253,7 +224,7 @@ class PurchaseController extends Controller
         }
 
         // 🛡️ Cegah input pada periode akuntansi tertutup ATAU backdate melebihi limit H-7
-        \App\Support\Accounting\AccountingPeriodGuard::assertDateOpen($store, $validated['purchase_date'], 'purchase_date');
+        \App\Support\Accounting\AccountingPeriodGuard::assertDateOpen($store, $validated['purchased_at'] ?? now(), 'purchased_at');
 
         if (isset($validated['supplier_id'])) {
             $supplierOk = Supplier::query()

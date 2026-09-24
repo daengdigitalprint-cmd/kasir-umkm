@@ -32,6 +32,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         commands: __DIR__.'/../routes/console.php',
+        channels: __DIR__.'/../routes/channels.php',
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
@@ -67,6 +68,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('loyalty:expire-points')->dailyAt('03:00');
         $schedule->command('trial:expire')->hourly();
         $schedule->command('kpi:snapshot')->dailyAt('00:30');
+        $schedule->command('ai:proactive-alerts')->dailyAt('07:10');
+        $schedule->command('ai:daily-digest')->dailyAt('08:00');
         $schedule->command('attendance:mark-absent')->dailyAt('23:59');
     })
     ->withExceptions(function (Exceptions $exceptions) {

@@ -37,7 +37,7 @@ function makeOwnerOrg(string $prefix): array
         'email_verified_at' => now(),
     ]);
 
-    $owner->stores()->attach([$store1->id, $store2->id], ['role' => 'admin']);
+    $owner->stores()->attach([$store1->id, $store2->id], ['role' => 'owner']);
 
     return [$owner, $store1, $store2];
 }

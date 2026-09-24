@@ -4,10 +4,8 @@ import { computed, ref } from 'vue';
 
 const props = defineProps<{
     maskotUrl?: string;
-    assetsBase?: string;
 }>();
 
-const assetsBase = computed(() => props.assetsBase ?? '/sastik-assets');
 const maskotUrl = computed(() => props.maskotUrl ?? '/logo-macca.png');
 
 const waPhoneDigits = '6285242766676';
@@ -30,7 +28,7 @@ const waPanelOpen = ref(false);
                     <div class="header__wrap border-btm ul_li_between pos-rel">
                         <div class="xb-header-logo">
                             <Link href="/" class="logo d-flex align-items-center">
-                                <img :src="maskotUrl" alt="logo UMKM Kasir" style="height:48px;width:auto" />
+                                <img :src="maskotUrl" alt="logo UMKM Kasir" width="3194" height="1037" style="height:48px;width:auto" />
                             </Link>
                         </div>
                         <div class="main-menu__wrap navbar navbar-expand-lg p-0">
@@ -80,7 +78,7 @@ const waPanelOpen = ref(false);
                             <div class="xb-menu-close xb-hide-xl xb-close"></div>
                             <div class="xb-logo-mobile xb-hide-xl">
                                 <Link href="/" class="logo d-flex align-items-center">
-                                    <img :src="maskotUrl" alt="logo UMKM Kasir" style="height:48px;width:auto" />
+                                    <img :src="maskotUrl" alt="logo UMKM Kasir" width="3194" height="1037" style="height:48px;width:auto" />
                                 </Link>
                             </div>
                             <nav class="xb-header-nav">

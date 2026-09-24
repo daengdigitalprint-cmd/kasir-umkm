@@ -42,7 +42,7 @@ const startReverse = (entry: Entry) => {
 };
 
 const submitReverse = (entry: Entry) => {
-    reverseForm.post(`/reports/financial/journal/${entry.id}/reverse`, {
+    reverseForm.post(`/financial/journal/${entry.id}/reverse`, {
         preserveScroll: true,
         onSuccess: () => {
             reversing.value = null;

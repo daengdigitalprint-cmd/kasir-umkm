@@ -40,7 +40,7 @@ watch(
 
 const applyFilter = () => {
     router.get(
-        '/reports/financial/trial-balance',
+        '/financial/trial-balance',
         { start_date: filterStart.value, end_date: filterEnd.value },
         { preserveState: true, preserveScroll: true },
     );

@@ -7,9 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Receipt, Trash2, FileText, Pencil, Ban } from 'lucide-vue-next';
+import { Receipt, Trash2, FileText, Pencil, Ban, Store } from 'lucide-vue-next';
 import { confirmDialog, toastSuccess, toastError } from '@/lib/swal';
-import { ref, reactive, watch } from 'vue';
+import { ref, reactive, watch, onMounted, onUnmounted } from 'vue';
 import InvoiceModal from '@/components/InvoiceModal.vue';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
@@ -59,10 +59,21 @@ const props = withDefaults(
             total_gross_profit: string | number;
             items_with_hpp: number;
         };
+        channelBreakdown?: Array<{
+            channel: string;
+            label: string;
+            group: string;
+            is_aggregator: boolean;
+            transaction_count: number;
+            gross_revenue: number;
+            commission_amount: number;
+            net_revenue: number;
+        }>;
         readonly?: boolean;
     }>(),
     {
         hppSummary: () => ({ total_revenue: 0, total_cost: 0, total_gross_profit: 0, items_with_hpp: 0 }),
+        channelBreakdown: () => [],
         readonly: false,
     },
 );
@@ -86,6 +97,25 @@ const applyFilter = () => {
         : { start_date: filterStart.value, end_date: filterEnd.value, ...(saleClass.value ? { sale_class: saleClass.value } : {}) };
     router.get(url, params, { preserveState: true, preserveScroll: true });
 };
+
+// ── Polling untuk mode riwayat transaksi (readonly) ────────────────────────
+// Otomatis refresh data transaksi setiap 10 detik supaya riwayat terbaru
+// langsung muncul tanpa perlu reload manual.
+let pollId: ReturnType<typeof setInterval> | null = null;
+
+onMounted(() => {
+    if (props.readonly) {
+        pollId = setInterval(() => {
+            router.reload({ only: ['transactions'], preserveScroll: true });
+        }, 10_000);
+    }
+});
+
+onUnmounted(() => {
+    if (pollId !== null) {
+        clearInterval(pollId);
+    }
+});
 
 const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('id-ID', {
@@ -336,6 +366,56 @@ async function saveEditTransaction() {
                         <p class="text-lg font-semibold text-emerald-700">Rp {{ formatCurrency(Number(hppSummary.total_gross_profit)) }}</p>
                     </div>
                 </div>
+            </CardContent>
+        </Card>
+
+        <Card v-if="channelBreakdown.length > 0" class="border-0 shadow-md mb-6">
+            <CardHeader>
+                <CardTitle class="flex items-center gap-2">
+                    <Store class="h-5 w-5 text-slate-600" />
+                    Ringkasan per Channel
+                </CardTitle>
+                <CardDescription>Distribusi omzet berdasarkan asal channel (offline vs online)</CardDescription>
+            </CardHeader>
+            <CardContent class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b text-left text-slate-500">
+                            <th class="pb-3 pr-4 font-medium">Channel</th>
+                            <th class="pb-3 pr-4 font-medium">Tipe</th>
+                            <th class="pb-3 pr-4 text-right font-medium">Transaksi</th>
+                            <th class="pb-3 pr-4 text-right font-medium">Omzet Kotor</th>
+                            <th class="pb-3 pr-4 text-right font-medium">Komisi</th>
+                            <th class="pb-3 text-right font-medium">Omzet Bersih</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="c in channelBreakdown" :key="c.channel" class="border-b last:border-0">
+                            <td class="py-2.5 pr-4 font-medium text-slate-800">{{ c.label }}</td>
+                            <td class="py-2.5 pr-4">
+                                <span :class="c.group === 'online' ? 'inline-flex rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700' : 'inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600'">
+                                    {{ c.group === 'online' ? 'Online' : 'Offline' }}
+                                </span>
+                            </td>
+                            <td class="py-2.5 pr-4 text-right">{{ c.transaction_count }}</td>
+                            <td class="py-2.5 pr-4 text-right">Rp {{ formatCurrency(c.gross_revenue) }}</td>
+                            <td class="py-2.5 pr-4 text-right" :class="c.commission_amount > 0 ? 'text-rose-600' : 'text-slate-400'">
+                                {{ c.commission_amount > 0 ? 'Rp ' + formatCurrency(c.commission_amount) : '—' }}
+                            </td>
+                            <td class="py-2.5 text-right font-semibold text-emerald-700">Rp {{ formatCurrency(c.net_revenue) }}</td>
+                        </tr>
+                    </tbody>
+                    <tfoot>
+                        <tr class="border-t-2 border-slate-200">
+                            <td colspan="2" class="pt-3 font-semibold text-slate-700">Total Offline</td>
+                            <td colspan="4" class="pt-3 text-right font-semibold text-slate-700">Rp {{ formatCurrency(channelBreakdown.filter(c => c.group === 'offline').reduce((s, c) => s + c.gross_revenue, 0)) }}</td>
+                        </tr>
+                        <tr>
+                            <td colspan="2" class="pb-3 font-semibold text-slate-700">Total Online</td>
+                            <td colspan="4" class="pb-3 text-right font-semibold text-slate-700">Rp {{ formatCurrency(channelBreakdown.filter(c => c.group === 'online').reduce((s, c) => s + c.gross_revenue, 0)) }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
             </CardContent>
         </Card>
 

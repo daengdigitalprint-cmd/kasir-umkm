@@ -64,7 +64,7 @@ watch(
 
 const applyFilter = () => {
     router.get(
-        '/reports/financial/income-statement',
+        '/financial/income-statement',
         { start_date: filterStart.value, end_date: filterEnd.value },
         { preserveState: true, preserveScroll: true },
     );

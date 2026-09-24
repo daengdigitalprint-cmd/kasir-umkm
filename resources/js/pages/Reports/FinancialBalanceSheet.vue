@@ -52,7 +52,7 @@ watch(
 
 const applyFilter = () => {
     router.get(
-        '/reports/financial/balance-sheet',
+        '/financial/balance-sheet',
         { as_of: filterAsOf.value },
         { preserveState: true, preserveScroll: true },
     );
@@ -65,7 +65,7 @@ const capitalForm = useForm({
 });
 
 const submitCapital = () => {
-    capitalForm.post('/reports/financial/capital-injection', {
+    capitalForm.post('/financial/capital-injection', {
         preserveScroll: true,
         onSuccess: () => capitalForm.reset('amount', 'note'),
     });

@@ -89,13 +89,13 @@ class JournalPoster
         $cogsTotal = round($cogsTotal, 2);
 
         // Pisahkan Kas/Bank (amount_paid) dan Piutang Usaha (outstanding)
-        $amountPaid    = round(max(0, (float) $transaction->amount_paid), 2);
-        $changeAmount  = round(max(0, (float) ($transaction->change_amount ?? 0)), 2);
-        $cashReceived  = round(max(0, $amountPaid - $changeAmount), 2); // uang bersih masuk
-        $outstanding   = round(max(0, $totalAmount - $cashReceived), 2);
+        $amountPaid = round(max(0, (float) $transaction->amount_paid), 2);
+        $changeAmount = round(max(0, (float) ($transaction->change_amount ?? 0)), 2);
+        $cashReceived = round(max(0, $amountPaid - $changeAmount), 2); // uang bersih masuk
+        $outstanding = round(max(0, $totalAmount - $cashReceived), 2);
 
         $sumCredits = round($revenueExclTax + $taxAmount + $tipAmount + $cogsTotal, 2);
-        $sumDebits  = round($cashReceived + $outstanding + $cogsTotal, 2);
+        $sumDebits = round($cashReceived + $outstanding + $cogsTotal, 2);
 
         if (abs($sumDebits - $sumCredits) > 0.02) {
             Log::warning('accounting.sale_unbalanced', [
@@ -126,7 +126,6 @@ class JournalPoster
                 $hpp,
                 $persediaan,
                 $piutangUsaha,
-                $totalAmount,
                 $revenueExclTax,
                 $taxAmount,
                 $tipAmount,
@@ -135,33 +134,33 @@ class JournalPoster
                 $outstanding,
             ) {
                 $entry = JournalEntry::query()->create([
-                    'store_id'       => $store->id,
-                    'entry_date'     => $entryDate,
+                    'store_id' => $store->id,
+                    'entry_date' => $entryDate,
                     'reference_type' => Transaction::class,
-                    'reference_id'   => $transaction->id,
-                    'description'    => 'Penjualan '.$transaction->transaction_number,
-                    'user_id'        => $transaction->user_id,
+                    'reference_id' => $transaction->id,
+                    'description' => 'Penjualan '.$transaction->transaction_number,
+                    'user_id' => $transaction->user_id,
                 ]);
 
                 // Debit Kas/Bank — hanya sebesar uang yang benar-benar diterima
                 if ($cashReceived > 0) {
                     JournalLine::query()->create([
-                        'journal_entry_id'    => $entry->id,
+                        'journal_entry_id' => $entry->id,
                         'chart_of_account_id' => $receivingAccount->id,
-                        'debit'               => $cashReceived,
-                        'credit'              => 0,
-                        'memo'                => $receivingLabel.' penerimaan '.$paymentMethod,
+                        'debit' => $cashReceived,
+                        'credit' => 0,
+                        'memo' => $receivingLabel.' penerimaan '.$paymentMethod,
                     ]);
                 }
 
                 // Debit Piutang Usaha — sisa tagihan yang belum diterima
                 if ($outstanding > 0) {
                     JournalLine::query()->create([
-                        'journal_entry_id'    => $entry->id,
+                        'journal_entry_id' => $entry->id,
                         'chart_of_account_id' => $piutangUsaha->id,
-                        'debit'               => $outstanding,
-                        'credit'              => 0,
-                        'memo'                => 'Piutang usaha ('.$transaction->transaction_number.')',
+                        'debit' => $outstanding,
+                        'credit' => 0,
+                        'memo' => 'Piutang usaha ('.$transaction->transaction_number.')',
                     ]);
                 }
 
@@ -541,9 +540,9 @@ class JournalPoster
             return;
         }
 
-        $kas    = ChartOfAccountsBootstrap::account($store, ChartOfAccountsBootstrap::CODE_KAS);
-        $beban  = ChartOfAccountsBootstrap::account($store, ChartOfAccountsBootstrap::CODE_BEBAN_OPERASIONAL);
-        $modal  = ChartOfAccountsBootstrap::account($store, ChartOfAccountsBootstrap::CODE_MODAL);
+        $kas = ChartOfAccountsBootstrap::account($store, ChartOfAccountsBootstrap::CODE_KAS);
+        $beban = ChartOfAccountsBootstrap::account($store, ChartOfAccountsBootstrap::CODE_BEBAN_OPERASIONAL);
+        $modal = ChartOfAccountsBootstrap::account($store, ChartOfAccountsBootstrap::CODE_MODAL);
         // Gunakan akun pendapatan tip sebagai pendapatan lain-lain sementara
         // karena bootstrap belum punya CODE_PENDAPATAN_LAIN.
         $pendapatanLain = ChartOfAccountsBootstrap::account($store, ChartOfAccountsBootstrap::CODE_PENDAPATAN_TIP);
@@ -563,23 +562,23 @@ class JournalPoster
 
         // Tentukan pasangan akun debit/kredit
         if ($isIn && $ct->category === CashTransaction::CATEGORY_REVENUE) {
-            $debitAccount  = $kas;
+            $debitAccount = $kas;
             $creditAccount = $pendapatanLain;
-            $memo          = 'Pendapatan lain-lain: '.($ct->notes ?? $ct->party_name);
+            $memo = 'Pendapatan lain-lain: '.($ct->notes ?? $ct->party_name);
         } elseif ($isIn) {
             // non_revenue: setoran kas murni (modal masuk)
-            $debitAccount  = $kas;
+            $debitAccount = $kas;
             $creditAccount = $modal;
-            $memo          = 'Setoran kas: '.($ct->notes ?? $ct->party_name);
+            $memo = 'Setoran kas: '.($ct->notes ?? $ct->party_name);
         } elseif ($ct->category === CashTransaction::CATEGORY_EXPENSE) {
-            $debitAccount  = $beban;
+            $debitAccount = $beban;
             $creditAccount = $kas;
-            $memo          = 'Beban operasional: '.($ct->notes ?? $ct->party_name);
+            $memo = 'Beban operasional: '.($ct->notes ?? $ct->party_name);
         } else {
             // non_expense: penarikan kas murni
-            $debitAccount  = $modal;
+            $debitAccount = $modal;
             $creditAccount = $kas;
-            $memo          = 'Penarikan kas: '.($ct->notes ?? $ct->party_name);
+            $memo = 'Penarikan kas: '.($ct->notes ?? $ct->party_name);
         }
 
         $entryDate = $ct->created_at->toDateString();
@@ -589,28 +588,28 @@ class JournalPoster
             $store, $ct, $entryDate, $debitAccount, $creditAccount, $amount, $memo
         ) {
             $entry = JournalEntry::query()->create([
-                'store_id'       => $store->id,
-                'entry_date'     => $entryDate,
+                'store_id' => $store->id,
+                'entry_date' => $entryDate,
                 'reference_type' => CashTransaction::class,
-                'reference_id'   => $ct->id,
-                'description'    => 'Kas '.($ct->type === CashTransaction::TYPE_IN ? 'masuk' : 'keluar').' #'.$ct->id,
-                'user_id'        => $ct->user_id,
+                'reference_id' => $ct->id,
+                'description' => 'Kas '.($ct->type === CashTransaction::TYPE_IN ? 'masuk' : 'keluar').' #'.$ct->id,
+                'user_id' => $ct->user_id,
             ]);
 
             JournalLine::query()->create([
-                'journal_entry_id'    => $entry->id,
+                'journal_entry_id' => $entry->id,
                 'chart_of_account_id' => $debitAccount->id,
-                'debit'               => $amount,
-                'credit'              => 0,
-                'memo'                => $memo,
+                'debit' => $amount,
+                'credit' => 0,
+                'memo' => $memo,
             ]);
 
             JournalLine::query()->create([
-                'journal_entry_id'    => $entry->id,
+                'journal_entry_id' => $entry->id,
                 'chart_of_account_id' => $creditAccount->id,
-                'debit'               => 0,
-                'credit'              => $amount,
-                'memo'                => $memo,
+                'debit' => 0,
+                'credit' => $amount,
+                'memo' => $memo,
             ]);
 
             $ct->update(['journal_entry_id' => $entry->id]);
@@ -699,20 +698,16 @@ class JournalPoster
         $entryDate = $return->returned_at->toDateString();
         AccountingPeriodGuard::assertDateOpen($store, $entryDate);
 
-        // HPP balik: total biaya historis baris yang diretur.
+        // HPP balik: batch load semua TransactionItem transaksi asli sebelum loop.
+        $sourceItems = TransactionItem::query()
+            ->where('transaction_id', $return->transaction_id)
+            ->get()
+            ->keyBy(fn ($item) => $item->product_id.':'.($item->product_variant_id ?? 'null'));
+
         $costOfReturned = 0.0;
         foreach ($return->lines as $line) {
-            $sourceItem = TransactionItem::query()
-                ->where('transaction_id', $return->transaction_id)
-                ->where('product_id', $line->product_id)
-                ->where(function ($q) use ($line) {
-                    if ($line->product_variant_id) {
-                        $q->where('product_variant_id', $line->product_variant_id);
-                    } else {
-                        $q->whereNull('product_variant_id');
-                    }
-                })
-                ->first();
+            $key = $line->product_id.':'.($line->product_variant_id ?? 'null');
+            $sourceItem = $sourceItems->get($key);
             if ($sourceItem) {
                 $costOfReturned += (float) $sourceItem->total_cost_snapshot * ((float) $line->quantity / max((float) $sourceItem->quantity, 0.0001));
             }
@@ -726,7 +721,7 @@ class JournalPoster
         $refundAccountLabel = $isCashRefund ? 'Kas' : 'Bank';
 
         try {
-            DB::transaction(function () use ($store, $return, $totalRefund, $costOfReturned, $refundAccount, $refundAccountLabel, $pendapatan, $ppnKeluaran, $hpp, $persediaan, $piutang, $entryDate) {
+            DB::transaction(function () use ($store, $return, $totalRefund, $costOfReturned, $refundAccount, $refundAccountLabel, $pendapatan, $hpp, $persediaan, $entryDate) {
                 $entry = JournalEntry::query()->create([
                     'store_id' => $store->id,
                     'entry_date' => $entryDate,
@@ -860,7 +855,7 @@ class JournalPoster
             ->selectRaw('COALESCE(SUM(debit),0) as total_debit, COALESCE(SUM(credit),0) as total_credit')
             ->first();
 
-        $totalDebit  = round((float) $lines->total_debit, 2);
+        $totalDebit = round((float) $lines->total_debit, 2);
         $totalCredit = round((float) $lines->total_credit, 2);
 
         if (abs($totalDebit - $totalCredit) > 0.02) {
@@ -874,8 +869,6 @@ class JournalPoster
      * Posting penerimaan pelunasan piutang.
      * Jurnal: Debit Kas/Bank, Kredit Piutang Usaha.
      * Tidak memposting pendapatan, PPN, HPP, atau persediaan kembali.
-     *
-     * @return \App\Models\JournalEntry
      */
     public static function postReceivableCollection(
         Store $store,
@@ -887,9 +880,9 @@ class JournalPoster
 
         ChartOfAccountsBootstrap::ensureForStore($store);
 
-        $kas           = ChartOfAccountsBootstrap::account($store, ChartOfAccountsBootstrap::CODE_KAS);
-        $bank          = ChartOfAccountsBootstrap::account($store, ChartOfAccountsBootstrap::CODE_BANK);
-        $piutangUsaha  = ChartOfAccountsBootstrap::account($store, ChartOfAccountsBootstrap::CODE_PIUTANG_USAHA);
+        $kas = ChartOfAccountsBootstrap::account($store, ChartOfAccountsBootstrap::CODE_KAS);
+        $bank = ChartOfAccountsBootstrap::account($store, ChartOfAccountsBootstrap::CODE_BANK);
+        $piutangUsaha = ChartOfAccountsBootstrap::account($store, ChartOfAccountsBootstrap::CODE_PIUTANG_USAHA);
 
         if (! $kas || ! $bank || ! $piutangUsaha) {
             Log::warning('accounting.missing_coa_receivable', ['store_id' => $store->id]);
@@ -901,36 +894,36 @@ class JournalPoster
         AccountingPeriodGuard::assertDateOpen($store, $entryDate);
 
         $receivingAccount = $payment->payment_method === 'cash' ? $kas : $bank;
-        $receivingLabel   = $payment->payment_method === 'cash' ? 'Kas' : 'Bank';
-        $amount           = round((float) $payment->amount, 2);
+        $receivingLabel = $payment->payment_method === 'cash' ? 'Kas' : 'Bank';
+        $amount = round((float) $payment->amount, 2);
 
         return DB::transaction(function () use (
             $store, $payment, $entryDate,
             $receivingAccount, $receivingLabel, $piutangUsaha, $amount,
         ) {
             $entry = JournalEntry::query()->create([
-                'store_id'       => $store->id,
-                'entry_date'     => $entryDate,
+                'store_id' => $store->id,
+                'entry_date' => $entryDate,
                 'reference_type' => \App\Models\ReceivablePayment::class,
-                'reference_id'   => $payment->id,
-                'description'    => 'Pelunasan piutang #'.$payment->transaction->transaction_number,
-                'user_id'        => $payment->user_id,
+                'reference_id' => $payment->id,
+                'description' => 'Pelunasan piutang #'.$payment->transaction->transaction_number,
+                'user_id' => $payment->user_id,
             ]);
 
             JournalLine::query()->create([
-                'journal_entry_id'    => $entry->id,
+                'journal_entry_id' => $entry->id,
                 'chart_of_account_id' => $receivingAccount->id,
-                'debit'               => $amount,
-                'credit'              => 0,
-                'memo'                => $receivingLabel.' penerimaan pelunasan ('.$payment->payment_method.')',
+                'debit' => $amount,
+                'credit' => 0,
+                'memo' => $receivingLabel.' penerimaan pelunasan ('.$payment->payment_method.')',
             ]);
 
             JournalLine::query()->create([
-                'journal_entry_id'    => $entry->id,
+                'journal_entry_id' => $entry->id,
                 'chart_of_account_id' => $piutangUsaha->id,
-                'debit'               => 0,
-                'credit'              => $amount,
-                'memo'                => 'Pelunasan piutang usaha',
+                'debit' => 0,
+                'credit' => $amount,
+                'memo' => 'Pelunasan piutang usaha',
             ]);
 
             // Simpan referensi journal ke receivable_payment

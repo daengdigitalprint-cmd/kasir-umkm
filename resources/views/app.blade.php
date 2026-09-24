@@ -134,6 +134,9 @@
             }
         </style>
 
+        {{-- WebMCP manifest untuk agentic exploration --}}
+        <link rel="webmcp" href="/.well-known/webmcp.json">
+
         <title inertia>{{ ! empty($landingServerSeo) ? $landingServerSeo['title'] : config('app.name', 'Laravel') }}</title>
 
         @if (! empty($landingServerSeo))
@@ -171,10 +174,14 @@
         @endif
 
         <!-- Google Fonts: Plus Jakarta Sans -->
-        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <!-- Preconnect hanya untuk origin penting (hindari >4 preconnect). -->
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap">
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
+        <!-- CSS font non-blocking: media="print" dipicu onload — hindari bottleneck
+             hierarki dependensi LCP (chain css → woff2 → render). -->
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
+        <noscript>
+            <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+        </noscript>
         
         <style>
             :root {
@@ -232,10 +239,6 @@
             }
         </style>
 
-        {{-- SweetAlert2 (CDN): preload untuk percepat load, async untuk non-blocking --}}
-        <link rel="preload" as="style" href="https://cdn.jsdelivr.net/npm/sweetalert2@11.23.0/dist/sweetalert2.min.css" crossorigin="anonymous">
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11.23.0/dist/sweetalert2.min.css" crossorigin="anonymous" media="print" onload="this.media='all'">
-
         {{-- Production assets - use built assets directly --}}
         @vite(['resources/js/app.ts'])
         @inertiaHead
@@ -265,9 +268,6 @@
         
         @inertia
 
-        {{-- SweetAlert2 all-in-one (global Swal) — harus sebelum skrip Service Worker --}}
-        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.23.0/dist/sweetalert2.all.min.js" crossorigin="anonymous"></script>
-        
         {{-- PWA Service Worker Registration --}}
         <script>
             function promptPwaVersionReload() {
@@ -302,10 +302,10 @@
             // Register service worker
             if ('serviceWorker' in navigator) {
                 window.addEventListener('load', () => {
-                    navigator.serviceWorker.register('/sw.js')
+                    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
                         .then((registration) => {
                             console.log('Service Worker registered successfully:', registration.scope);
-                            
+
                             // Check for updates
                             registration.addEventListener('updatefound', () => {
                                 const newWorker = registration.installing;
@@ -315,6 +315,10 @@
                                     }
                                 });
                             });
+
+                            // Selalu cek update sw.js dari server setiap halaman dimuat
+                            // agar perbaikan service worker cepat aktif tanpa menunggu 24 jam.
+                            registration.update();
                         })
                         .catch((error) => {
                             console.log('Service Worker registration failed:', error);

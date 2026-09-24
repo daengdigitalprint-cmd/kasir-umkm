@@ -19,6 +19,7 @@ interface TargetUser {
     store_id: number | null;
     store_name: string | null;
     role: string;
+    group_name: string;
 }
 
 interface Anomaly {
@@ -54,6 +55,16 @@ const hasResult = ref(false);
 const errorMessage = ref<string>('');
 
 const canAnalyze = computed(() => Boolean(selectedUserId.value && startDate.value && endDate.value) && !analyzing.value);
+
+const groupedUsers = computed(() => {
+    const groups: Record<string, TargetUser[]> = {};
+    for (const u of props.users) {
+        const key = u.group_name;
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(u);
+    }
+    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+});
 
 const renderedSummary = computed(() => (summary.value ? marked.parse(summary.value) as string : ''));
 
@@ -173,9 +184,11 @@ async function startAnalysis() {
                                 class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                             >
                                 <option value="" disabled>Pilih user...</option>
-                                <option v-for="u in props.users" :key="u.id" :value="u.id">
-                                    {{ u.name }} ({{ u.email }}){{ u.store_name ? ` - ${u.store_name}` : '' }}
-                                </option>
+                                <optgroup v-for="([groupName, users]) in groupedUsers" :key="groupName" :label="groupName">
+                                    <option v-for="u in users" :key="u.id" :value="u.id">
+                                        {{ u.name }} ({{ u.email }}){{ u.store_name ? ` - ${u.store_name}` : '' }}
+                                    </option>
+                                </optgroup>
                             </select>
                         </div>
                         <div class="space-y-1.5">

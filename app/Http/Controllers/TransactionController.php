@@ -165,8 +165,33 @@ class TransactionController extends Controller
             'discount',
         ]);
 
+        // Pre-load bundle items, component products & variants to avoid N+1 in loop
+        $bundleComponentIds = collect();
+        $bundleVariantIds = collect();
+        $itemVariantIds = collect();
+
+        foreach ($transaction->items as $item) {
+            $product = $item->product;
+            if ($product && $product->is_bundle) {
+                $items = ProductBundleItem::where('bundle_product_id', $product->id)->get();
+                $item->setRelation('bundleItems', $items);
+                foreach ($items as $bi) {
+                    $bundleComponentIds->push($bi->component_product_id);
+                    if ($bi->component_product_variant_id) {
+                        $bundleVariantIds->push($bi->component_product_variant_id);
+                    }
+                }
+            } elseif ($product && $product->has_variants && $item->product_variant_id) {
+                $itemVariantIds->push($item->product_variant_id);
+            }
+        }
+
+        $componentProducts = Product::query()->whereIn('id', $bundleComponentIds->unique())->get()->keyBy('id');
+        $bundleVariants = ProductVariant::query()->whereIn('id', $bundleVariantIds->unique())->get()->keyBy('id');
+        $itemVariants = ProductVariant::query()->whereIn('id', $itemVariantIds->unique())->get()->keyBy('id');
+
         try {
-            $restorationDetails = DB::transaction(function () use ($transaction, $store, $validated) {
+            $restorationDetails = DB::transaction(function () use ($transaction, $store, $validated, $componentProducts, $bundleVariants, $itemVariants) {
                 $details = [
                     'products_restored' => 0,
                     'bundles_restored' => 0,
@@ -231,16 +256,15 @@ class TransactionController extends Controller
                     }
 
                     if ($product->is_bundle) {
-                        $bundleItems = ProductBundleItem::where('bundle_product_id', $product->id)->get();
-                        foreach ($bundleItems as $bi) {
+                        foreach ($item->bundleItems as $bi) {
                             $compQty = bcmul((string) $item->quantity, (string) $bi->quantity, ProductQuantity::SCALE);
-                            $compProduct = Product::find($bi->component_product_id);
+                            $compProduct = $componentProducts->get($bi->component_product_id);
                             if (! $compProduct || ! $compProduct->track_stock || $compProduct->unlimited_stock) {
                                 continue;
                             }
 
                             if ($compProduct->has_variants && $bi->component_product_variant_id) {
-                                $variant = ProductVariant::find($bi->component_product_variant_id);
+                                $variant = $bundleVariants->get($bi->component_product_variant_id);
                                 if ($variant) {
                                     $variant->increment('stock_quantity', $compQty);
                                     $totalStock = $compProduct->variants()->sum('stock_quantity');
@@ -266,7 +290,7 @@ class TransactionController extends Controller
                         }
                     } else {
                         if ($product->has_variants && $item->product_variant_id) {
-                            $variant = ProductVariant::find($item->product_variant_id);
+                            $variant = $itemVariants->get($item->product_variant_id);
                             if ($variant) {
                                 $variant->increment('stock_quantity', $item->quantity);
                                 $totalStock = $product->variants()->sum('stock_quantity');
@@ -433,10 +457,10 @@ class TransactionController extends Controller
             abort(403);
         }
 
-        // Hanya owner/superadmin yang boleh hapus permanen
+        // Hanya owner/admin/superadmin yang boleh hapus permanen
         $user = auth()->user();
-        if (! $user->isOwner() && ! $user->isSuperAdmin()) {
-            return response()->json(['message' => 'Hanya owner atau superadmin yang dapat menghapus transaksi permanen. Gunakan fitur Void untuk membatalkan transaksi.'], 403);
+        if (! $user->isOwner() && ! $user->isAdmin() && ! $user->isSuperAdmin()) {
+            return response()->json(['message' => 'Hanya owner, admin, atau superadmin yang dapat menghapus transaksi permanen. Gunakan fitur Void untuk membatalkan transaksi.'], 403);
         }
 
         if ($transaction->status !== 'completed') {
@@ -455,8 +479,33 @@ class TransactionController extends Controller
             'discount',
         ]);
 
+        // Pre-load bundle items, component products & variants to avoid N+1 in loop
+        $bundleComponentIds = collect();
+        $bundleVariantIds = collect();
+        $itemVariantIds = collect();
+
+        foreach ($transaction->items as $item) {
+            $product = $item->product;
+            if ($product && $product->is_bundle) {
+                $bundleItems = ProductBundleItem::where('bundle_product_id', $product->id)->get();
+                $item->setRelation('bundleItems', $bundleItems);
+                foreach ($bundleItems as $bi) {
+                    $bundleComponentIds->push($bi->component_product_id);
+                    if ($bi->component_product_variant_id) {
+                        $bundleVariantIds->push($bi->component_product_variant_id);
+                    }
+                }
+            } elseif ($product && $product->has_variants && $item->product_variant_id) {
+                $itemVariantIds->push($item->product_variant_id);
+            }
+        }
+
+        $componentProducts = Product::query()->whereIn('id', $bundleComponentIds->unique())->get()->keyBy('id');
+        $bundleVariants = ProductVariant::query()->whereIn('id', $bundleVariantIds->unique())->get()->keyBy('id');
+        $itemVariants = ProductVariant::query()->whereIn('id', $itemVariantIds->unique())->get()->keyBy('id');
+
         try {
-            $restorationDetails = DB::transaction(function () use ($transaction, $store) {
+            $restorationDetails = DB::transaction(function () use ($transaction, $store, $componentProducts, $bundleVariants, $itemVariants) {
                 $details = [
                     'products_restored' => 0,
                     'bundles_restored' => 0,
@@ -525,16 +574,15 @@ class TransactionController extends Controller
 
                     // Jika bundle, kembalikan stok setiap komponen bundle
                     if ($product->is_bundle) {
-                        $bundleItems = ProductBundleItem::where('bundle_product_id', $product->id)->get();
-                        foreach ($bundleItems as $bi) {
+                        foreach ($item->bundleItems as $bi) {
                             $compQty = bcmul((string) $item->quantity, (string) $bi->quantity, ProductQuantity::SCALE);
-                            $compProduct = Product::find($bi->component_product_id);
+                            $compProduct = $componentProducts->get($bi->component_product_id);
                             if (! $compProduct || ! $compProduct->track_stock || $compProduct->unlimited_stock) {
                                 continue;
                             }
 
                             if ($compProduct->has_variants && $bi->component_product_variant_id) {
-                                $variant = ProductVariant::find($bi->component_product_variant_id);
+                                $variant = $bundleVariants->get($bi->component_product_variant_id);
                                 if ($variant) {
                                     $variant->increment('stock_quantity', $compQty);
                                     $totalStock = $compProduct->variants()->sum('stock_quantity');
@@ -561,7 +609,7 @@ class TransactionController extends Controller
                     } else {
                         // Produk biasa / dengan varian
                         if ($product->has_variants && $item->product_variant_id) {
-                            $variant = ProductVariant::find($item->product_variant_id);
+                            $variant = $itemVariants->get($item->product_variant_id);
                             if ($variant) {
                                 $variant->increment('stock_quantity', $item->quantity);
                                 $totalStock = $product->variants()->sum('stock_quantity');

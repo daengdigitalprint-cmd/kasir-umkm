@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { Head, Link, useForm } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { Head, router, useForm } from '@inertiajs/vue3';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Ban, Eye, EyeOff, Save, Search, CheckCircle2 } from 'lucide-vue-next';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ArrowLeft, Ban, Eye, EyeOff, Save, Search, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-vue-next';
 
 interface LineRow {
     id: number;
@@ -62,6 +63,7 @@ const isDraft = computed(() => props.opname.status === 'draft');
 const showSystemQty = ref(!isDraft.value);
 const search = ref('');
 const showCancel = ref(false);
+const showPostConfirm = ref(false);
 
 const draftForm = useForm({
     lines: props.opname.lines.map((l) => ({
@@ -73,6 +75,151 @@ const draftForm = useForm({
 
 const postForm = useForm({});
 const cancelForm = useForm({ cancellation_reason: '' });
+
+// ── Navigasi guard: auto-save & konfirmasi saat pindah halaman ──
+const initialSnapshot = ref(JSON.stringify(draftForm.lines));
+const isDirty = computed(() => JSON.stringify(draftForm.lines) !== initialSnapshot.value);
+
+const showNavigateWarning = ref(false);
+const pendingNavigationUrl = ref<string | null>(null);
+const autoSaving = ref(false);
+
+function snapshotDraft() {
+    initialSnapshot.value = JSON.stringify(draftForm.lines);
+}
+
+function xsrfToken(): string {
+    const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : '';
+}
+
+/** Simpan draft via fetch biasa tanpa trigger redirect Inertia */
+async function saveDraftViaFetch(): Promise<void> {
+    const resp = await fetch(`/stock-opnames/${props.opname.id}/draft`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-XSRF-TOKEN': xsrfToken(),
+        },
+        body: JSON.stringify({ lines: draftForm.lines }),
+        redirect: 'manual',
+    });
+    if (resp.type === 'opaqueredirect' || resp.status === 0) {
+        // Redirect dari server — berarti save berhasil
+        snapshotDraft();
+        return;
+    }
+    if (!resp.ok) {
+        throw new Error('Gagal menyimpan draft');
+    }
+    snapshotDraft();
+}
+
+/** Simpan draft + navigasi ke URL pending */
+function saveAndNavigate() {
+    const url = pendingNavigationUrl.value;
+    if (!url) return;
+    showNavigateWarning.value = false;
+    autoSaving.value = true;
+    isNavigatingAway = true;
+    saveDraftViaFetch()
+        .then(() => {
+            pendingNavigationUrl.value = null;
+            router.visit(url, { replace: true });
+        })
+        .catch(() => {
+            autoSaving.value = false;
+            isNavigatingAway = false;
+        });
+}
+
+/** Buang perubahan & navigasi */
+function discardAndNavigate() {
+    const url = pendingNavigationUrl.value;
+    if (!url) return;
+    showNavigateWarning.value = false;
+    pendingNavigationUrl.value = null;
+    isNavigatingAway = true;
+    router.visit(url, { replace: true });
+}
+
+function cancelNavigation() {
+    showNavigateWarning.value = false;
+    pendingNavigationUrl.value = null;
+}
+
+/** Cegah tab/browser close saat dirty */
+function onBeforeUnload(e: BeforeUnloadEvent) {
+    if (isDraft.value && isDirty.value) {
+        e.preventDefault();
+        e.returnValue = '';
+    }
+}
+
+// Intercept semua navigasi Inertia (sidebar, Link, router.visit) saat dirty
+let isNavigatingAway = false;
+
+function onInertiaBefore(event: { detail: { visit: { url: string; method: string } } }) {
+    if (isNavigatingAway) return true;
+    if (!isDraft.value || !isDirty.value) return true;
+
+    // Jangan intercept saat form sedang dikirim (saveDraft/postOpname/cancel)
+    if (draftForm.processing || postForm.processing || approveForm.processing || cancelForm.processing) {
+        return true;
+    }
+
+    const targetUrl = event.detail.visit.url;
+    const method = event.detail.visit.method?.toLowerCase() || 'get';
+    if (!targetUrl) return true;
+
+    // Izinkan semua POST/PUT/PATCH/DELETE request (form submissions)
+    if (method !== 'get') return true;
+
+    // Bandingkan pathname saja (abaikan query string & hash)
+    const currentPath = new URL(window.location.href).pathname;
+    const targetPath = new URL(targetUrl, window.location.origin).pathname;
+
+    // Jika pathname sama, izinkan (reload, partial, dll)
+    if (currentPath === targetPath) return true;
+
+    // Cek apakah target adalah halaman berbeda
+    pendingNavigationUrl.value = targetUrl;
+    showNavigateWarning.value = true;
+    return false;
+}
+
+// Auto-save draft setiap 10 detik jika ada perubahan
+let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
+let offInertiaBefore: (() => void) | null = null;
+
+onMounted(() => {
+    if (!isDraft.value) return;
+    window.addEventListener('beforeunload', onBeforeUnload);
+    offInertiaBefore = router.on('before', onInertiaBefore);
+});
+
+onUnmounted(() => {
+    window.removeEventListener('beforeunload', onBeforeUnload);
+    offInertiaBefore?.();
+    if (autoSaveTimer) clearTimeout(autoSaveTimer);
+});
+
+watch(
+    () => JSON.stringify(draftForm.lines),
+    () => {
+        if (!isDraft.value || autoSaving.value) return;
+        if (autoSaveTimer) clearTimeout(autoSaveTimer);
+        autoSaveTimer = setTimeout(() => {
+            if (isDirty.value && !autoSaving.value && draftForm.isDirty) {
+                autoSaving.value = true;
+                saveDraftViaFetch()
+                    .catch(() => { /* auto-save gagal, user bisa save manual */ })
+                    .finally(() => { autoSaving.value = false; });
+            }
+        }, 10_000);
+    },
+);
 
 const lineById = (id: number) => props.opname.lines.find((l) => l.id === id);
 
@@ -159,11 +306,39 @@ const formatWhen = (iso: string | null) =>
         : '—';
 
 function saveDraft() {
-    draftForm.post(`/stock-opnames/${props.opname.id}/draft`, { preserveScroll: true });
+    draftForm.post(`/stock-opnames/${props.opname.id}/draft`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            snapshotDraft();
+        },
+    });
+}
+
+function openPostConfirm() {
+    // Pastikan draft tersimpan dulu sebelum tampilkan dialog konfirmasi
+    if (isDirty.value) {
+        draftForm.post(`/stock-opnames/${props.opname.id}/draft`, {
+            preserveScroll: true,
+            onSuccess: () => {
+                snapshotDraft();
+                showPostConfirm.value = true;
+            },
+        });
+    } else {
+        showPostConfirm.value = true;
+    }
 }
 
 function postOpname() {
-    postForm.post(`/stock-opnames/${props.opname.id}/post`, { preserveScroll: true });
+    if (postForm.processing) return;
+    showPostConfirm.value = false;
+    isNavigatingAway = true;
+    postForm.post(`/stock-opnames/${props.opname.id}/post`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            snapshotDraft();
+        },
+    });
 }
 
 function submitCancel() {
@@ -183,8 +358,8 @@ function submitCancel() {
         <div class="mx-auto space-y-6 pb-8" style="max-width: 90rem">
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div class="flex items-center gap-3">
-                    <Button as-child variant="ghost" size="icon" class="rounded-xl">
-                        <Link href="/stock-opnames"><ArrowLeft class="h-4 w-4" /></Link>
+                    <Button variant="ghost" size="icon" class="rounded-xl" @click="router.visit('/stock-opnames')">
+                        <ArrowLeft class="h-4 w-4" />
                     </Button>
                     <div>
                         <div class="flex items-center gap-3">
@@ -409,23 +584,163 @@ function submitCancel() {
                 class="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
             >
                 <p class="text-sm text-slate-600">
-                    Simpan draft bila hitungan belum selesai. Sesi dapat dilanjutkan kapan saja tanpa kehilangan data.
+                    <span v-if="!isDirty && affectedCount > 0">
+                        Data sudah tersimpan. Klik tombol "Lanjut ke Posting" untuk memposting stock opname ini.
+                    </span>
+                    <span v-else>
+                        Simpan draft bila hitungan belum selesai. Sesi dapat dilanjutkan kapan saja tanpa kehilangan data.
+                    </span>
                 </p>
                 <div class="flex items-center gap-3">
-                    <Button variant="outline" class="rounded-xl" :disabled="draftForm.processing" @click="saveDraft">
+                    <span v-if="autoSaving" class="inline-flex items-center gap-1.5 text-xs text-slate-500">
+                        <Loader2 class="h-3 w-3 animate-spin" />
+                        Auto-save draft...
+                    </span>
+                    <span v-else-if="isDirty" class="text-xs text-amber-600 font-medium">
+                        Ada perubahan belum tersimpan
+                    </span>
+
+                    <!-- Step 1: Simpan Draft (tampil jika ada perubahan) -->
+                    <Button 
+                        v-if="isDirty" 
+                        variant="outline" 
+                        class="rounded-xl" 
+                        :disabled="draftForm.processing" 
+                        @click="saveDraft"
+                    >
                         <Save class="mr-2 h-4 w-4" />
-                        {{ draftForm.processing ? 'Menyimpan…' : 'Simpan draft' }}
+                        {{ draftForm.processing ? 'Menyimpan...' : 'Simpan draft' }}
                     </Button>
-                    <Button v-if="props.canPost" class="rounded-xl" :disabled="postForm.processing" @click="postOpname">
+
+                    <!-- Step 2: Lanjut ke Posting (tampil jika tidak ada perubahan dan bisa posting) -->
+                    <Button 
+                        v-if="!isDirty && props.canPost" 
+                        class="rounded-xl" 
+                        :disabled="draftForm.processing || postForm.processing" 
+                        @click="openPostConfirm"
+                    >
                         <CheckCircle2 class="mr-2 h-4 w-4" />
-                        {{ postForm.processing ? 'Memproses…' : 'Posting opname' }}
+                        Lanjut ke Posting
                     </Button>
                 </div>
             </div>
 
-            <p v-if="isDraft" class="text-center text-xs text-slate-500">
-                Simpan draft dahulu sebelum memposting agar hasil hitung terbaru ikut terpakai.
+            <p v-if="isDraft && isDirty" class="text-center text-xs text-slate-500">
+                Simpan draft dahulu sebelum dapat melanjutkan ke posting.
             </p>
         </div>
     </AdminLayout>
+
+    <!-- Dialog konfirmasi posting -->
+    <Dialog :open="showPostConfirm" @update:open="(v: boolean) => !v && (showPostConfirm = false)">
+        <DialogContent class="sm:max-w-lg">
+            <DialogHeader>
+                <div class="flex items-center gap-3">
+                    <div class="flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 shrink-0">
+                        <CheckCircle2 class="h-6 w-6 text-blue-600" />
+                    </div>
+                    <div>
+                        <DialogTitle class="text-lg font-bold">Konfirmasi Posting Stock Opname</DialogTitle>
+                        <DialogDescription class="text-sm text-slate-500 mt-1">
+                            Pastikan data hitungan sudah benar sebelum diposting
+                        </DialogDescription>
+                    </div>
+                </div>
+            </DialogHeader>
+
+            <div class="space-y-4 py-4">
+                <div class="rounded-xl bg-slate-50 p-4 space-y-3">
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-slate-600">Total produk dihitung</span>
+                        <span class="font-bold text-slate-900">{{ props.opname.lines.length }} item</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-slate-600">Item dengan selisih</span>
+                        <span class="font-bold text-slate-900">{{ affectedCount }} item</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-slate-600">Nilai selisih total</span>
+                        <span class="font-bold tabular-nums" :class="valueClass(totalValue)">
+                            {{ formatRupiah(totalValue) }}
+                        </span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-slate-600">Akurasi inventori</span>
+                        <span class="font-bold text-slate-900">{{ accuracy.toFixed(1) }}%</span>
+                    </div>
+                </div>
+
+                <div class="rounded-xl bg-amber-50 border border-amber-200 p-4">
+                    <div class="flex gap-2">
+                        <AlertTriangle class="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                        <div class="text-sm text-amber-900">
+                            <p class="font-semibold mb-1">Perhatian:</p>
+                            <ul class="space-y-1 list-disc list-inside">
+                                <li>Stok sistem akan langsung disesuaikan</li>
+                                <li>Nilai persediaan akan berubah sesuai selisih</li>
+                                <li>Jurnal akuntansi akan dibuat otomatis</li>
+                                <li>Data tidak dapat diubah setelah diposting</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <p class="text-sm text-slate-600">
+                    Apakah Anda yakin data hitungan sudah akurat dan siap untuk diposting?
+                </p>
+            </div>
+
+            <DialogFooter class="flex flex-wrap justify-end gap-2">
+                <Button 
+                    variant="outline" 
+                    class="rounded-xl" 
+                    @click="showPostConfirm = false"
+                    :disabled="postForm.processing"
+                >
+                    Periksa Kembali
+                </Button>
+                <Button 
+                    class="rounded-xl bg-blue-600 hover:bg-blue-700" 
+                    @click="postOpname"
+                    :disabled="postForm.processing"
+                >
+                    <Loader2 v-if="postForm.processing" class="mr-2 h-4 w-4 animate-spin" />
+                    <CheckCircle2 v-else class="mr-2 h-4 w-4" />
+                    {{ postForm.processing ? 'Memposting...' : 'Ya, Posting Sekarang' }}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+
+    <!-- Dialog peringatan navigasi saat ada perubahan tersimpan -->
+    <Dialog :open="showNavigateWarning" @update:open="(v: boolean) => !v && cancelNavigation()">
+        <DialogContent class="sm:max-w-md overflow-hidden">
+            <DialogHeader>
+                <div class="flex items-center gap-3">
+                    <div class="flex items-center justify-center w-10 h-10 rounded-full bg-amber-100 shrink-0">
+                        <AlertTriangle class="h-5 w-5 text-amber-600" />
+                    </div>
+                    <div>
+                        <DialogTitle class="text-base font-bold">Data belum tersimpan</DialogTitle>
+                        <DialogDescription class="text-sm text-slate-500">
+                            Anda memiliki data hitung stok opname yang belum disimpan. Jika Anda meninggalkan halaman ini, perubahan yang belum disimpan akan hilang.
+                        </DialogDescription>
+                    </div>
+                </div>
+            </DialogHeader>
+            <DialogFooter class="flex flex-wrap justify-end gap-2">
+                <Button class="rounded-xl bg-amber-600 hover:bg-amber-700 text-white whitespace-nowrap" :disabled="autoSaving" @click="saveAndNavigate">
+                    <Loader2 v-if="autoSaving" class="mr-2 h-4 w-4 animate-spin" />
+                    <Save v-else class="mr-2 h-4 w-4" />
+                    {{ autoSaving ? 'Menyimpan...' : 'Simpan draft & tinggalkan' }}
+                </Button>
+                <Button variant="ghost" class="rounded-xl text-slate-600 whitespace-nowrap" @click="cancelNavigation">
+                    Tetap di Halaman Ini
+                </Button>
+                <Button variant="outline" class="rounded-xl text-red-600 border-red-200 hover:bg-red-50 whitespace-nowrap" @click="discardAndNavigate">
+                    Tinggalkan Halaman
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
 </template>

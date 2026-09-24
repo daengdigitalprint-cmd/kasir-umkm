@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { ref } from 'vue';
 
-const props = defineProps<{
+// `assetsBase` dipertahankan agar caller tetap bisa mengirim prop
+// tanpa error — tidak dipakai di template.
+defineProps<{
     assetsBase?: string;
 }>();
-
-const base = computed(() => props.assetsBase ?? '/buyer-assets');
 
 type FaqItem = {
     id: string;

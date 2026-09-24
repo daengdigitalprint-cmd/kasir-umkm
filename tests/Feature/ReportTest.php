@@ -3,6 +3,9 @@
 use App\Models\AccountingPeriod;
 use App\Models\CashShift;
 use App\Models\CashTransaction;
+use App\Models\ChartOfAccount;
+use App\Models\JournalEntry;
+use App\Models\JournalLine;
 use App\Models\Product;
 use App\Models\ProductionBatch;
 use App\Models\Purchase;
@@ -10,10 +13,6 @@ use App\Models\PurchasePayment;
 use App\Models\Recipe;
 use App\Models\StockAdjustment;
 use App\Models\Store;
-use App\Models\JournalEntry;
-use App\Models\JournalLine;
-use App\Models\ChartOfAccount;
-use App\Models\FinancialReportStatus;
 use App\Models\Transaction;
 use App\Models\TransactionItem;
 use App\Models\User;
@@ -36,7 +35,9 @@ function makeReportOrg(string $prefix): array
         'is_active' => true,
         'is_subscription_active' => true,
         // File ini menguji laporan akuntansi & posting jurnal → modul harus aktif.
-        'settings' => ['accounting_enabled' => true],
+        // Tanggal uji statis (2026-01 s/d 2026-08) jauh di masa lalu, longgarkan
+        // limit backdate default 7 hari agar lolos AccountingPeriodGuard.
+        'settings' => ['accounting_enabled' => true, 'max_backdate_days' => 9999],
     ]);
 
     $user = User::factory()->create([
@@ -202,7 +203,7 @@ test('laporan keuangan memvalidasi tanggal dan menghitung saldo serta laba', fun
     ]);
 
     $this->actingAs($user);
-    $trialBalance = $this->get('/reports/financial/trial-balance?start_date=2026-02-01&end_date=2026-02-28');
+    $trialBalance = $this->get('/financial/trial-balance?start_date=2026-02-01&end_date=2026-02-28');
     $trialBalance->assertOk();
     $trialProps = $trialBalance->viewData('page')['props'];
     expect(collect($trialProps['lines'])->firstWhere('code', '1.1.99'))->toMatchArray([
@@ -211,7 +212,7 @@ test('laporan keuangan memvalidasi tanggal dan menghitung saldo serta laba', fun
         'closing_balance' => 75000.0,
     ]);
 
-    $income = $this->get('/reports/financial/income-statement?start_date=2026-02-01&end_date=2026-02-28');
+    $income = $this->get('/financial/income-statement?start_date=2026-02-01&end_date=2026-02-28');
     $income->assertOk();
     $incomeProps = $income->viewData('page')['props'];
     expect($incomeProps['amounts'])->toMatchArray([
@@ -221,10 +222,10 @@ test('laporan keuangan memvalidasi tanggal dan menghitung saldo serta laba', fun
         'net_income' => -25000.0,
     ]);
 
-    $this->get('/reports/financial/trial-balance?start_date=2026-02-28&end_date=2026-02-01')->assertSessionHasErrors('end_date');
-    $this->get('/reports/financial/balance-sheet?as_of=not-a-date')->assertSessionHasErrors('as_of');
-    $this->get('/reports/financial/cash-flow?start_date=2026-02-28&end_date=2026-02-01')->assertSessionHasErrors('end_date');
-    $this->get('/reports/financial/statement-of-equity-changes?start_date=2026-02-28&end_date=2026-02-01')->assertSessionHasErrors('end_date');
+    $this->get('/financial/trial-balance?start_date=2026-02-28&end_date=2026-02-01')->assertSessionHasErrors('end_date');
+    $this->get('/financial/balance-sheet?as_of=not-a-date')->assertSessionHasErrors('as_of');
+    $this->get('/financial/cash-flow?start_date=2026-02-28&end_date=2026-02-01')->assertSessionHasErrors('end_date');
+    $this->get('/financial/statement-of-equity-changes?start_date=2026-02-28&end_date=2026-02-01')->assertSessionHasErrors('end_date');
     $this->get('/tax/ppn-summary?start_date=2026-02-28&end_date=2026-02-01')->assertSessionHasErrors('end_date');
 
     // Validasi juga berlaku untuk laporan non-keuangan
@@ -262,7 +263,7 @@ test('laba rugi membandingkan periode sebelumnya dan margin', function () {
     ]);
 
     $this->actingAs($user);
-    $response = $this->get('/reports/financial/income-statement?start_date=2026-02-01&end_date=2026-02-28');
+    $response = $this->get('/financial/income-statement?start_date=2026-02-01&end_date=2026-02-28');
     $response->assertOk();
     $props = $response->viewData('page')['props'];
 
@@ -299,7 +300,7 @@ test('laba rugi memisahkan beban pajak dari beban operasional', function () {
     ]);
 
     $this->actingAs($user);
-    $response = $this->get('/reports/financial/income-statement?start_date=2026-02-01&end_date=2026-02-28');
+    $response = $this->get('/financial/income-statement?start_date=2026-02-01&end_date=2026-02-28');
     $response->assertOk();
     $props = $response->viewData('page')['props'];
 
@@ -336,7 +337,7 @@ test('neraca mengelompokkan akun dan menghitung subtotal', function () {
     ]);
 
     $this->actingAs($user);
-    $response = $this->get('/reports/financial/balance-sheet?as_of=2026-08-31');
+    $response = $this->get('/financial/balance-sheet?as_of=2026-08-31');
     $response->assertOk();
     $props = $response->viewData('page')['props'];
 
@@ -356,20 +357,20 @@ test('posting kas masuk revenue menghasilkan jurnal seimbang', function () {
     [$store, $user] = makeReportOrg('CT1');
 
     $shift = CashShift::create([
-        'store_id'     => $store->id,
-        'user_id'      => $user->id,
+        'store_id' => $store->id,
+        'user_id' => $user->id,
         'opening_cash' => 0,
         'shift_number' => 1,
     ]);
 
     $ct = CashTransaction::create([
-        'store_id'      => $store->id,
-        'user_id'       => $user->id,
+        'store_id' => $store->id,
+        'user_id' => $user->id,
         'cash_shift_id' => $shift->id,
-        'type'          => CashTransaction::TYPE_IN,
-        'category'      => CashTransaction::CATEGORY_REVENUE,
-        'amount'        => 50000,
-        'notes'         => 'Jasa titip',
+        'type' => CashTransaction::TYPE_IN,
+        'category' => CashTransaction::CATEGORY_REVENUE,
+        'amount' => 50000,
+        'notes' => 'Jasa titip',
     ]);
 
     JournalPoster::postCashTransaction($store, $ct);
@@ -378,7 +379,7 @@ test('posting kas masuk revenue menghasilkan jurnal seimbang', function () {
     expect($ct->journal_entry_id)->not->toBeNull();
 
     $entry = $ct->journalEntry()->with('lines')->first();
-    $totalDebit  = $entry->lines->sum('debit');
+    $totalDebit = $entry->lines->sum('debit');
     $totalCredit = $entry->lines->sum('credit');
     expect($totalDebit)->toEqual($totalCredit);
     expect(count($entry->lines))->toBe(2);
@@ -388,27 +389,27 @@ test('posting kas keluar expense menghasilkan jurnal seimbang', function () {
     [$store, $user] = makeReportOrg('CT2');
 
     $shift = CashShift::create([
-        'store_id'     => $store->id,
-        'user_id'      => $user->id,
+        'store_id' => $store->id,
+        'user_id' => $user->id,
         'opening_cash' => 0,
         'shift_number' => 1,
     ]);
 
     $ct = CashTransaction::create([
-        'store_id'      => $store->id,
-        'user_id'       => $user->id,
+        'store_id' => $store->id,
+        'user_id' => $user->id,
         'cash_shift_id' => $shift->id,
-        'type'          => CashTransaction::TYPE_OUT,
-        'category'      => CashTransaction::CATEGORY_EXPENSE,
-        'amount'        => 15000,
-        'notes'         => 'Beli perlengkapan',
+        'type' => CashTransaction::TYPE_OUT,
+        'category' => CashTransaction::CATEGORY_EXPENSE,
+        'amount' => 15000,
+        'notes' => 'Beli perlengkapan',
     ]);
 
     JournalPoster::postCashTransaction($store, $ct);
 
     $ct->refresh();
     $entry = $ct->journalEntry()->with('lines')->first();
-    $totalDebit  = $entry->lines->sum('debit');
+    $totalDebit = $entry->lines->sum('debit');
     $totalCredit = $entry->lines->sum('credit');
     expect($totalDebit)->toEqual($totalCredit);
 });
@@ -417,20 +418,20 @@ test('posting ulang tidak membuat duplikat jurnal', function () {
     [$store, $user] = makeReportOrg('CT3');
 
     $shift = CashShift::create([
-        'store_id'     => $store->id,
-        'user_id'      => $user->id,
+        'store_id' => $store->id,
+        'user_id' => $user->id,
         'opening_cash' => 0,
         'shift_number' => 1,
     ]);
 
     $ct = CashTransaction::create([
-        'store_id'      => $store->id,
-        'user_id'       => $user->id,
+        'store_id' => $store->id,
+        'user_id' => $user->id,
         'cash_shift_id' => $shift->id,
-        'type'          => CashTransaction::TYPE_IN,
-        'category'      => CashTransaction::CATEGORY_NON_REVENUE,
-        'amount'        => 100000,
-        'notes'         => 'Setoran modal',
+        'type' => CashTransaction::TYPE_IN,
+        'category' => CashTransaction::CATEGORY_NON_REVENUE,
+        'amount' => 100000,
+        'notes' => 'Setoran modal',
     ]);
 
     JournalPoster::postCashTransaction($store, $ct);
@@ -753,7 +754,7 @@ test('rekonsiliasi membandingkan saldo buku dengan fisik', function () {
     $product->update(['stock_quantity' => '5000.0000', 'average_cost' => '8.000000']);
 
     $this->actingAs($user);
-    $response = $this->get('/reports/financial/reconciliation?as_of=2026-08-31');
+    $response = $this->get('/financial/reconciliation?as_of=2026-08-31');
     $response->assertOk();
     $props = $response->viewData('page')['props'];
 
@@ -827,7 +828,7 @@ test('laporan perubahan ekuitas menghitung saldo awal, perubahan, dan saldo akhi
     ]);
 
     $this->actingAs($user);
-    $response = $this->get('/reports/financial/statement-of-equity-changes?start_date=2026-08-01&end_date=2026-08-31');
+    $response = $this->get('/financial/statement-of-equity-changes?start_date=2026-08-01&end_date=2026-08-31');
     $response->assertOk();
     $props = $response->viewData('page')['props'];
 
@@ -890,7 +891,7 @@ test('arus kas akuntansi mengelompokkan mutasi kas ke operasi, investasi, dan pe
     ]);
 
     $this->actingAs($user);
-    $response = $this->get('/reports/financial/cash-flow?start_date=2026-08-01&end_date=2026-08-31');
+    $response = $this->get('/financial/cash-flow?start_date=2026-08-01&end_date=2026-08-31');
     $response->assertOk();
     $props = $response->viewData('page')['props'];
 
@@ -941,7 +942,7 @@ test('calk menampilkan saldo akun penting dari jurnal', function () {
     ]);
 
     $this->actingAs($user);
-    $response = $this->get('/reports/financial/calk?as_of=2026-08-31');
+    $response = $this->get('/financial/calk?as_of=2026-08-31');
     $response->assertOk();
     $props = $response->viewData('page')['props'];
 
@@ -993,7 +994,7 @@ test('arus kas mengklasifikasikan pembelian aset tetap sebagai aktivitas investa
     ]);
 
     $this->actingAs($user);
-    $response = $this->get('/reports/financial/cash-flow?start_date=2026-08-01&end_date=2026-08-31');
+    $response = $this->get('/financial/cash-flow?start_date=2026-08-01&end_date=2026-08-31');
     $props = $response->viewData('page')['props'];
 
     expect($props['investing']['outflow'])->toBe(2000000.0)
@@ -1009,7 +1010,7 @@ test('status laporan default adalah draft', function () {
     ChartOfAccountsBootstrap::ensureForStore($store);
 
     $this->actingAs($user);
-    $response = $this->get('/reports/financial/income-statement?start_date=2026-08-01&end_date=2026-08-31');
+    $response = $this->get('/financial/income-statement?start_date=2026-08-01&end_date=2026-08-31');
     $props = $response->viewData('page')['props'];
 
     expect($props['reportStatus'])->toMatchArray([
@@ -1025,7 +1026,7 @@ test('status laporan dapat dijadikan final dan kembali ke draft', function () {
     ChartOfAccountsBootstrap::ensureForStore($store);
 
     $this->actingAs($user);
-    $this->post('/reports/financial/report-status', [
+    $this->post('/financial/report-status', [
         'report_type' => 'laba_rugi',
         'period_end' => '2026-08-31',
         'status' => 'final',
@@ -1039,13 +1040,13 @@ test('status laporan dapat dijadikan final dan kembali ke draft', function () {
         'finalized_by' => $user->id,
     ]);
 
-    $response = $this->get('/reports/financial/income-statement?start_date=2026-08-01&end_date=2026-08-31');
+    $response = $this->get('/financial/income-statement?start_date=2026-08-01&end_date=2026-08-31');
     $props = $response->viewData('page')['props'];
 
     expect($props['reportStatus']['status'])->toBe('final')
         ->and($props['reportStatus']['finalized_by'])->toBe($user->name);
 
-    $this->post('/reports/financial/report-status', [
+    $this->post('/financial/report-status', [
         'report_type' => 'laba_rugi',
         'period_end' => '2026-08-31',
         'status' => 'draft',
@@ -1063,7 +1064,7 @@ test('finalisasi menghasilkan nomor laporan dan identitas dokumen', function () 
     ChartOfAccountsBootstrap::ensureForStore($store);
 
     $this->actingAs($user);
-    $this->post('/reports/financial/report-status', [
+    $this->post('/financial/report-status', [
         'report_type' => 'laba_rugi',
         'period_end' => '2026-08-31',
         'status' => 'final',
@@ -1077,20 +1078,20 @@ test('finalisasi menghasilkan nomor laporan dan identitas dokumen', function () 
         'prepared_by' => $user->id,
     ]);
 
-    $response = $this->get('/reports/financial/income-statement?start_date=2026-08-01&end_date=2026-08-31');
+    $response = $this->get('/financial/income-statement?start_date=2026-08-01&end_date=2026-08-31');
     $props = $response->viewData('page')['props'];
 
     expect($props['reportStatus']['report_number'])->toBe('LR-202608-0001')
         ->and($props['reportStatus']['prepared_by'])->toBe($user->name)
         ->and($props['reportStatus']['issued_at'])->not->toBeNull();
 
-    $this->post('/reports/financial/report-reviewer', [
+    $this->post('/financial/report-reviewer', [
         'report_type' => 'laba_rugi',
         'period_end' => '2026-08-31',
         'reviewed_by' => 'Budi Pemeriksa',
     ])->assertSessionHas('success');
 
-    $response = $this->get('/reports/financial/income-statement?start_date=2026-08-01&end_date=2026-08-31');
+    $response = $this->get('/financial/income-statement?start_date=2026-08-01&end_date=2026-08-31');
     $props = $response->viewData('page')['props'];
 
     expect($props['reportStatus']['reviewed_by'])->toBe('Budi Pemeriksa');
@@ -1111,7 +1112,7 @@ test('status laporan terkunci saat periode ditutup', function () {
     ]);
 
     $this->actingAs($user);
-    $response = $this->get('/reports/financial/income-statement?start_date=2026-08-01&end_date=2026-08-31');
+    $response = $this->get('/financial/income-statement?start_date=2026-08-01&end_date=2026-08-31');
     $props = $response->viewData('page')['props'];
 
     expect($props['reportStatus'])->toMatchArray([
@@ -1121,7 +1122,7 @@ test('status laporan terkunci saat periode ditutup', function () {
         'finalized_by' => null,
     ]);
 
-    $this->post('/reports/financial/report-status', [
+    $this->post('/financial/report-status', [
         'report_type' => 'laba_rugi',
         'period_end' => '2026-08-31',
         'status' => 'final',

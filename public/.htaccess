@@ -74,6 +74,36 @@ AddHandler application/x-httpd-php83 .php
     ExpiresDefault "access plus 1 week"
 </IfModule>
 
+# ===== CACHE-CONTROL FALLBACK =====
+# mod_expires di atas hanya aktif jika mod_expires tersedia. Di server
+# tanpa mod_expires, TTL tidak dikirim sehingga Lighthouse menilai
+# "Use efficient cache durations" sebagai masalah. Header Cache-Control
+# di bawah tetap bekerja via mod_headers yang hampir selalu tersedia.
+<IfModule mod_headers.c>
+    # Gambar - 1 tahun
+    <FilesMatch "\.(?:jpe?g|png|gif|webp|svg|ico|bmp|avif)$">
+        Header set Cache-Control "public, max-age=31536000"
+    </FilesMatch>
+
+    # Font - 1 tahun
+    <FilesMatch "\.(?:woff2?|ttf|otf|eot)$">
+        Header set Cache-Control "public, max-age=31536000"
+    </FilesMatch>
+
+    # CSS & JS - 1 bulan (Vite hash file tetap aman)
+    <FilesMatch "\.(?:css|js|map)$">
+        Header set Cache-Control "public, max-age=2592000"
+    </FilesMatch>
+
+    # HTML - selalu revalidasi (pastikan tidak di-cache client)
+    <FilesMatch "\.html$">
+        Header set Cache-Control "no-cache, must-revalidate"
+    </FilesMatch>
+    <FilesMatch "\.php$">
+        Header set Cache-Control "no-cache, must-revalidate"
+    </FilesMatch>
+</IfModule>
+
 # ===== COMPRESS TEXT ASSETS =====
 <IfModule mod_deflate.c>
     AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css application/javascript application/json

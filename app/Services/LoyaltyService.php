@@ -262,10 +262,17 @@ class LoyaltyService
                     return 0;
                 }
 
+                // Batch-lock all ledgers for this customer
+                $ledgerIds = $ledgers->pluck('id')->values();
+                $freshRows = LoyaltyPointLedger::query()
+                    ->lockForUpdate()
+                    ->whereIn('id', $ledgerIds)
+                    ->get()
+                    ->keyBy('id');
+
                 $sum = 0;
                 foreach ($ledgers as $row) {
-                    /** @var LoyaltyPointLedger $fresh */
-                    $fresh = LoyaltyPointLedger::query()->lockForUpdate()->find($row->id);
+                    $fresh = $freshRows->get($row->id);
                     if (! $fresh || $fresh->points_remaining <= 0) {
                         continue;
                     }
@@ -321,8 +328,13 @@ class LoyaltyService
             ->groupBy('customer_id');
 
         $count = 0;
+
+        // Batch-load customers to avoid N+1 queries
+        $customerIds = $rows->keys();
+        $customers = Customer::query()->whereIn('id', $customerIds)->get()->keyBy('id');
+
         foreach ($rows as $customerId => $ledgers) {
-            $customer = Customer::find($customerId);
+            $customer = $customers->get($customerId);
             if (! $customer) {
                 continue;
             }

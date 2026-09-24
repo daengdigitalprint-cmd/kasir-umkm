@@ -58,6 +58,8 @@ import {
     BookOpenCheck,
     KeyRound,
     Warehouse as WarehouseIcon,
+    Bike,
+    Tag,
 } from 'lucide-vue-next';
 
 interface PaymentMethod {
@@ -88,6 +90,7 @@ interface Props {
         description?: string;
         address?: string;
         phone?: string;
+        alert_whatsapp_numbers?: string;
         email?: string;
         website?: string;
         business_type?: string;
@@ -117,6 +120,10 @@ interface Props {
         direct_stock_edit?: boolean;
         warehouse_enabled?: boolean;
         is_allow_local_purchase?: boolean;
+        online_sales_enabled?: boolean;
+        online_commission_gofood?: number;
+        online_commission_grabfood?: number;
+        online_commission_shopeefood?: number;
         queue_module_enabled?: boolean;
         attendance_enabled?: boolean;
         scan_meja_enabled?: boolean;
@@ -208,6 +215,7 @@ const activeModuleCount = computed(
             storeForm.receivables_enabled,
             storeForm.cashier_pin_enabled,
             storeForm.warehouse_enabled,
+            storeForm.online_sales_enabled,
         ].filter(Boolean).length,
 );
 
@@ -251,6 +259,7 @@ const storeForm = useForm({
     description: props.store?.description || '',
     address: props.store?.address || '',
     phone: props.store?.phone || '',
+    alert_whatsapp_numbers: props.store?.alert_whatsapp_numbers || '',
     email: props.store?.email || '',
     website: props.store?.website || '',
     business_type: props.store?.business_type || 'general',
@@ -282,7 +291,12 @@ const storeForm = useForm({
     direct_stock_edit: props.store?.direct_stock_edit === true,
     warehouse_enabled: props.store?.warehouse_enabled === true,
     is_allow_local_purchase: props.store?.is_allow_local_purchase === true,
+    online_sales_enabled: props.store?.online_sales_enabled === true,
+    online_commission_gofood: props.store?.online_commission_gofood ?? 20,
+    online_commission_grabfood: props.store?.online_commission_grabfood ?? 20,
+    online_commission_shopeefood: props.store?.online_commission_shopeefood ?? 15,
     queue_module_enabled: props.store?.queue_module_enabled === true,
+    cup_label_enabled: props.store?.cup_label_enabled === true,
     wholesale_enabled: props.store?.wholesale_enabled === true,
     attendance_enabled: props.store?.attendance_enabled === true,
     scan_meja_enabled: props.store?.scan_meja_enabled === true,
@@ -1001,6 +1015,26 @@ async function toggleAccounting() {
                                         </div>
                                     </div>
 
+                                    <div class="space-y-2">
+                                        <Label for="alert_whatsapp_numbers" class="flex items-center gap-2">
+                                            <Phone class="h-4 w-4 text-emerald-600" />
+                                            Nomor WhatsApp admin (peringatan otomatis)
+                                        </Label>
+                                        <Input
+                                            id="alert_whatsapp_numbers"
+                                            v-model="storeForm.alert_whatsapp_numbers"
+                                            type="text"
+                                            placeholder="62812xxxxxxx,62813xxxxxxx"
+                                            class="h-12"
+                                        />
+                                        <p class="text-xs text-gray-500">
+                                            Bot WhatsApp akan kirim peringatan stok/omzet/margin ke nomor ini (pisah koma jika lebih dari satu). Kosongkan untuk menonaktifkan WA per toko.
+                                        </p>
+                                        <div v-if="storeForm.errors.alert_whatsapp_numbers" class="text-sm text-red-600">
+                                            {{ storeForm.errors.alert_whatsapp_numbers }}
+                                        </div>
+                                    </div>
+
                                     <div class="grid gap-4 md:grid-cols-2">
                                         <div class="space-y-2">
                                             <Label for="store_email">Email Toko</Label>
@@ -1265,6 +1299,7 @@ async function toggleAccounting() {
                                                     </p>
                                                 </div>
                                             </button>
+
                                             <!-- Produksi -->
                                             <button
                                                 type="button"
@@ -1335,41 +1370,43 @@ async function toggleAccounting() {
                                                     </p>
                                                 </div>
                                             </button>
-                                            <!-- Modul Antrian -->
+
+                                            <!-- Stiker Cup / Label Pesanan -->
                                             <button
                                                 type="button"
                                                 role="switch"
-                                                :aria-checked="storeForm.queue_module_enabled"
-                                                @click="storeForm.queue_module_enabled = !storeForm.queue_module_enabled"
+                                                :aria-checked="storeForm.cup_label_enabled"
+                                                @click="storeForm.cup_label_enabled = !storeForm.cup_label_enabled"
                                                 class="group relative flex items-start gap-3 rounded-xl border p-3.5 text-left transition-all duration-200 cursor-pointer"
-                                                :class="storeForm.queue_module_enabled
+                                                :class="storeForm.cup_label_enabled
                                                     ? 'border-emerald-300 bg-emerald-50/80'
                                                     : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'"
                                             >
                                                 <div
                                                     class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors"
-                                                    :class="storeForm.queue_module_enabled ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'"
+                                                    :class="storeForm.cup_label_enabled ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'"
                                                 >
-                                                    <Ticket class="h-5 w-5" />
+                                                    <Tag class="h-5 w-5" />
                                                 </div>
                                                 <div class="min-w-0 flex-1">
                                                     <div class="flex items-center justify-between gap-2">
-                                                        <span class="text-sm font-semibold" :class="storeForm.queue_module_enabled ? 'text-emerald-900' : 'text-slate-700'">Modul Antrian</span>
+                                                        <span class="text-sm font-semibold" :class="storeForm.cup_label_enabled ? 'text-emerald-900' : 'text-slate-700'">Stiker Cup / Label Pesanan</span>
                                                         <span
                                                             class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors"
-                                                            :class="storeForm.queue_module_enabled ? 'bg-emerald-500' : 'bg-slate-300'"
+                                                            :class="storeForm.cup_label_enabled ? 'bg-emerald-500' : 'bg-slate-300'"
                                                         >
                                                             <span
                                                                 class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
-                                                                :class="storeForm.queue_module_enabled ? 'translate-x-[18px]' : 'translate-x-0.5'"
+                                                                :class="storeForm.cup_label_enabled ? 'translate-x-[18px]' : 'translate-x-0.5'"
                                                             />
                                                         </span>
                                                     </div>
                                                     <p class="mt-0.5 text-xs text-slate-500 leading-snug">
-                                                        Antrian pelanggan (kasir, layanan, dll) di sidebar.
+                                                        Aktifkan tombol cetak stiker label per cup/item di kasir untuk warkop atau kafe.
                                                     </p>
                                                 </div>
                                             </button>
+
                                             <!-- Harga Grosir -->
                                             <button
                                                 type="button"
@@ -1779,6 +1816,92 @@ async function toggleAccounting() {
                                                     </span>
                                                 </span>
                                             </label>
+
+                                            <!-- Penjualan Online (Aggregator F&B: GoFood/GrabFood/ShopeeFood) -->
+                                            <button
+                                                type="button"
+                                                role="switch"
+                                                :aria-checked="storeForm.online_sales_enabled"
+                                                @click="storeForm.online_sales_enabled = !storeForm.online_sales_enabled"
+                                                class="group relative flex items-start gap-3 rounded-xl border p-3.5 text-left transition-all duration-200 cursor-pointer sm:col-span-2"
+                                                :class="storeForm.online_sales_enabled
+                                                    ? 'border-orange-300 bg-orange-50/80'
+                                                    : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'"
+                                            >
+                                                <div
+                                                    class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors"
+                                                    :class="storeForm.online_sales_enabled ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'"
+                                                >
+                                                    <Bike class="h-5 w-5" />
+                                                </div>
+                                                <div class="min-w-0 flex-1">
+                                                    <div class="flex items-center justify-between gap-2">
+                                                        <span class="text-sm font-semibold" :class="storeForm.online_sales_enabled ? 'text-orange-900' : 'text-slate-700'">Pesanan Online (Aggregator)</span>
+                                                        <span
+                                                            class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors"
+                                                            :class="storeForm.online_sales_enabled ? 'bg-orange-500' : 'bg-slate-300'"
+                                                        >
+                                                            <span
+                                                                class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+                                                                :class="storeForm.online_sales_enabled ? 'translate-x-[18px]' : 'translate-x-0.5'"
+                                                            />
+                                                        </span>
+                                                    </div>
+                                                    <p class="mt-0.5 text-xs text-slate-500 leading-snug">
+                                                        Aktif: pilih sumber pesanan GoFood, GrabFood, atau ShopeeFood saat checkout di POS, dengan pencatatan biaya komisi otomatis.
+                                                        Nonaktif: sumber pesanan hanya Beli Langsung dan Antar Sendiri; transaksi pesanan online tidak tersedia.
+                                                    </p>
+                                                    <div v-if="storeForm.errors.online_sales_enabled" class="text-sm text-red-600 mt-1">
+                                                        {{ storeForm.errors.online_sales_enabled }}
+                                                    </div>
+                                                </div>
+                                            </button>
+
+                                            <!-- Komisi default per aggregator (hanya tampil saat pesanan online aktif) -->
+                                            <div
+                                                v-if="storeForm.online_sales_enabled"
+                                                class="ml-6 grid grid-cols-3 gap-3 rounded-lg border border-orange-200 bg-orange-50/60 p-3"
+                                            >
+                                                <div class="space-y-1">
+                                                    <label class="text-xs font-medium text-orange-900">GoFood (%)</label>
+                                                    <input
+                                                        v-model.number="storeForm.online_commission_gofood"
+                                                        type="number"
+                                                        min="0"
+                                                        max="100"
+                                                        step="0.5"
+                                                        class="h-8 w-full rounded border border-orange-200 bg-white px-2 text-sm tabular-nums focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                                                    />
+                                                    <div v-if="storeForm.errors.online_commission_gofood" class="text-xs text-red-600">{{ storeForm.errors.online_commission_gofood }}</div>
+                                                </div>
+                                                <div class="space-y-1">
+                                                    <label class="text-xs font-medium text-orange-900">GrabFood (%)</label>
+                                                    <input
+                                                        v-model.number="storeForm.online_commission_grabfood"
+                                                        type="number"
+                                                        min="0"
+                                                        max="100"
+                                                        step="0.5"
+                                                        class="h-8 w-full rounded border border-orange-200 bg-white px-2 text-sm tabular-nums focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                                                    />
+                                                    <div v-if="storeForm.errors.online_commission_grabfood" class="text-xs text-red-600">{{ storeForm.errors.online_commission_grabfood }}</div>
+                                                </div>
+                                                <div class="space-y-1">
+                                                    <label class="text-xs font-medium text-orange-900">ShopeeFood (%)</label>
+                                                    <input
+                                                        v-model.number="storeForm.online_commission_shopeefood"
+                                                        type="number"
+                                                        min="0"
+                                                        max="100"
+                                                        step="0.5"
+                                                        class="h-8 w-full rounded border border-orange-200 bg-white px-2 text-sm tabular-nums focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                                                    />
+                                                    <div v-if="storeForm.errors.online_commission_shopeefood" class="text-xs text-red-600">{{ storeForm.errors.online_commission_shopeefood }}</div>
+                                                </div>
+                                                <p class="col-span-3 text-xs text-orange-700">
+                                                    Komisi default per channel. Kasir masih dapat mengubah nilainya saat checkout.
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
 

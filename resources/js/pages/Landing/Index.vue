@@ -49,7 +49,12 @@ const assetsBase = '/sastik-assets';
 /** Fase 1: jQuery (harus duluan — semua plugin bergantung). */
 const jqueryScript = `${assetsBase}/js/jquery-3.7.1.min.js`;
 
-/** Fase 2: Plugin-plugin (bisa paralel). */
+/** Fase 2: Plugin inti yang menjalankan layout/interaksi saat DOM ready.
+ * lenis.js termasuk di sini karena main.js langsung memuat
+ * `new Lenis()` di tahap inti — tidak boleh ditunda.
+ * parallaxie.js juga wajib di fase ini karena main.js memanggil
+ * `$('.parallaxie').parallaxie()` di tahap inti.
+ */
 const pluginScripts: string[] = [
     `${assetsBase}/js/bootstrap.bundle.min.js`,
     `${assetsBase}/js/swiper.min.js`,
@@ -62,15 +67,23 @@ const pluginScripts: string[] = [
     `${assetsBase}/js/jquery.magnific-popup.min.js`,
     `${assetsBase}/js/jqueryui.js`,
     `${assetsBase}/js/odometer.min.js`,
-    `${assetsBase}/js/parallaxie.js`,
-    `${assetsBase}/js/parallax.min.js`,
     `${assetsBase}/js/easing.min.js`,
     `${assetsBase}/js/scrollspy.js`,
-    `${assetsBase}/js/plugin.js`,
     `${assetsBase}/js/lenis.js`,
+    `${assetsBase}/js/parallaxie.js`,
+    `${assetsBase}/js/plugin.js`,
 ];
 
-/** Fase 3: main.js (harus terakhir — depends on semua plugin). */
+/**
+ * Fase 2b: Skrip non-kritis (tidak dipanggil main.js).
+ * Dimuat via idle callback setelah `main.js` selesai, sehingga tidak
+ * menambah hierarki dependensi kritis (LCP/FCP).
+ */
+const deferredScripts: string[] = [
+    `${assetsBase}/js/parallax.min.js`,
+];
+
+/** Fase 3: main.js (harus terakhir — depends on semua plugin inti). */
 const mainScript = `${assetsBase}/js/main.js`;
 
 const loadedScripts: HTMLScriptElement[] = [];
@@ -97,10 +110,15 @@ function loadScript(url: string): Promise<void> {
 async function loadScriptsOptimized(): Promise<void> {
     // Fase 1: jQuery (blocking)
     await loadScript(jqueryScript);
-    // Fase 2: semua plugin paralel
+    // Fase 2: semua plugin inti paralel
     await Promise.all(pluginScripts.map(loadScript));
-    // Fase 3: main.js (setelah semua siap)
+    // Fase 3: main.js (setelah semua plugin inti siap)
     await loadScript(mainScript);
+}
+
+async function loadDeferredScripts(): Promise<void> {
+    // parallax.min.js tidak dipanggil main.js; dimuat belakangan saja.
+    await Promise.all(deferredScripts.map(loadScript));
 }
 
 onMounted(() => {
@@ -111,17 +129,31 @@ onMounted(() => {
     // main.js menyembunyikan elemen animasi via gsap.set() lalu mengungkapnya
     // di dalam $(window).on('load', preloader). Karena script di-load dinamis
     // SETELAH event load asli, handler tersebut tidak pernah dipanggil.
-    // Setelah semua script termuat, dispatch synthetic load event untuk
+    // Setelah semua script inti termuat, dispatch synthetic load event untuk
     // memicu preloader() → xb_reveal_animation() → wowAnimation().
-    void loadScriptsOptimized().then(() => {
+    void loadScriptsOptimized().then(async () => {
+        // Dispatch synthetic load (hanya jika load asli belum terjadi /
+        // sudah melampui saat main.js termuat).
         if (document.readyState === 'complete') {
             window.dispatchEvent(new Event('load'));
         }
+
+        // Skrip parallax dimuat via idle callback — setelah load +
+        // main.js selesai berjalan, tidak memblokir FCP/LCP.
+        const loadDeferred = () => {
+            void loadDeferredScripts();
+        };
+        if ('requestIdleCallback' in window) {
+            (window as unknown as { requestIdleCallback: (cb: () => void) => number }).requestIdleCallback(loadDeferred, { timeout: 2000 });
+        } else {
+            window.setTimeout(loadDeferred, 500);
+        }
+
         // Fallback: jika preloader masih terlihat setelah 5s, sembunyikan manual
         const preloader = document.getElementById('preloader');
         if (preloader) {
             setTimeout(() => {
-                if (preloader && preloader.style.display !== 'none' && !preloader.classList.contains('preloader-hidden')) {
+                if (preloader.style.display !== 'none' && !preloader.classList.contains('preloader-hidden')) {
                     preloader.classList.add('preloader-hidden', 'xb-loader-hidden');
                     preloader.style.display = 'none';
                 }
@@ -145,13 +177,8 @@ onUnmounted(() => {
 <template>
     <div>
         <Head :title="pageTitle">
-            <!-- Preconnect to Google Fonts -->
-            <link rel="preconnect" href="https://fonts.googleapis.com" />
+            <!-- Preconnect gstatic (font file) — googleapis sudah di app.blade.php -->
             <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-
-            <!-- Preload Google Font: Plus Jakarta Sans -->
-            <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" />
-            <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" media="print" onload="this.media='all'" />
 
             <!-- Preload CSS kritis untuk rendering cepat -->
             <link rel="preload" as="style" :href="`${assetsBase}/css/bootstrap.min.css`" />
@@ -170,7 +197,6 @@ onUnmounted(() => {
             <link rel="stylesheet" :href="`${assetsBase}/css/swiper.min.css`" media="print" onload="this.media='all'" />
             <link rel="stylesheet" :href="`${assetsBase}/css/odometer.css`" media="print" onload="this.media='all'" />
             <link rel="stylesheet" :href="`${assetsBase}/css/nice-select.css`" media="print" onload="this.media='all'" />
-            <link rel="stylesheet" :href="`${assetsBase}/css/custom-fonts.css`" media="print" onload="this.media='all'" />
             <link rel="stylesheet" :href="`${assetsBase}/css/magnific-popup.css`" media="print" onload="this.media='all'" />
             <link rel="stylesheet" :href="`${assetsBase}/css/jquery-ui.css`" media="print" onload="this.media='all'" />
 
@@ -220,7 +246,7 @@ onUnmounted(() => {
         <div id="preloader" class="xb-loader">
             <div class="xb-loader-inner">
                 <div class="xb-loader-logo">
-                    <img :src="maskotUrl" alt="logo" />
+                    <img :src="maskotUrl" alt="logo" width="3194" height="1037" />
                 </div>
             </div>
         </div>
@@ -228,15 +254,15 @@ onUnmounted(() => {
         <div class="body_wrap">
             <div class="body-container m-auto mxw-1460">
                 <div class="xb-line-pattern">
-                    <img :src="`${assetsBase}/img/shape/line-pattern.png`" alt="" />
-                    <img :src="`${assetsBase}/img/shape/line-pattern.png`" alt="" />
+                    <img :src="`${assetsBase}/img/shape/line-pattern.png`" alt="" aria-hidden="true" width="64" height="1200">
+                    <img :src="`${assetsBase}/img/shape/line-pattern.png`" alt="" aria-hidden="true" width="64" height="1200">
                 </div>
                 <div class="body-inner" data-bg-color="#fff">
-                    <LandingNav :maskot-url="maskotUrl" :assets-base="assetsBase" />
+                    <LandingNav :maskot-url="maskotUrl" />
                     <div class="body-overlay"></div>
 
                     <main>
-                        <LandingHero :maskot-url="maskotUrl" :assets-base="assetsBase" />
+                        <LandingHero :assets-base="assetsBase" />
                         <LandingValue :assets-base="assetsBase" />
                         <LandingBrand :assets-base="assetsBase" />
                         <LandingAudience :assets-base="assetsBase" />

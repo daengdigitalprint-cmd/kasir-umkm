@@ -1,0 +1,14 @@
+{
+  "version": "1.0",
+  "site": "https://kasirumkm.web.id",
+  "name": "UMKM Kasir",
+  "description": "Aplikasi kasir modern untuk UMKM — mulai gratis tanpa kartu kredit.",
+  "features": ["pwa", "agentic", "inertia"],
+  "crawler": {
+    "allowed": true,
+    "user_agents": ["*"],
+    "disallow_patterns": ["/admin/*", "/dashboard/*", "/api/private/*", "/login", "/register"]
+  },
+  "sitemap": "https://kasirumkm.web.id/sitemap.xml",
+  "robots": "https://kasirumkm.web.id/robots.txt"
+}

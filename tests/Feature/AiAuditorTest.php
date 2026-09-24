@@ -219,7 +219,7 @@ test('analyze gagal jika api key belum dikonfigurasi', function () {
         'end_date' => '2026-08-02',
     ])->assertStatus(503)->assertJson([
         'success' => false,
-        'message' => 'API Key AI belum dikonfigurasi. Tambahkan OPENAI_API_KEY atau ANTHROPIC_API_KEY pada file .env.',
+        'message' => 'API Key AI belum dikonfigurasi. Atur melalui menu Pengaturan AI di dashboard Super Admin.',
     ]);
 });
 

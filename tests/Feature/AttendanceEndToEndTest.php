@@ -92,7 +92,8 @@ test('alur lengkap: pembelian, pengaturan lokasi, check-in dan check-out', funct
             'longitude' => 106.816666,
             'accuracy' => 5,
         ])
-        ->assertRedirect();
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
 
     expect($attendance->fresh()->clock_out)->not->toBeNull();
     expect($attendance->fresh()->status)->toBe('present');
