@@ -11,7 +11,7 @@ import { getInitials } from '@/composables/useInitials';
 import { resolveProfileImageSrc } from '@/lib/profileAvatar';
 import { toastWarning } from '@/lib/swal';
 import { Head, usePage, router } from '@inertiajs/vue3';
-import { BarChart3, Bell, CalendarCheck, Crown, History, Home, Menu, Package, Settings, ShoppingCart, Store, Users, X, PanelLeft, Shirt, ReceiptText, Clock, ArrowRightLeft } from 'lucide-vue-next';
+import { BarChart3, Bell, CalendarCheck, Crown, History, Home, Menu, Package, Settings, ShoppingCart, Store, Users, UsersRound, X, PanelLeft, Shirt, ReceiptText, Clock, ArrowRightLeft } from 'lucide-vue-next';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
 interface AccessibleStoreRow {
@@ -91,6 +91,19 @@ const isOwner = computed(() => Boolean((page.props as { abilities?: { owner?: bo
 const isCashier = computed(() => Boolean((page.props as { abilities?: { cashier?: boolean } }).abilities?.cashier));
 const laundryEnabled = computed(() => Boolean((page.props as { laundry_enabled?: boolean }).laundry_enabled));
 const attendanceEnabled = computed(() => Boolean((page.props as { attendance_enabled?: boolean }).attendance_enabled));
+/** Menu bawah owner: SDM + jumlah pengajuan menunggu di semua outlet. */
+const ownerHrPending = computed(() => {
+    const p = (page.props as { pending_hr_requests?: { leave?: number; overtime?: number; total?: number } }).pending_hr_requests;
+    return Number(p?.total ?? Number(p?.leave ?? 0) + Number(p?.overtime ?? 0));
+});
+const ownerHrEnabled = computed(() => attendanceEnabled.value || ownerHrPending.value > 0);
+const ownerHrHref = computed(() => {
+    const p = (page.props as { pending_hr_requests?: { leave?: number; overtime?: number } }).pending_hr_requests;
+    if ((p?.leave ?? 0) > 0) return '/attendance/leaves';
+    if ((p?.overtime ?? 0) > 0) return '/attendance/overtimes';
+    // Pengajuan hanya di outlet lain: buka Dashboard Owner (kartu SDM per outlet).
+    return attendanceEnabled.value ? '/attendance/report' : '/owner/dashboard';
+});
 
 function onSwitchStore(ev: Event) {
     const el = ev.target as HTMLSelectElement;
@@ -650,7 +663,24 @@ const isCurrentRoute = (href: string) => {
                     <Crown class="!h-6 !w-6 mb-1" />
                     <span class="text-[10px] font-bold">Dashboard</span>
                 </Button>
-                <Button as="a" href="/products" variant="ghost" :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/products') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']">
+                <!-- SDM (absensi & gaji) menggantikan Produk bila modul absensi aktif; badge = pengajuan menunggu -->
+                <Button
+                    v-if="ownerHrEnabled"
+                    as="a"
+                    :href="ownerHrHref"
+                    variant="ghost"
+                    :class="['relative flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/attendance') || isCurrentRoute('/payroll') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']"
+                >
+                    <UsersRound class="!h-6 !w-6 mb-1" />
+                    <span class="text-[10px] font-bold">SDM</span>
+                    <span
+                        v-if="ownerHrPending > 0"
+                        class="absolute right-2 top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-black text-white"
+                    >
+                        {{ ownerHrPending > 99 ? '99+' : ownerHrPending }}
+                    </span>
+                </Button>
+                <Button v-else as="a" href="/products" variant="ghost" :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/products') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']">
                     <Package class="!h-6 !w-6 mb-1" />
                     <span class="text-[10px] font-bold">Produk</span>
                 </Button>

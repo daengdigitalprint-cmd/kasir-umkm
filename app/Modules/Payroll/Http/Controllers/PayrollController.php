@@ -6,6 +6,7 @@ use App\Modules\Attendance\Models\Employee;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Models\PayrollRun;
 use App\Modules\Payroll\Services\PayrollService;
+use App\Modules\Payroll\Support\PayrollApproval;
 use App\Modules\Payroll\Support\PayslipPdf;
 use App\Modules\Payroll\Support\SetupChecklist;
 use App\Services\ActivityLogger;
@@ -111,6 +112,10 @@ class PayrollController extends AdminPayrollController
                 ...$this->workflow($period->loadMissing('approver:id,name', 'payer:id,name')),
             ],
             'accounting_enabled' => JournalPoster::moduleEnabled($store),
+            'approval' => [
+                'owner_only' => PayrollApproval::ownerOnly($store) && PayrollApproval::hasOwner($store),
+                'can_approve' => PayrollApproval::canApprove(auth()->user(), $store),
+            ],
             'skipped_employees' => Employee::query()
                 ->where('store_id', $store->id)
                 ->where('is_active', true)
@@ -164,6 +169,10 @@ class PayrollController extends AdminPayrollController
 
         if (! $period->runs()->exists()) {
             return back()->with('error', 'Hitung gaji periode ini terlebih dahulu sebelum disetujui.');
+        }
+
+        if (! PayrollApproval::canApprove(auth()->user(), $store)) {
+            return back()->with('error', 'Gaji harus disetujui oleh pemilik toko (diatur di Pengaturan Gaji).');
         }
 
         $period->update([

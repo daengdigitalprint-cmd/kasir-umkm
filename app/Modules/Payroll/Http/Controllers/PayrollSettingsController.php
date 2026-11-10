@@ -2,6 +2,7 @@
 
 namespace App\Modules\Payroll\Http\Controllers;
 
+use App\Modules\Payroll\Support\PayrollApproval;
 use App\Services\ActivityLogger;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -38,7 +39,10 @@ class PayrollSettingsController extends AdminPayrollController
                 'absence_deduction_enabled' => (bool) $store->absence_deduction_enabled,
                 // PPh 21
                 'pph21_enabled' => (bool) $store->pph21_enabled,
+                // Persetujuan gaji oleh pemilik
+                'owner_approval' => PayrollApproval::ownerOnly($store),
             ],
+            'has_owner' => PayrollApproval::hasOwner($store),
         ]);
     }
 
@@ -71,7 +75,19 @@ class PayrollSettingsController extends AdminPayrollController
             'absence_deduction_enabled' => 'required|boolean',
             // PPh 21
             'pph21_enabled' => 'required|boolean',
+            'owner_approval' => 'sometimes|boolean',
         ]);
+
+        // Disimpan di settings JSON (bukan kolom tabel stores).
+        if (array_key_exists('owner_approval', $validated)) {
+            $ownerApproval = (bool) $validated['owner_approval'];
+            unset($validated['owner_approval']);
+            if ($ownerApproval !== PayrollApproval::ownerOnly($store)) {
+                PayrollApproval::setOwnerOnly($store, $ownerApproval);
+                ActivityLogger::log($store, 'payroll.settings_updated',
+                    $ownerApproval ? 'Mengaktifkan persetujuan gaji oleh pemilik' : 'Menonaktifkan persetujuan gaji oleh pemilik', $store);
+            }
+        }
 
         $before = $store->only(array_keys($validated));
         $store->update($validated);

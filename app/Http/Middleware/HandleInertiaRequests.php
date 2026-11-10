@@ -158,6 +158,8 @@ class HandleInertiaRequests extends Middleware
                 'pos' => $user?->canUsePointOfSale() ?? false,
                 'cashier' => $user?->isCashier() ?? false,
                 'manage_store_settings' => $user?->canManageStoreSettings() ?? false,
+                // Pengelola SDM (absensi & gaji): owner, admin, manajer — sama dengan otorisasi server.
+                'manage_hr' => $user ? ($user->isSuperAdmin() || in_array($user->getRoleForActiveStore(), ['admin', 'manager', 'owner'], true)) : false,
                 'owner' => $user?->canAccessOwnerPanel() ?? false,
             ],
             'allowed_menus' => $user?->allowedMenus() ?? [],
@@ -257,17 +259,52 @@ class HandleInertiaRequests extends Middleware
     }
 
     /**
-     * @return array{leave: int, overtime: int}
+     * Pengajuan cuti/lembur yang menunggu persetujuan.
+     * `leave`/`overtime` = outlet aktif; `others` = outlet lain yang juga dikelola user
+     * (owner multi-outlet), supaya pengajuan di outlet lain tidak terlewat.
+     *
+     * @return array{leave: int, overtime: int, total: int, others: list<array{id: int, name: string, leave: int, overtime: int}>}
      */
     private function pendingHrRequests(?User $user, ?Store $store): array
     {
-        if (! $user || ! $store || ! $user->canAccessBackOffice() || ! AttendanceSettings::enabled($store)) {
-            return ['leave' => 0, 'overtime' => 0];
+        $empty = ['leave' => 0, 'overtime' => 0, 'total' => 0, 'others' => []];
+        if (! $user || ! $store || ! $user->canAccessBackOffice()) {
+            return $empty;
         }
 
+        $stores = $user->isSuperAdmin()
+            ? collect([$store])
+            : $user->stores()->wherePivotIn('role', ['admin', 'manager', 'owner'])->where('stores.is_active', true)->get();
+        if (! $stores->contains('id', $store->id)) {
+            $stores->push($store);
+        }
+        $stores = $stores->filter(fn (Store $s) => AttendanceSettings::enabled($s))->keyBy('id');
+        if ($stores->isEmpty()) {
+            return $empty;
+        }
+
+        $ids = $stores->keys()->all();
+        $leave = LeaveRequest::query()->whereIn('store_id', $ids)->where('status', 'pending')
+            ->selectRaw('store_id, COUNT(*) as n')->groupBy('store_id')->pluck('n', 'store_id');
+        $overtime = OvertimeRequest::query()->whereIn('store_id', $ids)->where('status', 'pending')
+            ->selectRaw('store_id, COUNT(*) as n')->groupBy('store_id')->pluck('n', 'store_id');
+
+        $others = $stores->except($store->id)
+            ->map(fn (Store $s) => [
+                'id' => $s->id,
+                'name' => $s->name,
+                'leave' => (int) ($leave[$s->id] ?? 0),
+                'overtime' => (int) ($overtime[$s->id] ?? 0),
+            ])
+            ->filter(fn (array $row) => $row['leave'] + $row['overtime'] > 0)
+            ->values()
+            ->all();
+
         return [
-            'leave' => LeaveRequest::query()->where('store_id', $store->id)->where('status', 'pending')->count(),
-            'overtime' => OvertimeRequest::query()->where('store_id', $store->id)->where('status', 'pending')->count(),
+            'leave' => (int) ($leave[$store->id] ?? 0),
+            'overtime' => (int) ($overtime[$store->id] ?? 0),
+            'total' => (int) ($leave->sum() + $overtime->sum()),
+            'others' => $others,
         ];
     }
 }

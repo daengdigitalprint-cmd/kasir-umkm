@@ -19,6 +19,8 @@ use Inertia\Inertia;
 
 class AttendanceController extends Controller
 {
+    private const NOT_EMPLOYEE = 'Akun Anda belum terdaftar sebagai karyawan di toko ini. Daftarkan di menu Karyawan bila Anda juga ikut absen.';
+
     public function __construct(private readonly AttendanceService $attendance) {}
 
     /**
@@ -29,9 +31,10 @@ class AttendanceController extends Controller
         $store = $this->currentStore();
         $user = auth()->user();
 
-        $employee = $this->attendance->resolveActiveEmployee($user, $store);
+        // Pengelola (owner/admin/manajer) yang belum didaftarkan sebagai karyawan: null.
+        $employee = $this->attendance->findAttendee($user, $store);
         // Absen terbuka (termasuk shift malam kemarin) atau absen hari ini.
-        $today = $this->attendance->openAttendanceFor($store, $employee);
+        $today = $employee ? $this->attendance->openAttendanceFor($store, $employee) : null;
 
         // Admin/owner tidak perlu login via PIN — bypass gate.
         $userRole = method_exists($user, 'getRoleForActiveStore')
@@ -67,7 +70,7 @@ class AttendanceController extends Controller
             // Panduan langkah awal hanya untuk pemilik/admin.
             'setup' => $isAdminLike ? SetupChecklist::for($store) : null,
             // Data tampilan ala aplikasi Android: profil, jadwal hari ini, rekap bulan, grafik 7 hari.
-            'profile' => $this->profileData($store, $employee),
+            'profile' => $employee ? $this->profileData($store, $employee) : null,
             'activeCashier' => session('active_cashier') ? [
                 'employee_id' => session('active_cashier.employee_id'),
                 'employee_name' => session('active_cashier.employee_name'),
@@ -86,7 +89,10 @@ class AttendanceController extends Controller
         $geo = $this->validateGeo($request);
         $photo = $request->file('photo');
 
-        $employee = $this->attendance->resolveActiveEmployee($user, $store);
+        $employee = $this->attendance->findAttendee($user, $store);
+        if (! $employee) {
+            return back()->with('error', self::NOT_EMPLOYEE);
+        }
         $attendance = $this->attendance->clockIn($store, $employee, $geo, $photo, $user);
 
         return back()->with('success', 'Check-in berhasil pada '.$attendance->clock_in?->format('H:i').'.');
@@ -103,7 +109,10 @@ class AttendanceController extends Controller
         $geo = $this->validateGeo($request);
         $photo = $request->file('photo');
 
-        $employee = $this->attendance->resolveActiveEmployee($user, $store);
+        $employee = $this->attendance->findAttendee($user, $store);
+        if (! $employee) {
+            return back()->with('error', self::NOT_EMPLOYEE);
+        }
         // Termasuk absen shift malam kemarin yang belum ditutup.
         $attendance = $this->attendance->openAttendanceFor($store, $employee);
 
@@ -154,7 +163,8 @@ class AttendanceController extends Controller
     public function myPhoto(EmployeePhotoService $photos)
     {
         $store = $this->currentStore();
-        $employee = $this->attendance->resolveActiveEmployee(auth()->user(), $store);
+        $employee = $this->attendance->findAttendee(auth()->user(), $store);
+        abort_unless($employee, 404);
 
         return $photos->response($employee);
     }

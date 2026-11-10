@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Save, AlertCircle, Clock, Timer, Shield, Receipt } from 'lucide-vue-next';
+import { Save, AlertCircle, Clock, Timer, Shield, ShieldCheck, Receipt } from 'lucide-vue-next';
 
 const props = defineProps<{
     settings: {
@@ -30,10 +30,12 @@ const props = defineProps<{
         bpjs_jp_wage_cap: number;
         absence_deduction_enabled: boolean;
         pph21_enabled: boolean;
+        owner_approval: boolean;
     };
+    has_owner: boolean;
 }>();
 
-const activeTab = ref<'late' | 'overtime' | 'bpjs' | 'tax'>('late');
+const activeTab = ref<'late' | 'overtime' | 'bpjs' | 'tax' | 'approval'>('late');
 
 const form = useForm({
     late_penalty_per_day: String(props.settings.late_penalty_per_day),
@@ -55,6 +57,7 @@ const form = useForm({
     bpjs_jp_wage_cap: String(Math.round(props.settings.bpjs_jp_wage_cap)),
     absence_deduction_enabled: props.settings.absence_deduction_enabled,
     pph21_enabled: props.settings.pph21_enabled,
+    owner_approval: props.settings.owner_approval,
 });
 
 const formatAmount = (value: string | number) => {
@@ -86,6 +89,7 @@ const tabs = [
     { key: 'overtime' as const, label: 'Lembur', icon: Timer },
     { key: 'bpjs' as const, label: 'BPJS', icon: Shield },
     { key: 'tax' as const, label: 'PPh 21', icon: Receipt },
+    { key: 'approval' as const, label: 'Persetujuan', icon: ShieldCheck },
 ];
 </script>
 
@@ -388,6 +392,33 @@ const tabs = [
                         </div>
                     </div>
 
+                    <Button type="button" class="rounded-xl" :disabled="form.processing" @click="submit">
+                        <Save class="h-4 w-4 mr-1" /> Simpan Pengaturan
+                    </Button>
+                </CardContent>
+            </Card>
+
+            <!-- Tab: Persetujuan gaji -->
+            <Card v-if="activeTab === 'approval'" class="rounded-2xl border-slate-200 shadow-sm">
+                <CardHeader>
+                    <CardTitle>Persetujuan Gaji</CardTitle>
+                    <CardDescription>
+                        Pisahkan yang menghitung dan yang menyetujui gaji. Admin atau manajer menghitung dan memeriksa,
+                        lalu pemilik yang menyetujui sebelum gaji dibayar dan slip terbuka untuk karyawan.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent class="space-y-4">
+                    <label class="flex cursor-pointer items-start gap-3">
+                        <input v-model="form.owner_approval" type="checkbox" class="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+                        <span>
+                            <span class="block font-medium text-slate-800">Gaji hanya bisa disetujui oleh pemilik (owner)</span>
+                            <span class="block text-sm text-slate-500">Admin dan manajer tetap bisa menghitung ulang selama gaji masih berstatus draf.</span>
+                        </span>
+                    </label>
+                    <p v-if="form.owner_approval && !has_owner" class="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+                        Toko ini belum punya akun pemilik (owner), jadi aturan ini belum berlaku: admin tetap bisa menyetujui.
+                        Tambahkan pemilik di menu Tim & Akses.
+                    </p>
                     <Button type="button" class="rounded-xl" :disabled="form.processing" @click="submit">
                         <Save class="h-4 w-4 mr-1" /> Simpan Pengaturan
                     </Button>

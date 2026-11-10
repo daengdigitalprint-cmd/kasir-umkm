@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import AdminLayout from '@/layouts/AdminLayout.vue';
+import OwnerHrSummary, { type HrSummary } from '@/components/owner/OwnerHrSummary.vue';
 import {
     Chart as ChartJS,
     CategoryScale,
@@ -85,6 +86,8 @@ interface ChartDataResponse {
 interface Props {
     stores: StoreItem[];
     chartData: ChartDataResponse;
+    /** Ringkasan SDM lintas outlet (kosong bila tidak ada outlet dengan modul absensi aktif). */
+    hr?: HrSummary;
     filters: {
         period: string;
         start_date: string;
@@ -255,6 +258,9 @@ function setQuickRange(days: number) {
                 </Button>
             </div>
         </template>
+
+        <!-- Ringkasan SDM lintas outlet -->
+        <OwnerHrSummary v-if="hr && hr.outlets.length" :hr="hr" />
 
         <!-- Filter Bar -->
         <Card class="border-0 shadow-lg mb-6">

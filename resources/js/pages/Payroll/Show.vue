@@ -98,6 +98,7 @@ const props = defineProps<{
         journal_entry_id: number | null;
     };
     accounting_enabled: boolean;
+    approval?: { owner_only: boolean; can_approve: boolean };
     skipped_employees: string[];
     runs: Run[];
     totals: {
@@ -215,9 +216,20 @@ const pay = () => {
                         </p>
                     </div>
                     <div class="flex flex-wrap gap-2">
-                        <Button v-if="period.status === 'draft' && runs.length" type="button" class="rounded-xl" @click="approve">
+                        <Button
+                            v-if="period.status === 'draft' && runs.length && approval?.can_approve !== false"
+                            type="button"
+                            class="rounded-xl"
+                            @click="approve"
+                        >
                             <CheckCircle2 class="mr-1 h-4 w-4" /> Setujui
                         </Button>
+                        <p
+                            v-else-if="period.status === 'draft' && runs.length"
+                            class="max-w-xs rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800"
+                        >
+                            Menunggu persetujuan pemilik. Gaji di toko ini hanya bisa disetujui oleh owner.
+                        </p>
                         <template v-if="period.status === 'approved'">
                             <Button type="button" variant="outline" class="rounded-xl" @click="reopen">
                                 <RotateCcw class="mr-1 h-4 w-4" /> Buka kembali

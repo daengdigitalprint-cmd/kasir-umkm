@@ -50,6 +50,40 @@ class AttendanceService
         );
     }
 
+    /** Peran pengelola: tidak otomatis dijadikan karyawan saat membuka halaman absen. */
+    public const MANAGER_ROLES = ['admin', 'manager', 'owner'];
+
+    /**
+     * Karyawan untuk halaman absen web. Kasir aktif (PIN) diutamakan. Staf biasa otomatis
+     * dibuatkan profil karyawan; pengelola (owner/admin/manajer) hanya bila sudah
+     * didaftarkan di menu Karyawan, agar tidak ikut rekap kehadiran & payroll tanpa sengaja.
+     */
+    public function findAttendee(User $user, Store $store): ?Employee
+    {
+        $activeId = session('active_cashier.employee_id');
+        if ($activeId) {
+            $employee = Employee::query()
+                ->where('id', $activeId)
+                ->where('store_id', $store->id)
+                ->where('is_active', true)
+                ->first();
+
+            if ($employee) {
+                return $employee;
+            }
+        }
+
+        if ($user->isSuperAdmin() || in_array($user->getRoleForActiveStore(), self::MANAGER_ROLES, true)) {
+            return Employee::query()
+                ->where('store_id', $store->id)
+                ->where('user_id', $user->id)
+                ->where('is_active', true)
+                ->first();
+        }
+
+        return $this->resolveEmployee($user, $store);
+    }
+
     /**
      * Resolusi karyawan untuk sesi absensi. Prioritaskan kasir aktif (login PIN)
      * dari session; fallback ke profil user akun (owner/admin absen atas nama sendiri).

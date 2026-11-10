@@ -20,6 +20,7 @@ import {
     RefreshCw,
     RotateCcw,
     Umbrella,
+    UserX,
     Users,
     X,
     XCircle,
@@ -75,7 +76,8 @@ const props = defineProps<{
     cashier_login_mode: string;
     activeCashier: { employee_id: number; employee_name: string } | null;
     setup: { steps: SetupStep[]; done: number; total: number; complete: boolean } | null;
-    profile: Profile;
+    /** null = pengelola (owner/admin) yang belum didaftarkan sebagai karyawan. */
+    profile: Profile | null;
 }>();
 
 const BRAND = {
@@ -128,7 +130,7 @@ const greeting = computed(() => {
     return 'Selamat malam,';
 });
 
-const displayName = computed(() => props.activeCashier?.employee_name ?? props.profile.name);
+const displayName = computed(() => props.activeCashier?.employee_name ?? props.profile!.name);
 const initials = computed(() =>
     displayName.value
         .trim()
@@ -149,7 +151,7 @@ const statusInfo = computed(() => (props.attendanceToday ? STATUS[props.attendan
 
 const shiftProgress = computed(() => {
     const att = props.attendanceToday;
-    const schedule = props.profile.schedule;
+    const schedule = props.profile!.schedule;
     if (!schedule || !att?.clock_in) return null;
     if (att.clock_out) return 1;
     const toMin = (hhmm: string) => {
@@ -207,7 +209,7 @@ const refreshLocation = (): Promise<LocationState | null> => {
     return new Promise((resolve) => {
         navigator.geolocation.getCurrentPosition(
             (pos) => {
-                const office = props.profile.office;
+                const office = props.profile!.office;
                 location.value = {
                     latitude: pos.coords.latitude,
                     longitude: pos.coords.longitude,
@@ -374,21 +376,21 @@ function switchEmployee() {
 
 // ── Rekap & grafik ──
 const monthCards = computed(() => [
-    { label: 'Tepat waktu', value: props.profile.month.on_time, color: BRAND.present, icon: CheckCircle2 },
-    { label: 'Telat', value: props.profile.month.late, color: BRAND.late, icon: Clock },
-    { label: 'Alpa', value: props.profile.month.absent, color: BRAND.absent, icon: XCircle },
-    { label: 'Cuti', value: props.profile.month.leave, color: BRAND.leave, icon: Umbrella },
+    { label: 'Tepat waktu', value: props.profile!.month.on_time, color: BRAND.present, icon: CheckCircle2 },
+    { label: 'Telat', value: props.profile!.month.late, color: BRAND.late, icon: Clock },
+    { label: 'Alpa', value: props.profile!.month.absent, color: BRAND.absent, icon: XCircle },
+    { label: 'Cuti', value: props.profile!.month.leave, color: BRAND.leave, icon: Umbrella },
 ]);
 
 const week = computed(() => {
-    const maxHours = Math.max(8, ...props.profile.week.map((d) => d.hours));
-    const total = props.profile.week.reduce((sum, d) => sum + d.hours, 0);
-    const worked = props.profile.week.filter((d) => d.hours > 0).length;
-    const today = props.profile.week[props.profile.week.length - 1]?.date;
+    const maxHours = Math.max(8, ...props.profile!.week.map((d) => d.hours));
+    const total = props.profile!.week.reduce((sum, d) => sum + d.hours, 0);
+    const worked = props.profile!.week.filter((d) => d.hours > 0).length;
+    const today = props.profile!.week[props.profile!.week.length - 1]?.date;
     return {
         total,
         average: worked ? total / worked : 0,
-        bars: props.profile.week.map((d) => ({
+        bars: props.profile!.week.map((d) => ({
             ...d,
             height: d.hours > 0 ? d.hours / maxHours : d.status === 'absent' ? 0.06 : 0.03,
             color: d.status ? STATUS[d.status]?.color ?? '#94A3B8' : null,
@@ -402,7 +404,7 @@ const barsReady = ref(false);
 
 onMounted(() => {
     clockTimer = setInterval(() => (now.value = new Date()), 1000);
-    if (props.settings.require_geolocation) refreshLocation();
+    if (props.profile && props.settings.require_geolocation) refreshLocation();
     requestAnimationFrame(() => (barsReady.value = true));
 });
 
@@ -422,6 +424,22 @@ onBeforeUnmount(() => {
 
             <PayrollSetupGuide v-if="setup" :setup="setup" />
 
+            <!-- Pengelola yang belum terdaftar sebagai karyawan -->
+            <section v-if="!profile" class="rounded-3xl bg-white p-6 text-center shadow-sm ring-1 ring-slate-100">
+                <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50">
+                    <UserX class="h-7 w-7 text-indigo-600" />
+                </div>
+                <h2 class="mt-4 text-lg font-extrabold text-slate-900">Anda belum terdaftar sebagai karyawan</h2>
+                <p class="mx-auto mt-1 max-w-sm text-sm text-slate-500">
+                    Pemilik dan admin tidak otomatis ikut absen. Bila Anda juga bekerja shift dan perlu absen, daftarkan akun Anda di menu Karyawan.
+                </p>
+                <div class="mt-5 flex flex-wrap justify-center gap-2">
+                    <a href="/attendance/report" class="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700">Lihat kehadiran karyawan</a>
+                    <a href="/attendance/employees" class="rounded-xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-200">Buka menu Karyawan</a>
+                </div>
+            </section>
+
+            <template v-else>
             <!-- Header ungu: profil, jam, jadwal -->
             <section
                 class="relative overflow-hidden rounded-[28px] px-5 pb-20 pt-6 text-white"
@@ -630,6 +648,7 @@ onBeforeUnmount(() => {
                     </span>
                 </div>
             </section>
+            </template>
         </div>
 
         <!-- Kamera selfie layar penuh -->

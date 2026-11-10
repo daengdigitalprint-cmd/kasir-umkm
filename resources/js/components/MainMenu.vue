@@ -102,6 +102,8 @@ type NavItem = {
     payrollOnly?: boolean;
     /** Menu SDM untuk pengelola (admin/owner/back-office), selalu dicek walau role dikonfigurasi. */
     hrAdminOnly?: boolean;
+    /** Pengaturan SDM: owner, admin, manajer (ability manage_hr). */
+    hrSettingsOnly?: boolean;
     /** Menu absensi pribadi untuk karyawan non back-office (kasir dll). */
     hrStaffOnly?: boolean;
     /** Tambahan path yang membuat menu ini ditandai aktif. */
@@ -398,7 +400,7 @@ const navigationSource: NavItem[] = [
         section: 'sdm',
         payrollOnly: true,
         hrAdminOnly: true,
-        storeAdminOnly: true,
+        hrSettingsOnly: true,
         activePaths: ['/payroll/settings'],
     },
     // ── Pengaturan ──
@@ -432,6 +434,7 @@ const navigationItems = computed((): ProcessedNavItem[] => {
     const pos = Boolean((page.props as { abilities?: { pos?: boolean } }).abilities?.pos);
     const isOwner = Boolean((page.props as { abilities?: { owner?: boolean } }).abilities?.owner);
     const manageStoreSettings = Boolean((page.props as { abilities?: { manage_store_settings?: boolean } }).abilities?.manage_store_settings);
+    const manageHr = Boolean((page.props as { abilities?: { manage_hr?: boolean } }).abilities?.manage_hr);
     const canAccessActivityLogs = Boolean((page.props as { can_access_activity_logs?: boolean }).can_access_activity_logs);
     const fnb = Boolean((page.props as { fnb_enabled?: boolean }).fnb_enabled);
     const pharmacy = Boolean((page.props as { pharmacy_enabled?: boolean }).pharmacy_enabled);
@@ -450,8 +453,9 @@ const navigationItems = computed((): ProcessedNavItem[] => {
     const pendingQueueCount = Number((page.props as { pending_queue_count?: number }).pending_queue_count ?? 0);
     const pendingTableOrderCount = Number((page.props as { pending_table_order_count?: number }).pending_table_order_count ?? 0);
     const pendingKitchenOrderCount = Number((page.props as { pending_kitchen_order_count?: number }).pending_kitchen_order_count ?? 0);
-    const pendingHr = (page.props as { pending_hr_requests?: { leave?: number; overtime?: number } }).pending_hr_requests;
-    const pendingHrCount = Number(pendingHr?.leave ?? 0) + Number(pendingHr?.overtime ?? 0);
+    const pendingHr = (page.props as { pending_hr_requests?: { leave?: number; overtime?: number; total?: number } }).pending_hr_requests;
+    // Total semua outlet yang dikelola (owner multi-outlet), bukan hanya outlet aktif.
+    const pendingHrCount = Number(pendingHr?.total ?? Number(pendingHr?.leave ?? 0) + Number(pendingHr?.overtime ?? 0));
     const locationType = String((page.props as { location_type?: string }).location_type ?? 'outlet');
     const isWarehouse = locationType === 'central_warehouse' || locationType === 'branch_warehouse';
     const currentRole = String(
@@ -493,6 +497,7 @@ const navigationItems = computed((): ProcessedNavItem[] => {
         // Menu SDM: pengelola melihat grup SDM & Gaji, karyawan biasa hanya "Absensi".
         if (item.hrAdminOnly && !backoffice) return [];
         if (item.hrStaffOnly && backoffice) return [];
+        if (item.hrSettingsOnly && !manageHr) return [];
         if (item.payrollOnly && !payrollEnabled) return [];
         if (item.cashierPinOnly && !cashierPinEnabled) return [];
         if (item.accountingOnly && !accountingEnabled) return [];

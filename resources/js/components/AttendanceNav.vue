@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue';
-import { Link, usePage } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
+import { Link, router, usePage } from '@inertiajs/vue3';
 import {
     BarChart3,
     CalendarCheck,
@@ -10,6 +10,7 @@ import {
     Coins,
     History,
     Settings,
+    Store,
     Wallet,
 } from 'lucide-vue-next';
 
@@ -23,11 +24,31 @@ import {
 type NavItem = { label: string; href: string; icon: unknown; badge?: number };
 
 const page = usePage();
-const abilities = (page.props.abilities ?? {}) as { backoffice?: boolean; manage_store_settings?: boolean };
+const abilities = (page.props.abilities ?? {}) as { backoffice?: boolean; manage_hr?: boolean };
 const isBackoffice = Boolean(abilities.backoffice);
-const canManageSettings = Boolean(abilities.manage_store_settings);
+const canManageSettings = Boolean(abilities.manage_hr);
 const payrollEnabled = Boolean(page.props.payroll_enabled);
-const pending = computed(() => (page.props.pending_hr_requests ?? {}) as { leave?: number; overtime?: number });
+type OtherOutlet = { id: number; name: string; leave: number; overtime: number };
+const pending = computed(
+    () => (page.props.pending_hr_requests ?? {}) as { leave?: number; overtime?: number; others?: OtherOutlet[] },
+);
+
+/** Di halaman Pengajuan: tampilkan outlet lain yang juga punya pengajuan menunggu. */
+const otherOutlets = computed(() => {
+    const url = current.value;
+    if (!isBackoffice || !(url.startsWith('/attendance/leaves') || url.startsWith('/attendance/overtimes'))) return [];
+    return pending.value.others ?? [];
+});
+const switching = ref<number | null>(null);
+const openOutlet = (outlet: OtherOutlet) => {
+    switching.value = outlet.id;
+    const target = outlet.leave > 0 ? '/attendance/leaves' : '/attendance/overtimes';
+    router.post(
+        '/stores/switch',
+        { store_id: outlet.id },
+        { onSuccess: () => router.visit(target), onFinish: () => (switching.value = null) },
+    );
+};
 
 const current = computed(() => page.url.split('?')[0]);
 
@@ -77,6 +98,24 @@ const items = computed<NavItem[]>(() => {
 </script>
 
 <template>
+    <div
+        v-if="otherOutlets.length"
+        class="mb-3 flex flex-wrap items-center gap-2 rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-900 ring-1 ring-amber-200"
+    >
+        <Store class="h-4 w-4 shrink-0 text-amber-600" />
+        <span class="font-semibold">Pengajuan menunggu di outlet lain:</span>
+        <button
+            v-for="outlet in otherOutlets"
+            :key="outlet.id"
+            type="button"
+            class="flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-xs font-bold ring-1 ring-amber-200 hover:bg-amber-100 disabled:opacity-60"
+            :disabled="switching !== null"
+            @click="openOutlet(outlet)"
+        >
+            {{ outlet.name }}
+            <span class="rounded-full bg-red-500 px-1.5 text-[10px] text-white">{{ outlet.leave + outlet.overtime }}</span>
+        </button>
+    </div>
     <nav
         v-if="items.length"
         class="flex gap-1.5 overflow-x-auto rounded-xl bg-white p-1.5 ring-1 ring-slate-200 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"

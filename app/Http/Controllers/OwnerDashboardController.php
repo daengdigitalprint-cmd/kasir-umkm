@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Exports\OwnerRevenueExport;
+use App\Models\Store;
+use App\Modules\Attendance\Services\HrOverviewService;
 use App\Services\OwnerDashboardService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -30,6 +32,10 @@ class OwnerDashboardController extends Controller
         return Inertia::render('Owner/Dashboard', [
             'stores' => $stores->values(),
             'chartData' => $chartData,
+            // Ringkasan SDM lintas outlet (hanya outlet dengan modul absensi aktif).
+            'hr' => app(HrOverviewService::class)->forStores(
+                Store::query()->whereIn('id', $stores->pluck('id'))->where('is_active', true)->with('organization')->orderBy('name')->get()
+            ),
             'filters' => [
                 'period' => $period,
                 'start_date' => $startDate,
