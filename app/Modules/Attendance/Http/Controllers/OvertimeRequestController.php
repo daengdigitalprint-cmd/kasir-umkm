@@ -5,6 +5,7 @@ namespace App\Modules\Attendance\Http\Controllers;
 use App\Models\Store;
 use App\Modules\Attendance\Models\Employee;
 use App\Modules\Attendance\Models\OvertimeRequest;
+use App\Modules\Attendance\Support\AttendanceSettings;
 use App\Services\ActivityLogger;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -27,6 +28,11 @@ class OvertimeRequestController extends AdminAttendanceController
         return Inertia::render('Attendance/Overtimes', [
             'overtimes' => $overtimes,
             'employees' => $this->employees($store),
+            'policy' => [
+                'mode' => AttendanceSettings::overtimeMode($store),
+                'min_minutes' => AttendanceSettings::overtimeMinMinutes($store),
+                'rounding_minutes' => AttendanceSettings::overtimeRoundingMinutes($store),
+            ],
         ]);
     }
 
@@ -51,12 +57,18 @@ class OvertimeRequestController extends AdminAttendanceController
 
         $validated = $request->validate([
             'status' => 'required|in:approved,rejected',
+            // Admin boleh menyesuaikan jam saat menyetujui (mis. lembur terdeteksi 2 jam, disetujui 1,5 jam).
+            'hours' => 'nullable|numeric|min:0.5|max:24',
         ]);
 
         if ((int) $overtime->employee?->user_id === (int) auth()->id()) {
             return back()->with('error', 'Pengajuan lembur milik sendiri harus disetujui oleh atasan/pemilik lain.');
         }
 
+        $detectedHours = (float) $overtime->hours;
+        if ($validated['status'] === 'approved' && isset($validated['hours'])) {
+            $overtime->hours = (float) $validated['hours'];
+        }
         $overtime->status = $validated['status'];
         $overtime->approved_by = $validated['status'] === 'approved' ? auth()->id() : null;
         $overtime->approved_at = $validated['status'] === 'approved' ? now() : null;
@@ -65,7 +77,12 @@ class OvertimeRequestController extends AdminAttendanceController
         ActivityLogger::log($store, 'overtime.'.$validated['status'],
             ($validated['status'] === 'approved' ? 'Menyetujui' : 'Menolak')." lembur {$overtime->employee?->name} {$overtime->work_date?->toDateString()} ({$overtime->hours} jam)",
             $overtime,
-            ['hours' => (float) $overtime->hours, 'work_date' => $overtime->work_date?->toDateString()],
+            [
+                'hours' => (float) $overtime->hours,
+                'hours_before' => $detectedHours,
+                'source' => $overtime->source,
+                'work_date' => $overtime->work_date?->toDateString(),
+            ],
         );
 
         return back()->with('success', $validated['status'] === 'approved'
@@ -123,6 +140,7 @@ class OvertimeRequestController extends AdminAttendanceController
             'hours' => (float) $overtime->hours,
             'status' => $overtime->status,
             'reason' => $overtime->reason,
+            'source' => $overtime->source ?? OvertimeRequest::SOURCE_REQUEST,
         ];
     }
 }

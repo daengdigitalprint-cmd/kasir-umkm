@@ -6,7 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Check, X, Trash2 } from 'lucide-vue-next';
+import { Check, X, Trash2, Sparkles } from 'lucide-vue-next';
+import { ref, watch } from 'vue';
 
 interface Employee {
     id: number;
@@ -22,12 +23,32 @@ interface Overtime {
     hours: number;
     status: string;
     reason: string | null;
+    source: 'request' | 'auto';
 }
 
 const props = defineProps<{
     overtimes: Overtime[];
     employees: Employee[];
+    policy: { mode: 'auto_approval' | 'auto' | 'request'; min_minutes: number; rounding_minutes: number };
 }>();
+
+/** Jam yang akan disetujui per baris (admin boleh mengubah sebelum menyetujui). */
+const approveHours = ref<Record<number, number>>({});
+watch(
+    () => props.overtimes,
+    (rows) => {
+        for (const o of rows) {
+            if (o.status === 'pending' && approveHours.value[o.id] === undefined) approveHours.value[o.id] = o.hours;
+        }
+    },
+    { immediate: true },
+);
+
+const modeText: Record<string, string> = {
+    auto_approval: 'Lembur terdeteksi otomatis dari jam absen pulang dan menunggu persetujuan Anda. Karyawan tidak perlu mengajukan.',
+    auto: 'Lembur terdeteksi otomatis dari jam absen pulang dan langsung dihitung saat gaji dibuat.',
+    request: 'Lembur hanya dihitung bila diajukan karyawan dan Anda setujui.',
+};
 
 const statusLabel: Record<string, string> = {
     pending: 'Menunggu',
@@ -47,7 +68,9 @@ const submit = () => {
 };
 
 const decide = (id: number, status: 'approved' | 'rejected') => {
-    router.patch(`/attendance/overtimes/${id}`, { status }, { preserveScroll: true });
+    const payload: { status: string; hours?: number } = { status };
+    if (status === 'approved' && approveHours.value[id]) payload.hours = approveHours.value[id];
+    router.patch(`/attendance/overtimes/${id}`, payload, { preserveScroll: true });
 };
 
 const remove = (id: number) => {
@@ -65,6 +88,17 @@ const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('id-ID', { day
     <AdminLayout title="Pengajuan Lembur">
         <div class="space-y-6 pb-8">
             <AttendanceNav />
+
+            <div class="flex gap-3 rounded-2xl bg-indigo-50 p-4 text-sm text-indigo-900 ring-1 ring-indigo-100">
+                <Sparkles class="mt-0.5 h-5 w-5 shrink-0 text-indigo-600" />
+                <div>
+                    <p class="font-semibold">{{ modeText[policy.mode] }}</p>
+                    <p v-if="policy.mode !== 'request'" class="mt-0.5 text-indigo-700">
+                        Dihitung bila pulang minimal {{ policy.min_minutes }} menit setelah shift berakhir<template v-if="policy.rounding_minutes">, dibulatkan ke bawah per {{ policy.rounding_minutes }} menit</template>.
+                        Ubah di <a href="/attendance/settings" class="font-semibold underline">Pengaturan SDM</a>.
+                    </p>
+                </div>
+            </div>
 
             <Card class="rounded-2xl border-slate-200 shadow-sm">
                 <CardHeader>
@@ -106,7 +140,8 @@ const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('id-ID', { day
 
             <Card class="rounded-2xl border-slate-200 shadow-sm">
                 <CardHeader>
-                    <CardTitle>Daftar Pengajuan Lembur</CardTitle>
+                    <CardTitle>Daftar Lembur</CardTitle>
+                    <CardDescription>Jam pada baris "Menunggu" bisa diubah sebelum disetujui.</CardDescription>
                 </CardHeader>
                 <CardContent class="overflow-x-auto">
                     <table class="w-full text-left text-sm">
@@ -121,9 +156,32 @@ const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('id-ID', { day
                         </thead>
                         <tbody>
                             <tr v-for="overtime in overtimes" :key="overtime.id" class="border-b border-slate-100">
-                                <td class="py-2 pr-3">{{ overtime.employee_name ?? '—' }}</td>
-                                <td class="py-2 pr-3">{{ fmtDate(overtime.work_date) }}</td>
-                                <td class="py-2 pr-3">{{ overtime.hours }}</td>
+                                <td class="py-2 pr-3">
+                                    <p class="font-medium">{{ overtime.employee_name ?? '—' }}</p>
+                                    <p v-if="overtime.reason" class="text-xs text-slate-500">{{ overtime.reason }}</p>
+                                </td>
+                                <td class="py-2 pr-3 whitespace-nowrap">
+                                    {{ fmtDate(overtime.work_date) }}
+                                    <span
+                                        class="ml-1 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                                        :class="overtime.source === 'auto' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600'"
+                                    >
+                                        {{ overtime.source === 'auto' ? 'Otomatis' : 'Diajukan' }}
+                                    </span>
+                                </td>
+                                <td class="py-2 pr-3">
+                                    <Input
+                                        v-if="overtime.status === 'pending'"
+                                        v-model.number="approveHours[overtime.id]"
+                                        type="number"
+                                        step="0.5"
+                                        min="0.5"
+                                        max="24"
+                                        class="h-8 w-20"
+                                        title="Ubah jam sebelum menyetujui bila perlu"
+                                    />
+                                    <span v-else>{{ overtime.hours }}</span>
+                                </td>
                                 <td class="py-2 pr-3">
                                     <span
                                         class="rounded-full px-2 py-0.5 text-xs font-medium"

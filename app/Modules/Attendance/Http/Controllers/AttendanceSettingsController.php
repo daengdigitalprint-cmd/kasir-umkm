@@ -22,7 +22,10 @@ class AttendanceSettingsController extends Controller
         $this->authorizeAdmin();
 
         return Inertia::render('Attendance/Settings', [
-            'settings' => AttendanceSettings::all($store),
+            'settings' => [
+                ...AttendanceSettings::all($store),
+                'overtime_mode' => AttendanceSettings::overtimeMode($store),
+            ],
             'package' => [
                 'is_purchased' => AttendancePayrollAddOnService::isPurchased($store),
                 'expires_at' => AttendancePayrollAddOnService::attendancePayrollUntil($store),
@@ -55,6 +58,9 @@ class AttendanceSettingsController extends Controller
             'require_geolocation' => 'boolean',
             'grace_minutes' => 'integer|min:0|max:240',
             'overtime_requires_approval' => 'boolean',
+            'overtime_mode' => 'in:auto_approval,auto,request',
+            'overtime_min_minutes' => 'integer|min:0|max:240',
+            'overtime_rounding_minutes' => 'integer|in:0,15,30,60',
             'late_deduction_method' => 'in:none,per_minute,per_day',
             'late_deduction_rate' => 'nullable|numeric|min:0',
         ]);

@@ -287,6 +287,7 @@ class AttendanceService
                 'hours_worked' => null,
                 'overtime_hours' => null,
             ])->save();
+            $this->syncAutoOvertime($attendance);
 
             return;
         }
@@ -299,6 +300,7 @@ class AttendanceService
                 'hours_worked' => null,
                 'overtime_hours' => null,
             ])->save();
+            $this->syncAutoOvertime($attendance);
 
             return;
         }
@@ -329,7 +331,8 @@ class AttendanceService
                 $early = max(0, $shiftEnd - $clockOut);
                 $workedMinutes = max(0, $clockOut - $clockIn - $schedule->break_minutes);
                 $hoursWorked = round($workedMinutes / 60, 2);
-                $overtime = round(max(0, $clockOut - $shiftEnd) / 60, 2);
+                // Lembur: minimal & pembulatan sesuai pengaturan (mis. min 30 menit, per 30 menit).
+                $overtime = AttendanceSettings::overtimeHoursFromMinutes($attendance->store, $clockOut - $shiftEnd);
             }
         }
 
@@ -343,6 +346,95 @@ class AttendanceService
             'hours_worked' => $hoursWorked,
             'overtime_hours' => $overtime,
         ])->save();
+
+        $this->syncAutoOvertime($attendance);
+    }
+
+    /**
+     * Lembur otomatis: buat/perbarui catatan lembur dari jam absen pulang.
+     *
+     * - Mode `auto_approval`: berstatus "menunggu" sampai disetujui admin.
+     * - Mode `auto`: langsung dihitung dari kolom attendance.overtime_hours;
+     *   catatan tetap dibuat (sudah disetujui) agar terlihat di daftar lembur.
+     * - Catatan yang sudah diputuskan admin tidak diubah lagi.
+     * - Bila karyawan sudah mengajukan lembur sendiri untuk tanggal itu, tidak dibuat duplikat.
+     */
+    /**
+     * Cegah lembur ganda: pengajuan manual ditolak bila tanggal itu sudah punya
+     * lembur yang tercatat otomatis dari absen.
+     */
+    public function assertNoAutoOvertime(int $employeeId, string $workDate): void
+    {
+        $auto = OvertimeRequest::query()
+            ->where('employee_id', $employeeId)
+            ->whereDate('work_date', $workDate)
+            ->where('source', OvertimeRequest::SOURCE_AUTO)
+            ->where('status', '!=', 'rejected')
+            ->first();
+
+        if ($auto) {
+            throw ValidationException::withMessages([
+                'work_date' => 'Lembur tanggal ini sudah tercatat otomatis dari absen ('
+                    .rtrim(rtrim(number_format((float) $auto->hours, 2, ',', ''), '0'), ',')
+                    .' jam). Tidak perlu diajukan lagi.',
+            ]);
+        }
+    }
+
+    public function syncAutoOvertime(Attendance $attendance): void
+    {
+        $store = $attendance->store;
+        if (! AttendanceSettings::overtimeAutoDetect($store)) {
+            return;
+        }
+
+        $existing = OvertimeRequest::query()
+            ->where('attendance_id', $attendance->id)
+            ->where('source', OvertimeRequest::SOURCE_AUTO)
+            ->first();
+        $hours = (float) ($attendance->overtime_hours ?? 0);
+
+        if ($hours <= 0) {
+            if ($existing?->status === 'pending') {
+                $existing->delete();
+            }
+
+            return;
+        }
+
+        if ($existing) {
+            if ($existing->status === 'pending' && (float) $existing->hours !== $hours) {
+                $existing->update(['hours' => $hours]);
+            }
+
+            return;
+        }
+
+        $manual = OvertimeRequest::query()
+            ->where('employee_id', $attendance->employee_id)
+            ->whereDate('work_date', $attendance->work_date->toDateString())
+            ->where('source', OvertimeRequest::SOURCE_REQUEST)
+            ->where('status', '!=', 'rejected')
+            ->exists();
+        if ($manual) {
+            return;
+        }
+
+        $schedule = $attendance->schedule_id ? WorkSchedule::query()->find($attendance->schedule_id) : null;
+        $autoApproved = AttendanceSettings::overtimeMode($store) === 'auto';
+
+        OvertimeRequest::query()->create([
+            'store_id' => $attendance->store_id,
+            'employee_id' => $attendance->employee_id,
+            'attendance_id' => $attendance->id,
+            'work_date' => $attendance->work_date->toDateString(),
+            'hours' => $hours,
+            'status' => $autoApproved ? 'approved' : 'pending',
+            'source' => OvertimeRequest::SOURCE_AUTO,
+            'approved_at' => $autoApproved ? now() : null,
+            'reason' => 'Terdeteksi otomatis: pulang '.$attendance->clock_out?->format('H:i')
+                .($schedule ? ', shift berakhir '.substr((string) $schedule->shift_end, 0, 5) : ''),
+        ]);
     }
 
     /**

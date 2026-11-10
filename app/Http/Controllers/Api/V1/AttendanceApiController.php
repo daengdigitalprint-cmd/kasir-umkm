@@ -281,6 +281,8 @@ class AttendanceApiController extends Controller
             'reason' => ['nullable', 'string', 'max:255'],
         ]);
 
+        $this->attendance->assertNoAutoOvertime($employee->id, $validated['work_date']);
+
         $overtime = OvertimeRequest::create([
             'store_id' => $store->id,
             'employee_id' => $employee->id,

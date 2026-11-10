@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import AttendanceNav from '@/components/AttendanceNav.vue';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { MapPin, Save, BadgeCheck, AlertCircle, CalendarOff, Plus, Trash2 } from 'lucide-vue-next';
 
 const props = defineProps<{
@@ -20,6 +20,9 @@ const props = defineProps<{
         require_geolocation: boolean;
         grace_minutes: number;
         overtime_requires_approval: boolean;
+        overtime_mode: 'auto_approval' | 'auto' | 'request';
+        overtime_min_minutes: number;
+        overtime_rounding_minutes: number;
         late_deduction_method: string;
         late_deduction_rate: number;
     };
@@ -56,9 +59,29 @@ const form = useForm({
     require_selfie: props.settings.require_selfie,
     require_geolocation: props.settings.require_geolocation,
     grace_minutes: props.settings.grace_minutes,
-    overtime_requires_approval: props.settings.overtime_requires_approval,
+    overtime_mode: props.settings.overtime_mode,
+    overtime_min_minutes: props.settings.overtime_min_minutes,
+    overtime_rounding_minutes: props.settings.overtime_rounding_minutes,
     late_deduction_method: props.settings.late_deduction_method,
     late_deduction_rate: props.settings.late_deduction_rate,
+});
+
+const overtimeModes = [
+    {
+        value: 'auto_approval',
+        label: 'Otomatis + persetujuan admin',
+        help: 'Lembur terdeteksi dari jam absen pulang, lalu Anda cukup menyetujui. Karyawan tidak perlu mengajukan.',
+    },
+    { value: 'auto', label: 'Otomatis langsung dihitung', help: 'Lembur dari jam absen pulang langsung masuk gaji tanpa persetujuan.' },
+    { value: 'request', label: 'Hanya lewat pengajuan', help: 'Lembur dihitung hanya bila diajukan karyawan dan disetujui.' },
+] as const;
+
+const roundingExample = computed(() => {
+    const step = Number(form.overtime_rounding_minutes) || 0;
+    const minutes = step ? Math.floor(110 / step) * step : 110;
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return m ? `${h} jam ${m} menit` : `${h} jam`;
 });
 
 const locating = ref(false);
@@ -186,9 +209,43 @@ const submit = () => form.post('/attendance/settings', { preserveScroll: true })
                         <Label>Toleransi terlambat (menit)</Label>
                         <Input v-model="form.grace_minutes" type="number" min="0" max="240" />
                     </div>
-                    <div class="flex items-center justify-between">
-                        <Label>Lembur wajib approval</Label>
-                        <Checkbox v-model="form.overtime_requires_approval" />
+                    <div class="space-y-2 border-t border-slate-100 pt-4">
+                        <Label>Cara menghitung lembur</Label>
+                        <div class="grid gap-2">
+                            <label
+                                v-for="option in overtimeModes"
+                                :key="option.value"
+                                class="flex cursor-pointer gap-3 rounded-xl border p-3 transition"
+                                :class="form.overtime_mode === option.value ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 hover:bg-slate-50'"
+                            >
+                                <input v-model="form.overtime_mode" type="radio" :value="option.value" class="mt-1 accent-indigo-600" />
+                                <span>
+                                    <span class="block text-sm font-semibold text-slate-800">
+                                        {{ option.label }}
+                                        <span v-if="option.value === 'auto_approval'" class="ml-1 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-700">Disarankan</span>
+                                    </span>
+                                    <span class="block text-xs text-slate-500">{{ option.help }}</span>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+                    <div v-if="form.overtime_mode !== 'request'" class="grid grid-cols-2 gap-3">
+                        <div class="space-y-1">
+                            <Label>Minimal lembur (menit)</Label>
+                            <Input v-model.number="form.overtime_min_minutes" type="number" min="0" max="240" step="5" />
+                            <p class="text-xs text-slate-500">Pulang telat di bawah ini tidak dihitung lembur.</p>
+                            <p v-if="form.errors.overtime_min_minutes" class="text-sm text-red-600">{{ form.errors.overtime_min_minutes }}</p>
+                        </div>
+                        <div class="space-y-1">
+                            <Label>Pembulatan</Label>
+                            <select v-model.number="form.overtime_rounding_minutes" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">
+                                <option :value="0">Tanpa pembulatan</option>
+                                <option :value="15">Ke bawah per 15 menit</option>
+                                <option :value="30">Ke bawah per 30 menit</option>
+                                <option :value="60">Ke bawah per 1 jam</option>
+                            </select>
+                            <p class="text-xs text-slate-500">Contoh: 1 jam 50 menit → {{ roundingExample }}.</p>
+                        </div>
                     </div>
                 </CardContent>
             </Card>

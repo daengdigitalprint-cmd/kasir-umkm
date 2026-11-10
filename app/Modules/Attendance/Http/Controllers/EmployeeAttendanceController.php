@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Attendance\Models\Employee;
 use App\Modules\Attendance\Models\LeaveRequest;
 use App\Modules\Attendance\Models\OvertimeRequest;
+use App\Modules\Attendance\Services\AttendanceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -141,6 +142,8 @@ class EmployeeAttendanceController extends AdminAttendanceController
             'hours' => 'required|numeric|min:0.5|max:24',
             'reason' => 'nullable|string|max:255',
         ]);
+
+        app(AttendanceService::class)->assertNoAutoOvertime($employee->id, $validated['work_date']);
 
         OvertimeRequest::create([
             'store_id' => $store->id,

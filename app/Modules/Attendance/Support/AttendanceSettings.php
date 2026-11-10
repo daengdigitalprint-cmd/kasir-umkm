@@ -22,6 +22,11 @@ final class AttendanceSettings
         'require_geolocation' => true,
         'grace_minutes' => 15,
         'overtime_requires_approval' => true,
+        // auto_approval: terdeteksi dari absen pulang lalu disetujui admin (bawaan)
+        // auto: terdeteksi dan langsung dihitung · request: hanya lewat pengajuan karyawan
+        'overtime_mode' => null,
+        'overtime_min_minutes' => 30,
+        'overtime_rounding_minutes' => 30,
         'late_deduction_method' => 'none', // none | per_minute | per_day
         'late_deduction_rate' => 0,
         'auto_generate_from_cash_shift' => true,
@@ -74,9 +79,60 @@ final class AttendanceSettings
         return max(0, (int) self::all($store)['grace_minutes']);
     }
 
+    public const OVERTIME_MODES = ['auto_approval', 'auto', 'request'];
+
+    /**
+     * Cara lembur dihitung. Toko lama yang belum memilih mode: yang mematikan
+     * "perlu persetujuan" menjadi `auto`, selebihnya `auto_approval`.
+     */
+    public static function overtimeMode(?Store $store): string
+    {
+        $all = self::all($store);
+        if (in_array($all['overtime_mode'], self::OVERTIME_MODES, true)) {
+            return $all['overtime_mode'];
+        }
+
+        return $all['overtime_requires_approval'] ? 'auto_approval' : 'auto';
+    }
+
+    /** Payroll hanya menghitung lembur yang disetujui (mode selain `auto`). */
     public static function overtimeRequiresApproval(?Store $store): bool
     {
-        return (bool) self::all($store)['overtime_requires_approval'];
+        return self::overtimeMode($store) !== 'auto';
+    }
+
+    /** Sistem membuat catatan lembur dari jam absen pulang. */
+    public static function overtimeAutoDetect(?Store $store): bool
+    {
+        return self::overtimeMode($store) !== 'request';
+    }
+
+    public static function overtimeMinMinutes(?Store $store): int
+    {
+        return max(0, (int) self::all($store)['overtime_min_minutes']);
+    }
+
+    public static function overtimeRoundingMinutes(?Store $store): int
+    {
+        return max(0, (int) self::all($store)['overtime_rounding_minutes']);
+    }
+
+    /**
+     * Menit lewat akhir shift → jam lembur: di bawah batas minimum = 0,
+     * selebihnya dibulatkan ke bawah per kelipatan pembulatan.
+     */
+    public static function overtimeHoursFromMinutes(?Store $store, int $minutes): float
+    {
+        if ($minutes <= 0 || $minutes < self::overtimeMinMinutes($store)) {
+            return 0.0;
+        }
+
+        $step = self::overtimeRoundingMinutes($store);
+        if ($step > 0) {
+            $minutes = intdiv($minutes, $step) * $step;
+        }
+
+        return round($minutes / 60, 2);
     }
 
     public static function autoGenerateFromCashShift(?Store $store): bool
@@ -142,7 +198,8 @@ final class AttendanceSettings
 
             $current[$key] = match ($key) {
                 'enabled', 'require_selfie', 'require_geolocation', 'overtime_requires_approval', 'auto_generate_from_cash_shift' => (bool) $value,
-                'radius_meters', 'grace_minutes' => max(0, (int) $value),
+                'radius_meters', 'grace_minutes', 'overtime_min_minutes', 'overtime_rounding_minutes' => max(0, (int) $value),
+                'overtime_mode' => in_array($value, self::OVERTIME_MODES, true) ? $value : null,
                 'latitude', 'longitude' => is_numeric($value) ? (float) $value : null,
                 'late_deduction_rate' => max(0, (float) $value),
                 default => $value,
