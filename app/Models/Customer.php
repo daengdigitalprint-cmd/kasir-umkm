@@ -17,6 +17,8 @@ class Customer extends Model
         'address',
         'date_of_birth',
         'gender',
+        'referral_code',
+        'referred_by',
         'total_spent',
         'total_orders',
         'points_balance',
@@ -30,6 +32,7 @@ class Customer extends Model
 
     protected $casts = [
         'date_of_birth' => 'date',
+        'referred_by' => 'integer',
         'total_spent' => 'decimal:2',
         'points_balance' => 'integer',
         'points_earned_total' => 'integer',
@@ -58,6 +61,16 @@ class Customer extends Model
     public function redemptions(): HasMany
     {
         return $this->hasMany(LoyaltyRedemption::class);
+    }
+
+    public function referredBy(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class, 'referred_by');
+    }
+
+    public function referrals(): HasMany
+    {
+        return $this->hasMany(Customer::class, 'referred_by');
     }
 
     public function getAverageOrderValueAttribute()

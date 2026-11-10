@@ -51,7 +51,10 @@
         <div>
             <strong>No:</strong> {{ $transaction->transaction_number }}<br>
             <strong>Tgl:</strong> {{ $transaction->created_at->format('d M Y H:i') }}<br>
-            <strong>Kasir:</strong> {{ $transaction->user->name ?? 'Kasir' }}
+            <strong>Kasir:</strong> {{ $transaction->user->name ?? 'Kasir' }}<br>
+            @if($transaction->barber)
+                <strong>Teknisi:</strong> {{ $transaction->barber->name }}
+            @endif
         </div>
         <div class="right-align">
             <strong>Pelanggan:</strong> {{ $transaction->customer->name ?? 'Umum' }}<br>

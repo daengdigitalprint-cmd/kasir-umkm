@@ -24,6 +24,8 @@ const form = useForm({
     phone: '',
     address: '',
     customer_type: 'ecer',
+    date_of_birth: '',
+    referral_code: '',
 });
 
 const submit = () => {
@@ -103,6 +105,34 @@ const submit = () => {
                             </select>
                             <p class="text-xs text-muted-foreground">Pelanggan grosir memakai harga grosir produk (bila diisi).</p>
                             <p v-if="form.errors.customer_type" class="text-xs text-red-600">{{ form.errors.customer_type }}</p>
+                        </div>
+
+                        <!-- Tanggal Lahir -->
+                        <div class="space-y-1.5">
+                            <Label for="date_of_birth">Tanggal Lahir</Label>
+                            <Input
+                                id="date_of_birth"
+                                v-model="form.date_of_birth"
+                                type="date"
+                                :class="{ 'border-red-400': form.errors.date_of_birth }"
+                            />
+                            <p class="text-xs text-muted-foreground">Dipakai untuk bonus poin ulang tahun.</p>
+                            <p v-if="form.errors.date_of_birth" class="text-xs text-red-600">{{ form.errors.date_of_birth }}</p>
+                        </div>
+
+                        <!-- Kode Referral -->
+                        <div class="space-y-1.5">
+                            <Label for="referral_code">Kode Referral</Label>
+                            <Input
+                                id="referral_code"
+                                v-model="form.referral_code"
+                                type="text"
+                                placeholder="RF-XXXXX-XXXXX (opsional)"
+                                class="font-mono uppercase"
+                                :class="{ 'border-red-400': form.errors.referral_code }"
+                            />
+                            <p class="text-xs text-muted-foreground">Kode milik pelanggan yang mengundang (bila ada).</p>
+                            <p v-if="form.errors.referral_code" class="text-xs text-red-600">{{ form.errors.referral_code }}</p>
                         </div>
 
                         <!-- Alamat -->

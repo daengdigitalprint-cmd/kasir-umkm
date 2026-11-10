@@ -123,6 +123,11 @@ class StockAdjustment extends Model
         return $this->hasMany(StockAdjustmentLine::class);
     }
 
+    public function imports(): HasMany
+    {
+        return $this->hasMany(StockOpnameImport::class);
+    }
+
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');

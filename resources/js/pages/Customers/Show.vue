@@ -6,10 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Users, Phone, MapPin, Mail, Calendar, ArrowLeft, Edit, ShoppingBag, Gift, Star, CreditCard, AlertTriangle, CheckCircle2 } from 'lucide-vue-next';
+import { Users, Phone, MapPin, Mail, Calendar, ArrowLeft, Edit, ShoppingBag, Gift, Star, CreditCard, AlertTriangle, CheckCircle2, Copy, Check } from 'lucide-vue-next';
 import { router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import { confirmDialog } from '@/lib/swal';
+
+const referralCopied = ref(false);
 
 interface TransactionItem {
     id: number;
@@ -48,6 +50,7 @@ interface Customer {
     phone: string | null;
     address: string | null;
     created_at: string;
+    referral_code?: string | null;
 }
 
 interface PointLedger {
@@ -97,6 +100,19 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+
+const copyReferralCode = async () => {
+    if (! props.customer.referral_code) {
+        return;
+    }
+    try {
+        await navigator.clipboard.writeText(props.customer.referral_code);
+        referralCopied.value = true;
+        setTimeout(() => (referralCopied.value = false), 2000);
+    } catch {
+        // Clipboard tidak tersedia — abaikan.
+    }
+};
 
 const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('id-ID', { style: 'decimal', minimumFractionDigits: 0 }).format(amount);
@@ -231,6 +247,22 @@ function submitPayment() {
                         <div class="flex items-center gap-2 text-slate-600 sm:col-span-2">
                             <MapPin class="h-4 w-4 text-slate-400 shrink-0" />
                             <span>{{ customer.address ?? '-' }}</span>
+                        </div>
+                        <div
+                            v-if="customer.referral_code"
+                            class="flex items-center gap-2 text-slate-600 sm:col-span-2"
+                        >
+                            <Gift class="h-4 w-4 text-slate-400 shrink-0" />
+                            <span class="font-mono uppercase">{{ customer.referral_code }}</span>
+                            <button
+                                type="button"
+                                class="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                                @click="copyReferralCode"
+                            >
+                                <Check v-if="referralCopied" class="h-3.5 w-3.5" />
+                                <Copy v-else class="h-3.5 w-3.5" />
+                                {{ referralCopied ? 'Tersalin' : 'Salin' }}
+                            </button>
                         </div>
                     </div>
                 </CardContent>

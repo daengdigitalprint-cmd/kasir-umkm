@@ -43,6 +43,10 @@ class KitchenQueueUpdated implements ShouldBroadcastNow
             ? $entry->transaction
             : $entry->transaction()->first(['id', 'transaction_number', 'order_type', 'table_reference']);
 
+        $barber = $entry->relationLoaded('barber')
+            ? $entry->barber
+            : $entry->barber()->first(['id', 'name']);
+
         return new self(
             storeId: (int) $entry->store_id,
             action: $action,
@@ -57,6 +61,8 @@ class KitchenQueueUpdated implements ShouldBroadcastNow
                 'called_at' => $entry->called_at?->toIso8601String(),
                 'notes' => $entry->notes,
                 'items' => $entry->items ?? [],
+                'barber_user_id' => $entry->barber_user_id,
+                'barber_name' => $barber?->name,
             ],
             entryId: $entry->id,
         );

@@ -13,6 +13,7 @@ interface ComponentItem {
     id: number;
     name: string;
     type: 'earning' | 'deduction';
+    is_fixed: boolean;
     amount: number;
 }
 
@@ -35,6 +36,7 @@ const form = useForm({
     employee_id: '',
     name: '',
     type: 'earning' as 'earning' | 'deduction',
+    is_fixed: true,
     amount: '' as string,
 });
 
@@ -62,6 +64,7 @@ const startEdit = (employeeId: number, item: ComponentItem) => {
     form.employee_id = String(employeeId);
     form.name = item.name;
     form.type = item.type;
+    form.is_fixed = item.is_fixed;
     form.amount = String(item.amount);
 };
 
@@ -102,7 +105,8 @@ const updateTaxStatus = (employee: Employee, taxStatus: string) => {
                 <CardHeader>
                     <CardTitle>{{ editing() ? 'Edit Komponen Gaji' : 'Tambah Komponen Gaji' }}</CardTitle>
                     <CardDescription>
-                        Komponen <em>earning</em> menjadi gaji pokok, <em>deduction</em> menjadi potongan tetap.
+                        Isi gaji tiap karyawan sebagai beberapa baris: misalnya <b>Gaji Pokok</b>, <b>Tunjangan Transport</b>
+                        (penghasilan), atau <b>Cicilan Kasbon</b> (potongan). Nilai di sini dipakai setiap kali gaji dihitung.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -125,12 +129,12 @@ const updateTaxStatus = (employee: Employee, taxStatus: string) => {
                         <div class="space-y-1">
                             <Label>Jenis</Label>
                             <select v-model="form.type" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                                <option value="earning">Earning (Penghasilan)</option>
-                                <option value="deduction">Deduction (Potongan)</option>
+                                <option value="earning">Penghasilan (menambah gaji)</option>
+                                <option value="deduction">Potongan (mengurangi gaji)</option>
                             </select>
                         </div>
                         <div class="space-y-1">
-                            <Label>Nominal</Label>
+                            <Label>Nominal per bulan (Rp)</Label>
                             <Input
                                 type="text"
                                 inputmode="numeric"
@@ -141,6 +145,18 @@ const updateTaxStatus = (employee: Employee, taxStatus: string) => {
                             />
                             <p v-if="form.errors.amount" class="text-sm text-red-600">{{ form.errors.amount }}</p>
                         </div>
+                    </div>
+                    <div v-if="form.type === 'earning'" class="mt-3 flex items-start gap-2">
+                        <input
+                            id="is-fixed"
+                            v-model="form.is_fixed"
+                            type="checkbox"
+                            class="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <label for="is-fixed" class="text-sm text-slate-600">
+                            <span class="font-medium text-slate-700">Gaji tetap</span> — gaji pokok & tunjangan tetap. Menjadi dasar BPJS,
+                            upah lembur, prorata, dan potongan alpa. Kosongkan untuk tunjangan tidak tetap (mis. uang makan, insentif).
+                        </label>
                     </div>
                     <div class="mt-4 flex gap-2">
                         <Button type="button" class="rounded-xl" :disabled="form.processing" @click="submit">
@@ -164,10 +180,10 @@ const updateTaxStatus = (employee: Employee, taxStatus: string) => {
                         <thead class="text-slate-500">
                             <tr class="border-b border-slate-200">
                                 <th class="py-2 pr-3">Karyawan</th>
-                                <th class="py-2 pr-3">Status Pajak</th>
+                                <th class="py-2 pr-3" title="Status PTKP untuk PPh 21: TK = tidak kawin, K = kawin, angka = jumlah tanggungan">Status pajak (PTKP)</th>
                                 <th class="py-2 pr-3">Komponen</th>
-                                <th class="py-2 pr-3">Total Penghasilan</th>
-                                <th class="py-2 pr-3">Total Potongan</th>
+                                <th class="py-2 pr-3 text-right">Total penghasilan</th>
+                                <th class="py-2 pr-3 text-right">Total potongan</th>
                                 <th class="py-2"></th>
                             </tr>
                         </thead>
@@ -194,6 +210,11 @@ const updateTaxStatus = (employee: Employee, taxStatus: string) => {
                                             <span :class="item.type === 'deduction' ? 'text-red-600' : ''">
                                                 {{ item.name }} ({{ fmt(Number(item.amount)) }})
                                             </span>
+                                            <span
+                                                v-if="item.type === 'earning' && !item.is_fixed"
+                                                class="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700"
+                                                >tidak tetap</span
+                                            >
                                             <button type="button" class="text-slate-400 hover:text-slate-600" @click="startEdit(employee.id, item)">
                                                 <Pencil class="h-3.5 w-3.5" />
                                             </button>
@@ -201,11 +222,21 @@ const updateTaxStatus = (employee: Employee, taxStatus: string) => {
                                                 <Trash2 class="h-3.5 w-3.5" />
                                             </button>
                                         </p>
-                                        <p v-if="!employee.components.length" class="text-xs text-slate-400">Belum ada komponen.</p>
+                                        <p
+                                            v-if="!employee.components.some((c) => c.type === 'earning')"
+                                            class="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700"
+                                        >
+                                            Belum ada gaji — karyawan ini tidak ikut dihitung.
+                                            <button type="button" class="underline" @click="form.employee_id = String(employee.id); form.name = 'Gaji Pokok'">
+                                                Isi sekarang
+                                            </button>
+                                        </p>
                                     </div>
                                 </td>
-                                <td class="py-2 pr-3 font-medium">{{ fmt(earnings(employee.components)) }}</td>
-                                <td class="py-2 pr-3 text-red-600">{{ fmt(deductions(employee.components)) }}</td>
+                                <td class="py-2 pr-3 text-right font-medium tabular-nums">{{ fmt(earnings(employee.components)) }}</td>
+                                <td class="py-2 pr-3 text-right tabular-nums" :class="deductions(employee.components) ? 'text-red-600' : 'text-slate-300'">
+                                    {{ deductions(employee.components) ? fmt(deductions(employee.components)) : '—' }}
+                                </td>
                                 <td class="py-2"></td>
                             </tr>
                             <tr v-if="!employees.length">

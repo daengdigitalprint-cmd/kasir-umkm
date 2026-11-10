@@ -36,7 +36,7 @@ class CashFlowController extends Controller
         $shiftIds = $shifts->pluck('id');
         $txByShift = Transaction::whereIn('cash_shift_id', $shiftIds)
             ->where('status', 'completed')
-            ->selectRaw('cash_shift_id, payment_method, COUNT(*) as count, SUM(total_amount) as total')
+            ->selectRaw('cash_shift_id, payment_method, COUNT(*) as count, SUM(total_amount) as total, SUM(cash_amount) as cash_total')
             ->groupBy('cash_shift_id', 'payment_method')
             ->get()
             ->groupBy('cash_shift_id');
@@ -62,8 +62,8 @@ class CashFlowController extends Controller
 
             // Penjualan per metode
             $salesData = $txByShift[$shift->id] ?? collect();
-            $salesCash = (float) $salesData->where('payment_method', 'cash')->sum('total');
-            $salesNonCash = (float) $salesData->where('payment_method', '!=', 'cash')->sum('total');
+            $salesCash = (float) $salesData->sum('cash_total');
+            $salesNonCash = (float) $salesData->sum('total') - $salesCash;
             $totalSales = $salesCash + $salesNonCash;
             $totalTxCount = (int) $salesData->sum('count');
 

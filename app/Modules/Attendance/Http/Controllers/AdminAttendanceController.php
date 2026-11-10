@@ -4,6 +4,8 @@ namespace App\Modules\Attendance\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\Store;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Exists;
 
 /**
  * Basis controller admin untuk modul absensi (jadwal, cuti, lembur).
@@ -19,6 +21,14 @@ abstract class AdminAttendanceController extends Controller
         }
 
         return $store;
+    }
+
+    /**
+     * Aturan validasi employee_id: karyawan wajib milik toko aktif (cegah IDOR lintas toko).
+     */
+    protected function storeEmployeeRule(): Exists
+    {
+        return Rule::exists('employees', 'id')->where('store_id', $this->currentStore()->id);
     }
 
     protected function authorizeAdmin(): void

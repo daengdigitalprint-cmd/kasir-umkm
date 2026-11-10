@@ -2,8 +2,8 @@
 .thermal-receipt-preview {
     display: flex;
     justify-content: center;
-    background: #f8fafc;
-    padding: 1rem;
+    background: #e2e8f0;
+    padding: 1.5rem 1rem;
     border-radius: 0.5rem;
     max-height: min(58vh, 520px);
     overflow-y: auto;
@@ -12,16 +12,45 @@
 
 .thermal-receipt-preview .struk {
     box-sizing: border-box;
+    position: relative;
     width: 100%;
     margin: 0;
-    padding: 0.65rem 0.75rem 0.85rem;
+    padding: 35px 0.75rem 35px;
     font-family: ui-monospace, 'Cascadia Mono', 'Consolas', 'Courier New', monospace;
     line-height: 1.35;
     color: #0f172a;
-    background: #fff;
-    border: 1px dashed #cbd5e1;
-    border-radius: 0.35rem;
-    box-shadow: 0 1px 2px rgb(15 23 42 / 0.06);
+    background: #ffffff;
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.12));
+}
+
+/* Efek potongan bergerigi — atas */
+.thermal-receipt-preview .struk::before {
+    content: "";
+    position: absolute;
+    top: -10px;
+    left: 0;
+    width: 100%;
+    height: 10px;
+    background:
+        linear-gradient(135deg, transparent 5px, #ffffff 0),
+        linear-gradient(-135deg, transparent 5px, #ffffff 0);
+    background-size: 10px 10px;
+    background-repeat: repeat-x;
+}
+
+/* Efek potongan bergerigi — bawah */
+.thermal-receipt-preview .struk::after {
+    content: "";
+    position: absolute;
+    bottom: -10px;
+    left: 0;
+    width: 100%;
+    height: 10px;
+    background:
+        linear-gradient(45deg, transparent 5px, #ffffff 0),
+        linear-gradient(-45deg, transparent 5px, #ffffff 0);
+    background-size: 10px 10px;
+    background-repeat: repeat-x;
 }
 
 .thermal-receipt-preview--80 .struk {

@@ -113,28 +113,28 @@ class TransactionAnomalyTool extends AiTool
     private function summaryMessage(array $data): string
     {
         if ($data['total_flags'] === 0) {
-            return 'Tidak ada transaksi mencurigakan pada periode ini. Sistem memantau diskon besar, void berulang, dan selisih kas shift.';
+            return "## Ringkasan Audit Transaksi\n\n"
+                ."- **Status:** Tidak ada transaksi mencurigakan pada periode ini.\n"
+                .'- Pemantauan mencakup diskon besar, void berulang, dan selisih kas shift.';
         }
 
-        $labels = [];
-        $details = [];
+        $findings = [];
 
         if ($data['discount_anomalies']) {
-            $labels[] = 'Diskon tidak wajar';
-            $details[] = count($data['discount_anomalies']).' transaksi';
+            $findings[] = '- **Diskon tidak wajar:** '.count($data['discount_anomalies']).' transaksi';
         }
         if ($data['void_patterns']) {
-            $labels[] = 'Void berulang';
-            $details[] = count($data['void_patterns']).' kasir';
+            $findings[] = '- **Void berulang:** '.count($data['void_patterns']).' kasir';
         }
         if ($data['cash_differences']) {
-            $labels[] = 'Selisih kas shift';
-            $details[] = count($data['cash_differences']).' shift';
+            $findings[] = '- **Selisih kas shift:** '.count($data['cash_differences']).' shift';
         }
 
-        return 'Ditemukan '.count($labels).' jenis indikasi: '.implode('; ', $labels)
-            .' ('.implode('; ', $details).'). '
-            .'Diskon ≥ '.TransactionAnomalyDetector::DEFAULT_DISCOUNT_THRESHOLD_PCT.'% subtotal dan void berulang perlu ditinjau manual. '
-            .'Simpan temuan ini sebagai bagian dari audit anti-fraud toko Anda.';
+        return "## Ringkasan Audit Transaksi\n\n"
+            .'Ditemukan **'.count($findings)." jenis indikasi**.\n\n"
+            .implode("\n", $findings)
+            ."\n\n### Tindak lanjut\n\n"
+            .'- Tinjau transaksi dengan diskon **≥'.TransactionAnomalyDetector::DEFAULT_DISCOUNT_THRESHOLD_PCT."%** dari subtotal.\n"
+            .'- Lakukan audit manual untuk seluruh temuan.';
     }
 }

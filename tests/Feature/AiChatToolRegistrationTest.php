@@ -56,3 +56,12 @@ it('mendaftarkan tool search_customer pada jalur chat', function () {
 
     expect($registry->has('search_customer'))->toBeTrue();
 });
+
+it('mendaftarkan tool get_barber_commissions pada jalur chat', function () {
+    $store = createAiChatRegistrationStore();
+    $user = User::factory()->create(['store_id' => $store->id, 'role' => 'admin']);
+
+    $registry = registerAiChatTools($user)->getToolRegistry();
+
+    expect($registry->has('get_barber_commissions'))->toBeTrue();
+});

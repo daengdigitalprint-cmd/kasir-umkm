@@ -67,10 +67,8 @@ class JournalPoster
             return;
         }
 
-        // Pilih akun penerimaan berdasarkan metode pembayaran (SAK EMKM: pisah Kas vs Bank)
+        // Pisah penerimaan Kas vs Bank (SAK EMKM); split tender memakai porsi tunai di cash_amount
         $paymentMethod = $transaction->payment_method ?? 'cash';
-        $receivingAccount = $paymentMethod === 'cash' ? $kas : $bank;
-        $receivingLabel = $paymentMethod === 'cash' ? 'Kas' : 'Bank';
 
         $transaction->loadMissing(['items.product', 'items.productVariant']);
 
@@ -93,6 +91,12 @@ class JournalPoster
         $changeAmount = round(max(0, (float) ($transaction->change_amount ?? 0)), 2);
         $cashReceived = round(max(0, $amountPaid - $changeAmount), 2); // uang bersih masuk
         $outstanding = round(max(0, $totalAmount - $cashReceived), 2);
+
+        $cashAmount = (float) ($transaction->cash_amount ?? 0);
+        $kasPart = $cashAmount > 0
+            ? round(min($cashAmount, $cashReceived), 2)
+            : ($paymentMethod === 'cash' ? $cashReceived : 0.0);
+        $bankPart = round(max(0, $cashReceived - $kasPart), 2);
 
         $sumCredits = round($revenueExclTax + $taxAmount + $tipAmount + $cogsTotal, 2);
         $sumDebits = round($cashReceived + $outstanding + $cogsTotal, 2);
@@ -117,8 +121,10 @@ class JournalPoster
                 $store,
                 $transaction,
                 $entryDate,
-                $receivingAccount,
-                $receivingLabel,
+                $kas,
+                $bank,
+                $kasPart,
+                $bankPart,
                 $paymentMethod,
                 $pendapatan,
                 $utangPpn,
@@ -130,7 +136,6 @@ class JournalPoster
                 $taxAmount,
                 $tipAmount,
                 $cogsTotal,
-                $cashReceived,
                 $outstanding,
             ) {
                 $entry = JournalEntry::query()->create([
@@ -143,13 +148,23 @@ class JournalPoster
                 ]);
 
                 // Debit Kas/Bank — hanya sebesar uang yang benar-benar diterima
-                if ($cashReceived > 0) {
+                if ($kasPart > 0) {
                     JournalLine::query()->create([
                         'journal_entry_id' => $entry->id,
-                        'chart_of_account_id' => $receivingAccount->id,
-                        'debit' => $cashReceived,
+                        'chart_of_account_id' => $kas->id,
+                        'debit' => $kasPart,
                         'credit' => 0,
-                        'memo' => $receivingLabel.' penerimaan '.$paymentMethod,
+                        'memo' => 'Kas penerimaan cash',
+                    ]);
+                }
+
+                if ($bankPart > 0) {
+                    JournalLine::query()->create([
+                        'journal_entry_id' => $entry->id,
+                        'chart_of_account_id' => $bank->id,
+                        'debit' => $bankPart,
+                        'credit' => 0,
+                        'memo' => 'Bank penerimaan '.($paymentMethod === 'cash' ? 'non-tunai' : $paymentMethod),
                     ]);
                 }
 
@@ -784,6 +799,105 @@ class JournalPoster
      * Dipakai untuk mengoreksi kesalahan pada periode yang sudah ditutup tanpa
      * mengubah jurnal historis.
      */
+    /**
+     * Jurnal pembayaran gaji satu periode (dipanggil saat periode ditandai dibayar).
+     *
+     *   Dr Beban gaji & upah          = bruto − potongan lain (kasbon, denda telat, dll.)
+     *   Dr Beban iuran BPJS perusahaan = iuran BPJS bagian perusahaan
+     *   Cr Utang PPh 21 karyawan       = PPh 21 dipotong − kelebihan potong yang dikembalikan
+     *   Cr Utang iuran BPJS            = iuran BPJS karyawan + perusahaan
+     *   Cr Kas / Bank                  = total gaji bersih dibayarkan
+     *
+     * Potongan lain dihitung sebagai sisa (bruto − PPh − BPJS karyawan + refund − bersih)
+     * agar jurnal selalu seimbang, termasuk saat gaji bersih dibatasi Rp0.
+     */
+    public static function postPayroll(
+        Store $store,
+        \App\Modules\Payroll\Models\PayrollPeriod $period,
+        string $paymentMethod,
+        string $entryDate,
+        ?int $userId = null,
+    ): ?JournalEntry {
+        if (! self::moduleEnabled($store)) {
+            return null;
+        }
+
+        AccountingPeriodGuard::assertDateOpen($store, $entryDate, 'payment_date');
+        ChartOfAccountsBootstrap::ensureForStore($store);
+
+        $code = static fn (string $c) => ChartOfAccountsBootstrap::account($store, $c)
+            ?? throw new \RuntimeException("Akun {$c} tidak tersedia.");
+
+        $kasBank = $code($paymentMethod === 'bank' ? ChartOfAccountsBootstrap::CODE_BANK : ChartOfAccountsBootstrap::CODE_KAS);
+        $bebanGaji = $code(ChartOfAccountsBootstrap::CODE_BEBAN_GAJI);
+        $bebanBpjs = $code(ChartOfAccountsBootstrap::CODE_BEBAN_BPJS);
+        $utangPph = $code(ChartOfAccountsBootstrap::CODE_UTANG_PPH21);
+        $utangBpjs = $code(ChartOfAccountsBootstrap::CODE_UTANG_BPJS);
+
+        $salaryExpense = 0.0;
+        $employerBpjs = 0.0;
+        $employeeBpjs = 0.0;
+        $pph = 0.0;
+        $net = 0.0;
+
+        foreach ($period->runs()->get() as $run) {
+            $b = $run->component_breakdown ?? [];
+            $bpjs = $b['bpjs'] ?? [];
+            $runEmployer = (float) ($bpjs['health']['employer'] ?? 0) + (float) ($bpjs['jht']['employer'] ?? 0)
+                + (float) ($bpjs['jp']['employer'] ?? 0) + (float) ($bpjs['jkk'] ?? 0) + (float) ($bpjs['jkm'] ?? 0);
+            $runEmployee = (float) ($bpjs['total_employee'] ?? 0);
+            $runPph = (float) ($b['tax']['monthly_tax'] ?? 0) - (float) ($b['tax']['refund'] ?? 0);
+            $runNet = (float) $run->net_salary;
+            $gross = (float) $run->gross_salary;
+            $otherDeductions = $gross - $runPph - $runEmployee - $runNet;
+
+            $salaryExpense += $gross - $otherDeductions;
+            $employerBpjs += $runEmployer;
+            $employeeBpjs += $runEmployee;
+            $pph += $runPph;
+            $net += $runNet;
+        }
+
+        $lines = array_filter([
+            [$bebanGaji, round($salaryExpense, 2), 0, 'Gaji & upah '.$period->name],
+            [$bebanBpjs, round($employerBpjs, 2), 0, 'Iuran BPJS bagian perusahaan'],
+            $pph >= 0
+                ? [$utangPph, 0, round($pph, 2), 'PPh 21 dipotong dari gaji']
+                : [$utangPph, round(-$pph, 2), 0, 'Pengembalian kelebihan PPh 21'],
+            [$utangBpjs, 0, round($employeeBpjs + $employerBpjs, 2), 'Iuran BPJS karyawan + perusahaan'],
+            [$kasBank, 0, round($net, 2), 'Pembayaran gaji bersih'],
+        ], fn ($line) => $line[1] > 0 || $line[2] > 0);
+
+        if ($lines === []) {
+            return null;
+        }
+
+        return DB::transaction(function () use ($store, $period, $entryDate, $userId, $lines) {
+            $entry = JournalEntry::query()->create([
+                'store_id' => $store->id,
+                'entry_date' => $entryDate,
+                'reference_type' => 'payroll_period',
+                'reference_id' => $period->id,
+                'description' => 'Pembayaran gaji '.$period->name,
+                'user_id' => $userId,
+            ]);
+
+            foreach ($lines as [$account, $debit, $credit, $memo]) {
+                JournalLine::query()->create([
+                    'journal_entry_id' => $entry->id,
+                    'chart_of_account_id' => $account->id,
+                    'debit' => $debit,
+                    'credit' => $credit,
+                    'memo' => $memo,
+                ]);
+            }
+
+            self::assertBalanced($entry);
+
+            return $entry;
+        });
+    }
+
     public static function postReversal(Store $store, JournalEntry $original, string $entryDate, ?int $userId = null, ?string $note = null): ?JournalEntry
     {
         if (! self::moduleEnabled($store)) {

@@ -507,6 +507,10 @@ html.lp-landing body {
    during animation, causing the dialog to shift after opening. */
 .pos-checkout-dialog[data-state='open'] {
     animation: pos-dialog-fade-in 200ms ease-out both !important;
+    box-shadow:
+        0 0 0 1px rgb(15 23 42 / 0.04),
+        0 4px 6px -1px rgb(15 23 42 / 0.08),
+        0 24px 48px -12px rgb(15 23 42 / 0.35) !important;
 }
 .pos-checkout-dialog[data-state='closed'] {
     animation: pos-dialog-fade-out 150ms ease-in both !important;

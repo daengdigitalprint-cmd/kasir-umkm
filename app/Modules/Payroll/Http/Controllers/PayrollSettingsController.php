@@ -2,6 +2,7 @@
 
 namespace App\Modules\Payroll\Http\Controllers;
 
+use App\Services\ActivityLogger;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -32,6 +33,9 @@ class PayrollSettingsController extends AdminPayrollController
                 'bpjs_jp_employer' => (float) $store->bpjs_jp_employer,
                 'bpjs_jkk' => (float) $store->bpjs_jkk,
                 'bpjs_jkm' => (float) $store->bpjs_jkm,
+                'bpjs_health_wage_cap' => (float) $store->bpjs_health_wage_cap,
+                'bpjs_jp_wage_cap' => (float) $store->bpjs_jp_wage_cap,
+                'absence_deduction_enabled' => (bool) $store->absence_deduction_enabled,
                 // PPh 21
                 'pph21_enabled' => (bool) $store->pph21_enabled,
             ],
@@ -62,11 +66,23 @@ class PayrollSettingsController extends AdminPayrollController
             'bpjs_jp_employer' => 'required_if:bpjs_enabled,true|numeric|min:0',
             'bpjs_jkk' => 'required_if:bpjs_enabled,true|numeric|min:0',
             'bpjs_jkm' => 'required_if:bpjs_enabled,true|numeric|min:0',
+            'bpjs_health_wage_cap' => 'required|numeric|min:0',
+            'bpjs_jp_wage_cap' => 'required|numeric|min:0',
+            'absence_deduction_enabled' => 'required|boolean',
             // PPh 21
             'pph21_enabled' => 'required|boolean',
         ]);
 
+        $before = $store->only(array_keys($validated));
         $store->update($validated);
+        $changes = array_intersect_key($store->getChanges(), $validated);
+
+        if ($changes !== []) {
+            ActivityLogger::log($store, 'payroll.settings_updated', 'Mengubah pengaturan payroll', $store, [
+                'before' => array_intersect_key($before, $changes),
+                'after' => $changes,
+            ]);
+        }
 
         return back()->with('success', 'Pengaturan payroll berhasil disimpan.');
     }

@@ -189,6 +189,7 @@ class AiChatController extends Controller
         $aiService->registerTool(new \App\Tools\Reports\TransactionAnomalyTool);
         $aiService->registerTool(new \App\Tools\Products\PriceRecommendationTool);
         $aiService->registerTool(new \App\Tools\Reports\ProductProfitInsightTool);
+        $aiService->registerTool(new \App\Tools\Reports\BarberCommissionTool);
         $aiService->registerTool(new \App\Tools\Operational\SearchCustomerTool);
 
         if ($user->isSuperAdmin() || $user->isAdmin() || $user->isManager()) {

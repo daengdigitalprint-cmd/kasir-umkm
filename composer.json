@@ -23,9 +23,12 @@
         "laravel/ai": "^0.7.2",
         "laravel/framework": "^12.0",
         "laravel/reverb": "^1.11",
+        "laravel/sanctum": "^4.3",
         "laravel/tinker": "^2.10.1",
         "laravel/wayfinder": "^0.1.9",
-        "maatwebsite/excel": "^3.1"
+        "maatwebsite/excel": "^3.1",
+        "nativephp/mobile": "^4.6",
+        "nativephp/mobile-ui": "^0.8.0"
     },
     "require-dev": {
         "appoly/laravel-boost-trae-extension": "^1.0",
@@ -101,5 +104,11 @@
         }
     },
     "minimum-stability": "stable",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "repositories": {
+        "nativephp/bluetooth-printer": {
+            "type": "path",
+            "url": "packages/nativephp/bluetooth-printer"
+        }
+    }
 }

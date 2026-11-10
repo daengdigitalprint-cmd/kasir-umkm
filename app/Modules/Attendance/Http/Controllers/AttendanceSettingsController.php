@@ -4,7 +4,9 @@ namespace App\Modules\Attendance\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\Store;
+use App\Modules\Attendance\Models\Holiday;
 use App\Modules\Attendance\Support\AttendanceSettings;
+use App\Services\ActivityLogger;
 use App\Services\AttendancePayrollAddOnService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -29,6 +31,14 @@ class AttendanceSettingsController extends Controller
                 'id' => $store->id,
                 'name' => $store->name,
             ],
+            // Hari libur mulai awal tahun lalu agar riwayat tetap terlihat saat payroll Desember.
+            'holidays' => Holiday::query()
+                ->where('store_id', $store->id)
+                ->whereDate('date', '>=', now()->subYear()->startOfYear()->toDateString())
+                ->orderBy('date')
+                ->get(['id', 'date', 'name'])
+                ->map(fn (Holiday $h) => ['id' => $h->id, 'date' => $h->date->toDateString(), 'name' => $h->name])
+                ->values(),
         ]);
     }
 
@@ -49,7 +59,17 @@ class AttendanceSettingsController extends Controller
             'late_deduction_rate' => 'nullable|numeric|min:0',
         ]);
 
+        $before = AttendanceSettings::all($store);
         AttendanceSettings::update($store, $validated);
+        $after = AttendanceSettings::all($store->fresh());
+        $changed = array_keys(array_filter($after, fn ($value, $key) => ($before[$key] ?? null) !== $value, ARRAY_FILTER_USE_BOTH));
+
+        if ($changed !== []) {
+            ActivityLogger::log($store, 'attendance.settings_updated', 'Mengubah pengaturan absensi', $store, [
+                'before' => array_intersect_key($before, array_flip($changed)),
+                'after' => array_intersect_key($after, array_flip($changed)),
+            ]);
+        }
 
         return back()->with('success', 'Pengaturan absensi berhasil disimpan.');
     }

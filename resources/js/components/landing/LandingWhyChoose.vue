@@ -52,13 +52,10 @@ function toggle(id: string): void {
                     <div class="col-lg-6">
                         <div class="gt-choose-us-content">
                             <div class="gt-section-title style-3 mb-0">
-                                <h6 class="text-white tt-capitalize wow fadeInUp">Mengapa UMKM Kasir</h6>
-                                <h2 class="text-white char-animation">
-                                    Berhenti pakai catatan manual.
-                                    Beralih ke UMKM Kasir.
-                                </h2>
+                                <h6 class="tt-capitalize wow fadeInUp text-white">Mengapa UMKM Kasir</h6>
+                                <h2 class="char-animation text-white">Berhenti pakai catatan manual. Beralih ke UMKM Kasir.</h2>
                             </div>
-                            <div class="faq-items mt-0 ms-0">
+                            <div class="faq-items ms-0 mt-0">
                                 <div class="accordion" id="umkmKasirFaq">
                                     <div
                                         v-for="(item, idx) in faqItems"
@@ -91,9 +88,7 @@ function toggle(id: string): void {
                                     </div>
                                 </div>
                             </div>
-                            <Link href="/register" class="gt-theme-btn style-3 wow fadeInUp" data-wow-delay=".9s">
-                                Mulai sekarang
-                            </Link>
+                            <Link href="/register" class="gt-theme-btn style-3 wow fadeInUp" data-wow-delay=".9s"> Mulai sekarang </Link>
                         </div>
                     </div>
                 </div>

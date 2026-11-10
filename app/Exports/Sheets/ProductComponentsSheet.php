@@ -3,6 +3,7 @@
 namespace App\Exports\Sheets;
 
 use App\Models\Product;
+use App\Models\ProductBundleItem;
 use App\Models\ProductSaleConsumption;
 use App\Models\Recipe;
 use App\Models\Store;
@@ -17,15 +18,18 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 /**
- * Sheet kedua untuk ekspor produk: komponen (recipe & product sale consumption).
+ * Sheet kedua untuk ekspor produk: komponen produk.
  * Struktur:
- * - Tipe komponen: 'recipe' (resep produksi) atau 'consumption' (komponen penjualan)
+ * - Tipe komponen: 'recipe' (resep produksi), 'consumption' (komponen menu),
+ *   atau 'bundle' (komponen produk paket)
  * - ID Produk (yang punya komponen)
  * - Nama Produk
  * - SKU Produk
+ * - SKU/Nama Varian Produk (komponen menu per varian)
  * - ID Komponen (produk yang dipakai)
  * - Nama Komponen
  * - SKU Komponen
+ * - SKU/Nama Varian Komponen (komponen paket yang menunjuk varian tertentu)
  * - Kuantitas
  * - Satuan Dasar
  * - Urutan (sort_order)
@@ -59,6 +63,8 @@ class ProductComponentsSheet implements FromCollection, WithColumnWidths, WithHe
                     'component_id' => $ing->product_id,
                     'component_name' => $ing->product->name,
                     'component_sku' => $ing->product->sku,
+                    'component_variant_sku' => null,
+                    'component_variant_name' => null,
                     'quantity' => $ing->quantity,
                     'base_unit' => $ing->base_unit,
                     'sort_order' => $ing->sort_order,
@@ -83,9 +89,38 @@ class ProductComponentsSheet implements FromCollection, WithColumnWidths, WithHe
                 'component_id' => $cons->component_product_id,
                 'component_name' => $cons->component->name,
                 'component_sku' => $cons->component->sku,
+                'component_variant_sku' => null,
+                'component_variant_name' => null,
                 'quantity' => $cons->quantity,
                 'base_unit' => $cons->base_unit,
                 'sort_order' => $cons->sort_order,
+                'recipe_code' => null,
+            ];
+        }
+
+        // 3. Komponen produk paket (bundle)
+        $bundleItems = ProductBundleItem::with(['bundleProduct', 'componentProduct', 'componentVariant'])
+            ->whereIn('bundle_product_id', Product::query()->where('store_id', $storeId)->select('id'))
+            ->orderBy('bundle_product_id')
+            ->orderBy('sort_order')
+            ->get();
+
+        foreach ($bundleItems as $item) {
+            $rows[] = [
+                'type' => 'bundle',
+                'product_id' => $item->bundle_product_id,
+                'product_name' => $item->bundleProduct?->name,
+                'product_sku' => $item->bundleProduct?->sku,
+                'product_variant_sku' => null,
+                'product_variant_name' => null,
+                'component_id' => $item->component_product_id,
+                'component_name' => $item->componentProduct?->name,
+                'component_sku' => $item->componentProduct?->sku,
+                'component_variant_sku' => $item->componentVariant?->sku,
+                'component_variant_name' => $item->componentVariant?->name,
+                'quantity' => $item->quantity,
+                'base_unit' => $item->componentProduct?->base_unit,
+                'sort_order' => $item->sort_order,
                 'recipe_code' => null,
             ];
         }
@@ -105,6 +140,8 @@ class ProductComponentsSheet implements FromCollection, WithColumnWidths, WithHe
             'ID Komponen',
             'Nama Komponen',
             'SKU Komponen',
+            'SKU Varian Komponen',
+            'Nama Varian Komponen',
             'Kuantitas',
             'Satuan Dasar',
             'Urutan',
@@ -128,6 +165,8 @@ class ProductComponentsSheet implements FromCollection, WithColumnWidths, WithHe
             $row['component_id'],
             $row['component_name'],
             $row['component_sku'],
+            $row['component_variant_sku'],
+            $row['component_variant_name'],
             $row['quantity'],
             $row['base_unit'],
             $row['sort_order'],
@@ -152,16 +191,18 @@ class ProductComponentsSheet implements FromCollection, WithColumnWidths, WithHe
             'G' => 10, // ID Komponen
             'H' => 30, // Nama Komponen
             'I' => 18, // SKU Komponen
-            'J' => 12, // Kuantitas
-            'K' => 14, // Satuan Dasar
-            'L' => 10, // Urutan
-            'M' => 16, // Kode Resep
+            'J' => 20, // SKU Varian Komponen
+            'K' => 30, // Nama Varian Komponen
+            'L' => 12, // Kuantitas
+            'M' => 14, // Satuan Dasar
+            'N' => 10, // Urutan
+            'O' => 16, // Kode Resep
         ];
     }
 
     public function styles(Worksheet $sheet): array
     {
-        $lastColumn = 'M';
+        $lastColumn = 'O';
         $sheet->freezePane('A2');
 
         return [

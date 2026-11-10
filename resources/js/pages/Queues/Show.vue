@@ -15,12 +15,17 @@ interface QueueEntry {
     id: number;
     queue_id: number;
     queue_name: string | null;
+    queue_code: string | null;
     number: number;
     status: string;
+    order_type: string | null;
+    table_number: string | null;
     customer_name: string | null;
     customer_phone: string | null;
     priority: number;
     notes: string | null;
+    barber_user_id: number | null;
+    barber_name: string | null;
     called_at: string | null;
     completed_at: string | null;
     created_at: string | null;
@@ -31,6 +36,8 @@ const props = defineProps<{
     queue: { id: number; name: string; code: string; is_active: boolean };
     entries: QueueEntry[];
     store: { id: number; name: string };
+    barbershopEnabled: boolean;
+    barbers: { id: number; name: string }[];
 }>();
 
 // --- Auto refresh ---
@@ -64,6 +71,8 @@ const createForm = useForm({
     customer_phone: '',
     notes: '',
     priority: 0,
+    barber_user_id: null as number | null,
+    table_number: '',
 });
 
 const submitCreate = () => {
@@ -216,6 +225,23 @@ function timeAgo(dateStr: string | null): string {
                                         <Phone class="h-3 w-3" /> {{ entry.customer_phone }}
                                     </p>
                                     <p v-if="entry.notes" class="text-xs text-slate-500 mt-0.5 italic">"{{ entry.notes }}"</p>
+                                    <div
+                                        v-if="barbershopEnabled && (entry.barber_name || entry.table_number)"
+                                        class="mt-1 flex flex-wrap gap-1"
+                                    >
+                                        <span
+                                            v-if="entry.barber_name"
+                                            class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100"
+                                        >
+                                            {{ entry.barber_name }}
+                                        </span>
+                                        <span
+                                            v-if="entry.table_number"
+                                            class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500"
+                                        >
+                                            Kursi {{ entry.table_number }}
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
 
@@ -299,6 +325,34 @@ function timeAgo(dateStr: string | null): string {
                             type="number"
                             min="0"
                             max="10"
+                        />
+                    </div>
+                    <div v-if="barbershopEnabled" class="space-y-2">
+                        <Label for="barber_user_id">Teknisi / Barber</Label>
+                        <select
+                            id="barber_user_id"
+                            :value="createForm.barber_user_id ?? ''"
+                            @change="createForm.barber_user_id = ($event.target as HTMLSelectElement).value ? Number(($event.target as HTMLSelectElement).value) : null"
+                            class="flex h-9 w-full items-center rounded-md border border-slate-200 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        >
+                            <option :value="''">Umum (tanpa teknisi)</option>
+                            <option
+                                v-for="b in barbers"
+                                :key="b.id"
+                                :value="String(b.id)"
+                            >
+                                {{ b.name }}
+                            </option>
+                        </select>
+                        <p v-if="createForm.errors.barber_user_id" class="text-xs text-red-600">{{ createForm.errors.barber_user_id }}</p>
+                    </div>
+                    <div v-if="barbershopEnabled" class="space-y-2">
+                        <Label for="table_number">Nomor Kursi</Label>
+                        <Input
+                            id="table_number"
+                            v-model="createForm.table_number"
+                            placeholder="Mis. 1, 2, A"
+                            maxlength="20"
                         />
                     </div>
                     <div class="space-y-2">

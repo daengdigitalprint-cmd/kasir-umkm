@@ -9,6 +9,11 @@ namespace App\Modules\Payroll\Services;
  */
 class TaxService
 {
+    /** Biaya jabatan: 5% dari bruto, maksimal Rp6.000.000 setahun (Rp500.000 sebulan). */
+    public const BIAYA_JABATAN_RATE = 0.05;
+
+    public const BIAYA_JABATAN_MAX_ANNUAL = 6_000_000;
+
     /** Tarif PPh 21 progresif (per tahun). */
     public const TAX_BRACKETS = [
         ['max' => 60_000_000, 'rate' => 0.05],
@@ -73,11 +78,11 @@ class TaxService
             [6_600_000, 0.0], [6_950_000, 0.25], [7_350_000, 0.5], [7_800_000, 0.75],
             [8_850_000, 1.0], [9_800_000, 1.25], [10_950_000, 1.5], [11_200_000, 1.75],
             [12_050_000, 2.0], [12_950_000, 3.0], [14_150_000, 4.0], [15_550_000, 5.0],
-            [17_000_000, 6.0], [19_500_000, 7.0], [22_700_000, 8.0], [26_600_000, 9.0],
+            [17_050_000, 6.0], [19_500_000, 7.0], [22_700_000, 8.0], [26_600_000, 9.0],
             [28_100_000, 10.0], [30_100_000, 11.0], [32_600_000, 12.0], [35_400_000, 13.0],
             [38_900_000, 14.0], [43_000_000, 15.0], [47_400_000, 16.0], [51_200_000, 17.0],
             [55_800_000, 18.0], [60_400_000, 19.0], [66_700_000, 20.0], [74_500_000, 21.0],
-            [84_000_000, 22.0], [97_000_000, 23.0], [113_500_000, 24.0], [134_000_000, 25.0],
+            [83_200_000, 22.0], [95_600_000, 23.0], [110_000_000, 24.0], [134_000_000, 25.0],
             [169_000_000, 26.0], [221_000_000, 27.0], [390_000_000, 28.0], [463_000_000, 29.0],
             [561_000_000, 30.0], [709_000_000, 31.0], [965_000_000, 32.0], [1_419_000_000, 33.0], [PHP_FLOAT_MAX, 34.0],
         ],
@@ -152,7 +157,8 @@ class TaxService
     {
         $category = $this->terCategory($taxStatus);
         $rate = $this->terRate($category, $monthlyGross);
-        $monthlyTax = round($monthlyGross * $rate / 100, 2);
+        // PPh dibulatkan ke bawah ke rupiah penuh.
+        $monthlyTax = floor($monthlyGross * $rate / 100);
 
         return [
             'method' => 'ter',
@@ -164,27 +170,44 @@ class TaxService
     }
 
     /**
-     * Rekonsiliasi PPh 21 Desember: pajak tahunan progresif dikurangi akumulasi TER Jan-Nov.
-     * Kelebihan potong (negatif) dibulatkan ke 0 — ponytail: pengembalian (refund)
-     * belum ditangani; tambahkan saat perlu menampilkan kredit pajak Desember.
+     * Rekonsiliasi PPh 21 masa pajak terakhir (Desember) sesuai PMK 168/2023:
+     *   neto      = bruto setahun − biaya jabatan (5%, maks 6 jt) − iuran JHT & JP yang dibayar karyawan
+     *   PKP       = neto − PTKP, dibulatkan ke bawah ke ribuan
+     *   PPh 21 Desember = PPh setahun (tarif progresif) − total TER Jan–Nov
+     * Bila hasilnya negatif (kelebihan potong), selisihnya dikembalikan ke karyawan
+     * bersama gaji Desember ('refund'), bukan dibuang.
      *
-     * @param  float  $annualGross  Bruto kumulatif Jan-Des
-     * @param  float  $accumulatedTer  Total TER Jan-Nov yang sudah dipotong
-     * @return array{method: string, annual_gross: float, ptwp: float, pkp: float, annual_tax: float, accumulated_ter: float, monthly_tax: float}
+     * @param  float  $annualGross  Bruto kumulatif setahun (termasuk premi BPJS yang dibayar pemberi kerja)
+     * @param  float  $accumulatedTer  Total PPh 21 TER yang sudah dipotong sebelum Desember
+     * @param  float  $annualPensionContribution  Total iuran JHT + JP bagian karyawan setahun
+     * @return array<string, float|string>
      */
-    public function reconcileDecember(float $annualGross, string $taxStatus = 'TK/0', float $accumulatedTer = 0): array
-    {
-        $annual = $this->calculateAnnual($annualGross, $taxStatus);
-        $monthlyTax = max(0, $annual['annual_tax'] - $accumulatedTer);
+    public function reconcileDecember(
+        float $annualGross,
+        string $taxStatus = 'TK/0',
+        float $accumulatedTer = 0,
+        float $annualPensionContribution = 0,
+    ): array {
+        $ptkp = self::PTKP[$taxStatus] ?? self::PTKP['TK/0'];
+        $biayaJabatan = min($annualGross * self::BIAYA_JABATAN_RATE, self::BIAYA_JABATAN_MAX_ANNUAL);
+        $neto = max(0, $annualGross - $biayaJabatan - $annualPensionContribution);
+        $pkp = max(0, floor(($neto - $ptkp) / 1000) * 1000);
+        $annualTax = floor($this->calculateProgressiveTax($pkp));
+        $difference = $annualTax - $accumulatedTer;
 
         return [
             'method' => 'ter_december',
-            'annual_gross' => round($annualGross, 2),
-            'ptwp' => $annual['ptwp'],
-            'pkp' => $annual['pkp'],
-            'annual_tax' => $annual['annual_tax'],
-            'accumulated_ter' => round($accumulatedTer, 2),
-            'monthly_tax' => round($monthlyTax, 2),
+            'annual_gross' => round($annualGross),
+            'annual_income' => round($annualGross),
+            'biaya_jabatan' => round($biayaJabatan),
+            'pension_deduction' => round($annualPensionContribution),
+            'neto' => round($neto),
+            'ptwp' => $ptkp,
+            'pkp' => $pkp,
+            'annual_tax' => $annualTax,
+            'accumulated_ter' => round($accumulatedTer),
+            'monthly_tax' => max(0, $difference),
+            'refund' => max(0, -$difference),
         ];
     }
 

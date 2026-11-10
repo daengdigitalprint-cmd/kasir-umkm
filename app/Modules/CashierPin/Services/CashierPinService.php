@@ -82,6 +82,7 @@ class CashierPinService
             'warehouse' => 'Admin gudang',
             'kitchen' => 'Dapur',
             'owner' => 'Pemilik (Owner)',
+            'barber' => 'Barber',
             default => $role ?? 'Anggota tim',
         };
     }

@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
+use App\Models\Store;
 use App\Support\LoyaltySettings;
 use App\Support\StorePlanLimits;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class CustomerController extends Controller
@@ -73,26 +75,59 @@ class CustomerController extends Controller
                 ->with('error', 'Anda perlu membuat toko terlebih dahulu.');
         }
 
-        $request->validate([
+        $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:20',
             'address' => 'nullable|string|max:500',
             'customer_type' => 'nullable|in:ecer,grosir',
+            'date_of_birth' => 'nullable|date',
+            'referral_code' => 'nullable|string|max:20',
         ]);
 
         StorePlanLimits::assertCanCreateCustomer($store);
 
+        // Kode referral yang diinput: pastikan milik toko yang sama & bukan diri sendiri.
+        $referrer = null;
+        if (! empty($validated['referral_code'])) {
+            $referrer = $store->customers()
+                ->where('referral_code', strtoupper(trim($validated['referral_code'])))
+                ->first();
+        }
+
         $customer = $store->customers()->create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'phone' => $request->phone,
-            'address' => $request->address,
-            'customer_type' => ($store->settings['wholesale_enabled'] ?? false) && $request->customer_type === 'grosir' ? 'grosir' : 'ecer',
+            'name' => $validated['name'],
+            'email' => $validated['email'] ?? null,
+            'phone' => $validated['phone'] ?? null,
+            'address' => $validated['address'] ?? null,
+            'customer_type' => ($store->settings['wholesale_enabled'] ?? false) && ($validated['customer_type'] ?? null) === 'grosir' ? 'grosir' : 'ecer',
+            'date_of_birth' => $validated['date_of_birth'] ?? null,
+            'referral_code' => $this->generateReferralCode($store),
+            'referred_by' => $referrer?->id,
         ]);
+
+        if ($referrer) {
+            app(\App\Services\LoyaltyService::class)->grantReferralBonus($customer);
+        }
 
         return redirect()->route('customers.index')
             ->with('success', 'Pelanggan berhasil ditambahkan.');
+    }
+
+    /**
+     * Hasilkan kode referral unik untuk pelanggan (bila loyalitas aktif).
+     */
+    private function generateReferralCode(Store $store): ?string
+    {
+        if (! LoyaltySettings::enabled($store)) {
+            return null;
+        }
+
+        do {
+            $code = 'RF-'.strtoupper(substr(preg_replace('/[^A-Za-z0-9]/', '', $store->name), 0, 6)).'-'.strtoupper(Str::random(5));
+        } while (Customer::where('referral_code', $code)->exists());
+
+        return $code;
     }
 
     /**
@@ -144,35 +179,35 @@ class CustomerController extends Controller
             ->orderBy('debt_due_at', 'asc')
             ->get()
             ->map(fn ($t) => [
-                'id'                 => $t->id,
+                'id' => $t->id,
                 'transaction_number' => $t->transaction_number,
-                'total_amount'       => (float) $t->total_amount,
-                'amount_paid'        => (float) $t->amount_paid,
-                'outstanding'        => round((float) $t->total_amount - (float) $t->amount_paid, 2),
-                'payment_status'     => $t->payment_status,
-                'debt_due_at'        => $t->debt_due_at?->toDateString(),
-                'created_at'         => $t->created_at->toDateTimeString(),
-                'is_overdue'         => $t->debt_due_at && $t->debt_due_at->isPast(),
+                'total_amount' => (float) $t->total_amount,
+                'amount_paid' => (float) $t->amount_paid,
+                'outstanding' => round((float) $t->total_amount - (float) $t->amount_paid, 2),
+                'payment_status' => $t->payment_status,
+                'debt_due_at' => $t->debt_due_at?->toDateString(),
+                'created_at' => $t->created_at->toDateTimeString(),
+                'is_overdue' => $t->debt_due_at && $t->debt_due_at->isPast(),
             ]);
 
         $totalOutstanding = $receivables->sum('outstanding');
 
         return Inertia::render('Customers/Show', [
-            'customer'     => $customer,
+            'customer' => $customer,
             'transactions' => $transactions,
-            'loyalty'      => [
-                'enabled'              => $loyaltyEnabled,
-                'points_balance'       => (int) $customer->points_balance,
-                'points_earned_total'  => (int) $customer->points_earned_total,
-                'points_redeemed_total'=> (int) $customer->points_redeemed_total,
-                'history'              => $pointHistory,
-                'rewards'              => $availableRewards,
+            'loyalty' => [
+                'enabled' => $loyaltyEnabled,
+                'points_balance' => (int) $customer->points_balance,
+                'points_earned_total' => (int) $customer->points_earned_total,
+                'points_redeemed_total' => (int) $customer->points_redeemed_total,
+                'history' => $pointHistory,
+                'rewards' => $availableRewards,
             ],
-            'receivables'     => $receivables->values(),
-            'totalOutstanding'=> round($totalOutstanding, 2),
-            'store'           => [
-                'id'       => $store->id,
-                'name'     => $store->name,
+            'receivables' => $receivables->values(),
+            'totalOutstanding' => round($totalOutstanding, 2),
+            'store' => [
+                'id' => $store->id,
+                'name' => $store->name,
                 'currency' => $store->currency,
             ],
         ]);
@@ -225,6 +260,7 @@ class CustomerController extends Controller
             'phone' => 'nullable|string|max:20',
             'address' => 'nullable|string|max:500',
             'customer_type' => 'nullable|in:ecer,grosir',
+            'date_of_birth' => 'nullable|date',
         ]);
 
         $customer->update([
@@ -233,6 +269,7 @@ class CustomerController extends Controller
             'phone' => $request->phone,
             'address' => $request->address,
             'customer_type' => ($store->settings['wholesale_enabled'] ?? false) && $request->customer_type === 'grosir' ? 'grosir' : 'ecer',
+            'date_of_birth' => $request->date_of_birth ?: null,
         ]);
 
         return redirect()->route('customers.index')
@@ -271,7 +308,7 @@ class CustomerController extends Controller
      */
     public function search(Request $request)
     {
-        $user  = auth()->user();
+        $user = auth()->user();
         $store = $user->store;
 
         if (! $store) {
@@ -286,8 +323,8 @@ class CustomerController extends Controller
         $customers = $store->customers()
             ->where(function ($query) use ($q) {
                 $query->where('name', 'like', "%{$q}%")
-                      ->orWhere('phone', 'like', "%{$q}%")
-                      ->orWhere('email', 'like', "%{$q}%");
+                    ->orWhere('phone', 'like', "%{$q}%")
+                    ->orWhere('email', 'like', "%{$q}%");
             })
             ->orderBy('name')
             ->limit(10)
@@ -303,7 +340,7 @@ class CustomerController extends Controller
      */
     public function quickStore(Request $request)
     {
-        $user  = auth()->user();
+        $user = auth()->user();
         $store = $user->store;
 
         if (! $store) {
@@ -311,22 +348,22 @@ class CustomerController extends Controller
         }
 
         $data = $request->validate([
-            'name'  => 'required|string|max:255',
+            'name' => 'required|string|max:255',
             'phone' => 'nullable|string|max:20',
         ]);
 
         StorePlanLimits::assertCanCreateCustomer($store);
 
         $customer = $store->customers()->create([
-            'name'          => $data['name'],
-            'phone'         => $data['phone'] ?? null,
+            'name' => $data['name'],
+            'phone' => $data['phone'] ?? null,
             'customer_type' => 'ecer',
         ]);
 
         return response()->json([
             'customer' => [
-                'id'    => $customer->id,
-                'name'  => $customer->name,
+                'id' => $customer->id,
+                'name' => $customer->name,
                 'phone' => $customer->phone,
             ],
         ], 201);

@@ -112,11 +112,7 @@ const column3: Testimonial[] = [
             <div class="row height-fixed fix justify-content-between lp-testimonial-row">
                 <div class="col-xl-4 col-md-6">
                     <div class="all-item d-grid">
-                        <div
-                            v-for="(t, idx) in column1"
-                            :key="`c1-${idx}`"
-                            class="lp-testimonial-card"
-                        >
+                        <div v-for="(t, idx) in column1" :key="`c1-${idx}`" class="lp-testimonial-card">
                             <div class="lp-testimonial-quote" aria-hidden="true">
                                 <i class="fa-solid fa-quote-left"></i>
                             </div>
@@ -139,11 +135,7 @@ const column3: Testimonial[] = [
 
                 <div class="col-xl-4 col-md-6">
                     <div class="all-item d-grid reverse">
-                        <div
-                            v-for="(t, idx) in column2"
-                            :key="`c2-${idx}`"
-                            class="lp-testimonial-card"
-                        >
+                        <div v-for="(t, idx) in column2" :key="`c2-${idx}`" class="lp-testimonial-card">
                             <div class="lp-testimonial-quote" aria-hidden="true">
                                 <i class="fa-solid fa-quote-left"></i>
                             </div>
@@ -166,11 +158,7 @@ const column3: Testimonial[] = [
 
                 <div class="col-xl-4 col-md-6">
                     <div class="all-item d-grid">
-                        <div
-                            v-for="(t, idx) in column3"
-                            :key="`c3-${idx}`"
-                            class="lp-testimonial-card"
-                        >
+                        <div v-for="(t, idx) in column3" :key="`c3-${idx}`" class="lp-testimonial-card">
                             <div class="lp-testimonial-quote" aria-hidden="true">
                                 <i class="fa-solid fa-quote-left"></i>
                             </div>
@@ -298,8 +286,8 @@ const column3: Testimonial[] = [
     width: 2.75rem;
     height: 2.75rem;
     border-radius: 999px;
-    background: linear-gradient(135deg, #DBEAFE 0%, #BFDBFE 100%);
-    color: #124AFF;
+    background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+    color: #124aff;
     font-size: 1.05rem;
     margin-bottom: 1rem;
 }

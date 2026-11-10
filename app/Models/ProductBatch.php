@@ -8,9 +8,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class ProductBatch extends Model
 {
     public const STATUS_AVAILABLE = 'available';
+
     public const STATUS_QUARANTINED = 'quarantined';
+
     public const STATUS_EXPIRED = 'expired';
+
     public const STATUS_DESTROYED = 'destroyed';
+
     public const STATUS_RETURNED = 'returned';
 
     public const STATUSES = [

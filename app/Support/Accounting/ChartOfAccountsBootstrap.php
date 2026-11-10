@@ -46,6 +46,17 @@ class ChartOfAccountsBootstrap
 
     public const CODE_BEBAN_PAJAK = '6.1.03';
 
+    /** Utang PPh 21 yang dipotong dari gaji karyawan (disetor ke kas negara). */
+    public const CODE_UTANG_PPH21 = '2.1.04';
+
+    /** Utang iuran BPJS (bagian karyawan + perusahaan) yang belum disetor. */
+    public const CODE_UTANG_BPJS = '2.1.05';
+
+    public const CODE_BEBAN_GAJI = '6.2.01';
+
+    /** Iuran BPJS yang ditanggung perusahaan. */
+    public const CODE_BEBAN_BPJS = '6.2.02';
+
     public static function ensureForStore(Store $store): void
     {
         $defs = [
@@ -59,6 +70,8 @@ class ChartOfAccountsBootstrap
             [self::CODE_UTANG_PPN_KELUARAN, 'Utang PPN Keluaran', ChartOfAccount::TYPE_LIABILITY, ChartOfAccount::GROUP_CURRENT_LIABILITY, 50],
             [self::CODE_UTANG_USAHA, 'Utang usaha', ChartOfAccount::TYPE_LIABILITY, ChartOfAccount::GROUP_CURRENT_LIABILITY, 55],
             [self::CODE_UTANG_PAJAK, 'Utang pajak penghasilan', ChartOfAccount::TYPE_LIABILITY, ChartOfAccount::GROUP_CURRENT_LIABILITY, 56],
+            [self::CODE_UTANG_PPH21, 'Utang PPh 21 karyawan', ChartOfAccount::TYPE_LIABILITY, ChartOfAccount::GROUP_CURRENT_LIABILITY, 57],
+            [self::CODE_UTANG_BPJS, 'Utang iuran BPJS', ChartOfAccount::TYPE_LIABILITY, ChartOfAccount::GROUP_CURRENT_LIABILITY, 58],
             [self::CODE_MODAL, 'Modal disetor', ChartOfAccount::TYPE_EQUITY, ChartOfAccount::GROUP_EQUITY, 60],
             [self::CODE_SALDO_LABA, 'Saldo laba', ChartOfAccount::TYPE_EQUITY, ChartOfAccount::GROUP_EQUITY, 65],
             [self::CODE_PENDAPATAN_PENJUALAN, 'Pendapatan penjualan (DPP)', ChartOfAccount::TYPE_REVENUE, null, 70],
@@ -67,6 +80,8 @@ class ChartOfAccountsBootstrap
             [self::CODE_BEBAN_OPERASIONAL, 'Beban operasional', ChartOfAccount::TYPE_EXPENSE, null, 100],
             [self::CODE_BEBAN_KERUGIAN_PERSEDIAAN, 'Kerugian selisih persediaan', ChartOfAccount::TYPE_EXPENSE, null, 105],
             [self::CODE_BEBAN_PAJAK, 'Beban pajak penghasilan', ChartOfAccount::TYPE_EXPENSE, null, 106],
+            [self::CODE_BEBAN_GAJI, 'Beban gaji & upah', ChartOfAccount::TYPE_EXPENSE, null, 110],
+            [self::CODE_BEBAN_BPJS, 'Beban iuran BPJS perusahaan', ChartOfAccount::TYPE_EXPENSE, null, 111],
         ];
 
         foreach ($defs as [$code, $name, $type, $group, $sort]) {

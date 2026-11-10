@@ -5,6 +5,7 @@ namespace App\Modules\Attendance\Http\Controllers;
 use App\Modules\Attendance\Models\Attendance;
 use App\Modules\Attendance\Models\Employee;
 use App\Modules\Attendance\Services\AttendanceService;
+use App\Services\ActivityLogger;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -50,7 +51,7 @@ class AttendanceReportController extends AdminAttendanceController
         $records = Attendance::query()
             ->where('store_id', $store->id)
             ->whereBetween('work_date', [$from, $to])
-            ->with('employee:id,name')
+            ->with(['employee:id,name', 'photos:id,attendance_id,type,captured_at'])
             ->orderByDesc('work_date')
             ->orderByDesc('clock_in')
             ->get()
@@ -83,7 +84,16 @@ class AttendanceReportController extends AdminAttendanceController
         $validated = $request->validate([
             'clock_in' => 'nullable|date_format:H:i',
             'clock_out' => 'nullable|date_format:H:i',
+            'reason' => 'required|string|max:255',
+        ], [
+            'reason.required' => 'Alasan koreksi wajib diisi (tercatat di log aktivitas).',
         ]);
+
+        $before = [
+            'clock_in' => $attendance->clock_in?->format('H:i'),
+            'clock_out' => $attendance->clock_out?->format('H:i'),
+            'status' => $attendance->status,
+        ];
 
         $tz = $store->timezone ?: 'UTC';
         $workDate = $attendance->work_date->toDateString();
@@ -102,19 +112,33 @@ class AttendanceReportController extends AdminAttendanceController
             ]);
         }
 
-        if ($clockIn && $clockOut && $clockOut->lessThan($clockIn)) {
-            throw ValidationException::withMessages([
-                'clock_out' => 'Jam pulang tidak boleh lebih awal dari jam masuk.',
-            ]);
+        // Jam pulang lebih awal dari jam masuk = shift malam, pulang keesokan harinya.
+        if ($clockIn && $clockOut && $clockOut->lessThanOrEqualTo($clockIn)) {
+            $clockOut = $clockOut->addDay();
         }
 
         $attendance->forceFill([
             'clock_in' => $clockIn,
             'clock_out' => $clockOut,
+            'notes' => mb_substr('Koreksi: '.$validated['reason'], 0, 255),
             'updated_by' => auth()->id(),
         ])->save();
 
         $service->applySchedule($attendance);
+
+        ActivityLogger::log($store, 'attendance.corrected',
+            "Koreksi absen {$attendance->employee?->name} tanggal {$workDate}: {$validated['reason']}",
+            $attendance,
+            [
+                'before' => $before,
+                'after' => [
+                    'clock_in' => $attendance->clock_in?->format('H:i'),
+                    'clock_out' => $attendance->clock_out?->format('H:i'),
+                    'status' => $attendance->status,
+                ],
+                'reason' => $validated['reason'],
+            ],
+        );
 
         return back()->with('success', 'Jam absen berhasil diperbarui.');
     }
@@ -131,6 +155,16 @@ class AttendanceReportController extends AdminAttendanceController
         foreach ($attendance->photos as $photo) {
             Storage::disk('local')->delete($photo->path);
         }
+
+        ActivityLogger::log($store, 'attendance.deleted',
+            "Menghapus absen {$attendance->employee?->name} tanggal {$attendance->work_date?->toDateString()}",
+            $attendance,
+            [
+                'clock_in' => $attendance->clock_in?->format('H:i'),
+                'clock_out' => $attendance->clock_out?->format('H:i'),
+                'status' => $attendance->status,
+            ],
+        );
 
         $attendance->delete();
 
@@ -149,6 +183,12 @@ class AttendanceReportController extends AdminAttendanceController
             'late_minutes' => $record->late_minutes,
             'hours_worked' => $record->hours_worked,
             'overtime_hours' => $record->overtime_hours,
+            'notes' => $record->notes,
+            'photos' => $record->photos->map(fn ($photo) => [
+                'id' => $photo->id,
+                'type' => $photo->type,
+                'url' => route('attendance.photos.show', $photo),
+            ])->values(),
         ];
     }
 }

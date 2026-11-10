@@ -22,6 +22,7 @@ class ModuleService
         'kitchen_queue_enabled' => 'Antrian Dapur',
         'accounting_enabled' => 'Modul Akuntansi (Jurnal)',
         'receivables_enabled' => 'Modul Hutang Piutang',
+        'product_discount_enabled' => 'Modul Diskon per Produk',
     ];
 
     /**

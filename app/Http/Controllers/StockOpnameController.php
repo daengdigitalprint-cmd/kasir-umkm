@@ -2,24 +2,34 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\StockOpnameTemplateExport;
+use App\Jobs\ProcessStockOpnameImport;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\ProductVariant;
 use App\Models\StockAdjustment;
 use App\Models\StockAdjustmentLine;
+use App\Models\StockOpnameImport;
+use App\Services\StockOpnameImportService;
 use App\Support\Accounting\JournalPoster;
 use App\Support\AdjustmentStockOperations;
+use App\Support\BatchTracking;
 use App\Support\InventoryCosting;
 use App\Support\ProductQuantity;
 use App\Support\StockAdjustmentApproval;
 use App\Support\StorePlanLimits;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use Maatwebsite\Excel\Facades\Excel;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
  * Stock opname: hitung fisik berkala dengan sesi berdraft.
@@ -29,6 +39,9 @@ use Inertia\Response;
  */
 class StockOpnameController extends Controller
 {
+    /** Batas baris preview yang dikirim ke browser; data lengkap tetap dipakai saat apply. */
+    private const IMPORT_PREVIEW_LIMIT = 500;
+
     public function index(Request $request): Response|RedirectResponse
     {
         $user = $request->user();
@@ -203,8 +216,15 @@ class StockOpnameController extends Controller
             'statusLabel' => StockAdjustment::statusLabel((string) $stockOpname->status),
             'canPost' => $stockOpname->isDraft(),
             'canCancel' => ! $stockOpname->isCancelled() && $canReview,
+            'canDelete' => $stockOpname->isCancelled() && $canReview,
             'canApprove' => $isPending && $canReview && ! $blockedBySegregation,
             'segregationBlocked' => $isPending && $canReview && $blockedBySegregation,
+            'imports' => $stockOpname->imports()
+                ->latest()
+                ->limit(5)
+                ->get()
+                ->map(fn (StockOpnameImport $import): array => $this->importPayload($import))
+                ->all(),
         ]);
     }
 
@@ -262,6 +282,157 @@ class StockOpnameController extends Controller
 
         return redirect()->route('stock-opnames.show', $stockOpname)
             ->with('success', 'Hasil hitung tersimpan. Sesi dapat dilanjutkan kapan saja.');
+    }
+
+    /**
+     * Unduh lembar hitung sesi: daftar produk beserta snapshot stok sistem.
+     */
+    public function template(Request $request, StockAdjustment $stockOpname): RedirectResponse|BinaryFileResponse
+    {
+        $user = $request->user();
+        $store = $user->store;
+        if (! $store) {
+            return redirect()->route('stores.create')->with('error', 'Anda perlu membuat toko terlebih dahulu.');
+        }
+
+        $this->assertOwnedOpname($store, $stockOpname);
+        StorePlanLimits::assertAdvancedRetail($store, 'Fitur stock opname tersedia mulai paket GrowUp.');
+
+        $filename = 'lembar-hitung-'.Str::slug($stockOpname->adjustment_number ?: 'opname').'.xlsx';
+
+        try {
+            return Excel::download(
+                new StockOpnameTemplateExport($stockOpname->id, BatchTracking::enabled($store)),
+                $filename,
+                \Maatwebsite\Excel\Excel::XLSX,
+                [
+                    'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+                    'Cache-Control' => 'no-cache, no-store, must-revalidate',
+                    'Pragma' => 'no-cache',
+                    'Expires' => '0',
+                ],
+            );
+        } catch (\Throwable $e) {
+            report($e);
+
+            return redirect()->route('stock-opnames.show', $stockOpname)
+                ->with('error', 'Gagal membuat lembar hitung. Coba lagi beberapa saat lagi.');
+        }
+    }
+
+    /**
+     * Unggah berkas hasil hitung untuk diperiksa di latar belakang.
+     *
+     * Belum ada data yang ditulis ke lembar hitung; user meninjau preview
+     * selisih lebih dulu lalu mengonfirmasi lewat importApply.
+     */
+    public function importStore(Request $request, StockAdjustment $stockOpname): RedirectResponse
+    {
+        $user = $request->user();
+        $store = $user->store;
+        if (! $store) {
+            return redirect()->route('stores.create')->with('error', 'Anda perlu membuat toko terlebih dahulu.');
+        }
+
+        $this->assertOwnedOpname($store, $stockOpname);
+        StorePlanLimits::assertAdvancedRetail($store, 'Fitur stock opname tersedia mulai paket GrowUp.');
+
+        if (! $stockOpname->isDraft()) {
+            throw ValidationException::withMessages([
+                'file' => 'Sesi ini sudah final dan tidak dapat diubah.',
+            ]);
+        }
+
+        $validated = $request->validate([
+            'file' => ['required', 'file', 'mimes:xlsx,xls,csv,txt', 'max:10240'],
+            'missing_mode' => ['nullable', Rule::in([StockOpnameImport::MODE_IGNORE, StockOpnameImport::MODE_ZERO])],
+        ], [
+            'file.required' => 'Pilih berkas hasil hitung terlebih dahulu.',
+            'file.mimes' => 'Format berkas harus .xlsx, .xls, atau .csv.',
+            'file.max' => 'Ukuran berkas maksimal 10 MB.',
+            'missing_mode.in' => 'Pilihan perlakuan produk yang tidak ada di berkas tidak dikenal.',
+        ]);
+
+        try {
+            $path = $request->file('file')->store('stock-opname-imports', 'local');
+        } catch (\Throwable $e) {
+            report($e);
+
+            throw ValidationException::withMessages([
+                'file' => 'Berkas gagal disimpan. Coba unggah ulang.',
+            ]);
+        }
+
+        $import = StockOpnameImport::create([
+            'store_id' => $store->id,
+            'stock_adjustment_id' => $stockOpname->id,
+            'created_by' => $user->id,
+            'file_path' => $path,
+            'file_name' => $request->file('file')->getClientOriginalName(),
+            'missing_mode' => $validated['missing_mode'] ?? StockOpnameImport::MODE_IGNORE,
+            'status' => StockOpnameImport::STATUS_PENDING,
+        ]);
+
+        ProcessStockOpnameImport::dispatch($import->id);
+
+        return redirect()->route('stock-opnames.show', ['stock_opname' => $stockOpname->id, 'import' => $import->id])
+            ->with('success', 'Berkas diterima dan sedang diperiksa. Tinjau preview selisih sebelum menerapkannya ke lembar hitung.');
+    }
+
+    /**
+     * Status pemrosesan berkas beserta preview hasil untuk polling dari halaman sesi.
+     */
+    public function importShow(Request $request, StockAdjustment $stockOpname, StockOpnameImport $import): JsonResponse
+    {
+        $user = $request->user();
+        $store = $user->store;
+        if (! $store) {
+            abort(403, 'Anda perlu membuat toko terlebih dahulu.');
+        }
+
+        $this->assertOwnedOpname($store, $stockOpname);
+        $this->assertOwnedImport($stockOpname, $import);
+
+        $report = $import->report ?? [];
+        $preview = $report['preview'] ?? [];
+
+        return response()->json(array_merge($this->importPayload($import), [
+            'errors' => $report['errors'] ?? [],
+            'preview' => array_slice($preview, 0, self::IMPORT_PREVIEW_LIMIT),
+            'preview_total' => count($preview),
+        ]));
+    }
+
+    /**
+     * Terapkan hasil berkas yang sudah dikonfirmasi ke lembar hitung sesi.
+     */
+    public function importApply(
+        Request $request,
+        StockAdjustment $stockOpname,
+        StockOpnameImport $import,
+        StockOpnameImportService $service,
+    ): RedirectResponse {
+        $user = $request->user();
+        $store = $user->store;
+        if (! $store) {
+            return redirect()->route('stores.create')->with('error', 'Anda perlu membuat toko terlebih dahulu.');
+        }
+
+        $this->assertOwnedOpname($store, $stockOpname);
+        $this->assertOwnedImport($stockOpname, $import);
+        StorePlanLimits::assertAdvancedRetail($store, 'Fitur stock opname tersedia mulai paket GrowUp.');
+
+        try {
+            $service->apply($import);
+        } catch (\Throwable $e) {
+            throw ValidationException::withMessages([
+                'import' => $e->getMessage(),
+            ]);
+        }
+
+        return redirect()->route('stock-opnames.show', $stockOpname)
+            ->with('success', 'Hasil hitung dari berkas diterapkan ke lembar hitung. Periksa kembali sebelum memposting.');
     }
 
     /**
@@ -500,6 +671,57 @@ class StockOpnameController extends Controller
     }
 
     /**
+     * Hapus permanen sesi yang sudah dibatalkan.
+     *
+     * Sesi yang dibatalkan tidak lagi memengaruhi stok, sehingga aman dihapus
+     * dari daftar. Berkas unggahan ikut dibersihkan dari penyimpanan lokal.
+     */
+    public function destroy(Request $request, StockAdjustment $stockOpname): RedirectResponse
+    {
+        $user = $request->user();
+        $store = $user->store;
+        if (! $store) {
+            return redirect()->route('stores.create')->with('error', 'Anda perlu membuat toko terlebih dahulu.');
+        }
+
+        $this->assertOwnedOpname($store, $stockOpname);
+
+        if (! $user->isAdmin() && ! $user->isManager()) {
+            abort(403, 'Hanya admin atau manajer yang dapat menghapus stock opname.');
+        }
+
+        StorePlanLimits::assertAdvancedRetail($store, 'Fitur stock opname tersedia mulai paket GrowUp.');
+
+        try {
+            DB::transaction(function () use ($stockOpname) {
+                $document = StockAdjustment::query()
+                    ->whereKey($stockOpname->id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                if (! $document->isCancelled()) {
+                    throw new \RuntimeException('Hanya sesi yang sudah dibatalkan yang dapat dihapus permanen.');
+                }
+
+                foreach ($document->imports()->pluck('file_path') as $path) {
+                    if (filled($path)) {
+                        Storage::disk('local')->delete($path);
+                    }
+                }
+
+                $document->delete();
+            });
+        } catch (\Throwable $e) {
+            throw ValidationException::withMessages([
+                'delete' => $e->getMessage(),
+            ]);
+        }
+
+        return redirect()->route('stock-opnames.index')
+            ->with('success', "Stock opname {$stockOpname->adjustment_number} berhasil dihapus permanen.");
+    }
+
+    /**
      * Produk yang layak masuk lembar hitung (lihat aturan 3.4).
      */
     private function countableProductsQuery($store)
@@ -520,5 +742,42 @@ class StockOpnameController extends Controller
         if ($document->type !== StockAdjustment::TYPE_OPNAME) {
             abort(404);
         }
+    }
+
+    private function assertOwnedImport(StockAdjustment $document, StockOpnameImport $import): void
+    {
+        if ((int) $import->stock_adjustment_id !== (int) $document->id) {
+            abort(404);
+        }
+    }
+
+    /**
+     * Ringkasan satu proses unggah berkas untuk ditampilkan di halaman sesi.
+     *
+     * @return array<string, mixed>
+     */
+    private function importPayload(StockOpnameImport $import): array
+    {
+        $report = $import->report ?? [];
+
+        return [
+            'id' => $import->id,
+            'file_name' => $import->file_name,
+            'status' => $import->status,
+            'status_label' => StockOpnameImport::statusLabel((string) $import->status),
+            'missing_mode' => $import->missing_mode,
+            'missing_mode_label' => StockOpnameImport::missingModeLabel((string) $import->missing_mode),
+            'total_rows' => $import->total_rows,
+            'processed_rows' => $import->processed_rows,
+            'matched_rows' => $import->matched_rows,
+            'error_rows' => $import->error_rows,
+            'error_message' => $import->error_message,
+            'applied_at' => $import->applied_at?->toIso8601String(),
+            'summary' => $report['summary'] ?? null,
+            'can_apply' => $import->isCompleted()
+                && ! $import->isApplied()
+                && ($report['errors'] ?? []) === []
+                && ($report['preview'] ?? []) !== [],
+        ];
     }
 }

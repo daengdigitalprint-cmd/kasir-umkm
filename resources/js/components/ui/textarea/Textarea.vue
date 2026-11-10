@@ -15,6 +15,7 @@ interface Props {
   name?: string
   id?: string
   value?: string
+  modelValue?: string | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -22,6 +23,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<{
+  'update:modelValue': [value: string]
   input: [event: Event]
   change: [event: Event]
   focus: [event: FocusEvent]
@@ -29,6 +31,7 @@ const emit = defineEmits<{
 }>()
 
 const handleInput = (event: Event) => {
+  emit('update:modelValue', (event.target as HTMLTextAreaElement).value)
   emit('input', event)
 }
 
@@ -62,7 +65,7 @@ const handleBlur = (event: FocusEvent) => {
     :minlength="props.minlength"
     :required="props.required"
     :autofocus="props.autofocus"
-    :value="props.value"
+    :value="props.modelValue ?? props.value"
     @input="handleInput"
     @change="handleChange"
     @focus="handleFocus"

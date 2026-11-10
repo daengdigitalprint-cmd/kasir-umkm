@@ -5,7 +5,7 @@ import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ArrowLeft, Ban, Eye, EyeOff, Save, Search, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-vue-next';
+import { ArrowLeft, Ban, Download, Eye, EyeOff, Save, Search, Trash2, Upload, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-vue-next';
 
 interface LineRow {
     id: number;
@@ -41,13 +41,67 @@ interface OpnameDetail {
     cancelled_by: { id: number; name: string } | null;
 }
 
+interface ImportSummary {
+    data_rows: number;
+    matched_rows: number;
+    error_rows: number;
+    missing_lines: number;
+    counted_lines: number;
+    positive_value: string;
+    negative_value: string;
+    total_variance_value: string;
+}
+
+interface ImportPreviewRow {
+    line_id: number;
+    file_row: number | null;
+    product_id: number | null;
+    product_name: string;
+    sku: string;
+    variant: string | null;
+    batch_code: string | null;
+    unit: string;
+    system_quantity: string;
+    counted_quantity: string;
+    variance_quantity: string;
+    unit_cost: string;
+    variance_value: string;
+    note: string | null;
+    missing: boolean;
+}
+
+interface ImportPayload {
+    id: number;
+    file_name: string;
+    status: 'pending' | 'processing' | 'completed' | 'failed';
+    status_label: string;
+    missing_mode: 'ignore' | 'zero';
+    missing_mode_label: string;
+    total_rows: number;
+    processed_rows: number;
+    matched_rows: number;
+    error_rows: number;
+    error_message: string | null;
+    applied_at: string | null;
+    summary: ImportSummary | null;
+    can_apply: boolean;
+}
+
+interface ImportDetail extends ImportPayload {
+    errors: string[];
+    preview: ImportPreviewRow[];
+    preview_total: number;
+}
+
 const props = defineProps<{
     opname: OpnameDetail;
     statusLabel: string;
     canPost: boolean;
     canCancel: boolean;
+    canDelete?: boolean;
     canApprove?: boolean;
     segregationBlocked?: boolean;
+    imports: ImportPayload[];
 }>();
 
 const isPendingApproval = computed(() => props.opname.status === 'pending_approval');
@@ -58,11 +112,13 @@ function submitApprove() {
 }
 
 const isDraft = computed(() => props.opname.status === 'draft');
+const isCancelled = computed(() => props.opname.status === 'cancelled');
 
 // Blind count aktif secara bawaan selama sesi masih berjalan.
 const showSystemQty = ref(!isDraft.value);
 const search = ref('');
 const showCancel = ref(false);
+const showDelete = ref(false);
 const showPostConfirm = ref(false);
 
 const draftForm = useForm({
@@ -75,6 +131,129 @@ const draftForm = useForm({
 
 const postForm = useForm({});
 const cancelForm = useForm({ cancellation_reason: '' });
+const deleteForm = useForm({});
+
+// ── Impor berkas hitung: unduh template → unggah → preview selisih → terapkan ──
+const activeImport = ref<ImportDetail | null>(null);
+const importFile = ref<File | null>(null);
+const importFileInput = ref<HTMLInputElement | null>(null);
+const showApplyConfirm = ref(false);
+
+const importForm = useForm({
+    file: null as File | null,
+    missing_mode: 'ignore' as 'ignore' | 'zero',
+});
+const applyForm = useForm({});
+
+let importPollTimer: ReturnType<typeof setTimeout> | null = null;
+
+const importStatusClass: Record<string, string> = {
+    pending: 'bg-slate-100 text-slate-700',
+    processing: 'bg-blue-100 text-blue-800',
+    completed: 'bg-emerald-100 text-emerald-800',
+    failed: 'bg-red-100 text-red-700',
+};
+
+const importProgress = computed(() => {
+    const imp = activeImport.value;
+    if (!imp) return 0;
+    if (imp.total_rows <= 0) return 5;
+    return Math.min(100, Math.max(5, Math.round((imp.processed_rows / imp.total_rows) * 100)));
+});
+
+const applyImportError = computed(() => (applyForm.errors as Record<string, string>).import ?? null);
+
+function importIdFromUrl(): number | null {
+    const raw = new URLSearchParams(window.location.search).get('import');
+    const id = Number(raw);
+    return raw && Number.isFinite(id) && id > 0 ? id : null;
+}
+
+function downloadTemplate() {
+    window.location.href = `/stock-opnames/${props.opname.id}/template`;
+}
+
+function onImportFileChange(event: Event) {
+    const target = event.target as HTMLInputElement;
+    const file = target.files?.[0] ?? null;
+    importFile.value = file;
+    importForm.file = file;
+    importForm.clearErrors();
+}
+
+function submitImport() {
+    if (!importFile.value) {
+        importForm.setError('file', 'Pilih berkas hasil hitung terlebih dahulu.');
+        return;
+    }
+
+    importForm.post(`/stock-opnames/${props.opname.id}/imports`, {
+        forceFormData: true,
+        preserveScroll: true,
+        onSuccess: () => {
+            importFile.value = null;
+            importForm.reset();
+            if (importFileInput.value) importFileInput.value.value = '';
+            const id = importIdFromUrl();
+            if (id) openImport(id);
+        },
+    });
+}
+
+/** Muat detail impor (JSON) sekaligus jadwalkan polling saat masih diproses */
+async function openImport(id: number): Promise<void> {
+    try {
+        const resp = await fetch(`/stock-opnames/${props.opname.id}/imports/${id}`, {
+            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        if (!resp.ok) return;
+        activeImport.value = (await resp.json()) as ImportDetail;
+        scheduleImportPoll();
+    } catch {
+        // Biarkan panel kosong; user dapat membuka lagi dari riwayat unggahan.
+    }
+}
+
+function scheduleImportPoll() {
+    if (importPollTimer) {
+        clearTimeout(importPollTimer);
+        importPollTimer = null;
+    }
+    const imp = activeImport.value;
+    if (!imp || (imp.status !== 'pending' && imp.status !== 'processing')) return;
+    importPollTimer = setTimeout(() => openImport(imp.id), 2000);
+}
+
+function closeImportPanel() {
+    if (importPollTimer) {
+        clearTimeout(importPollTimer);
+        importPollTimer = null;
+    }
+    activeImport.value = null;
+}
+
+function submitApply() {
+    const imp = activeImport.value;
+    if (!imp || applyForm.processing) return;
+    showApplyConfirm.value = false;
+    applyForm.post(`/stock-opnames/${props.opname.id}/imports/${imp.id}/apply`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            syncDraftFromOpname();
+            openImport(imp.id);
+        },
+    });
+}
+
+/** Selaraskan form draft dengan nilai yang baru saja ditulis impor */
+function syncDraftFromOpname() {
+    draftForm.lines = props.opname.lines.map((l) => ({
+        id: l.id,
+        counted_quantity: String(Number(l.counted_quantity)),
+        line_notes: l.line_notes ?? '',
+    }));
+    snapshotDraft();
+}
 
 // ── Navigasi guard: auto-save & konfirmasi saat pindah halaman ──
 const initialSnapshot = ref(JSON.stringify(draftForm.lines));
@@ -164,8 +343,15 @@ function onInertiaBefore(event: { detail: { visit: { url: string; method: string
     if (isNavigatingAway) return true;
     if (!isDraft.value || !isDirty.value) return true;
 
-    // Jangan intercept saat form sedang dikirim (saveDraft/postOpname/cancel)
-    if (draftForm.processing || postForm.processing || approveForm.processing || cancelForm.processing) {
+    // Jangan intercept saat form sedang dikirim (saveDraft/postOpname/cancel/impor)
+    if (
+        draftForm.processing ||
+        postForm.processing ||
+        approveForm.processing ||
+        cancelForm.processing ||
+        importForm.processing ||
+        applyForm.processing
+    ) {
         return true;
     }
 
@@ -194,6 +380,13 @@ let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
 let offInertiaBefore: (() => void) | null = null;
 
 onMounted(() => {
+    // Buka panel impor dari ?import= atau lanjutkan polling impor yang masih berjalan.
+    const initialImportId =
+        importIdFromUrl() ?? props.imports.find((i) => i.status === 'pending' || i.status === 'processing')?.id ?? null;
+    if (initialImportId) {
+        openImport(initialImportId);
+    }
+
     if (!isDraft.value) return;
     window.addEventListener('beforeunload', onBeforeUnload);
     offInertiaBefore = router.on('before', onInertiaBefore);
@@ -203,6 +396,7 @@ onUnmounted(() => {
     window.removeEventListener('beforeunload', onBeforeUnload);
     offInertiaBefore?.();
     if (autoSaveTimer) clearTimeout(autoSaveTimer);
+    if (importPollTimer) clearTimeout(importPollTimer);
 });
 
 watch(
@@ -349,6 +543,15 @@ function submitCancel() {
         },
     });
 }
+
+function submitDelete() {
+    if (deleteForm.processing) return;
+    deleteForm.delete(`/stock-opnames/${props.opname.id}`, {
+        onFinish: () => {
+            showDelete.value = false;
+        },
+    });
+}
 </script>
 
 <template>
@@ -390,6 +593,10 @@ function submitCancel() {
                     <Button v-if="props.canCancel" variant="outline" class="rounded-xl text-red-600" @click="showCancel = !showCancel">
                         <Ban class="mr-2 h-4 w-4" />
                         {{ isPendingApproval ? 'Tolak' : 'Batalkan' }}
+                    </Button>
+                    <Button v-if="props.canDelete" variant="outline" class="rounded-xl text-red-600" @click="showDelete = !showDelete">
+                        <Trash2 class="mr-2 h-4 w-4" />
+                        Hapus permanen
                     </Button>
                 </div>
             </div>
@@ -440,6 +647,27 @@ function submitCancel() {
                 </div>
             </div>
 
+            <div v-if="showDelete" class="rounded-2xl border border-red-200 bg-red-50 p-5">
+                <p class="font-bold text-red-900">Hapus permanen sesi opname ini?</p>
+                <p class="mt-1 text-sm text-red-800">
+                    Sesi beserta seluruh baris hitung dan berkas unggahannya akan dihapus dari sistem. Tindakan ini tidak
+                    dapat dibatalkan.
+                </p>
+                <p v-if="deleteForm.errors.delete" class="mt-2 text-sm font-semibold text-red-700">
+                    {{ deleteForm.errors.delete }}
+                </p>
+                <div class="mt-3 flex gap-2">
+                    <Button
+                        class="rounded-xl bg-red-600 hover:bg-red-700"
+                        :disabled="deleteForm.processing"
+                        @click="submitDelete"
+                    >
+                        {{ deleteForm.processing ? 'Menghapus...' : 'Ya, hapus permanen' }}
+                    </Button>
+                    <Button variant="outline" class="rounded-xl" @click="showDelete = false">Tidak jadi</Button>
+                </div>
+            </div>
+
             <div
                 v-if="props.opname.cancellation_reason"
                 class="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-900"
@@ -478,6 +706,284 @@ function submitCancel() {
                     </CardContent>
                 </Card>
             </div>
+
+            <Card v-if="isDraft || props.imports.length > 0" class="rounded-2xl border-slate-200 shadow-sm">
+                <CardHeader>
+                    <CardTitle class="text-base font-bold">Impor berkas hitung</CardTitle>
+                    <CardDescription>
+                        Unduh lembar hitung, isi kolom stok fisik di Excel saat menghitung di gudang, lalu unggah untuk melihat
+                        preview selisih sebelum diterapkan.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent class="space-y-4">
+                    <div v-if="isDraft" class="flex flex-wrap items-center gap-3">
+                        <Button variant="outline" class="rounded-xl" @click="downloadTemplate">
+                            <Download class="mr-2 h-4 w-4" />
+                            Unduh lembar hitung (.xlsx)
+                        </Button>
+                        <p class="text-xs text-slate-500">
+                            Kolom stok sistem pada berkas adalah snapshot saat sesi dibuka.
+                        </p>
+                    </div>
+
+                    <div v-if="isDraft" class="rounded-2xl border border-slate-200 p-4">
+                        <p class="text-sm font-semibold text-slate-900">Unggah hasil hitung</p>
+                        <div class="mt-3 grid gap-4 lg:grid-cols-2">
+                            <div>
+                                <label class="block">
+                                    <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Berkas hasil hitung</span>
+                                    <input
+                                        ref="importFileInput"
+                                        type="file"
+                                        accept=".xlsx,.xls,.csv"
+                                        class="mt-2 block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-white"
+                                        :disabled="importForm.processing"
+                                        @change="onImportFileChange"
+                                    />
+                                </label>
+                                <p class="mt-1 text-xs text-slate-400">Format .xlsx, .xls, atau .csv · maksimal 10 MB</p>
+                            </div>
+                            <div>
+                                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                    Produk yang tidak ada di berkas
+                                </p>
+                                <label class="mt-2 flex items-start gap-2 text-sm text-slate-700">
+                                    <input v-model="importForm.missing_mode" type="radio" value="ignore" class="mt-0.5" />
+                                    <span>Abaikan (tidak dihitung)</span>
+                                </label>
+                                <label class="mt-1.5 flex items-start gap-2 text-sm text-slate-700">
+                                    <input v-model="importForm.missing_mode" type="radio" value="zero" class="mt-0.5" />
+                                    <span>Anggap stok 0 (selisih = −stok sistem)</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <p v-if="importForm.errors.file" class="mt-2 text-sm font-semibold text-red-700">
+                            {{ importForm.errors.file }}
+                        </p>
+                        <p v-if="importForm.errors.missing_mode" class="mt-1 text-sm font-semibold text-red-700">
+                            {{ importForm.errors.missing_mode }}
+                        </p>
+
+                        <Button class="mt-3 rounded-xl" :disabled="importForm.processing || !importFile" @click="submitImport">
+                            <Loader2 v-if="importForm.processing" class="mr-2 h-4 w-4 animate-spin" />
+                            <Upload v-else class="mr-2 h-4 w-4" />
+                            {{ importForm.processing ? 'Mengunggah…' : 'Unggah dan proses' }}
+                        </Button>
+                    </div>
+
+                    <div v-if="activeImport" class="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <p class="font-semibold text-slate-900">{{ activeImport.file_name }}</p>
+                                <p class="text-xs text-slate-500">
+                                    Produk absen: {{ activeImport.missing_mode_label }}
+                                    <span v-if="activeImport.applied_at" class="ml-1">
+                                        · diterapkan {{ formatWhen(activeImport.applied_at) }}
+                                    </span>
+                                </p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span
+                                    class="rounded-full px-2.5 py-1 text-xs font-bold"
+                                    :class="importStatusClass[activeImport.status] ?? 'bg-slate-100 text-slate-700'"
+                                >
+                                    {{ activeImport.status_label }}
+                                </span>
+                                <Button variant="ghost" size="sm" class="rounded-xl text-slate-500" @click="closeImportPanel">
+                                    Tutup
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div v-if="activeImport.status === 'pending' || activeImport.status === 'processing'" class="mt-4">
+                            <div class="flex items-center gap-2 text-sm text-slate-600">
+                                <Loader2 class="h-4 w-4 animate-spin" />
+                                Memproses berkas… {{ activeImport.processed_rows }} dari {{ activeImport.total_rows }} baris
+                            </div>
+                            <div class="mt-2 h-2 overflow-hidden rounded-full bg-slate-200">
+                                <div
+                                    class="h-2 rounded-full bg-slate-900 transition-all"
+                                    :style="{ width: importProgress + '%' }"
+                                ></div>
+                            </div>
+                        </div>
+
+                        <div v-else-if="activeImport.status === 'failed'" class="mt-4 rounded-xl border border-red-200 bg-red-50 p-4">
+                            <p class="text-sm font-semibold text-red-800">Pemrosesan gagal — lembar hitung tidak berubah.</p>
+                            <p class="mt-1 text-sm text-red-700">{{ activeImport.error_message }}</p>
+                        </div>
+
+                        <div v-else class="mt-4 space-y-4">
+                            <div v-if="activeImport.summary" class="grid grid-cols-2 gap-3 md:grid-cols-5">
+                                <div class="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                                    <p class="text-xs text-slate-500">Baris data</p>
+                                    <p class="font-bold text-slate-900">{{ activeImport.summary.data_rows }}</p>
+                                </div>
+                                <div class="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                                    <p class="text-xs text-slate-500">Baris cocok</p>
+                                    <p class="font-bold text-slate-900">{{ activeImport.summary.matched_rows }}</p>
+                                </div>
+                                <div class="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                                    <p class="text-xs text-slate-500">Baris error</p>
+                                    <p class="font-bold" :class="activeImport.summary.error_rows > 0 ? 'text-red-600' : 'text-slate-900'">
+                                        {{ activeImport.summary.error_rows }}
+                                    </p>
+                                </div>
+                                <div class="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                                    <p class="text-xs text-slate-500">Produk absen</p>
+                                    <p class="font-bold text-slate-900">{{ activeImport.summary.missing_lines }}</p>
+                                </div>
+                                <div class="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                                    <p class="text-xs text-slate-500">Nilai selisih</p>
+                                    <p
+                                        class="font-bold tabular-nums"
+                                        :class="valueClass(activeImport.summary.total_variance_value)"
+                                    >
+                                        {{ formatRupiah(activeImport.summary.total_variance_value) }}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div v-if="activeImport.errors.length > 0" class="rounded-xl border border-red-200 bg-red-50 p-4">
+                                <p class="text-sm font-semibold text-red-800">
+                                    Laporan error per baris — perbaiki berkas lalu unggah ulang sebelum hasil dapat diterapkan.
+                                </p>
+                                <ul class="mt-2 max-h-52 list-inside list-disc space-y-1 overflow-y-auto">
+                                    <li v-for="(message, idx) in activeImport.errors" :key="idx" class="text-xs text-red-700">
+                                        {{ message }}
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <div v-if="activeImport.preview.length > 0" class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                                <table class="w-full text-sm">
+                                    <thead>
+                                        <tr
+                                            class="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500"
+                                        >
+                                            <th class="py-2.5 pl-3 pr-4 font-semibold">Produk</th>
+                                            <th class="py-2.5 pr-4 text-right font-semibold">Stok sistem</th>
+                                            <th class="py-2.5 pr-4 text-right font-semibold">Stok fisik</th>
+                                            <th class="py-2.5 pr-4 text-right font-semibold">Selisih</th>
+                                            <th class="py-2.5 pr-4 text-right font-semibold">Nilai</th>
+                                            <th class="py-2.5 pr-3 font-semibold">Catatan</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr
+                                            v-for="row in activeImport.preview"
+                                            :key="`${row.line_id}-${row.file_row ?? 'absen'}`"
+                                            class="border-b border-slate-100"
+                                            :class="row.missing ? 'bg-amber-50/60' : ''"
+                                        >
+                                            <td class="py-2.5 pl-3 pr-4">
+                                                <p class="font-semibold text-slate-900">
+                                                    {{ row.product_name
+                                                    }}<span v-if="row.variant" class="text-slate-500"> — {{ row.variant }}</span>
+                                                </p>
+                                                <p class="text-xs text-slate-400">
+                                                    {{ row.sku || '—' }}
+                                                    <span v-if="row.batch_code"> · Batch {{ row.batch_code }}</span>
+                                                    <span
+                                                        v-if="row.missing"
+                                                        class="ml-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800"
+                                                    >
+                                                        tidak ada di berkas
+                                                    </span>
+                                                </p>
+                                            </td>
+                                            <td class="py-2.5 pr-4 text-right tabular-nums text-slate-600">
+                                                {{ formatQty(row.system_quantity) }}
+                                            </td>
+                                            <td class="py-2.5 pr-4 text-right font-semibold tabular-nums text-slate-900">
+                                                {{ formatQty(row.counted_quantity) }}
+                                            </td>
+                                            <td
+                                                class="py-2.5 pr-4 text-right font-bold tabular-nums"
+                                                :class="valueClass(row.variance_quantity)"
+                                            >
+                                                {{ Number(row.variance_quantity) > 0 ? '+' : ''
+                                                }}{{ formatQty(row.variance_quantity) }}
+                                            </td>
+                                            <td
+                                                class="py-2.5 pr-4 text-right font-semibold tabular-nums"
+                                                :class="valueClass(row.variance_value)"
+                                            >
+                                                {{ formatRupiah(row.variance_value) }}
+                                            </td>
+                                            <td class="py-2.5 pr-3 text-xs text-slate-500">{{ row.note || '—' }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p v-if="activeImport.preview_total > activeImport.preview.length" class="text-xs text-slate-500">
+                                Menampilkan {{ activeImport.preview.length }} dari {{ activeImport.preview_total }} baris preview.
+                            </p>
+
+                            <div
+                                v-if="activeImport.applied_at"
+                                class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800"
+                            >
+                                Hasil hitung sudah diterapkan ke lembar hitung. Periksa kembali sebelum memposting sesi ini.
+                            </div>
+                            <div
+                                v-else-if="activeImport.can_apply"
+                                class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4"
+                            >
+                                <p class="text-sm text-slate-600">
+                                    Penyimpanan hanya memperbarui lembar hitung; stok berubah setelah sesi diposting.
+                                </p>
+                                <Button class="rounded-xl" :disabled="applyForm.processing" @click="showApplyConfirm = true">
+                                    <CheckCircle2 class="mr-2 h-4 w-4" />
+                                    Simpan ke lembar hitung
+                                </Button>
+                            </div>
+                            <p v-else-if="activeImport.errors.length > 0" class="text-sm font-semibold text-red-700">
+                                Hasil belum dapat diterapkan karena masih ada error pada berkas.
+                            </p>
+                            <div
+                                v-else-if="activeImport.summary && activeImport.summary.counted_lines === 0"
+                                class="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600"
+                            >
+                                Tidak ada baris yang cocok dengan produk pada sesi ini.
+                            </div>
+
+                            <p v-if="applyImportError" class="text-sm font-semibold text-red-700">
+                                {{ applyImportError }}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div v-if="!activeImport && props.imports.length > 0" class="space-y-2">
+                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Riwayat unggahan</p>
+                        <button
+                            v-for="imp in props.imports"
+                            :key="imp.id"
+                            type="button"
+                            class="flex w-full flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 px-3 py-2 text-left text-sm hover:border-slate-300 hover:bg-slate-50"
+                            @click="openImport(imp.id)"
+                        >
+                            <span class="font-medium text-slate-900">{{ imp.file_name }}</span>
+                            <span class="flex items-center gap-2 text-xs text-slate-500">
+                                <span>{{ imp.missing_mode_label }}</span>
+                                <span
+                                    class="rounded-full px-2 py-0.5 font-bold"
+                                    :class="importStatusClass[imp.status] ?? 'bg-slate-100 text-slate-700'"
+                                >
+                                    {{ imp.status_label }}
+                                </span>
+                                <span
+                                    v-if="imp.applied_at"
+                                    class="rounded-full bg-emerald-100 px-2 py-0.5 font-bold text-emerald-800"
+                                >
+                                    diterapkan
+                                </span>
+                            </span>
+                        </button>
+                    </div>
+                </CardContent>
+            </Card>
 
             <Card class="rounded-2xl border-slate-200 shadow-sm">
                 <CardHeader>
@@ -707,6 +1213,36 @@ function submitCancel() {
                     <Loader2 v-if="postForm.processing" class="mr-2 h-4 w-4 animate-spin" />
                     <CheckCircle2 v-else class="mr-2 h-4 w-4" />
                     {{ postForm.processing ? 'Memposting...' : 'Ya, Posting Sekarang' }}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+
+    <!-- Dialog konfirmasi penerapan hasil impor ke lembar hitung -->
+    <Dialog :open="showApplyConfirm" @update:open="(v: boolean) => !v && (showApplyConfirm = false)">
+        <DialogContent class="sm:max-w-md">
+            <DialogHeader>
+                <div class="flex items-center gap-3">
+                    <div class="flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 shrink-0">
+                        <CheckCircle2 class="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div>
+                        <DialogTitle class="text-base font-bold">Terapkan hasil hitung ke lembar hitung?</DialogTitle>
+                        <DialogDescription class="text-sm text-slate-500">
+                            Jumlah fisik dari berkas akan mengisi kolom hitung sesi ini dan menimpa isian manual yang belum
+                            disimpan. Stok baru berubah setelah sesi diposting.
+                        </DialogDescription>
+                    </div>
+                </div>
+            </DialogHeader>
+            <DialogFooter class="flex flex-wrap justify-end gap-2">
+                <Button variant="outline" class="rounded-xl" :disabled="applyForm.processing" @click="showApplyConfirm = false">
+                    Periksa lagi
+                </Button>
+                <Button class="rounded-xl" :disabled="applyForm.processing" @click="submitApply">
+                    <Loader2 v-if="applyForm.processing" class="mr-2 h-4 w-4 animate-spin" />
+                    <CheckCircle2 v-else class="mr-2 h-4 w-4" />
+                    {{ applyForm.processing ? 'Menerapkan…' : 'Ya, terapkan' }}
                 </Button>
             </DialogFooter>
         </DialogContent>

@@ -127,7 +127,7 @@ test('pelanggan baru dari quick-store muncul di hasil pencarian', function () {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// Skenario 5: Quick-store tidak terpengaruh role backoffice — 
+// Skenario 5: Quick-store tidak terpengaruh role backoffice —
 //             kasir biasa bisa mendaftarkan pelanggan dari POS
 // ═══════════════════════════════════════════════════════════════
 

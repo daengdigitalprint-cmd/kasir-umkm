@@ -4,14 +4,19 @@ namespace App\Services;
 
 use App\Models\Product;
 use App\Models\ProductBatch;
+use App\Models\ProductBundleItem;
 use App\Models\ProductCategory;
 use App\Models\ProductSaleConsumption;
 use App\Models\ProductVariant;
+use App\Models\Recipe;
+use App\Models\RecipeIngredient;
 use App\Models\StockMovement;
 use App\Models\Store;
+use App\Support\BarbershopFeatures;
 use App\Support\BaseUnit;
 use App\Support\BatchTracking;
 use App\Support\InventoryType;
+use App\Support\ModifierOptions;
 use App\Support\PharmacyFeatures;
 use App\Support\ProductImportSchema;
 use App\Support\ProductQuantity;
@@ -157,34 +162,18 @@ class ProductImportService
             return ['imported' => 0, 'errors' => []];
         }
 
-        $headerMap = $this->buildHeaderMap(array_shift($rows));
+        [$headerMap, $dataRows] = $this->componentSheetRows($rows);
 
-        if (! isset($headerMap['tipe_komponen'])) {
+        if ($headerMap === null) {
             return ['imported' => 0, 'errors' => []];
         }
 
-        $products = $store->products()
-            ->get(['id', 'name', 'sku', 'inventory_type', 'base_unit', 'has_variants', 'is_bundle', 'is_active', 'track_stock'])
-            ->keyBy('id');
-
-        $bySku = [];
-        $byName = [];
-        foreach ($products as $product) {
-            if ($product->sku !== null && $product->sku !== '') {
-                $bySku[mb_strtolower($product->sku)] = $product->id;
-            }
-            $byName[mb_strtolower($product->name)] = $product->id;
-        }
+        [$products, $bySku, $byName] = $this->sheetProductIndex($store);
 
         $errors = [];
         $grouped = [];
 
-        foreach ($rows as $index => $row) {
-            if ($this->isEmptyRow($row)) {
-                continue;
-            }
-            $line = $index + 2;
-
+        foreach ($dataRows as $line => $row) {
             $type = $this->stringValue($row, $headerMap, 'tipe_komponen');
             if ($type === null || mb_strtolower($type) !== 'consumption') {
                 continue;
@@ -326,6 +315,506 @@ class ProductImportService
     }
 
     /**
+     * Impor sheet "Varian Produk": membuat varian yang belum ada dan memperbarui yang cocok.
+     *
+     * Varian dicocokkan per produk induk memakai SKU Varian, lalu Nama Varian.
+     * Produk yang mendapat varian otomatis ditandai bervarian.
+     *
+     * @param  list<list<mixed>>  $rows  Baris mentah termasuk header pada indeks 0.
+     * @return array{imported: int, errors: list<string>}
+     */
+    public function importVariants(Store $store, array $rows, ?int $userId = null): array
+    {
+        if ($rows === []) {
+            return ['imported' => 0, 'errors' => []];
+        }
+
+        $headerMap = $this->buildHeaderMap(array_shift($rows));
+
+        if (! isset($headerMap['nama_varian'])) {
+            return ['imported' => 0, 'errors' => []];
+        }
+
+        [$products, $bySku, $byName] = $this->sheetProductIndex($store);
+
+        $errors = [];
+        $prepared = [];
+
+        foreach ($rows as $index => $row) {
+            if ($this->isEmptyRow($row)) {
+                continue;
+            }
+            $line = $index + 2;
+
+            $variantName = $this->stringValue($row, $headerMap, 'nama_varian');
+            if ($variantName === null) {
+                $errors[] = "Baris {$line}: kolom Nama Varian wajib diisi.";
+
+                continue;
+            }
+            if (mb_strlen($variantName) > 120) {
+                $errors[] = "Baris {$line}: Nama Varian melebihi 120 karakter.";
+
+                continue;
+            }
+
+            $product = $this->resolveSheetProduct(
+                $products,
+                $bySku,
+                $byName,
+                $this->stringValue($row, $headerMap, 'sku_produk'),
+                $this->stringValue($row, $headerMap, 'nama_produk'),
+                $this->rawValue($row, $headerMap, 'id_produk'),
+            );
+
+            if ($product === null) {
+                $errors[] = "Baris {$line}: produk induk varian tidak ditemukan di toko ini.";
+
+                continue;
+            }
+
+            if ($product->is_bundle) {
+                $errors[] = "Baris {$line}: produk paket «{$product->name}» tidak boleh memiliki varian.";
+
+                continue;
+            }
+
+            $rowErrors = [];
+            // Header "Harga" dinormalkan menjadi kolom harga jual oleh ProductImportSchema.
+            $price = $this->numberValue($row, $headerMap, ProductImportSchema::COL_PRICE, 'Harga', $rowErrors);
+            $wholesale = $this->numberValue($row, $headerMap, ProductImportSchema::COL_WHOLESALE_PRICE, 'Harga Grosir', $rowErrors);
+            $cost = $this->numberValue($row, $headerMap, ProductImportSchema::COL_COST, 'Harga Beli', $rowErrors);
+            $stock = $this->numberValue($row, $headerMap, ProductImportSchema::COL_STOCK, 'Stok', $rowErrors);
+            $minStock = $this->numberValue($row, $headerMap, ProductImportSchema::COL_MIN_STOCK, 'Stok Minimum', $rowErrors);
+            $sortOrder = $this->numberValue($row, $headerMap, 'urutan', 'Urutan', $rowErrors);
+
+            if ($rowErrors !== []) {
+                $errors[] = "Baris {$line}: ".implode(' ', $rowErrors);
+
+                continue;
+            }
+
+            foreach ([['Harga', $price], ['Harga Grosir', $wholesale], ['Harga Beli', $cost], ['Stok', $stock], ['Stok Minimum', $minStock]] as [$label, $value]) {
+                if ($value !== null && $value < 0) {
+                    $errors[] = "Baris {$line}: {$label} tidak boleh negatif.";
+
+                    continue 2;
+                }
+            }
+
+            $variantSku = $this->stringValue($row, $headerMap, 'sku_varian');
+
+            $prepared[] = [
+                'product' => $product,
+                'name' => $variantName,
+                'sku' => $variantSku,
+                'barcode' => $this->stringValue($row, $headerMap, 'barcode_varian'),
+                'price' => $price,
+                'wholesale_price' => $wholesale,
+                'cost_price' => $cost,
+                'stock_quantity' => $stock ?? 0,
+                'min_stock_level' => $minStock ?? 0,
+                'allow_negative_stock' => ProductImportSchema::parseBoolean(
+                    $this->rawValue($row, $headerMap, ProductImportSchema::COL_ALLOW_NEGATIVE_STOCK),
+                    false,
+                ) ?? false,
+                'is_active' => ProductImportSchema::parseBoolean(
+                    $this->rawValue($row, $headerMap, ProductImportSchema::COL_IS_ACTIVE),
+                    true,
+                ) ?? true,
+                'sort_order' => $sortOrder !== null ? (int) $sortOrder : 0,
+            ];
+        }
+
+        if ($errors !== []) {
+            return ['imported' => 0, 'errors' => $this->capErrors($errors)];
+        }
+
+        $imported = 0;
+
+        DB::transaction(function () use ($store, $prepared, &$imported) {
+            $touchedProducts = [];
+
+            foreach ($prepared as $item) {
+                /** @var Product $product */
+                $product = $item['product'];
+
+                $query = ProductVariant::query()
+                    ->where('store_id', $store->id)
+                    ->where('product_id', $product->id);
+
+                $existing = $item['sku'] !== null && $item['sku'] !== ''
+                    ? (clone $query)->where('sku', $item['sku'])->first()
+                    : null;
+
+                $existing ??= (clone $query)->whereRaw('LOWER(name) = ?', [mb_strtolower($item['name'])])->first();
+
+                $payload = [
+                    'store_id' => $store->id,
+                    'product_id' => $product->id,
+                    'name' => $item['name'],
+                    'sku' => $item['sku'],
+                    'barcode' => $item['barcode'],
+                    'price' => $item['price'],
+                    'wholesale_price' => $item['wholesale_price'],
+                    'cost_price' => $item['cost_price'],
+                    'stock_quantity' => $item['stock_quantity'],
+                    'min_stock_level' => $item['min_stock_level'],
+                    'allow_negative_stock' => $item['allow_negative_stock'],
+                    'is_active' => $item['is_active'],
+                    'sort_order' => $item['sort_order'],
+                ];
+
+                if ($existing) {
+                    $existing->update($payload);
+                } else {
+                    ProductVariant::create($payload);
+                }
+
+                $touchedProducts[$product->id] = true;
+                $imported++;
+            }
+
+            if ($touchedProducts !== []) {
+                Product::query()
+                    ->where('store_id', $store->id)
+                    ->whereIn('id', array_keys($touchedProducts))
+                    ->update(['has_variants' => true]);
+            }
+        });
+
+        return ['imported' => $imported, 'errors' => []];
+    }
+
+    /**
+     * Impor baris bertipe "recipe" dari sheet komponen menjadi resep produksi.
+     *
+     * @param  list<list<mixed>>  $rows  Baris mentah termasuk header pada indeks 0.
+     * @return array{imported: int, errors: list<string>}
+     */
+    public function importRecipes(Store $store, array $rows, ?int $userId = null): array
+    {
+        [$headerMap, $dataRows] = $this->componentSheetRows($rows);
+
+        if ($headerMap === null) {
+            return ['imported' => 0, 'errors' => []];
+        }
+
+        [$products, $bySku, $byName] = $this->sheetProductIndex($store);
+
+        $errors = [];
+        $grouped = [];
+
+        foreach ($dataRows as $line => $row) {
+            if (mb_strtolower((string) $this->stringValue($row, $headerMap, 'tipe_komponen')) !== 'recipe') {
+                continue;
+            }
+
+            $product = $this->resolveSheetProduct(
+                $products,
+                $bySku,
+                $byName,
+                $this->stringValue($row, $headerMap, 'sku_produk'),
+                $this->stringValue($row, $headerMap, 'nama_produk'),
+                $this->rawValue($row, $headerMap, 'id_produk'),
+            );
+
+            if ($product === null) {
+                $errors[] = "Baris {$line}: produk hasil resep tidak ditemukan di toko ini.";
+
+                continue;
+            }
+
+            $ingredient = $this->resolveSheetProduct(
+                $products,
+                $bySku,
+                $byName,
+                $this->stringValue($row, $headerMap, 'sku_komponen'),
+                $this->stringValue($row, $headerMap, 'nama_komponen'),
+                $this->rawValue($row, $headerMap, 'id_komponen'),
+            );
+
+            if ($ingredient === null || (int) $ingredient->id === (int) $product->id) {
+                $errors[] = "Baris {$line}: bahan resep tidak valid untuk toko ini.";
+
+                continue;
+            }
+
+            $rowErrors = [];
+            $quantity = $this->numberValue($row, $headerMap, 'kuantitas', 'Kuantitas', $rowErrors);
+            if ($rowErrors !== []) {
+                $errors[] = "Baris {$line}: ".implode(' ', $rowErrors);
+
+                continue;
+            }
+            if ($quantity === null || $quantity <= 0) {
+                $errors[] = "Baris {$line}: kuantitas bahan resep harus lebih dari nol.";
+
+                continue;
+            }
+
+            $sortOrder = $this->numberValue($row, $headerMap, 'urutan', 'Urutan', $rowErrors);
+            $code = $this->stringValue($row, $headerMap, 'kode_resep');
+
+            $grouped[$product->id] ??= [
+                'product' => $product,
+                'code' => $code,
+                'ingredients' => [],
+            ];
+
+            // Satu bahan hanya boleh muncul sekali per resep (unique recipe_id + product_id).
+            $grouped[$product->id]['ingredients'][$ingredient->id] = [
+                'product_id' => $ingredient->id,
+                'quantity' => $quantity,
+                'base_unit' => $this->stringValue($row, $headerMap, 'satuan_dasar') ?? $ingredient->base_unit,
+                'sort_order' => $sortOrder !== null ? (int) $sortOrder : count($grouped[$product->id]['ingredients']),
+            ];
+        }
+
+        if ($errors !== []) {
+            return ['imported' => 0, 'errors' => $this->capErrors($errors)];
+        }
+
+        $imported = 0;
+
+        DB::transaction(function () use ($store, $grouped, $userId, &$imported) {
+            foreach ($grouped as $productId => $item) {
+                /** @var Product $product */
+                $product = $item['product'];
+
+                $recipe = Recipe::query()
+                    ->where('store_id', $store->id)
+                    ->where('product_id', $productId)
+                    ->first();
+
+                $code = $item['code'];
+                if ($code !== null && Recipe::query()
+                    ->where('store_id', $store->id)
+                    ->where('code', $code)
+                    ->when($recipe !== null, fn ($q) => $q->whereKeyNot($recipe->id))
+                    ->exists()) {
+                    // Kode resep sudah dipakai resep lain di toko ini: biarkan kosong.
+                    $code = null;
+                }
+
+                if ($recipe === null) {
+                    $recipe = Recipe::create([
+                        'store_id' => $store->id,
+                        'name' => $product->name,
+                        'code' => $code,
+                        'product_id' => $productId,
+                        'output_quantity' => 1,
+                        'output_unit' => $product->base_unit,
+                        'is_active' => true,
+                        'created_by' => $userId,
+                        'updated_by' => $userId,
+                    ]);
+                } else {
+                    $recipe->update(['code' => $code, 'updated_by' => $userId]);
+                    $recipe->ingredients()->delete();
+                }
+
+                foreach ($item['ingredients'] as $ingredient) {
+                    RecipeIngredient::create([
+                        'recipe_id' => $recipe->id,
+                        'product_id' => $ingredient['product_id'],
+                        'quantity' => $ingredient['quantity'],
+                        'base_unit' => $ingredient['base_unit'],
+                        'sort_order' => $ingredient['sort_order'],
+                    ]);
+                    $imported++;
+                }
+            }
+        });
+
+        return ['imported' => $imported, 'errors' => []];
+    }
+
+    /**
+     * Impor baris bertipe "bundle" dari sheet komponen menjadi komponen produk paket.
+     *
+     * @param  list<list<mixed>>  $rows  Baris mentah termasuk header pada indeks 0.
+     * @return array{imported: int, errors: list<string>}
+     */
+    public function importBundleItems(Store $store, array $rows, ?int $userId = null): array
+    {
+        [$headerMap, $dataRows] = $this->componentSheetRows($rows);
+
+        if ($headerMap === null) {
+            return ['imported' => 0, 'errors' => []];
+        }
+
+        [$products, $bySku, $byName] = $this->sheetProductIndex($store);
+
+        $errors = [];
+        $grouped = [];
+
+        foreach ($dataRows as $line => $row) {
+            if (mb_strtolower((string) $this->stringValue($row, $headerMap, 'tipe_komponen')) !== 'bundle') {
+                continue;
+            }
+
+            $bundle = $this->resolveSheetProduct(
+                $products,
+                $bySku,
+                $byName,
+                $this->stringValue($row, $headerMap, 'sku_produk'),
+                $this->stringValue($row, $headerMap, 'nama_produk'),
+                $this->rawValue($row, $headerMap, 'id_produk'),
+            );
+
+            if ($bundle === null) {
+                $errors[] = "Baris {$line}: produk paket tidak ditemukan di toko ini.";
+
+                continue;
+            }
+
+            if ($bundle->has_variants) {
+                $errors[] = "Baris {$line}: produk bervarian «{$bundle->name}» tidak bisa dijadikan produk paket.";
+
+                continue;
+            }
+
+            $component = $this->resolveSheetProduct(
+                $products,
+                $bySku,
+                $byName,
+                $this->stringValue($row, $headerMap, 'sku_komponen'),
+                $this->stringValue($row, $headerMap, 'nama_komponen'),
+                $this->rawValue($row, $headerMap, 'id_komponen'),
+            );
+
+            if ($component === null || (int) $component->id === (int) $bundle->id) {
+                $errors[] = "Baris {$line}: komponen paket tidak valid untuk toko ini.";
+
+                continue;
+            }
+
+            $rowErrors = [];
+            $quantity = $this->numberValue($row, $headerMap, 'kuantitas', 'Kuantitas', $rowErrors);
+            $sortOrder = $this->numberValue($row, $headerMap, 'urutan', 'Urutan', $rowErrors);
+
+            if ($rowErrors !== []) {
+                $errors[] = "Baris {$line}: ".implode(' ', $rowErrors);
+
+                continue;
+            }
+            if ($quantity === null || $quantity <= 0) {
+                $errors[] = "Baris {$line}: kuantitas komponen paket harus lebih dari nol.";
+
+                continue;
+            }
+
+            $variantSku = $this->stringValue($row, $headerMap, 'sku_varian_komponen');
+            $variantName = $this->stringValue($row, $headerMap, 'nama_varian_komponen');
+            $variantId = null;
+
+            if ($variantSku !== null || $variantName !== null) {
+                $variantId = $this->resolveSheetVariant($store, $component, $variantSku, $variantName);
+
+                if ($variantId === null) {
+                    $errors[] = "Baris {$line}: varian komponen tidak ditemukan untuk «{$component->name}».";
+
+                    continue;
+                }
+            }
+
+            $grouped[$bundle->id][] = [
+                'component_product_id' => $component->id,
+                'component_product_variant_id' => $variantId,
+                'quantity' => $quantity,
+                'sort_order' => $sortOrder !== null ? (int) $sortOrder : count($grouped[$bundle->id] ?? []),
+            ];
+        }
+
+        if ($errors !== []) {
+            return ['imported' => 0, 'errors' => $this->capErrors($errors)];
+        }
+
+        $imported = 0;
+
+        DB::transaction(function () use ($store, $grouped, &$imported) {
+            foreach ($grouped as $bundleId => $items) {
+                $bundle = Product::query()->where('store_id', $store->id)->whereKey($bundleId)->first();
+                if (! $bundle) {
+                    continue;
+                }
+
+                ProductBundleItem::query()->where('bundle_product_id', $bundleId)->delete();
+
+                foreach ($items as $item) {
+                    ProductBundleItem::create([
+                        'bundle_product_id' => $bundleId,
+                        'component_product_id' => $item['component_product_id'],
+                        'component_product_variant_id' => $item['component_product_variant_id'],
+                        'quantity' => $item['quantity'],
+                        'sort_order' => $item['sort_order'],
+                    ]);
+                    $imported++;
+                }
+
+                if (! $bundle->is_bundle) {
+                    $bundle->update(['is_bundle' => true]);
+                }
+            }
+        });
+
+        return ['imported' => $imported, 'errors' => []];
+    }
+
+    /**
+     * Header map + baris data sheet komponen (kunci array = nomor baris pada file).
+     *
+     * @param  list<list<mixed>>  $rows
+     * @return array{0: array<string, int>|null, 1: array<int, list<mixed>>}
+     */
+    private function componentSheetRows(array $rows): array
+    {
+        if ($rows === []) {
+            return [null, []];
+        }
+
+        $headerMap = $this->buildHeaderMap(array_shift($rows));
+
+        if (! isset($headerMap['tipe_komponen'])) {
+            return [null, []];
+        }
+
+        $dataRows = [];
+        foreach ($rows as $index => $row) {
+            if ($this->isEmptyRow($row)) {
+                continue;
+            }
+            $dataRows[$index + 2] = $row;
+        }
+
+        return [$headerMap, $dataRows];
+    }
+
+    /**
+     * Indeks produk toko untuk sheet tambahan: koleksi by id, peta SKU, dan peta nama.
+     *
+     * @return array{0: \Illuminate\Support\Collection<int, Product>, 1: array<string, int>, 2: array<string, int>}
+     */
+    private function sheetProductIndex(Store $store): array
+    {
+        $products = $store->products()
+            ->get(['id', 'name', 'sku', 'inventory_type', 'base_unit', 'has_variants', 'is_bundle', 'is_active', 'track_stock'])
+            ->keyBy('id');
+
+        $bySku = [];
+        $byName = [];
+        foreach ($products as $product) {
+            if ($product->sku !== null && $product->sku !== '') {
+                $bySku[mb_strtolower($product->sku)] = $product->id;
+            }
+            $byName[mb_strtolower($product->name)] = $product->id;
+        }
+
+        return [$products, $bySku, $byName];
+    }
+
+    /**
      * Resolusi produk dari sheet komponen: SKU, lalu nama, lalu ID (hanya bila masih milik toko).
      *
      * @param  \Illuminate\Support\Collection<int, Product>  $products
@@ -458,12 +947,9 @@ class ProductImportService
             $errors[] = "Beberapa baris mengarah ke produk yang sama («{$product->name}»). Gabungkan menjadi satu baris.";
         }
 
-        if ($product !== null && $product->has_variants) {
-            $errors[] = "Produk «{$product->name}» memiliki varian sehingga tidak dapat diperbarui lewat impor. Ubah melalui halaman Edit Produk.";
-        }
-        if ($product !== null && $product->is_bundle) {
-            $errors[] = "Produk «{$product->name}» adalah produk paket sehingga tidak dapat diperbarui lewat impor. Ubah melalui halaman Edit Produk.";
-        }
+        // Produk bervarian dan produk paket boleh diperbarui, tetapi stoknya tidak:
+        // stok varian ada di sheet "Varian Produk" dan stok paket dihitung dari komponennya.
+        $stockLocked = $product !== null && ($product->has_variants || $product->is_bundle);
 
         if ($sku !== null && $this->conflictsWithOtherProductIndex($storeProductIndex, 'sku', $sku, $product?->id)) {
             $errors[] = "SKU «{$sku}» sudah dipakai produk lain di toko ini.";
@@ -479,6 +965,11 @@ class ProductImportService
             $errors[] = 'Harga Jual tidak boleh negatif.';
         }
 
+        $wholesalePrice = $this->numberValue($row, $headerMap, ProductImportSchema::COL_WHOLESALE_PRICE, 'Harga Grosir', $errors);
+        if ($wholesalePrice !== null && $wholesalePrice < 0) {
+            $errors[] = 'Harga Grosir tidak boleh negatif.';
+        }
+
         $cost = $this->numberValue($row, $headerMap, ProductImportSchema::COL_COST, 'Harga Beli', $errors);
         if ($cost !== null && $cost < 0) {
             $errors[] = 'Harga Beli tidak boleh negatif.';
@@ -487,6 +978,10 @@ class ProductImportService
         $stock = $this->numberValue($row, $headerMap, ProductImportSchema::COL_STOCK, 'Stok', $errors);
         if ($stock !== null && $stock < 0) {
             $errors[] = 'Stok tidak boleh negatif.';
+        }
+        if ($stockLocked) {
+            // Abaikan kolom Stok supaya stok varian/paket tidak tertimpa nilai ringkasan.
+            $stock = null;
         }
 
         $minStock = $this->numberValue($row, $headerMap, ProductImportSchema::COL_MIN_STOCK, 'Stok Minimum', $errors);
@@ -531,6 +1026,7 @@ class ProductImportService
         $unlimitedStock = $this->booleanValue($row, $headerMap, ProductImportSchema::COL_UNLIMITED_STOCK, 'Stok Tanpa Batas', $product !== null ? (bool) $product->unlimited_stock : false, $errors);
         $isActive = $this->booleanValue($row, $headerMap, ProductImportSchema::COL_IS_ACTIVE, 'Status Aktif', $product !== null ? (bool) $product->is_active : true, $errors);
         $allowsDecimal = $this->booleanValue($row, $headerMap, ProductImportSchema::COL_ALLOWS_DECIMAL, 'Izinkan Desimal', $product !== null ? (bool) $product->allows_decimal : false, $errors);
+        $allowNegativeStock = $this->booleanValue($row, $headerMap, ProductImportSchema::COL_ALLOW_NEGATIVE_STOCK, 'Izinkan Penjualan Stok Habis', $product !== null ? (bool) $product->allow_negative_stock : false, $errors);
 
         // Paket Starter: produk baru tanpa desimal; produk lama mempertahankan nilai tersimpan.
         if (! StorePlanLimits::allowsAdvancedRetailFeatures($store)) {
@@ -583,6 +1079,62 @@ class ProductImportService
             }
         }
 
+        $modifierOptions = null;
+        $modifierProvided = false;
+        if (ModifierOptions::enabled($store) && isset($headerMap[ProductImportSchema::COL_MODIFIER_OPTIONS])) {
+            $rawModifier = $this->stringValue($row, $headerMap, ProductImportSchema::COL_MODIFIER_OPTIONS);
+            $modifierProvided = $rawModifier !== null;
+
+            if ($rawModifier !== null) {
+                $decoded = json_decode($rawModifier, true);
+                if (! is_array($decoded)) {
+                    $errors[] = 'Opsi Modifier harus berupa JSON, contoh: [{"label":"Extra Keju","price":3000}].';
+                } else {
+                    $modifierOptions = ModifierOptions::normalize($decoded);
+                }
+            }
+        }
+
+        $serviceDuration = null;
+        $barberCommissionMode = null;
+        $barberCommissionValue = null;
+        $barbershopProvided = false;
+        if (BarbershopFeatures::enabled($store)) {
+            $barbershopProvided = true;
+
+            $rawDuration = $this->numberValue($row, $headerMap, ProductImportSchema::COL_SERVICE_DURATION, 'Durasi Layanan (menit)', $errors);
+            if ($rawDuration !== null) {
+                if ($rawDuration < 1 || $rawDuration > 1440) {
+                    $errors[] = 'Durasi Layanan (menit) harus di antara 1 dan 1440.';
+                } else {
+                    $serviceDuration = (int) round($rawDuration);
+                }
+            } else {
+                $serviceDuration = $product?->service_duration_minutes;
+            }
+
+            $barberCommissionMode = $this->choiceValue(
+                $row,
+                $headerMap,
+                ProductImportSchema::COL_BARBER_COMMISSION_MODE,
+                ['percent' => 'percent', 'persen' => 'percent', 'fixed' => 'fixed', 'nominal' => 'fixed', 'tetap' => 'fixed'],
+                'Mode Komisi Barber',
+                'percent, fixed',
+                $errors,
+            ) ?? $product?->barber_commission_mode;
+
+            $rawCommission = $this->numberValue($row, $headerMap, ProductImportSchema::COL_BARBER_COMMISSION_VALUE, 'Nilai Komisi Barber', $errors);
+            if ($rawCommission !== null && $rawCommission < 0) {
+                $errors[] = 'Nilai Komisi Barber tidak boleh negatif.';
+            }
+            $barberCommissionValue = $rawCommission
+                ?? ($product?->barber_commission_value !== null ? (float) $product->barber_commission_value : null);
+
+            if ($barberCommissionMode === null) {
+                $barberCommissionValue = null;
+            }
+        }
+
         $qtyContext = new Product(['allows_decimal' => $allowsDecimal]);
         $stockValue = $stock !== null
             ? ProductQuantity::normalizeStorageAmount($qtyContext, $stock)
@@ -626,6 +1178,7 @@ class ProductImportService
                 'barcode' => $barcode,
                 'description' => $description ?? $product?->description,
                 'price' => $price ?? ($product !== null ? (float) $product->price : 0.0),
+                'wholesale_price' => $wholesalePrice ?? ($product?->wholesale_price !== null ? (float) $product->wholesale_price : null),
                 'cost_price' => $cost ?? ($product?->cost_price !== null ? (float) $product->cost_price : null),
                 'stock_quantity' => $stockValue,
                 'min_stock_level' => $minStockValue,
@@ -637,13 +1190,43 @@ class ProductImportService
                 'track_stock' => $trackStock,
                 'unlimited_stock' => $unlimitedStock,
                 'allows_decimal' => $allowsDecimal,
+                'allow_negative_stock' => $allowNegativeStock,
                 'is_active' => $isActive,
                 'pharmacy_sale_class' => $pharmacyClass,
                 'pharmacy_registration_no' => $pharmacyRegNo,
             ],
             'cost_provided' => $cost !== null,
+            'stock_locked' => $stockLocked,
+            'modifier_provided' => $modifierProvided,
+            'modifier_options' => $modifierOptions,
+            'barbershop_provided' => $barbershopProvided,
+            'service_duration_minutes' => $serviceDuration,
+            'barber_commission_mode' => $barberCommissionMode,
+            'barber_commission_value' => $barberCommissionValue,
             'image_url' => $imageUrl,
         ];
+    }
+
+    /**
+     * Terapkan kolom pengaturan opsional (modifier F&B & komisi barber) ke payload produk.
+     *
+     * @param  array<string, mixed>  $item
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function withOptionalSettings(array $item, array $payload): array
+    {
+        if ($item['modifier_provided']) {
+            $payload['modifier_options'] = $item['modifier_options'];
+        }
+
+        if ($item['barbershop_provided']) {
+            $payload['service_duration_minutes'] = $item['service_duration_minutes'];
+            $payload['barber_commission_mode'] = $item['barber_commission_mode'];
+            $payload['barber_commission_value'] = $item['barber_commission_value'];
+        }
+
+        return $payload;
     }
 
     /**
@@ -651,7 +1234,7 @@ class ProductImportService
      */
     private function createProduct(Store $store, array $item, ?int $userId): void
     {
-        $payload = $item['payload'];
+        $payload = $this->withOptionalSettings($item, $item['payload']);
         $payload['product_category_id'] = $this->resolveCategoryId($store, $item['category_name']);
         $payload['category'] = $item['category_name'];
         $payload['average_cost'] = $payload['cost_price'];
@@ -699,8 +1282,12 @@ class ProductImportService
      */
     private function updateProduct(Store $store, Product $product, array $item, ?int $userId): void
     {
-        $payload = $item['payload'];
+        $payload = $this->withOptionalSettings($item, $item['payload']);
         $oldStock = ProductQuantity::normalizeStorageAmount($product, $product->stock_quantity);
+
+        if ($item['stock_locked']) {
+            unset($payload['stock_quantity']);
+        }
 
         if ($item['category_name'] !== null) {
             $payload['product_category_id'] = $this->resolveCategoryId($store, $item['category_name']);

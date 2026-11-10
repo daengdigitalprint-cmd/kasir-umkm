@@ -216,6 +216,41 @@ class AiService
             return ['text' => $smallTalk];
         }
 
+        // --- Komisi barber/teknisi (khusus barbershop) ---
+        if (preg_match('/\b(komisi|commission)\b.*\b(barber|teknisi|cukur|pangkas)\b|\b(barber|teknisi|cukur|pangkas)\b.*\b(komisi|commission)\b|\bcek\b.*\bkomisi\b|\bkomisi\s+barber\b|\bkomisi\s+teknisi\b/u', $text)) {
+            $arguments = ['period' => match (true) {
+                str_contains($text, 'kemarin') => 'yesterday',
+                str_contains($text, 'hari ini') => 'today',
+                str_contains($text, 'minggu lalu') => 'last_week',
+                str_contains($text, 'bulan lalu') => 'last_month',
+                str_contains($text, 'minggu') => 'this_week',
+                str_contains($text, 'bulan') => 'this_month',
+                str_contains($text, 'tahun') => 'this_year',
+                default => 'this_month',
+            }];
+
+            if (preg_match('/\b(?:barber|teknisi|cukur|pangkas)\s+([a-z0-9][a-z0-9\s.\'\-]{1,30})/iu', $message, $m)) {
+                $candidate = trim($m[1]);
+                $candidate = trim((string) preg_replace('/\s+(hari\s+ini|kemarin|minggu\s+ini|minggu\s+lalu|bulan\s+ini|bulan\s+lalu|tahun\s+ini|hari|minggu|bulan|tahun)\s*$/iu', '', $candidate));
+                $candidate = trim((string) preg_replace('/\s+(dong|ya|yuk|deh|nih|aja|kak|bang|yaa|saya|kita|aku|enggak|tidak)\s*$/iu', '', $candidate));
+
+                // Lewati kandidat yang bukan nama: sisa frasa periode, kata ganti, atau konteks cabang.
+                $isNotName = $candidate === ''
+                    || preg_match('/^(hari|minggu|bulan|tahun|kemarin|saya|kita|aku|semua|seluruh|ini|lalu|dong|ya)\b.*$/iu', $candidate) === 1
+                    || preg_match('/\b(cabang|outlet|toko)\b/u', $candidate) === 1;
+
+                if (! $isNotName) {
+                    $arguments['barber_name'] = $candidate;
+                }
+            }
+
+            if (preg_match('/(?:semua|seluruh)\s*(?:cabang|outlet|toko)|(?:antarcabang|antar\s*cabang)|lintas\s*(?:cabang|outlet)/', $text) === 1) {
+                $arguments['scope'] = 'all';
+            }
+
+            return ['tool' => 'get_barber_commissions', 'arguments' => $arguments];
+        }
+
         // Frasa yang meminta agregasi lintas cabang (multi-outlet)
         $allBranches = preg_match('/(?:semua|seluruh)\s*(?:cabang|outlet|toko)|(?:antarcabang|antar\s*cabang)|lintas\s*(?:cabang|outlet)/', $text) === 1;
 
@@ -271,7 +306,7 @@ class AiService
         }
 
         // --- Deteksi anomali transaksi / anti-fraud kasir ---
-        if (preg_match('/transaksi\s+(?:yang\s+)?(?:mencurigakan|aneh|janggal|ganjil)|\b(?:anomali|fraud|kecurangan)\b|anti[\s-]*fraud|void\s+(?:berulang|banyak|terus|beruntun)|(?:diskon)\s+(?:aneh|tidak\s+wajar|besar|gede|berlebihan|gila|anehnya)|selisih\s+kas|audit\s+(?:kasir|transaksi|penjualan)|kasir\s+(?:nakal|curang)/', $text)) {
+        if (preg_match('/transaksi\s+(?:yang\s+)?(?:mencurigakan|aneh|janggal|ganjil)|\b(?:anomali|fraud|kecurangan)\b|anti[\s-]*fraud|void\s+(?:berulang|banyak|terus|beruntun)|(?:diskon)\s+(?:aneh|tidak\s+wajar|besar|gede|berlebihan|gila|anehnya)|selisih\s+kas|audit\s+(?:kasir|transaksi|penjualan)|kasir\s+(?:nakal|curang)|tampilkan\s+(?:semua\s+)?data(?:nya)?|data\s+selisih\s+kas|data\s+diskon|data\s+indikasi/', $text)) {
             $arguments = ['period' => match (true) {
                 str_contains($text, 'kemarin') => 'yesterday',
                 str_contains($text, 'hari ini') => 'today',
@@ -485,6 +520,162 @@ class AiService
             return $createResult;
         }
 
+        // --- Tanggal spesifik ("tanggal 24", "24 September", "24/09", dll.)
+        // dicek terakhir agar tidak menangkap pesan yang punya intent lain. ---
+        $specificDate = $this->detectSpecificDate($text, $message, $conversation);
+        if ($specificDate !== null) {
+            return $specificDate;
+        }
+
+        return null;
+    }
+
+    /**
+     * Deteksi pesan yang menyebutkan tanggal/rentang tanggal spesifik,
+     * lalu sesuaikan dengan konteks percakapan sebelumnya.
+     *
+     * Contoh pola yang dikenali:
+     *   "tanggal 24"          → penjualan tgl 24 bulan ini (atau bulan lalu jika > hari ini)
+     *   "24 September"        → penjualan 24 September tahun ini
+     *   "24/09"               → penjualan 24 September tahun ini
+     *   "24-09-2026"          → penjualan 24 September 2026
+     *   "1 sampai 10 September" → penjualan rentang tsb
+     *
+     * Jika percakapan sebelumnya tentang penjualan → get_sales_summary
+     * Jika tentang produk terlaris → get_top_products
+     * Jika tidak ada konteks sebelumnya → get_sales_summary (default)
+     *
+     * @return array{tool: string, arguments: array}|null
+     */
+    protected function detectSpecificDate(string $text, string $original, ?AiConversation $conversation): ?array
+    {
+        $bulanMap = [
+            'januari' => 1, 'jan' => 1,
+            'februari' => 2, 'feb' => 2,
+            'maret' => 3, 'mar' => 3,
+            'april' => 4, 'apr' => 4,
+            'mei' => 5,
+            'juni' => 6, 'jun' => 6,
+            'juli' => 7, 'jul' => 7,
+            'agustus' => 8, 'agu' => 8, 'aug' => 8,
+            'september' => 9, 'sep' => 9, 'sept' => 9,
+            'oktober' => 10, 'okt' => 10, 'oct' => 10,
+            'november' => 11, 'nov' => 11,
+            'desember' => 12, 'des' => 12, 'dec' => 12,
+        ];
+
+        $now = \Illuminate\Support\Carbon::now();
+        $dateFrom = null;
+        $dateTo = null;
+
+        // --- Format: DD-MM-YYYY atau DD/MM/YYYY ---
+        if (preg_match('/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})\b/', $text, $m)) {
+            $dateFrom = \Illuminate\Support\Carbon::createSafe((int) $m[3], (int) $m[2], (int) $m[1])?->startOfDay();
+            $dateTo = $dateFrom?->copy()->endOfDay();
+        }
+
+        // --- Format: DD/MM (tanpa tahun) ---
+        elseif (preg_match('/\b(\d{1,2})\/(\d{1,2})\b/', $text, $m)) {
+            $year = $now->year;
+            $dateFrom = \Illuminate\Support\Carbon::createSafe($year, (int) $m[2], (int) $m[1])?->startOfDay();
+            $dateTo = $dateFrom?->copy()->endOfDay();
+        }
+
+        // --- Format: DD <bulan> [YYYY] (mis. "24 September" atau "24 September 2026") ---
+        elseif (preg_match('/\b(\d{1,2})\s+('.implode('|', array_keys($bulanMap)).')(?:\s+(\d{4}))?\b/u', $text, $m)) {
+            $day = (int) $m[1];
+            $month = $bulanMap[$m[2]] ?? null;
+            $year = isset($m[3]) && $m[3] ? (int) $m[3] : $now->year;
+
+            if ($month) {
+                $dateFrom = \Illuminate\Support\Carbon::createSafe($year, $month, $day)?->startOfDay();
+                $dateTo = $dateFrom?->copy()->endOfDay();
+            }
+        }
+
+        // --- Format: "tanggal N" saja (mis. "tanggal 24") ---
+        elseif (preg_match('/\btanggal\s+(\d{1,2})\b/u', $text, $m)) {
+            $day = (int) $m[1];
+            $month = $now->month;
+            $year = $now->year;
+
+            // Jika tanggal sudah lewat bulan ini, gunakan bulan ini; jika belum ada di bulan ini, anggap bulan lalu
+            $candidate = \Illuminate\Support\Carbon::createSafe($year, $month, $day);
+
+            if (! $candidate) {
+                return null;
+            }
+
+            if ($candidate->gt($now)) {
+                $candidate->subMonth();
+            }
+
+            $dateFrom = $candidate->startOfDay();
+            $dateTo = $candidate->copy()->endOfDay();
+        }
+
+        // --- Format: rentang "1 sampai 10 September" / "1-10 September" ---
+        elseif (preg_match('/\b(\d{1,2})\s+(?:sampai|hingga|s\/d|sd|-)\s+(\d{1,2})\s+('.implode('|', array_keys($bulanMap)).')(?:\s+(\d{4}))?\b/u', $text, $m)) {
+            $month = $bulanMap[$m[3]] ?? null;
+            $year = isset($m[4]) && $m[4] ? (int) $m[4] : $now->year;
+
+            if ($month) {
+                $dateFrom = \Illuminate\Support\Carbon::createSafe($year, $month, (int) $m[1])?->startOfDay();
+                $dateTo = \Illuminate\Support\Carbon::createSafe($year, $month, (int) $m[2])?->endOfDay();
+            }
+        }
+
+        if (! $dateFrom || ! $dateTo) {
+            return null;
+        }
+
+        // Tentukan tool berdasarkan konteks percakapan sebelumnya
+        $tool = 'get_sales_summary';
+        $args = [
+            'date_from' => $dateFrom->format('Y-m-d'),
+            'date_to' => $dateTo->format('Y-m-d'),
+        ];
+
+        if ($conversation) {
+            $lastTool = $this->resolveLastToolFromConversation($conversation);
+
+            if ($lastTool === 'get_top_products') {
+                $tool = 'get_top_products';
+                $args = [
+                    'date_from' => $dateFrom->format('Y-m-d'),
+                    'date_to' => $dateTo->format('Y-m-d'),
+                ];
+            }
+        }
+
+        return ['tool' => $tool, 'arguments' => $args];
+    }
+
+    /**
+     * Ambil nama tool terakhir yang dieksekusi dalam percakapan ini
+     * (dari ~5 pesan terakhir) untuk menentukan konteks follow-up.
+     */
+    protected function resolveLastToolFromConversation(?AiConversation $conversation): ?string
+    {
+        if (! $conversation) {
+            return null;
+        }
+
+        $lastToolMsg = $conversation->messages()
+            ->where('role', 'user')
+            ->where('content', 'like', 'Hasil dari tool %')
+            ->reorder()
+            ->latest('id')
+            ->first();
+
+        if (! $lastToolMsg) {
+            return null;
+        }
+
+        if (preg_match('/^Hasil dari tool (\w+):/', $lastToolMsg->content, $m)) {
+            return $m[1];
+        }
+
         return null;
     }
 
@@ -499,7 +690,7 @@ class AiService
             return null;
         }
 
-        $hasBusinessWord = preg_match('/\b(stok|persediaan|penjualan|omset|omzet|jual|laku|terjual|produk|barang|harga|laba|untung|rugi|margin|transaksi|order|beli|belanja|supplier|pelanggan|customer|laporan|kasir|struk|nota|bayar|hutang|utang|piutang|restock|cabang|outlet|toko|gudang)\b/u', $text) === 1;
+        $hasBusinessWord = preg_match('/\b(stok|persediaan|penjualan|omset|omzet|jual|laku|terjual|produk|barang|harga|laba|untung|rugi|margin|transaksi|order|beli|belanja|supplier|pelanggan|customer|laporan|kasir|struk|nota|bayar|hutang|utang|piutang|restock|cabang|outlet|toko|gudang|komisi|commission|barber|teknisi|cukur|pangkas)\b/u', $text) === 1;
         $hasActionWord = preg_match('/\b(tambah(?:kan)?|buat(?:kan)?|ubah|hapus|update|setel|isi|input|cari(?:kan|in)?|tampilkan|lihat|cek|periksa|analisa|analisis|prediksi|hitung|bandingkan|kirim|daftar)\b/u', $text) === 1;
 
         if ($hasBusinessWord || $hasActionWord) {
@@ -695,7 +886,7 @@ class AiService
             return null;
         }
 
-        $hasCreateIntent = preg_match('/(?:tambah(?:kan)?|buat|input|masukkan|insert|create)\s+(?:produk|barang)/i', $message);
+        $hasCreateIntent = preg_match('/(?:\btambah(?:kan)?\b|\bmenambah(?:kan)?\b|\bnambah(?:kan)?\b|\bbuat(?:kan)?\b|\binput\b|\bmasukkan\b|\binsert\b|\bcreate\b)\s+(?:\w+\s+){0,2}(?:produk|barang)/iu', $message) === 1;
         $hasProductDetails = preg_match('/\bharga\b/i', $message) && preg_match('/\b(?:modal|hpp|stok|satuan)\b/i', $message);
 
         if (! $hasCreateIntent && ! $hasProductDetails) {
@@ -704,14 +895,19 @@ class AiService
 
         $args = [];
 
-        if (preg_match('/(?:tambah(?:kan)?|buat|input|masukkan|insert|create)\s+(?:produk|barang)\s+(.+?)(?:,|\s+(?:harga|modal|kategori|stok|satuan|hpp|cost|sku)\b|$)/i', $message, $m) || preg_match('/^\s*(.+?)\s+harga\b/i', $message, $m)) {
+        if (preg_match('/(?:\btambah(?:kan)?\b|\bmenambah(?:kan)?\b|\bnambah(?:kan)?\b|\bbuat(?:kan)?\b|\binput\b|\bmasukkan\b|\binsert\b|\bcreate\b)\s+(?:\w+\s+){0,2}(?:produk|barang)\s+(.+?)(?:,|\s+(?:harga|modal|kategori|stok|satuan|hpp|cost|sku)\b|$)/iu', $message, $m) || preg_match('/^\s*(.+?)\s+harga\b/i', $message, $m)) {
             $name = trim($m[1], " \t\n\r\0\x0B,.");
-            if ($name !== '') {
+            $name = trim((string) preg_replace('/^(?:baru|yang|ini|itu|saya|kita)\s+/iu', '', $name));
+            if ($name !== '' && ! preg_match('/^(?:baru|yang|ini|itu|saja|saya|kita|donk|dong|ya|aja|dulu|dong ya)$/iu', $name)) {
                 $args['name'] = $name;
             }
         }
 
         if (empty($args['name'])) {
+            if ($hasCreateIntent) {
+                return ['text' => 'Siap, saya bantu tambahkan produk baru. Sebutkan **nama produk dan harga jualnya** ya. Contoh: "Tambah produk Kopi Susu harga 15000 modal 10000 stok 20 satuan pcs kategori Minuman".'];
+            }
+
             return null;
         }
 
@@ -750,6 +946,13 @@ class AiService
 
         // Harga wajib ada
         if (empty($args['price'])) {
+            $name = $args['name'];
+            $hint = "Harga jual **{$name}** berapa Rupiah? Contoh: \"{$name} harga 15000\". Tambahkan modal/stok/satuan juga jika ada.";
+
+            if ($hasCreateIntent) {
+                return ['text' => $hint];
+            }
+
             return null;
         }
 
@@ -1024,6 +1227,10 @@ class AiService
             return "{$message}\n\n{$products}";
         }
 
+        if ($toolName === 'get_barber_commissions') {
+            return $message;
+        }
+
         if ($toolName === 'check_stock' && ! empty($data['products'])) {
             $products = collect($data['products'])->map(fn (array $product) => sprintf(
                 '- **%s** — %s %s',
@@ -1035,7 +1242,75 @@ class AiService
             return "{$message}\n\n{$products}";
         }
 
+        if ($toolName === 'detect_transaction_anomalies') {
+            return $this->formatAnomalyDetails($data, $message);
+        }
+
         return $message;
+    }
+
+    /**
+     * Rincian tiap temuan audit transaksi dalam tabel Markdown.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    protected function formatAnomalyDetails(array $data, string $message): string
+    {
+        $sections = [
+            $message,
+            '**Periode:** '.$data['date_from'].' — '.$data['date_to'],
+        ];
+
+        if (! empty($data['discount_anomalies'])) {
+            $rows = collect($data['discount_anomalies'])->map(fn (array $row, int $index) => sprintf(
+                '| %d | %s | %s | %s | %s%% | Rp %s |',
+                $index + 1,
+                $row['transaction_number'],
+                $row['cashier'],
+                $row['created_at'],
+                $row['discount_pct'],
+                number_format((float) $row['discount_amount'], 0, ',', '.'),
+            ))->implode("\n");
+
+            $sections[] = "### Diskon tidak wajar\n\n"
+                ."| # | Transaksi | Kasir | Waktu | Diskon | Nilai diskon |\n"
+                ."|---|---|---|---|---|---|\n"
+                .$rows;
+        }
+
+        if (! empty($data['void_patterns'])) {
+            $rows = collect($data['void_patterns'])->map(fn (array $row, int $index) => sprintf(
+                '| %d | %s | %d kali | Rp %s |',
+                $index + 1,
+                $row['cashier'],
+                $row['void_count'],
+                number_format((float) $row['total_void_amount'], 0, ',', '.'),
+            ))->implode("\n");
+
+            $sections[] = "### Void berulang\n\n"
+                ."| # | Kasir | Jumlah void | Nilai void |\n"
+                ."|---|---|---|---|\n"
+                .$rows;
+        }
+
+        if (! empty($data['cash_differences'])) {
+            $rows = collect($data['cash_differences'])->map(fn (array $row, int $index) => sprintf(
+                '| %d | %s | %s | Rp %s | Rp %s | **Rp %s** |',
+                $index + 1,
+                $row['cashier'],
+                $row['closed_at'],
+                number_format((float) $row['expected_cash'], 0, ',', '.'),
+                number_format((float) $row['counted_cash'], 0, ',', '.'),
+                number_format((float) $row['difference'], 0, ',', '.'),
+            ))->implode("\n");
+
+            $sections[] = "### Selisih kas shift\n\n"
+                ."| # | Kasir | Ditutup | Seharusnya | Hitungan fisik | Selisih |\n"
+                ."|---|---|---|---|---|---|\n"
+                .$rows;
+        }
+
+        return implode("\n\n", $sections);
     }
 
     protected function handleToolCalls(AiConversation $conversation, AiMessage $assistantMessage, AiResponse $response, ?callable $onDelta = null): array

@@ -184,6 +184,44 @@ class BackupController extends Controller
     }
 
     /**
+     * Upload file backup dari eksternal (mis. hasil unduhan) ke riwayat toko.
+     */
+    public function upload(Request $request): JsonResponse
+    {
+        $request->validate([
+            'file' => 'required|file|max:102400|extensions:json',
+        ], [
+            'file.required' => 'Pilih file backup terlebih dahulu.',
+            'file.max' => 'Ukuran file backup maksimal 100 MB.',
+            'file.extensions' => 'File backup harus berformat .json.',
+        ]);
+
+        $user = $request->user();
+        $store = $user->store;
+
+        if (! $store) {
+            return response()->json(['success' => false, 'message' => 'Store tidak ditemukan.'], 404);
+        }
+
+        try {
+            $history = $this->backupService->storeUploadedBackup($store, $request->file('file'), $user->id);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'File backup berhasil diunggah.',
+                'data' => $history->load('user:id,name'),
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mengunggah backup: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Restore data dari file backup.
      */
     public function restore(Request $request): JsonResponse
@@ -213,7 +251,7 @@ class BackupController extends Controller
         }
 
         try {
-            $log = $this->backupService->restoreFromBackup($store, $history->filepath);
+            $log = $this->backupService->restoreFromBackup($store, $history->filepath, $user->id);
 
             return response()->json([
                 'success' => true,

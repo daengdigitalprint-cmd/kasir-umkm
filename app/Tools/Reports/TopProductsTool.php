@@ -121,12 +121,22 @@ class TopProductsTool extends AiTool
 
     protected function getDateRange(array $args): array
     {
-        $period = $args['period'] ?? 'this_month';
         $now = Carbon::now();
+
+        if (! empty($args['date_from']) && ! empty($args['date_to'])) {
+            return [
+                'from' => Carbon::parse($args['date_from'])->startOfDay(),
+                'to' => Carbon::parse($args['date_to'])->endOfDay(),
+            ];
+        }
+
+        $period = $args['period'] ?? 'this_month';
 
         return match ($period) {
             'today' => ['from' => $now->copy()->startOfDay(), 'to' => $now->copy()->endOfDay()],
+            'yesterday' => ['from' => $now->copy()->subDay()->startOfDay(), 'to' => $now->copy()->subDay()->endOfDay()],
             'this_week' => ['from' => $now->copy()->startOfWeek(), 'to' => $now->copy()->endOfWeek()],
+            'last_week' => ['from' => $now->copy()->subWeek()->startOfWeek(), 'to' => $now->copy()->subWeek()->endOfWeek()],
             'this_month' => ['from' => $now->copy()->startOfMonth(), 'to' => $now->copy()->endOfMonth()],
             'last_month' => ['from' => $now->copy()->subMonth()->startOfMonth(), 'to' => $now->copy()->subMonth()->endOfMonth()],
             default => ['from' => $now->copy()->startOfMonth(), 'to' => $now->copy()->endOfMonth()],

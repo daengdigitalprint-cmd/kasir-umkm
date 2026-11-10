@@ -25,6 +25,8 @@ function paymentMethodLabel(method: string): string {
         card: 'Kartu',
         ewallet: 'E-Wallet',
         transfer: 'Transfer',
+        bank_transfer: 'Transfer',
+        qris: 'QRIS',
         other: 'Lainnya',
     };
     return m[method] ?? method;
@@ -144,6 +146,10 @@ export function buildReceiptPlainLinesFromPosResponse(
     lines.push(rowLR('No. Struk', String(tx.transaction_number ?? ''), w));
     lines.push(rowLR('Tgl/Jam', tglStr, w));
     lines.push(rowLR('Kasir', String((tx.user as { name?: string } | undefined)?.name ?? ''), w));
+    const barberName = String(((tx.barber as { name?: string } | undefined)?.name) ?? '').trim();
+    if (barberName) {
+        lines.push(rowLR('Teknisi', barberName, w));
+    }
     if (tx.order_type) {
         lines.push(rowLR('Pesanan', orderTypeLabel(String(tx.order_type)), w));
     }
@@ -258,7 +264,18 @@ export function buildReceiptPlainLinesFromPosResponse(
 
     lines.push(rule(w));
     const payLabel = paymentMethodLabel(String(tx.payment_method ?? ''));
-    lines.push(rowLR(`Bayar (${payLabel})`, formatCurrencyId(Number(tx.amount_paid ?? 0)), w));
+    const paymentLines = Array.isArray(tx.payments) ? (tx.payments as { method?: string; amount?: number | string }[]) : [];
+    if (paymentLines.length > 1) {
+        // Split tender: uang tunai diterima = total dibayar − porsi non-tunai.
+        const nonCashTotal = paymentLines.filter((line) => line.method !== 'cash').reduce((sum, line) => sum + Number(line.amount ?? 0), 0);
+        for (const line of paymentLines) {
+            const method = String(line.method ?? '');
+            const amount = method === 'cash' ? Number(tx.amount_paid ?? 0) - nonCashTotal : Number(line.amount ?? 0);
+            lines.push(rowLR(`Bayar (${paymentMethodLabel(method)})`, formatCurrencyId(amount), w));
+        }
+    } else {
+        lines.push(rowLR(`Bayar (${payLabel})`, formatCurrencyId(Number(tx.amount_paid ?? 0)), w));
+    }
     if (Number(tx.change_amount) > 0) {
         lines.push(rowLR('Kembali', formatCurrencyId(Number(tx.change_amount)), w));
     }
@@ -339,6 +356,7 @@ export function buildReceiptPlainLinesFromInvoicePage(
     total_amount: number;
     amount_paid: number;
     change_amount: number;
+    payments?: { method: string; amount: number | string; reference?: string | null }[] | null;
     order_type?: string | null;
     table_reference?: string | null;
     payment_details?: {
@@ -367,6 +385,7 @@ export function buildReceiptPlainLinesFromInvoicePage(
     store: { name: string; address?: string; phone?: string };
     user: { name: string };
     customer?: { name?: string };
+    barber?: { name?: string } | null;
     },
     pharmacyEnabled = false,
 ): string[] {
@@ -397,6 +416,9 @@ export function buildReceiptPlainLinesFromInvoicePage(
         ),
     );
     lines.push(rowLR('Kasir', tx.user.name, w));
+    if (tx.barber?.name) {
+        lines.push(rowLR('Teknisi', tx.barber.name, w));
+    }
     if (tx.customer?.name) {
         lines.push(rowLR('Pelanggan', tx.customer.name, w));
     }

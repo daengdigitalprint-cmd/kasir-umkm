@@ -103,7 +103,13 @@ const formatMoney = (n: number) =>
 
 const formatDt = (iso: string | null) => {
     if (!iso) return '—';
-    return new Date(iso).toLocaleString('id-ID', {
+    const normalized = iso.trim();
+    const hasTz = /[Zz]|[+-]\d{2}:?\d{2}$/.test(normalized);
+    const isoUtc = hasTz ? normalized : normalized + 'Z';
+    const d = new Date(isoUtc);
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleString('id-ID', {
+        timeZone: 'Asia/Makassar',
         day: 'numeric',
         month: 'short',
         year: 'numeric',

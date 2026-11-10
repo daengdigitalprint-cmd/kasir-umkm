@@ -6,13 +6,18 @@ use App\Http\Controllers\StoreSettingsController;
 use App\Models\QueueEntry;
 use App\Models\Store;
 use App\Models\Transaction;
+use App\Models\User;
+use App\Modules\Attendance\Models\LeaveRequest;
+use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Attendance\Support\AttendanceSettings;
 use App\Services\AttendancePayrollAddOnService;
 use App\Support\Accounting\AccountingFeatures;
 use App\Support\Accounting\AccountingPeriodGuard;
+use App\Support\BarbershopFeatures;
 use App\Support\FnBFeatures;
 use App\Support\LaundryFeatures;
 use App\Support\PharmacyFeatures;
+use App\Support\ProductDiscountFeatures;
 use App\Support\StockAdjustmentApproval;
 use App\Support\StoreLocationType;
 use App\Support\StorePlanLimits;
@@ -159,9 +164,12 @@ class HandleInertiaRequests extends Middleware
             'fnb_enabled' => $activeStore ? FnBFeatures::enabled($activeStore) : false,
             'pharmacy_enabled' => $activeStore ? PharmacyFeatures::enabled($activeStore) : false,
             'laundry_enabled' => $activeStore ? LaundryFeatures::enabled($activeStore) : false,
+            'barbershop_enabled' => $activeStore ? BarbershopFeatures::enabled($activeStore) : false,
             'attendance_enabled' => $activeStore ? AttendanceSettings::enabled($activeStore) : false,
             'attendance_settings' => $activeStore ? AttendanceSettings::forFrontend($activeStore) : null,
             'payroll_enabled' => $activeStore ? AttendancePayrollAddOnService::isPurchased($activeStore) : false,
+            // Badge menu SDM: pengajuan cuti/lembur yang menunggu persetujuan (hanya untuk back-office).
+            'pending_hr_requests' => fn () => $this->pendingHrRequests($user, $activeStore),
             'recipes_enabled' => $activeStore
                 ? (bool) ($activeStore->settings['recipes_enabled']
                     ?? StoreSettingsController::featureDefaultsForType($activeStore->business_type ?? 'general')['recipes_enabled'])
@@ -183,6 +191,10 @@ class HandleInertiaRequests extends Middleware
             'receivables_enabled' => $activeStore
                 ? (bool) ($activeStore->settings['receivables_enabled'] ?? true)
                 : false,
+            'product_discount_enabled' => ProductDiscountFeatures::enabled($activeStore),
+            'ai_chat_enabled' => $activeStore
+                ? (bool) ($activeStore->settings['ai_chat_enabled'] ?? true)
+                : true,
             'pending_queue_count' => $activeStore && ($activeStore->settings['queue_module_enabled'] ?? false)
                 ? QueueEntry::where('store_id', $activeStore->id)
                     ->whereNull('transaction_id')
@@ -217,7 +229,10 @@ class HandleInertiaRequests extends Middleware
             'subscription' => $subscriptionData,
             'plan_limits' => $planLimits,
             'can_access_activity_logs' => $user ? $user->canAccessActivityLogs() : false,
-            'can_use_ai_assistant' => $user ? ($user->isSuperAdmin() || $user->isAdmin() || $user->isManager() || $user->isCashier() || $user->isOwner()) : false,
+            'can_use_ai_assistant' => $user
+                ? (($activeStore === null || ($activeStore->settings['ai_chat_enabled'] ?? true) !== false)
+                    && ($user->isSuperAdmin() || $user->isAdmin() || $user->isManager() || $user->isCashier() || $user->isOwner()))
+                : false,
             'can_manage_ai_settings' => $user ? ($user->isSuperAdmin() || $user->isAdmin()) : false,
             'cashier_login_mode' => $activeStore
                 ? ($activeStore->cashier_login_mode ?? 'email')
@@ -238,6 +253,21 @@ class HandleInertiaRequests extends Middleware
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'csrf_token' => csrf_token(),
             'app_url' => config('app.url'),
+        ];
+    }
+
+    /**
+     * @return array{leave: int, overtime: int}
+     */
+    private function pendingHrRequests(?User $user, ?Store $store): array
+    {
+        if (! $user || ! $store || ! $user->canAccessBackOffice() || ! AttendanceSettings::enabled($store)) {
+            return ['leave' => 0, 'overtime' => 0];
+        }
+
+        return [
+            'leave' => LeaveRequest::query()->where('store_id', $store->id)->where('status', 'pending')->count(),
+            'overtime' => OvertimeRequest::query()->where('store_id', $store->id)->where('status', 'pending')->count(),
         ];
     }
 }

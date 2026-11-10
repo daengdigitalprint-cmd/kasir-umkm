@@ -17,11 +17,13 @@ use App\Models\StockMovement;
 use App\Models\Store;
 use App\Models\Transaction;
 use App\Models\TransactionItem;
+use App\Models\TransactionPayment;
 use App\Models\User;
 use App\Modules\CashierPin\Services\CashierPinService;
 use App\Services\LoyaltyService;
 use App\Support\Accounting\AccountingPeriodGuard;
 use App\Support\Accounting\JournalPoster;
+use App\Support\BarbershopFeatures;
 use App\Support\BatchTracking;
 use App\Support\BusinessTypePresets;
 use App\Support\FnBFeatures;
@@ -29,6 +31,7 @@ use App\Support\InventoryCosting;
 use App\Support\InventoryType;
 use App\Support\LoyaltySettings;
 use App\Support\PharmacyFeatures;
+use App\Support\ProductDiscountFeatures;
 use App\Support\ProductQuantity;
 use App\Support\ReceiptSettings;
 use App\Support\SaleConsumptionResolver;
@@ -41,6 +44,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
 
@@ -78,16 +82,30 @@ class POSController extends Controller
                     ),
                     'componentVariant' => fn ($q3) => $q3->select('id', 'product_id', 'name', 'stock_quantity'),
                 ]),
+                // Data komponen TIDAK disarangkan di sini: satu bahan dipakai puluhan
+                // menu sehingga objeknya terduplikasi dan membengkakkan payload halaman.
+                // Komponen dikirim sekali lewat prop `saleComponents`.
                 'saleConsumptions' => fn ($q) => $q->select(
                     'id', 'product_id', 'product_variant_id', 'component_product_id', 'quantity', 'base_unit', 'sort_order',
-                )->with([
-                    'component' => fn ($q2) => $q2->select(
-                        'id', 'name', 'stock_quantity', 'track_stock', 'unlimited_stock', 'inventory_type', 'base_unit',
-                    ),
-                ]),
+                ),
             ])
             ->get()
             ->append('image_url');
+
+        $saleComponentIds = $products
+            ->pluck('saleConsumptions')
+            ->flatten(1)
+            ->pluck('component_product_id')
+            ->filter()
+            ->unique()
+            ->values();
+
+        $saleComponents = $saleComponentIds->isEmpty()
+            ? collect()
+            : Product::query()
+                ->where('store_id', $store->id)
+                ->whereIn('id', $saleComponentIds)
+                ->get(['id', 'name', 'stock_quantity', 'track_stock', 'unlimited_stock', 'inventory_type', 'base_unit']);
 
         $activeDiscounts = $store->discounts()
             ->valid()
@@ -131,9 +149,8 @@ class POSController extends Controller
         if ($openCashShift) {
             $salesCash = (float) Transaction::query()
                 ->where('cash_shift_id', $openCashShift->id)
-                ->where('payment_method', 'cash')
                 ->where('status', 'completed')
-                ->sum('total_amount');
+                ->sum('cash_amount');
 
             $cashIn = (float) CashTransaction::query()
                 ->where('cash_shift_id', $openCashShift->id)
@@ -190,6 +207,7 @@ class POSController extends Controller
 
         return Inertia::render('POS/Index', [
             'products' => $products,
+            'saleComponents' => $saleComponents,
             'popularProductIds' => $popularProductIds,
             'categories' => ProductCategory::where('store_id', $store->id)
                 ->whereHas('products', function ($q) {
@@ -220,10 +238,18 @@ class POSController extends Controller
                 'open_bill_enabled' => FnBFeatures::openBillEnabled($store),
                 'cup_label_enabled' => (bool) ($store->settings['cup_label_enabled'] ?? false),
                 'pharmacy_enabled' => PharmacyFeatures::enabled($store),
+                'barbershop_enabled' => BarbershopFeatures::enabled($store),
+                'barbers' => BarbershopFeatures::enabled($store)
+                    ? User::barbersForStore($store)
+                        ->map(fn ($barber) => ['id' => $barber->id, 'name' => $barber->name])
+                        ->values()
+                        ->all()
+                    : [],
                 'default_service_charge_percent' => FnBFeatures::defaultServiceChargePercent($store),
                 'receipt' => ReceiptSettings::payload($store),
                 'pos_show_barcode' => (bool) ($store->settings['pos_show_barcode'] ?? false),
                 'wholesale_enabled' => (bool) ($store->settings['wholesale_enabled'] ?? false),
+                'product_discount_enabled' => ProductDiscountFeatures::enabled($store),
                 'online_sales_enabled' => (bool) ($store->settings['online_sales_enabled'] ?? false),
                 'online_commission_gofood' => (float) ($store->settings['online_commission_gofood'] ?? 20),
                 'online_commission_grabfood' => (float) ($store->settings['online_commission_grabfood'] ?? 20),
@@ -256,7 +282,7 @@ class POSController extends Controller
         $endDate = $request->input('date_to', now()->format('Y-m-d'));
 
         $query = Transaction::where('store_id', $store->id)
-            ->where('status', 'completed')
+            ->whereIn('status', ['completed', 'void'])
             ->whereBetween('created_at', [$startDate.' 00:00:00', $endDate.' 23:59:59']);
 
         // Cashier hanya melihat transaksi sendiri, admin/owner/superadmin melihat semua
@@ -308,9 +334,8 @@ class POSController extends Controller
 
         $salesCash = (float) Transaction::query()
             ->where('cash_shift_id', $openCashShift->id)
-            ->where('payment_method', 'cash')
             ->where('status', 'completed')
-            ->sum('total_amount');
+            ->sum('cash_amount');
 
         $cashIn = (float) CashTransaction::query()
             ->where('cash_shift_id', $openCashShift->id)
@@ -409,8 +434,13 @@ class POSController extends Controller
                 'items.*.variant_name' => 'nullable|string|max:255',
                 'items.*.modifiers' => 'nullable|array',
                 'items.*.modifiers.*.key' => 'required|string|max:64',
+                'items.*.line_discount' => 'nullable|numeric|min:0',
                 'payment_method' => 'required|in:cash,card,ewallet,transfer,other,credit',
                 'amount_paid' => 'required|numeric|min:0',
+                'payments' => 'nullable|array|max:5',
+                'payments.*.method' => ['required_with:payments', 'string', Rule::in(TransactionPayment::METHODS)],
+                'payments.*.amount' => 'required_with:payments|numeric|min:0.01',
+                'payments.*.reference' => 'nullable|string|max:100',
                 'is_credit' => 'nullable|boolean',
                 'customer_id' => 'nullable|integer|exists:customers,id',
                 'debt_due_at' => 'nullable|date',
@@ -419,6 +449,7 @@ class POSController extends Controller
                 'customer_name' => 'nullable|string|max:255',
                 'customer_type' => 'nullable|in:ecer,grosir',
                 'discount_code' => 'nullable|string|max:100',
+                'loyalty_voucher_code' => 'nullable|string|max:40',
                 'order_type' => 'nullable|in:dine_in,takeaway,delivery',
                 'sales_channel' => 'nullable|string|in:'.implode(',', array_column(SalesChannel::cases(), 'value')),
                 'commission_percent' => 'nullable|numeric|min:0|max:100',
@@ -439,6 +470,7 @@ class POSController extends Controller
                 'prescription.items.*.quantity' => 'required_with:prescription.items|numeric|min:0.0001',
                 'storeId' => 'nullable|integer',
                 'created_at' => 'nullable|string',
+                'barber_user_id' => 'nullable|integer|exists:users,id',
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             \Log::error('Validasi POS gagal', [
@@ -466,6 +498,17 @@ class POSController extends Controller
         $offlineSaleId = $request->header('X-Offline-Sale-Id');
         $isCredit = (bool) $request->input('is_credit', false);
 
+        $barberUserId = null;
+        if (BarbershopFeatures::enabled($store) && $request->filled('barber_user_id')) {
+            $barberUserId = (int) $request->input('barber_user_id');
+            if (! User::barbersForStore($store)->contains('id', $barberUserId)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Teknisi tidak valid atau bukan anggota toko',
+                ], 422);
+            }
+        }
+
         // Transaksi kredit diblokir ketika request berasal dari antrean offline.
         if ($isCredit && $offlineSaleId) {
             return response()->json([
@@ -474,8 +517,13 @@ class POSController extends Controller
             ], 422);
         }
 
-        if ($offlineSaleId) {
-            $existing = Transaction::where('offline_sale_id', $offlineSaleId)->first();
+        // Kunci idempotensi: antrean offline memakai X-Offline-Sale-Id, kasir online
+        // memakai X-Pos-Idempotency-Key. Keduanya disimpan di kolom unik yang sama
+        // sehingga kirim ulang akibat jaringan putus tidak membuat transaksi ganda.
+        $idempotencyKey = $offlineSaleId ?: $request->header('X-Pos-Idempotency-Key');
+
+        if ($idempotencyKey) {
+            $existing = Transaction::where('offline_sale_id', $idempotencyKey)->first();
             if ($existing) {
                 $existing->load(['items.product', 'items.productVariant', 'store', 'user', 'discount', 'customer']);
                 $payload = $this->receiptTransactionPayload($existing, $store);
@@ -533,15 +581,20 @@ class POSController extends Controller
 
             $cartLines = [];
             $subtotal = 0.0;
+            $lineDiscountTotal = 0.0;
+            $productDiscountEnabled = ProductDiscountFeatures::enabled($store);
             $cartHasPrescription = false;
             $cartHasLimited = false;
             $cartPrescriptionItems = [];
             $customerType = ($store->settings['wholesale_enabled'] ?? false) && $request->input('customer_type') === 'grosir' ? 'grosir' : 'ecer';
 
             foreach ($request->items as $item) {
+                // Baris produk dikunci selama transaksi berjalan: tanpa ini dua kasir
+                // bisa sama-sama lolos pengecekan stok untuk unit terakhir yang sama.
                 $product = Product::query()
                     ->where('store_id', $store->id)
                     ->where('id', $item['product_id'])
+                    ->lockForUpdate()
                     ->firstOrFail();
 
                 if (! $product->is_active) {
@@ -668,7 +721,13 @@ class POSController extends Controller
                     : $this->resolveLinePrice($product->wholesale_price, (float) $product->price, $customerType);
                 $unitPrice = round($baseUnit + $modifierUnitSum, 2);
                 $lineTotal = round($unitPrice * (float) $qty, 2);
+                // Diskon manual per baris dari kasir, dibatasi maksimal sebesar nilai baris.
+                // Diabaikan bila modul Diskon per Produk dinonaktifkan di pengaturan toko.
+                $lineDiscount = $productDiscountEnabled
+                    ? min(round((float) ($item['line_discount'] ?? 0), 2), $lineTotal)
+                    : 0.0;
                 $subtotal += $lineTotal;
+                $lineDiscountTotal += $lineDiscount;
                 if (PharmacyFeatures::enabled($store) && ($product->pharmacy_sale_class ?? 'otc') === 'prescription') {
                     $cartPrescriptionItems[$product->id] = isset($cartPrescriptionItems[$product->id])
                         ? bcadd($cartPrescriptionItems[$product->id], $qty, ProductQuantity::SCALE)
@@ -679,12 +738,15 @@ class POSController extends Controller
                     'variant' => $variant,
                     'quantity' => $qty,
                     'line_total' => $lineTotal,
+                    'line_discount' => $lineDiscount,
                     'unit_price' => $unitPrice,
                     'modifiers' => $modifiers,
                 ];
             }
 
             $subtotal = round($subtotal, 2);
+            $lineDiscountTotal = round($lineDiscountTotal, 2);
+            $netSubtotal = round($subtotal - $lineDiscountTotal, 2);
 
             $pharmacySaleReference = '';
             $prescription = null;
@@ -788,10 +850,20 @@ class POSController extends Controller
                     $discountAmount = min(round((float) $discountModel->value, 2), $eligible);
                 }
 
-                $discountAmount = min($discountAmount, $subtotal);
+                $discountAmount = min($discountAmount, $netSubtotal);
             }
 
-            $afterDiscount = max(0, round($subtotal - $discountAmount, 2));
+            $afterDiscount = max(0, round($netSubtotal - $discountAmount, 2));
+
+            // Voucher loyalitas: validasi kode & kunci barisnya (lockForUpdate) di dalam
+            // transaksi DB agar tidak bisa dipakai dua kali secara bersamaan.
+            $voucherRedemption = null;
+            $voucherAmount = 0.0;
+            if ($request->filled('loyalty_voucher_code')) {
+                $voucherRedemption = app(LoyaltyService::class)->previewVoucher($store, $request->input('loyalty_voucher_code'));
+                $voucherAmount = min(round((float) $voucherRedemption->voucher_value, 2), $afterDiscount);
+                $afterDiscount = round($afterDiscount - $voucherAmount, 2);
+            }
 
             $fnb = FnBFeatures::enabled($store);
             $svcPct = 0.0;
@@ -853,6 +925,35 @@ class POSController extends Controller
                 }
             }
 
+            // Komisi teknisi barbershop: khusus toko barbershop, terpisah dari komisi aggregator.
+            // Tarif per produk (override) didahulukan, lalu tarif global toko. Nilai informatif.
+            $barberCommissionPercent = null;
+            $barberCommissionAmount = 0.0;
+            if ($barberUserId !== null && BarbershopFeatures::enabled($store)) {
+                $linePercents = [];
+                foreach ($cartLines as $line) {
+                    $rate = BarbershopFeatures::commissionForLine(
+                        $store,
+                        $line['product'],
+                        (float) $line['line_total'],
+                        (int) $line['quantity'],
+                    );
+                    if ($rate['amount'] > 0) {
+                        $barberCommissionAmount += $rate['amount'];
+                        $linePercents[$rate['percent']] = true;
+                    }
+                }
+                $barberCommissionAmount = round($barberCommissionAmount, 2);
+
+                // Catat persentase hanya bila semua baris berbasis persen dengan tarif seragam.
+                if ($barberCommissionAmount > 0 && count($linePercents) === 1) {
+                    $onlyPercent = (float) array_key_first($linePercents);
+                    if ($onlyPercent > 0) {
+                        $barberCommissionPercent = $onlyPercent;
+                    }
+                }
+            }
+
             $customer = null;
             if ($request->customer_name) {
                 $customer = Customer::firstOrCreate([
@@ -861,6 +962,17 @@ class POSController extends Controller
                 ], [
                     'customer_type' => $customerType,
                 ]);
+            } elseif ($voucherRedemption) {
+                // Voucher melekat pada satu pelanggan — pakai pemiliknya bila belum dipilih.
+                $customer = $voucherRedemption->customer;
+            }
+
+            // Voucher wajib dimiliki pelanggan yang dipakai pada transaksi ini.
+            if ($voucherRedemption && $customer && (int) $voucherRedemption->customer_id !== (int) $customer->id) {
+                throw new \Exception('Voucher bukan milik pelanggan yang dipilih.');
+            }
+            if ($voucherRedemption && ! $customer) {
+                $customer = Customer::find($voucherRedemption->customer_id);
             }
 
             // Kaitkan transaksi ke shift terbuka untuk semua metode bayar,
@@ -916,7 +1028,23 @@ class POSController extends Controller
                     : ['pharmacy' => $pharmacyMeta];
             }
 
-            $amountPaid = round((float) $request->amount_paid, 2);
+            // Split tender: kasir boleh membagi satu tagihan ke beberapa metode.
+            // Bila kolom `payments` tidak dikirim, pembayaran dianggap satu metode
+            // sesuai `payment_method` seperti sebelumnya.
+            $paymentLines = $this->resolvePaymentLines($request, $balanceDue, $isCredit);
+            $amountPaid = $paymentLines === []
+                ? round((float) $request->amount_paid, 2)
+                : round(array_sum(array_column($paymentLines, 'amount')), 2);
+
+            if ($voucherRedemption) {
+                $paymentDetails = is_array($paymentDetails) ? $paymentDetails : [];
+                $paymentDetails['loyalty_voucher'] = [
+                    'code' => $voucherRedemption->voucher_code,
+                    'amount' => $voucherAmount,
+                    'redemption_id' => $voucherRedemption->id,
+                ];
+            }
+
             if ($isCredit) {
                 // Mode kredit: validasi customer wajib ada jika ada sisa tagihan
                 if ($amountPaid < $balanceDue - 0.009) {
@@ -954,30 +1082,44 @@ class POSController extends Controller
                 'customer_id' => $customer?->id,
                 'discount_id' => $discountModel?->id,
                 'user_id' => $user->id,
+                'barber_user_id' => $barberUserId,
                 'cash_shift_id' => $cashShiftId,
                 'status_token' => Str::random(64),
                 'status' => 'completed',
-                'payment_method' => $request->payment_method,
+                // Metode dengan nominal terbesar dipakai sebagai label transaksi
+                // supaya tampilan dan laporan lama tetap masuk akal; rincian
+                // sebenarnya disimpan di tabel transaction_payments.
+                'payment_method' => $this->dominantPaymentMethod($paymentLines, $request->payment_method),
                 'payment_status' => $paymentStatus,
                 'order_type' => $orderType,
                 'table_reference' => $tableRef,
                 'sales_channel' => $salesChannel->value,
                 'commission_percent' => $commissionPercent,
                 'commission_amount' => $commissionAmount,
+                'barber_commission_percent' => $barberCommissionPercent,
+                'barber_commission_amount' => $barberCommissionAmount > 0 ? $barberCommissionAmount : null,
                 'subtotal' => $subtotal,
                 'tax_amount' => $taxAmount,
-                'discount_amount' => $discountAmount,
+                'discount_amount' => round($discountAmount + $lineDiscountTotal, 2),
                 'service_charge_percent' => $fnb && $svcPct > 0 ? round($svcPct, 2) : null,
                 'service_charge_amount' => $serviceChargeAmount,
                 'tip_amount' => $tipAmount,
                 'total_amount' => $totalAmount,
                 'amount_paid' => $amountPaid,
+                'cash_amount' => $this->cashPortion($paymentLines, $request->payment_method, $amountPaid, $balanceDue, $isCredit),
                 'change_amount' => max(0, round($amountPaid - $balanceDue, 2)),
                 'payment_details' => $paymentDetails,
                 'completed_at' => now(),
-                'offline_sale_id' => $offlineSaleId,
+                'offline_sale_id' => $idempotencyKey,
                 'debt_due_at' => $debtDueAt,
             ]);
+
+            $this->storePaymentLines($transaction, $paymentLines, $amountPaid, $balanceDue);
+
+            // Tandai voucher sudah dipakai (atomik dengan pembuatan transaksi).
+            if ($voucherRedemption) {
+                app(LoyaltyService::class)->markVoucherUsed($store, $voucherRedemption->voucher_code, $customer, $transaction);
+            }
 
             foreach ($cartLines as $idx => $line) {
                 $product = $line['product'];
@@ -985,7 +1127,7 @@ class POSController extends Controller
                 $qty = $line['quantity'];
                 $alloc = $buyXGetYAllocation['allocations'][$idx] ?? null;
                 $freeQty = $alloc['free_quantity'] ?? '0.0000';
-                $itemDiscount = $alloc['discount_amount'] ?? 0.0;
+                $itemDiscount = round(($alloc['discount_amount'] ?? 0.0) + $line['line_discount'], 2);
 
                 $displayName = $variant
                     ? "{$product->name} — {$variant->name}"
@@ -1071,6 +1213,20 @@ class POSController extends Controller
             $transaction->load(['items.product', 'items.productVariant', 'store', 'user', 'discount', 'customer']);
             JournalPoster::postSaleTransaction($store, $transaction);
 
+            // Poin loyalitas ditulis di DALAM transaksi DB (sebelum commit) agar penjualan
+            // dan poin atomik — tidak ada jendela crash antara commit dan poin hilang.
+            $pointsEarned = 0;
+            if ($customer && StorePlanLimits::allowsAdvancedRetailFeatures($store) && LoyaltySettings::enabled($store)) {
+                try {
+                    $pointsEarned = app(LoyaltyService::class)->earnFromTransaction($transaction);
+                } catch (\Throwable $e) {
+                    Log::warning('[loyalty] gagal menambah poin transaksi', [
+                        'transaction_id' => $transaction->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
             DB::commit();
 
             // Log aktivitas transaksi
@@ -1083,21 +1239,10 @@ class POSController extends Controller
                     'transaction_number' => $transaction->transaction_number,
                     'total_amount' => $totalAmount,
                     'items_count' => count($cartLines),
-                    'payment_method' => $request->payment_method,
+                    'payment_method' => $transaction->payment_method,
+                    'split_payment' => count($paymentLines) > 1,
                 ]
             );
-
-            $pointsEarned = 0;
-            if ($customer && StorePlanLimits::allowsAdvancedRetailFeatures($store) && LoyaltySettings::enabled($store)) {
-                try {
-                    $pointsEarned = app(LoyaltyService::class)->earnFromTransaction($transaction);
-                } catch (\Throwable $e) {
-                    Log::warning('[loyalty] gagal menambah poin transaksi', [
-                        'transaction_id' => $transaction->id,
-                        'error' => $e->getMessage(),
-                    ]);
-                }
-            }
 
             $payload = $this->receiptTransactionPayload($transaction, $store);
             $payload['loyalty_points_earned'] = $pointsEarned;
@@ -1129,6 +1274,7 @@ class POSController extends Controller
                         'customer_name' => $request->customer_name,
                         'customer_phone' => $customer?->phone,
                         'transaction_id' => $transaction->id,
+                        'barber_user_id' => $barberUserId,
                         'items' => $items,
                     ]);
                 } catch (\Throwable $e) {
@@ -1512,6 +1658,10 @@ class POSController extends Controller
                 'service_charge_percent' => 'nullable|numeric|min:0|max:100',
                 'tip_amount' => 'nullable|numeric|min:0',
                 'split_bill_count' => 'nullable|integer|min:1|max:20',
+                'payments' => 'nullable|array|max:5',
+                'payments.*.method' => ['required_with:payments', 'string', Rule::in(TransactionPayment::METHODS)],
+                'payments.*.amount' => 'required_with:payments|numeric|min:0.01',
+                'payments.*.reference' => 'nullable|string|max:100',
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
@@ -1587,7 +1737,10 @@ class POSController extends Controller
                 }
             }
 
-            $amountPaid = round((float) $request->amount_paid, 2);
+            $paymentLines = $this->resolvePaymentLines($request, $totalAmount, false);
+            $amountPaid = $paymentLines === []
+                ? round((float) $request->amount_paid, 2)
+                : round(array_sum(array_column($paymentLines, 'amount')), 2);
             if ($amountPaid + 0.009 < $totalAmount) {
                 throw new \Exception('Jumlah bayar kurang dari total tagihan.');
             }
@@ -1612,17 +1765,33 @@ class POSController extends Controller
                 'status' => 'completed',
                 'order_status' => 'completed',
                 'payment_status' => 'paid',
-                'payment_method' => $request->payment_method,
+                'payment_method' => $this->dominantPaymentMethod($paymentLines, $request->payment_method),
                 'service_charge_percent' => $svcPct > 0 ? round($svcPct, 2) : null,
                 'service_charge_amount' => $serviceChargeAmount,
                 'tax_amount' => $taxAmount,
                 'tip_amount' => $tipAmount,
                 'total_amount' => $totalAmount,
                 'amount_paid' => $amountPaid,
+                'cash_amount' => $this->cashPortion($paymentLines, $request->payment_method, $amountPaid, $totalAmount, false),
                 'change_amount' => max(0, round($amountPaid - $totalAmount, 2)),
                 'payment_details' => $details,
                 'completed_at' => now(),
             ]);
+
+            $transaction->payments()->delete();
+            $this->storePaymentLines($transaction, $paymentLines, $amountPaid, $totalAmount);
+
+            // Kunci semua baris produk yang akan dipotong, searah dengan processPayment,
+            // supaya pembayaran open bill tidak balapan dengan transaksi kasir lain.
+            $lockedProductIds = $items->pluck('product_id')->filter()->unique()->sort()->values();
+            if ($lockedProductIds->isNotEmpty()) {
+                Product::query()
+                    ->where('store_id', $store->id)
+                    ->whereIn('id', $lockedProductIds)
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get();
+            }
 
             // Deduksi stok per item (sama seperti processPayment).
             foreach ($items as $item) {
@@ -1630,6 +1799,7 @@ class POSController extends Controller
                 if (! $product) {
                     continue;
                 }
+                $product->refresh();
                 $qty = ProductQuantity::normalizeStorageAmount($product, (string) $item->quantity);
                 $variant = $item->productVariant;
 
@@ -1651,20 +1821,7 @@ class POSController extends Controller
 
             JournalPoster::postSaleTransaction($store, $transaction->fresh());
 
-            DB::commit();
-
-            \App\Services\ActivityLogger::log(
-                store: $store,
-                action: 'open_bill.paid',
-                description: "Open bill {$transaction->transaction_number} dibayar sebesar ".number_format($totalAmount, 0, ',', '.'),
-                subject: $transaction,
-                metadata: [
-                    'transaction_number' => $transaction->transaction_number,
-                    'total_amount' => $totalAmount,
-                    'payment_method' => $request->payment_method,
-                ]
-            );
-
+            // Poin loyalitas atomik dengan pembayaran open bill (sebelum commit).
             $pointsEarned = 0;
             if ($transaction->customer && StorePlanLimits::allowsAdvancedRetailFeatures($store) && LoyaltySettings::enabled($store)) {
                 try {
@@ -1676,6 +1833,21 @@ class POSController extends Controller
                     ]);
                 }
             }
+
+            DB::commit();
+
+            \App\Services\ActivityLogger::log(
+                store: $store,
+                action: 'open_bill.paid',
+                description: "Open bill {$transaction->transaction_number} dibayar sebesar ".number_format($totalAmount, 0, ',', '.'),
+                subject: $transaction,
+                metadata: [
+                    'transaction_number' => $transaction->transaction_number,
+                    'total_amount' => $totalAmount,
+                    'payment_method' => $transaction->payment_method,
+                    'split_payment' => count($paymentLines) > 1,
+                ]
+            );
 
             $payload = $this->receiptTransactionPayload($transaction->fresh(), $store);
             $payload['loyalty_points_earned'] = $pointsEarned;
@@ -1740,6 +1912,169 @@ class POSController extends Controller
     }
 
     /**
+     * Baris pembayaran split tender dari request, sudah divalidasi.
+     *
+     * Mengembalikan array kosong bila kasir memakai satu metode seperti biasa,
+     * sehingga seluruh jalur lama tidak berubah perilakunya.
+     *
+     * @return list<array{method: string, amount: float, reference: ?string}>
+     */
+    private function resolvePaymentLines(Request $request, float $balanceDue, bool $isCredit): array
+    {
+        $raw = $request->input('payments');
+
+        if (! is_array($raw) || $raw === []) {
+            return [];
+        }
+
+        if ($isCredit) {
+            throw new \Exception('Penjualan kredit tidak dapat dibagi ke beberapa metode pembayaran.');
+        }
+
+        $lines = [];
+        $cashCount = 0;
+
+        foreach ($raw as $index => $row) {
+            $method = is_array($row) ? (string) ($row['method'] ?? '') : '';
+            $amount = is_array($row) ? round((float) ($row['amount'] ?? 0), 2) : 0.0;
+
+            if (! in_array($method, TransactionPayment::METHODS, true)) {
+                throw new \Exception("Metode pembayaran «{$method}» tidak dikenal.");
+            }
+            if ($amount <= 0) {
+                throw new \Exception('Setiap baris pembayaran harus bernilai lebih dari nol.');
+            }
+            if ($method === 'cash') {
+                $cashCount++;
+            }
+
+            $reference = is_array($row) && isset($row['reference']) ? trim((string) $row['reference']) : null;
+
+            $lines[] = [
+                'method' => $method,
+                'amount' => $amount,
+                'reference' => $reference === '' ? null : mb_substr((string) $reference, 0, 100),
+                'sort_order' => $index,
+            ];
+        }
+
+        if (count($lines) > 5) {
+            throw new \Exception('Maksimal 5 metode pembayaran dalam satu transaksi.');
+        }
+        if ($cashCount > 1) {
+            throw new \Exception('Pembayaran tunai cukup satu baris; gabungkan nominalnya.');
+        }
+
+        $total = round(array_sum(array_column($lines, 'amount')), 2);
+
+        if ($total + 0.009 < $balanceDue) {
+            throw new \Exception('Total pembayaran kurang dari tagihan.');
+        }
+
+        // Kembalian hanya masuk akal untuk uang tunai. Metode non-tunai yang
+        // melebihi tagihan hampir pasti salah ketik, jadi ditolak lebih awal.
+        if ($cashCount === 0 && $total - $balanceDue > 0.009) {
+            throw new \Exception('Pembayaran non-tunai tidak boleh melebihi tagihan.');
+        }
+
+        return $lines;
+    }
+
+    /**
+     * Metode yang dipakai sebagai label transaksi: nominal terbesar.
+     *
+     * @param  list<array{method: string, amount: float}>  $lines
+     */
+    private function dominantPaymentMethod(array $lines, ?string $fallback): string
+    {
+        if ($lines === []) {
+            return $fallback ?: 'cash';
+        }
+
+        $byMethod = [];
+        foreach ($lines as $line) {
+            $byMethod[$line['method']] = ($byMethod[$line['method']] ?? 0) + $line['amount'];
+        }
+        arsort($byMethod);
+
+        return (string) array_key_first($byMethod);
+    }
+
+    /**
+     * Uang tunai yang benar-benar tinggal di laci (sudah dikurangi kembalian).
+     *
+     * @param  list<array{method: string, amount: float}>  $lines
+     */
+    private function cashPortion(array $lines, ?string $fallbackMethod, float $amountPaid, float $balanceDue, bool $isCredit): float
+    {
+        if ($isCredit) {
+            return 0.0;
+        }
+
+        if ($lines === []) {
+            return ($fallbackMethod ?? 'cash') === 'cash'
+                ? round(min($amountPaid, $balanceDue), 2)
+                : 0.0;
+        }
+
+        $cash = 0.0;
+        $nonCash = 0.0;
+        foreach ($lines as $line) {
+            if ($line['method'] === 'cash') {
+                $cash += $line['amount'];
+            } else {
+                $nonCash += $line['amount'];
+            }
+        }
+
+        // Kembalian diambil dari uang tunai, jadi porsi tunai dibatasi sisa tagihan
+        // setelah dikurangi bagian non-tunai.
+        return round(max(0, min($cash, $balanceDue - $nonCash)), 2);
+    }
+
+    /**
+     * Simpan rincian pembayaran. Transaksi satu metode tetap menulis satu baris
+     * supaya laporan rincian metode punya satu sumber data saja.
+     *
+     * @param  list<array{method: string, amount: float, reference: ?string, sort_order: int}>  $lines
+     */
+    private function storePaymentLines(Transaction $transaction, array $lines, float $amountPaid, float $balanceDue): void
+    {
+        if ($lines === []) {
+            $lines = [[
+                'method' => $transaction->payment_method ?: 'cash',
+                'amount' => round(min($amountPaid, $balanceDue), 2),
+                'reference' => null,
+                'sort_order' => 0,
+            ]];
+        } else {
+            // Kembalian diambil dari baris tunai agar rincian = uang yang benar-benar diterima.
+            $change = round(max(0, $amountPaid - $balanceDue), 2);
+            foreach ($lines as $index => $line) {
+                if ($change > 0 && $line['method'] === 'cash') {
+                    $lines[$index]['amount'] = round($line['amount'] - $change, 2);
+                    $change = 0;
+                }
+            }
+        }
+
+        foreach ($lines as $line) {
+            if ($line['amount'] <= 0) {
+                continue;
+            }
+
+            TransactionPayment::create([
+                'transaction_id' => $transaction->id,
+                'store_id' => $transaction->store_id,
+                'method' => $line['method'],
+                'amount' => $line['amount'],
+                'reference' => $line['reference'] ?? null,
+                'sort_order' => $line['sort_order'] ?? 0,
+            ]);
+        }
+    }
+
+    /**
      * Pilih harga satuan per baris POS berdasarkan tipe pelanggan.
      * Grosir memakai harga grosir bila tersedia, selain itu harga ecer.
      */
@@ -1777,7 +2112,7 @@ class POSController extends Controller
         $eligible = 0.0;
         foreach ($cartLines as $line) {
             if ($this->productMatchesDiscountScope($discount, $line['product'])) {
-                $eligible += $line['line_total'];
+                $eligible += $line['line_total'] - ($line['line_discount'] ?? 0.0);
             }
         }
 
@@ -2013,10 +2348,11 @@ class POSController extends Controller
      */
     private function receiptTransactionPayload(Transaction $transaction, Store $store): array
     {
-        $transaction->loadMissing(['items', 'store', 'user', 'discount', 'customer']);
+        $transaction->loadMissing(['items', 'store', 'user', 'discount', 'customer', 'barber:id,name', 'payments']);
 
         $payload = $transaction->toArray();
         $payload['receipt'] = ReceiptSettings::payload($store);
+        $payload['barbershop_enabled'] = BarbershopFeatures::enabled($store);
 
         return $payload;
     }
@@ -2049,12 +2385,14 @@ class POSController extends Controller
             'store:id,name,address,phone,email',
             'user:id,name',
             'customer:id,name,phone,email',
+            'barber:id,name',
         ]);
 
         return Inertia::render('Invoice', [
             'transaction' => $transaction,
             'fnb_enabled' => FnBFeatures::enabled($store),
             'pharmacy_enabled' => PharmacyFeatures::enabled($store),
+            'barbershop_enabled' => BarbershopFeatures::enabled($store),
         ]);
     }
 
@@ -2073,12 +2411,15 @@ class POSController extends Controller
             'store:id,name,address,phone,email',
             'user:id,name',
             'customer:id,name,phone,email',
+            'barber:id,name',
+            'payments',
         ]);
 
         return response()->json([
             'transaction' => $transaction,
             'fnb_enabled' => FnBFeatures::enabled($store),
             'pharmacy_enabled' => PharmacyFeatures::enabled($store),
+            'barbershop_enabled' => BarbershopFeatures::enabled($store),
         ]);
     }
 
@@ -2097,6 +2438,7 @@ class POSController extends Controller
             'store',
             'user:id,name',
             'customer:id,name,phone,email',
+            'barber:id,name',
         ]);
 
         $pdf = Pdf::loadView('pdf.invoice', [
@@ -2130,6 +2472,7 @@ class POSController extends Controller
             'items',
             'user:id,name',
             'customer:id,name,phone,email',
+            'barber:id,name',
         ]);
 
         $pdf = Pdf::loadView('pdf.invoice', [

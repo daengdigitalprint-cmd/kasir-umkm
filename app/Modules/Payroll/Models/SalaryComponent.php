@@ -14,12 +14,14 @@ class SalaryComponent extends Model
         'employee_id',
         'name',
         'type',
+        'is_fixed',
         'amount',
         'sort_order',
     ];
 
     protected $casts = [
         'amount' => 'decimal:2',
+        'is_fixed' => 'boolean',
     ];
 
     public function store(): BelongsTo

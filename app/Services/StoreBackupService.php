@@ -5,8 +5,12 @@ namespace App\Services;
 use App\Models\BackupHistory;
 use App\Models\StockTransfer;
 use App\Models\Store;
+use App\Support\CacheKeys;
+use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /**
  * Service untuk backup lengkap data toko dalam format JSON.
@@ -14,17 +18,29 @@ use Illuminate\Support\Facades\Storage;
  */
 class StoreBackupService
 {
+    private StoreDataSnapshot $snapshot;
+
+    public function __construct(?StoreDataSnapshot $snapshot = null)
+    {
+        $this->snapshot = $snapshot ?? new StoreDataSnapshot;
+    }
+
     /**
      * Generate backup lengkap untuk toko dalam format JSON.
+     *
+     * Bagian per-modul (products, transactions, ...) adalah ringkasan yang mudah dibaca;
+     * restore memakai bagian 'tables' yang berisi baris mentah seluruh tabel data toko.
      *
      * @return array Data backup terstruktur
      */
     public function generateBackup(Store $store): array
     {
+        $this->extendRuntimeLimits();
+
         $store->load('organization:id,name', 'subscriptionPlan:id,name,slug');
 
         $backup = [
-            'backup_version' => '1.0.0',
+            'backup_version' => '2.0.0',
             'generated_at' => now()->toIso8601String(),
             'store' => $this->exportStore($store),
             'products' => $this->exportProducts($store),
@@ -40,6 +56,7 @@ class StoreBackupService
             'discounts' => $this->exportDiscounts($store),
             'cash_shifts' => $this->exportCashShifts($store),
             'accounting' => $this->exportAccounting($store),
+            'tables' => $this->snapshot->export($store->id),
         ];
 
         return $backup;
@@ -108,13 +125,56 @@ class StoreBackupService
     }
 
     /**
+     * Simpan file backup yang diunggah dari luar (mis. hasil unduhan sebelumnya)
+     * ke storage toko, lalu catat ke backup_histories agar bisa di-restore.
+     */
+    public function storeUploadedBackup(Store $store, UploadedFile $file, ?int $userId = null): BackupHistory
+    {
+        $backup = json_decode((string) file_get_contents($file->getRealPath()), true);
+
+        if (! is_array($backup) || ! isset($backup['backup_version'], $backup['store']) || ! is_array($backup['store'])) {
+            throw new \InvalidArgumentException('File bukan backup yang valid. Gunakan file .json hasil unduhan backup aplikasi ini.');
+        }
+
+        if (! isset($backup['tables']) || ! is_array($backup['tables'])) {
+            throw new \InvalidArgumentException(
+                'File backup ini memakai format lama (v'.$backup['backup_version'].') yang tidak lengkap dan tidak bisa dipulihkan. '
+                .'Buat backup baru, unduh, lalu unggah file tersebut.'
+            );
+        }
+
+        $originalName = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
+        $safeName = Str::limit(Str::slug($originalName) ?: 'backup', 80, '');
+        $filename = sprintf('upload-%s-%s.json', now()->format('Y-m-d_His'), $safeName);
+        $directory = "backups/store-{$store->id}";
+        $filepath = "{$directory}/{$filename}";
+
+        Storage::makeDirectory($directory);
+        Storage::putFileAs($directory, $file, $filename);
+
+        return BackupHistory::create([
+            'store_id' => $store->id,
+            'user_id' => $userId,
+            'filename' => $filename,
+            'filepath' => $filepath,
+            'file_size' => Storage::size($filepath),
+            'status' => 'completed',
+            'trigger_type' => 'upload',
+            'records_count' => $this->countRecords($backup),
+            'records_summary' => $this->buildSummary($backup),
+        ]);
+    }
+
+    /**
      * Restore data dari file backup ke database.
      */
-    public function restoreFromBackup(Store $store, string $filepath): array
+    public function restoreFromBackup(Store $store, string $filepath, ?int $userId = null): array
     {
         if (! Storage::exists($filepath)) {
             throw new \RuntimeException('File backup tidak ditemukan.');
         }
+
+        $this->extendRuntimeLimits();
 
         $json = Storage::get($filepath);
         $backup = json_decode($json, true);
@@ -123,19 +183,42 @@ class StoreBackupService
             throw new \RuntimeException('File backup tidak valid atau rusak.');
         }
 
+        // Backup v1 hanya berisi ringkasan tanpa ID relasi, sehingga transaksi, stok,
+        // jurnal, dll. tidak bisa dipulihkan — restore dari file ini justru menghapus data.
+        if (! isset($backup['tables']) || ! is_array($backup['tables'])) {
+            throw new \RuntimeException(
+                'File backup ini memakai format lama (v'.$backup['backup_version'].') yang tidak menyimpan data penjualan, stok, '
+                .'dan jurnal secara lengkap, sehingga tidak bisa dipulihkan dengan aman. Buat backup baru lalu gunakan file tersebut.'
+            );
+        }
+
         $log = ['restored' => [], 'errors' => []];
 
-        DB::transaction(function () use ($store, $backup, &$log) {
-            // Hapus data lama toko (kecuali users & store itu sendiri)
-            $this->wipeStoreData($store, $log);
+        try {
+            DB::transaction(function () use ($store, $backup, $userId, &$log) {
+                $this->snapshot->restore(
+                    $store->id,
+                    $backup['tables'],
+                    (int) ($backup['store']['id'] ?? $store->id),
+                    $userId,
+                    $log,
+                );
+            });
+        } catch (UniqueConstraintViolationException $e) {
+            throw new \RuntimeException(
+                'Data di backup bentrok dengan data yang sudah ada (mis. nomor transaksi/pembelian yang sama milik toko lain). '
+                .'Pemulihan dibatalkan dan data toko tidak berubah.',
+                previous: $e,
+            );
+        }
 
-            // Restore data dari backup
-            $this->restoreStoreData($store, $backup, $log);
-        });
+        CacheKeys::forgetStoreReports($store->id);
+        CacheKeys::forgetStoreMasters($store->id);
 
         // Catat restore sebagai backup trigger
         BackupHistory::create([
             'store_id' => $store->id,
+            'user_id' => $userId,
             'filename' => basename($filepath),
             'filepath' => $filepath,
             'file_size' => Storage::size($filepath),
@@ -172,8 +255,38 @@ class StoreBackupService
         }
     }
 
+    /**
+     * Backup/restore toko besar bisa melewati batas default PHP (30 detik / 128 MB)
+     * dan berakhir dengan halaman error HTML, bukan respons JSON.
+     */
+    private function extendRuntimeLimits(): void
+    {
+        @set_time_limit(300);
+
+        $current = ini_get('memory_limit');
+        if ($current !== '-1' && $this->bytes((string) $current) < 512 * 1024 * 1024) {
+            @ini_set('memory_limit', '512M');
+        }
+    }
+
+    private function bytes(string $size): int
+    {
+        $value = (int) $size;
+
+        return match (strtolower(substr(trim($size), -1))) {
+            'g' => $value * 1024 ** 3,
+            'm' => $value * 1024 ** 2,
+            'k' => $value * 1024,
+            default => $value,
+        };
+    }
+
     private function countRecords(array $backup): int
     {
+        if (isset($backup['tables']) && is_array($backup['tables'])) {
+            return array_sum(array_map(fn ($rows) => is_array($rows) ? count($rows) : 0, $backup['tables']));
+        }
+
         $count = 0;
         foreach ($backup as $key => $value) {
             if (is_array($value) && ! isset($value['id'])) {
@@ -223,134 +336,6 @@ class StoreBackupService
         return $summary;
     }
 
-    private function wipeStoreData(Store $store, array &$log): void
-    {
-        $models = [
-            \App\Models\TransactionItem::class => 'transaction_items',
-            \App\Models\Transaction::class => 'transactions',
-            \App\Models\PurchaseReturnLine::class => 'purchase_return_lines',
-            \App\Models\PurchaseReturn::class => 'purchase_returns',
-            \App\Models\PurchaseLine::class => 'purchase_lines',
-            \App\Models\Purchase::class => 'purchases',
-            \App\Models\StockMovement::class => 'stock_movements',
-            \App\Models\StockTransferLine::class => 'stock_transfer_lines',
-            \App\Models\StockTransfer::class => 'stock_transfers',
-            \App\Models\PreOrderLine::class => 'pre_order_lines',
-            \App\Models\PreOrder::class => 'pre_orders',
-            \App\Models\Discount::class => 'discounts',
-            \App\Models\CashShift::class => 'cash_shifts',
-            \App\Models\JournalLine::class => 'journal_lines',
-            \App\Models\JournalEntry::class => 'journal_entries',
-            \App\Models\ChartOfAccount::class => 'chart_of_accounts',
-            \App\Models\ProductBatch::class => 'product_batches',
-            \App\Models\ProductBundleItem::class => 'product_bundle_items',
-            \App\Models\ProductVariant::class => 'product_variants',
-            \App\Models\Product::class => 'products',
-            \App\Models\ProductCategory::class => 'product_categories',
-            \App\Models\Customer::class => 'customers',
-            \App\Models\Supplier::class => 'suppliers',
-        ];
-
-        foreach ($models as $modelClass => $table) {
-            try {
-                $modelClass::where('store_id', $store->id)->delete();
-                $log['restored'][] = "Dihapus: {$table}";
-            } catch (\Throwable $e) {
-                $log['errors'][] = "Gagal hapus {$table}: {$e->getMessage()}";
-            }
-        }
-    }
-
-    private function restoreStoreData(Store $store, array $backup, array &$log): void
-    {
-        // Restore products
-        foreach ($backup['products'] ?? [] as $p) {
-            $product = $store->products()->create([
-                'name' => $p['name'],
-                'sku' => $p['sku'],
-                'barcode' => $p['barcode'] ?? null,
-                'description' => $p['description'] ?? null,
-                'category' => $p['category'] ?? null,
-                'price' => $p['price'],
-                'cost_price' => $p['cost_price'] ?? 0,
-                'stock' => $p['stock'] ?? 0,
-                'track_stock' => $p['track_stock'] ?? true,
-                'allows_decimal' => $p['allows_decimal'] ?? false,
-                'is_active' => $p['is_active'] ?? true,
-                'is_bundle' => $p['is_bundle'] ?? false,
-                'has_variants' => $p['has_variants'] ?? false,
-                'image_url' => $p['image_url'] ?? null,
-                'unit' => $p['unit'] ?? null,
-                'pharmacy_sale_class' => $p['pharmacy_sale_class'] ?? null,
-                'pharmacy_permit_number' => $p['pharmacy_permit_number'] ?? null,
-            ]);
-
-            foreach ($p['variants'] ?? [] as $v) {
-                $product->variants()->create([
-                    'name' => $v['name'],
-                    'sku' => $v['sku'],
-                    'barcode' => $v['barcode'] ?? null,
-                    'price' => $v['price'],
-                    'cost_price' => $v['cost_price'] ?? 0,
-                    'stock' => $v['stock'] ?? 0,
-                    'attributes' => $v['attributes'] ?? null,
-                ]);
-            }
-
-            foreach ($p['batches'] ?? [] as $b) {
-                $product->batches()->create([
-                    'batch_number' => $b['batch_number'],
-                    'product_variant_id' => $b['product_variant_id'] ?? null,
-                    'quantity' => $b['quantity'],
-                    'cost_price' => $b['cost_price'] ?? 0,
-                    'expiry_date' => $b['expiry_date'] ?? null,
-                    'received_at' => $b['received_at'] ?? null,
-                ]);
-            }
-        }
-        $log['restored'][] = 'Produk dipulihkan';
-
-        // Restore customers
-        foreach ($backup['customers'] ?? [] as $c) {
-            $store->customers()->create([
-                'name' => $c['name'],
-                'email' => $c['email'] ?? null,
-                'phone' => $c['phone'] ?? null,
-                'address' => $c['address'] ?? null,
-            ]);
-        }
-        $log['restored'][] = 'Pelanggan dipulihkan';
-
-        // Restore suppliers
-        foreach ($backup['suppliers'] ?? [] as $s) {
-            $store->suppliers()->create([
-                'name' => $s['name'],
-                'email' => $s['email'] ?? null,
-                'phone' => $s['phone'] ?? null,
-                'address' => $s['address'] ?? null,
-                'notes' => $s['notes'] ?? null,
-            ]);
-        }
-        $log['restored'][] = 'Supplier dipulihkan';
-
-        // Restore discounts
-        foreach ($backup['discounts'] ?? [] as $d) {
-            $store->discounts()->create([
-                'name' => $d['name'],
-                'code' => $d['code'] ?? null,
-                'type' => $d['type'],
-                'value' => $d['value'],
-                'minimum_purchase' => $d['minimum_purchase'] ?? 0,
-                'max_uses' => $d['max_uses'] ?? null,
-                'used_count' => $d['used_count'] ?? 0,
-                'start_date' => $d['start_date'] ?? null,
-                'end_date' => $d['end_date'] ?? null,
-                'is_active' => $d['is_active'] ?? true,
-            ]);
-        }
-        $log['restored'][] = 'Diskon dipulihkan';
-    }
-
     private function exportStore(Store $store): array
     {
         return [
@@ -397,16 +382,16 @@ class StoreBackupService
                 'category' => $p->category,
                 'price' => $p->price,
                 'cost_price' => $p->cost_price,
-                'stock' => $p->stock,
+                'stock_quantity' => $p->stock_quantity,
                 'track_stock' => $p->track_stock,
                 'allows_decimal' => $p->allows_decimal,
                 'is_active' => $p->is_active,
                 'is_bundle' => $p->is_bundle,
                 'has_variants' => $p->has_variants,
-                'image_url' => $p->image_url,
+                'images' => $p->images,
                 'unit' => $p->unit,
                 'pharmacy_sale_class' => $p->pharmacy_sale_class,
-                'pharmacy_permit_number' => $p->pharmacy_permit_number,
+                'pharmacy_registration_no' => $p->pharmacy_registration_no,
                 'variants' => $p->variants->map(fn ($v) => [
                     'id' => $v->id,
                     'name' => $v->name,
@@ -414,24 +399,23 @@ class StoreBackupService
                     'barcode' => $v->barcode,
                     'price' => $v->price,
                     'cost_price' => $v->cost_price,
-                    'stock' => $v->stock,
-                    'attributes' => $v->attributes,
+                    'stock_quantity' => $v->stock_quantity,
+                    'min_stock_level' => $v->min_stock_level,
+                    'is_active' => $v->is_active,
                 ])->toArray(),
                 'bundle_items' => $p->bundleItems->map(fn ($bi) => [
                     'component_product_id' => $bi->component_product_id,
                     'component_product_name' => $bi->componentProduct?->name,
-                    'component_variant_id' => $bi->component_variant_id,
+                    'component_variant_id' => $bi->component_product_variant_id,
                     'quantity' => $bi->quantity,
                     'sort_order' => $bi->sort_order,
                 ])->toArray(),
                 'batches' => $p->batches->map(fn ($b) => [
                     'id' => $b->id,
-                    'batch_number' => $b->batch_number,
-                    'product_variant_id' => $b->product_variant_id,
-                    'quantity' => $b->quantity,
-                    'cost_price' => $b->cost_price,
+                    'batch_code' => $b->batch_code,
+                    'quantity_remaining' => $b->quantity_remaining,
                     'expiry_date' => $b->expiry_date?->toDateString(),
-                    'received_at' => $b->received_at?->toIso8601String(),
+                    'status' => $b->status,
                 ])->toArray(),
                 'created_at' => $p->created_at->toIso8601String(),
                 'updated_at' => $p->updated_at->toIso8601String(),
@@ -494,7 +478,7 @@ class StoreBackupService
             ->get()
             ->map(fn ($t) => [
                 'id' => $t->id,
-                'customer_name' => $t->customer?->name ?? $t->customer_name,
+                'customer_name' => $t->customer?->name,
                 'status' => $t->status,
                 'payment_method' => $t->payment_method,
                 'order_type' => $t->order_type,
@@ -536,20 +520,26 @@ class StoreBackupService
                 'id' => $p->id,
                 'purchase_number' => $p->purchase_number,
                 'supplier_name' => $p->supplier?->name,
-                'purchase_date' => $p->purchase_date?->toDateString(),
+                'purchased_at' => $p->purchased_at?->toIso8601String(),
                 'notes' => $p->notes,
-                'subtotal' => $p->subtotal,
-                'tax_amount' => $p->tax_amount,
+                'dpp_amount' => $p->dpp_amount,
+                'ppn_amount' => $p->ppn_amount,
                 'total_amount' => $p->total_amount,
-                'status' => $p->status,
+                'supplier_tax_invoice_no' => $p->supplier_tax_invoice_no,
+                'is_paid' => $p->is_paid,
+                'payment_method' => $p->payment_method,
+                'amount_paid' => $p->amount_paid,
+                'due_date' => $p->due_date?->toDateString(),
                 'lines' => $p->lines->map(fn ($l) => [
                     'product_name' => $l->product?->name,
+                    'product_name_snapshot' => $l->product_name_snapshot,
+                    'sku_snapshot' => $l->sku_snapshot,
                     'product_variant_name' => $l->productVariant?->name,
                     'quantity' => $l->quantity,
-                    'unit_price' => $l->unit_price,
-                    'total_price' => $l->total_price,
-                    'batch_number' => $l->batch_number,
-                    'expiry_date' => $l->expiry_date?->toDateString(),
+                    'unit_cost' => $l->unit_cost,
+                    'subtotal' => $l->subtotal,
+                    'batch_code' => $l->batch_code,
+                    'batch_expiry_date' => $l->batch_expiry_date?->toDateString(),
                 ])->toArray(),
                 'created_at' => $p->created_at->toIso8601String(),
             ])
@@ -566,15 +556,11 @@ class StoreBackupService
                 'id' => $pr->id,
                 'return_number' => $pr->return_number,
                 'supplier_name' => $pr->supplier?->name,
-                'return_date' => $pr->return_date?->toDateString(),
-                'reason' => $pr->reason,
-                'total_amount' => $pr->total_amount,
-                'status' => $pr->status,
+                'returned_at' => $pr->returned_at?->toIso8601String(),
+                'notes' => $pr->notes,
                 'lines' => $pr->lines->map(fn ($l) => [
                     'product_name' => $l->product?->name,
                     'quantity' => $l->quantity,
-                    'unit_price' => $l->unit_price,
-                    'total_price' => $l->total_price,
                 ])->toArray(),
                 'created_at' => $pr->created_at->toIso8601String(),
             ])
@@ -592,7 +578,8 @@ class StoreBackupService
                 'product_name' => $sm->product?->name,
                 'variant_name' => $sm->productVariant?->name,
                 'type' => $sm->type,
-                'quantity' => $sm->quantity,
+                'quantity_change' => $sm->quantity_change,
+                'balance_after' => $sm->balance_after,
                 'notes' => $sm->notes,
                 'reference_type' => $sm->reference_type,
                 'reference_id' => $sm->reference_id,
@@ -606,7 +593,7 @@ class StoreBackupService
         return StockTransfer::query()
             ->where('from_store_id', $store->id)
             ->orWhere('to_store_id', $store->id)
-            ->with(['fromStore:id,name', 'toStore:id,name', 'lines.product'])
+            ->with(['fromStore:id,name', 'toStore:id,name', 'lines.fromProduct'])
             ->orderBy('id')
             ->get()
             ->map(fn ($st) => [
@@ -616,7 +603,7 @@ class StoreBackupService
                 'notes' => $st->notes,
                 'status' => $st->status,
                 'lines' => $st->lines->map(fn ($l) => [
-                    'product_name' => $l->product?->name,
+                    'product_name' => $l->fromProduct?->name,
                     'quantity' => $l->quantity,
                 ])->toArray(),
                 'sent_at' => $st->sent_at?->toIso8601String(),
@@ -634,17 +621,17 @@ class StoreBackupService
             ->get()
             ->map(fn ($po) => [
                 'id' => $po->id,
-                'pre_order_number' => $po->pre_order_number,
-                'customer_name' => $po->customer?->name ?? $po->customer_name,
+                'order_number' => $po->order_number,
+                'customer_name' => $po->customer?->name,
                 'deposit_received' => $po->deposit_received,
                 'estimated_total' => $po->estimated_total,
                 'expected_pickup_at' => $po->expected_pickup_at?->toIso8601String(),
                 'notes' => $po->notes,
                 'status' => $po->status,
                 'lines' => $po->lines->map(fn ($l) => [
-                    'product_name' => $l->product?->name,
+                    'product_name' => $l->product_name,
                     'quantity' => $l->quantity,
-                    'price' => $l->price,
+                    'unit_price' => $l->unit_price,
                 ])->toArray(),
                 'created_at' => $po->created_at->toIso8601String(),
             ])
@@ -662,12 +649,13 @@ class StoreBackupService
                 'code' => $d->code,
                 'type' => $d->type,
                 'value' => $d->value,
-                'minimum_purchase' => $d->minimum_purchase,
-                'max_uses' => $d->max_uses,
+                'minimum_amount' => $d->minimum_amount,
+                'maximum_uses' => $d->maximum_uses,
                 'used_count' => $d->used_count,
-                'start_date' => $d->start_date?->toDateString(),
-                'end_date' => $d->end_date?->toDateString(),
+                'starts_at' => $d->starts_at?->toIso8601String(),
+                'expires_at' => $d->expires_at?->toIso8601String(),
                 'is_active' => $d->is_active,
+                'description' => $d->description,
                 'created_at' => $d->created_at->toIso8601String(),
             ])
             ->toArray();
@@ -683,7 +671,7 @@ class StoreBackupService
                 'id' => $cs->id,
                 'user_name' => $cs->user?->name,
                 'opening_cash' => $cs->opening_cash,
-                'closing_cash_expected' => $cs->closing_cash_expected,
+                'expected_cash' => $cs->expected_cash,
                 'closing_cash_counted' => $cs->closing_cash_counted,
                 'difference_amount' => $cs->difference_amount,
                 'closing_notes' => $cs->closing_notes,
@@ -715,10 +703,10 @@ class StoreBackupService
                 ->get()
                 ->map(fn ($je) => [
                     'id' => $je->id,
-                    'date' => $je->date?->toDateString(),
+                    'entry_date' => $je->entry_date?->toDateString(),
                     'reference_type' => $je->reference_type,
                     'reference_id' => $je->reference_id,
-                    'memo' => $je->memo,
+                    'description' => $je->description,
                     'lines' => $je->lines->map(fn ($l) => [
                         'account_code' => $l->chartOfAccount?->code,
                         'account_name' => $l->chartOfAccount?->name,

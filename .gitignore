@@ -71,3 +71,20 @@ android-app/build/
 android-app/app/build/
 android-app/local.properties
 android-app/app/release/
+
+# Credential files (keystores, private keys, etc.)
+/credentials/
+
+# Dependensi di subfolder (motion/, remotion-video/, dll.)
+node_modules/
+
+# Hasil render video/audio (besar, bisa dibuat ulang dari sumbernya)
+*.mp4
+*.mov
+*.wav
+
+# File workspace editor
+*.code-workspace
+
+# Data barang/stok pelanggan (jangan masuk repo & jangan di folder public)
+/public/*.xlsx

@@ -17,20 +17,29 @@ class Employee extends Model
         'user_id',
         'name',
         'position',
+        'photo_path',
+        'joined_at',
+        'resigned_at',
         'is_active',
         'tax_status',
         'dependents',
         'pin_hash',
         'pin_set_at',
         'can_login_pos',
+        'device_id',
+        'device_name',
+        'device_bound_at',
     ];
 
     protected function casts(): array
     {
         return [
             'is_active' => 'boolean',
+            'joined_at' => 'date',
+            'resigned_at' => 'date',
             'can_login_pos' => 'boolean',
             'pin_set_at' => 'datetime',
+            'device_bound_at' => 'datetime',
         ];
     }
 

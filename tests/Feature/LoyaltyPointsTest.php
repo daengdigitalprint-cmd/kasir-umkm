@@ -3,6 +3,7 @@
 use App\Models\Customer;
 use App\Models\LoyaltyReward;
 use App\Models\Store;
+use App\Models\SubscriptionPlan;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\LoyaltyService;
@@ -227,4 +228,160 @@ test('endpoint redeem admin memotong saldo poin pelanggan', function () {
 
     expect($customer->fresh()->points_balance)->toBe(300);
     expect($store->loyaltyRedemptions()->count())->toBe(1);
+});
+
+test('preview voucher di POS mengembalikan nilai tanpa mengubah status', function () {
+    ['store' => $store, 'user' => $user] = loyaltyStore();
+    $customer = loyaltyCustomer($store);
+    $service = app(LoyaltyService::class);
+    $service->earn($customer, 300, 'earn', 'seed');
+
+    $reward = LoyaltyReward::query()->create([
+        'store_id' => $store->id,
+        'name' => 'Voucher 10rb',
+        'type' => 'voucher',
+        'points_cost' => 100,
+        'voucher_value' => 10000,
+        'stock' => null,
+        'is_active' => true,
+    ]);
+
+    $redemption = $service->redeem($customer->fresh(), $reward, $user->id);
+
+    $this->actingAs($user)
+        ->postJson('/pos/loyalty-voucher-preview', ['code' => $redemption->voucher_code])
+        ->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('voucher.value', 10000)
+        ->assertJsonPath('voucher.customer_name', 'Budi');
+
+    // Preview tidak boleh menandai voucher terpakai.
+    expect($redemption->fresh()->used_at)->toBeNull();
+    expect($redemption->fresh()->status)->toBe('fulfilled');
+});
+
+test('preview voucher ditolak untuk kode yang tidak ditemukan', function () {
+    ['store' => $store, 'user' => $user] = loyaltyStore();
+
+    $this->actingAs($user)
+        ->postJson('/pos/loyalty-voucher-preview', ['code' => 'RWD-TIDAK-ADA'])
+        ->assertStatus(422)
+        ->assertJsonPath('success', false)
+        ->assertJsonPath('message', 'Kode voucher tidak ditemukan.');
+});
+
+test('preview voucher ditolak untuk kode yang sudah pernah dipakai', function () {
+    ['store' => $store, 'user' => $user] = loyaltyStore();
+    $customer = loyaltyCustomer($store);
+    $service = app(LoyaltyService::class);
+    $service->earn($customer, 300, 'earn', 'seed');
+
+    $reward = LoyaltyReward::query()->create([
+        'store_id' => $store->id,
+        'name' => 'Voucher 10rb',
+        'type' => 'voucher',
+        'points_cost' => 100,
+        'voucher_value' => 10000,
+        'stock' => null,
+        'is_active' => true,
+    ]);
+
+    $redemption = $service->redeem($customer->fresh(), $reward, $user->id);
+    $redemption->forceFill(['used_at' => now(), 'status' => 'fulfilled'])->save();
+
+    $this->actingAs($user)
+        ->postJson('/pos/loyalty-voucher-preview', ['code' => $redemption->voucher_code])
+        ->assertStatus(422)
+        ->assertJsonPath('message', 'Kode voucher sudah pernah dipakai.');
+});
+
+test('hadiah lintas toko ditolak saat di-toggle', function () {
+    ['store' => $store, 'user' => $user] = loyaltyStore();
+    ['store' => $otherStore] = loyaltyStore();
+
+    $reward = LoyaltyReward::query()->create([
+        'store_id' => $otherStore->id,
+        'name' => 'Voucher toko lain',
+        'type' => 'voucher',
+        'points_cost' => 100,
+        'voucher_value' => 5000,
+        'stock' => null,
+        'is_active' => true,
+    ]);
+
+    $this->actingAs($user)
+        ->patch("/loyalty/rewards/{$reward->id}/toggle")
+        ->assertForbidden();
+
+    expect($reward->fresh()->is_active)->toBeTrue();
+});
+
+test('hadiah tipe voucher wajib memiliki nilai voucher', function () {
+    ['store' => $store, 'user' => $user] = loyaltyStore();
+
+    $this->actingAs($user)
+        ->post('/loyalty/rewards', [
+            'name' => 'Voucher kosong',
+            'type' => 'voucher',
+            'points_cost' => 100,
+        ])
+        ->assertSessionHasErrors('voucher_value');
+
+    expect($store->loyaltyRewards()->count())->toBe(0);
+});
+
+test('rute loyalitas diblokir untuk paket starter', function () {
+    ['store' => $store, 'user' => $user] = loyaltyStore();
+
+    $plan = SubscriptionPlan::query()->create([
+        'name' => 'Starter',
+        'slug' => 'starter',
+        'price' => 0,
+        'duration_days' => 30,
+        'is_active' => true,
+    ]);
+
+    $store->forceFill([
+        'subscription_plan_id' => $plan->id,
+        'is_subscription_active' => true,
+        'subscription_end' => now()->addDays(30),
+    ])->save();
+
+    $this->actingAs($user)
+        ->get('/loyalty')
+        ->assertRedirect(route('dashboard'));
+});
+
+test('void transaksi membatalkan poin yang diperoleh pelanggan', function () {
+    ['store' => $store, 'user' => $user] = loyaltyStore();
+    $customer = loyaltyCustomer($store);
+
+    $transaction = Transaction::query()->create([
+        'store_id' => $store->id,
+        'customer_id' => $customer->id,
+        'user_id' => $user->id,
+        'status' => 'completed',
+        'payment_method' => 'cash',
+        'subtotal' => 55000,
+        'total_amount' => 55000,
+        'amount_paid' => 55000,
+        'change_amount' => 0,
+    ]);
+
+    $service = app(LoyaltyService::class);
+    expect($service->earnFromTransaction($transaction))->toBe(5);
+
+    $reversed = $service->reverseEarnedPoints($transaction, 'Pembatalan poin void transaksi #'.$transaction->transaction_number, $user->id);
+
+    expect($reversed)->toBe(5);
+    expect($customer->fresh()->points_balance)->toBe(0);
+    expect($customer->fresh()->points_earned_total)->toBe(0);
+
+    $adjust = $customer->pointLedgers()->where('type', 'adjust')->first();
+    expect($adjust)->not->toBeNull();
+    expect($adjust->hasValidIntegrity())->toBeTrue();
+
+    // Panggilan kedua tidak mengulang pembatalan.
+    expect($service->reverseEarnedPoints($transaction))->toBe(0);
+    expect($customer->fresh()->points_balance)->toBe(0);
 });

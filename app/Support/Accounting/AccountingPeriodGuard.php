@@ -34,7 +34,7 @@ class AccountingPeriodGuard
         // 2. Cek limit backdate (Anti tanggal mundur berlebihan H-7)
         $maxBackdateDays = (int) ($store->settings['max_backdate_days'] ?? 7);
         $carbonDate = is_string($date) ? \Carbon\Carbon::parse($date)->startOfDay() : $date->copy()->startOfDay();
-        
+
         if ($carbonDate->isBefore(now()->startOfDay()->subDays($maxBackdateDays))) {
             throw ValidationException::withMessages([
                 $errorKey => "Tanggal transaksi terlalu lama di masa lalu (Maksimal mundur {$maxBackdateDays} hari). Hal ini untuk menjaga stabilitas laporan stok HPP.",

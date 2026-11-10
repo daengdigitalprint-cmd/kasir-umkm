@@ -143,10 +143,20 @@ it('menggabungkan seluruh indikasi anomali dalam satu laporan', function () {
     $result = (new TransactionAnomalyTool)->execute([], $user);
 
     expect($result->data['total_flags'])->toBe(3)
-        ->and($result->message)->toContain('Diskon tidak wajar')
-        ->toContain('Void berulang')
-        ->toContain('Selisih kas shift')
-        ->toContain('audit anti-fraud');
+        ->and($result->message)->toBe(implode("\n", [
+            '## Ringkasan Audit Transaksi',
+            '',
+            'Ditemukan **3 jenis indikasi**.',
+            '',
+            '- **Diskon tidak wajar:** 1 transaksi',
+            '- **Void berulang:** 1 kasir',
+            '- **Selisih kas shift:** 1 shift',
+            '',
+            '### Tindak lanjut',
+            '',
+            '- Tinjau transaksi dengan diskon **≥30%** dari subtotal.',
+            '- Lakukan audit manual untuk seluruh temuan.',
+        ]));
 });
 
 it('melaporkan toko bersih tanpa indikasi anomali', function () {
@@ -170,7 +180,12 @@ it('melaporkan toko bersih tanpa indikasi anomali', function () {
 
     expect($result->success)->toBeTrue()
         ->and($result->data['total_flags'])->toBe(0)
-        ->and($result->message)->toContain('Tidak ada transaksi mencurigakan');
+        ->and($result->message)->toBe(implode("\n", [
+            '## Ringkasan Audit Transaksi',
+            '',
+            '- **Status:** Tidak ada transaksi mencurigakan pada periode ini.',
+            '- Pemantauan mencakup diskon besar, void berulang, dan selisih kas shift.',
+        ]));
 });
 
 it('menolak user tanpa toko', function () {

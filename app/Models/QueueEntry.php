@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class QueueEntry extends Model
 {
     public const STATUSES = ['waiting', 'serving', 'ready', 'completed', 'cancelled'];
+
     public const ORDER_TYPES = ['dine_in', 'takeaway', 'online'];
 
     protected $fillable = [
@@ -20,6 +21,7 @@ class QueueEntry extends Model
         'customer_name',
         'customer_phone',
         'transaction_id',
+        'barber_user_id',
         'priority',
         'notes',
         'items',
@@ -50,5 +52,11 @@ class QueueEntry extends Model
     public function transaction(): BelongsTo
     {
         return $this->belongsTo(Transaction::class);
+    }
+
+    /** Teknisi (role barber) yang menangani entri antrian — barbershop / salon. */
+    public function barber(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'barber_user_id');
     }
 }

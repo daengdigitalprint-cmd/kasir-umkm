@@ -1,0 +1,79 @@
+{
+    "name": "nativephp/bluetooth-printer",
+    "version": "1.0.0",
+    "description": "Thermal Bluetooth Printer plugin",
+    "namespace": "BluetoothPrinter",
+    "keywords": ["printer", "bluetooth", "escpos"],
+    "category": "utilities",
+    "license": "MIT",
+    "pricing": {
+        "type": "free"
+    },
+    "author": {
+        "name": "Your Name",
+        "email": "you@example.com",
+        "url": ""
+    },
+    "homepage": "",
+    "repository": "",
+    "funding": [],
+    "platforms": [
+        "android",
+        "ios"
+    ],
+    "icon": "resources/icon.png",
+    "screenshots": [],
+    "bridge_functions": [
+        {
+            "name": "BluetoothPrinter.GetPairedDevices",
+            "android": "com.nativephp.plugins.bluetoothprinter.BluetoothPrinterFunctions.GetPairedDevices",
+            "ios": "BluetoothPrinterFunctions.GetPairedDevices",
+            "description": "Get paired bluetooth devices"
+        },
+        {
+            "name": "BluetoothPrinter.Print",
+            "android": "com.nativephp.plugins.bluetoothprinter.BluetoothPrinterFunctions.Print",
+            "ios": "BluetoothPrinterFunctions.Print",
+            "description": "Send ESC/POS bytes to bluetooth printer"
+        }
+    ],
+    "android": {
+        "min_version": 21,
+        "permissions": [
+            "android.permission.BLUETOOTH",
+            "android.permission.BLUETOOTH_ADMIN",
+            "android.permission.BLUETOOTH_CONNECT",
+            "android.permission.BLUETOOTH_SCAN",
+            "android.permission.ACCESS_FINE_LOCATION",
+            "android.permission.ACCESS_COARSE_LOCATION"
+        ],
+        "repositories": [],
+        "dependencies": {
+            "implementation": []
+        },
+        "activities": [],
+        "services": [],
+        "receivers": [],
+        "providers": []
+    },
+    "ios": {
+        "min_version": "15.0",
+        "permissions": [
+            "NSBluetoothAlwaysUsageDescription",
+            "NSBluetoothPeripheralUsageDescription"
+        ],
+        "repositories": [],
+        "dependencies": {
+            "swift_packages": [],
+            "pods": []
+        }
+    },
+    "assets": {
+        "android": [],
+        "ios": []
+    },
+    "secrets": [],
+    "events": [],
+    "service_provider": "Nativephp\\BluetoothPrinter\\BluetoothPrinterServiceProvider",
+    "hooks": {}
+}

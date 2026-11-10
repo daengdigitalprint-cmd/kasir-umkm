@@ -62,6 +62,9 @@ class Store extends Model
         'bpjs_jkk',
         'bpjs_jkm',
         'pph21_enabled',
+        'bpjs_health_wage_cap',
+        'bpjs_jp_wage_cap',
+        'absence_deduction_enabled',
         'cashier_login_mode',
     ];
 
@@ -98,6 +101,9 @@ class Store extends Model
         'bpjs_jp_employer' => 'decimal:2',
         'bpjs_jkk' => 'decimal:2',
         'bpjs_jkm' => 'decimal:2',
+        'bpjs_health_wage_cap' => 'decimal:2',
+        'bpjs_jp_wage_cap' => 'decimal:2',
+        'absence_deduction_enabled' => 'boolean',
         'pph21_enabled' => 'boolean',
     ];
 
@@ -166,20 +172,18 @@ class Store extends Model
     }
 
     /**
-     * Salin produk dari sumber ke toko ini.
+     * Salin produk dari sumber ke toko ini, lengkap dengan varian, komponen paket,
+     * komponen konsumsi penjualan, dan resep produksi.
      *
      * @param  string  $copyType  'raw_material' | 'sellable' | 'all'
-     * @return array{copied: int, skipped: int, errors: string[], details: array}
+     * @return array{copied: int, skipped: int, components: int, errors: string[], details: array}
      */
     public function copyProductsFrom(Store $source, string $copyType = 'all'): array
     {
         // Bangun lookup duplikasi: SKU (jika ada) + nama+inventory_type sebagai fallback
-        $existingSkus = $this->products()->pluck('sku')->filter()->flip()->all();
-        $existingNames = $this->products()
-            ->selectRaw('name, inventory_type')
-            ->get()
-            ->keyBy(fn ($p) => $p->name.'|'.$p->inventory_type)
-            ->toArray();
+        $destProducts = $this->products()->get();
+        $destBySku = $destProducts->filter(fn ($p) => filled($p->sku))->keyBy('sku');
+        $destByName = $destProducts->keyBy(fn ($p) => $p->name.'|'.$p->inventory_type);
 
         $query = $source->products()->where('is_active', true);
 
@@ -195,19 +199,36 @@ class Store extends Model
 
         // 'all' — tidak perlu filter, ambil semua produk aktif
 
-        $sourceProducts = $query->with('productCategory')->orderBy('name')->get();
+        $sourceProducts = $query
+            ->with([
+                'productCategory',
+                'variants',
+                'bundleItems.componentProduct',
+                'bundleItems.componentVariant',
+                'saleConsumptions.component',
+                'saleConsumptions.variant',
+            ])
+            ->orderBy('name')
+            ->get();
 
         $copied = 0;
         $skipped = 0;
+        $components = 0;
         $errors = [];
         $details = [];
 
-        foreach ($sourceProducts as $sp) {
-            $duplicateKey = $sp->name.'|'.$sp->inventory_type;
-            $isDuplicate = ($sp->sku && isset($existingSkus[$sp->sku]))
-                || isset($existingNames[$duplicateKey]);
+        /** @var array<int, Product> produk sumber -> produk tujuan (baru maupun yang sudah ada) */
+        $productMap = [];
+        /** @var array<int, bool> produk sumber yang baru dibuat di toko ini */
+        $freshProducts = [];
 
-            if ($isDuplicate) {
+        // Tahap 1 — salin baris produk lebih dulu agar semua komponen punya acuan.
+        foreach ($sourceProducts as $sp) {
+            $existing = (filled($sp->sku) ? $destBySku->get($sp->sku) : null)
+                ?? $destByName->get($sp->name.'|'.$sp->inventory_type);
+
+            if ($existing) {
+                $productMap[$sp->id] = $existing;
                 $skipped++;
                 $details[] = ['name' => $sp->name, 'sku' => $sp->sku, 'status' => 'skipped'];
 
@@ -227,30 +248,48 @@ class Store extends Model
                     }
                 }
 
-                Product::query()->create([
+                $newProduct = Product::query()->create([
                     'store_id' => $this->id,
                     'name' => $sp->name,
                     'sku' => $sp->sku,
                     'barcode' => $sp->barcode,
                     'description' => $sp->description,
                     'price' => $sp->price,
+                    'wholesale_price' => $sp->wholesale_price,
                     'cost_price' => $sp->cost_price,
                     'average_cost' => $sp->average_cost,
                     'stock_quantity' => 0,
                     'min_stock_level' => $sp->min_stock_level,
                     'product_category_id' => $catId,
                     'category' => $sp->category,
+                    'brand' => $sp->brand,
                     'unit' => $sp->unit,
                     'base_unit' => $sp->base_unit,
                     'images' => $sp->images,
                     'inventory_type' => $sp->inventory_type,
+                    'service_duration_minutes' => $sp->service_duration_minutes,
+                    'barber_commission_mode' => $sp->barber_commission_mode,
+                    'barber_commission_value' => $sp->barber_commission_value,
+                    'modifier_options' => $sp->modifier_options,
+                    'pharmacy_sale_class' => $sp->pharmacy_sale_class,
+                    'pharmacy_registration_no' => $sp->pharmacy_registration_no,
                     'tax_rate' => 0,
                     'is_active' => true,
-                    'track_stock' => true,
+                    'track_stock' => $sp->track_stock,
+                    'unlimited_stock' => $sp->unlimited_stock,
+                    'allow_negative_stock' => $sp->allow_negative_stock,
                     'has_variants' => false,
                     'is_bundle' => false,
                     'allows_decimal' => $sp->allows_decimal,
                 ]);
+
+                $productMap[$sp->id] = $newProduct;
+                $freshProducts[$sp->id] = true;
+
+                if (filled($newProduct->sku)) {
+                    $destBySku->put($newProduct->sku, $newProduct);
+                }
+                $destByName->put($newProduct->name.'|'.$newProduct->inventory_type, $newProduct);
 
                 $copied++;
                 $details[] = ['name' => $sp->name, 'sku' => $sp->sku, 'status' => 'copied'];
@@ -260,12 +299,249 @@ class Store extends Model
             }
         }
 
+        // Tahap 2 — salin varian & komponen setelah semua produk tujuan tersedia.
+        /** @var array<int, int> varian sumber -> varian tujuan */
+        $variantMap = [];
+
+        $resolveComponent = function (?Product $srcComponent) use (&$productMap, $destBySku, $destByName): ?Product {
+            if (! $srcComponent) {
+                return null;
+            }
+
+            return $productMap[$srcComponent->id]
+                ?? (filled($srcComponent->sku) ? $destBySku->get($srcComponent->sku) : null)
+                ?? $destByName->get($srcComponent->name.'|'.$srcComponent->inventory_type);
+        };
+
+        $resolveVariant = function (?ProductVariant $srcVariant, ?Product $destOwner) use (&$variantMap): ?int {
+            if (! $srcVariant) {
+                return null;
+            }
+
+            if (isset($variantMap[$srcVariant->id])) {
+                return $variantMap[$srcVariant->id];
+            }
+
+            if (! $destOwner) {
+                return null;
+            }
+
+            $match = $destOwner->variants()
+                ->when(
+                    filled($srcVariant->sku),
+                    fn ($q) => $q->where('sku', $srcVariant->sku),
+                    fn ($q) => $q->where('name', $srcVariant->name),
+                )
+                ->first();
+
+            if ($match) {
+                $variantMap[$srcVariant->id] = $match->id;
+            }
+
+            return $match?->id;
+        };
+
+        foreach ($sourceProducts as $sp) {
+            $destProduct = $productMap[$sp->id] ?? null;
+
+            if (! $destProduct) {
+                continue;
+            }
+
+            // Produk yang sudah ada hanya diisi bila komponennya masih kosong,
+            // supaya penyesuaian khusus outlet tidak tertimpa.
+            $isFresh = isset($freshProducts[$sp->id]);
+            $touched = false;
+
+            try {
+                if ($sp->variants->isNotEmpty()) {
+                    foreach ($sp->variants as $sv) {
+                        if ($resolveVariant($sv, $destProduct) !== null) {
+                            continue;
+                        }
+
+                        $destVariant = ProductVariant::query()->create([
+                            'store_id' => $this->id,
+                            'product_id' => $destProduct->id,
+                            'name' => $sv->name,
+                            'sku' => $sv->sku,
+                            'barcode' => $sv->barcode,
+                            'price' => $sv->price,
+                            'wholesale_price' => $sv->wholesale_price,
+                            'cost_price' => $sv->cost_price,
+                            'stock_quantity' => 0,
+                            'min_stock_level' => $sv->min_stock_level,
+                            'is_active' => $sv->is_active,
+                            'sort_order' => $sv->sort_order,
+                            'allow_negative_stock' => $sv->allow_negative_stock,
+                        ]);
+
+                        $variantMap[$sv->id] = $destVariant->id;
+                        $touched = true;
+                    }
+
+                    if (! $destProduct->has_variants) {
+                        $destProduct->update(['has_variants' => true]);
+                    }
+                }
+
+                // Komponen paket (produk bundle)
+                if ($sp->bundleItems->isNotEmpty() && ($isFresh || $destProduct->bundleItems()->count() === 0)) {
+                    foreach ($sp->bundleItems as $item) {
+                        $destComponent = $resolveComponent($item->componentProduct);
+
+                        if (! $destComponent) {
+                            $errors[] = "{$sp->name}: komponen paket \"{$item->componentProduct?->name}\" belum ada di toko tujuan.";
+
+                            continue;
+                        }
+
+                        ProductBundleItem::query()->create([
+                            'bundle_product_id' => $destProduct->id,
+                            'component_product_id' => $destComponent->id,
+                            'component_product_variant_id' => $resolveVariant($item->componentVariant, $destComponent),
+                            'quantity' => $item->quantity,
+                            'sort_order' => $item->sort_order,
+                        ]);
+
+                        $touched = true;
+                    }
+
+                    if (! $destProduct->is_bundle) {
+                        $destProduct->update(['is_bundle' => true]);
+                    }
+                }
+
+                // Komponen konsumsi penjualan (komponen menu)
+                if ($sp->saleConsumptions->isNotEmpty() && ($isFresh || $destProduct->saleConsumptions()->count() === 0)) {
+                    foreach ($sp->saleConsumptions as $consumption) {
+                        $destComponent = $resolveComponent($consumption->component);
+
+                        if (! $destComponent) {
+                            $errors[] = "{$sp->name}: komponen \"{$consumption->component?->name}\" belum ada di toko tujuan.";
+
+                            continue;
+                        }
+
+                        $destVariantId = null;
+                        if ($consumption->product_variant_id) {
+                            $destVariantId = $resolveVariant($consumption->variant, $destProduct);
+
+                            if (! $destVariantId) {
+                                $errors[] = "{$sp->name}: varian untuk komponen \"{$consumption->component?->name}\" tidak ditemukan di toko tujuan.";
+
+                                continue;
+                            }
+                        }
+
+                        ProductSaleConsumption::query()->create([
+                            'store_id' => $this->id,
+                            'product_id' => $destProduct->id,
+                            'product_variant_id' => $destVariantId,
+                            'component_product_id' => $destComponent->id,
+                            'quantity' => $consumption->quantity,
+                            'base_unit' => $consumption->base_unit,
+                            'sort_order' => $consumption->sort_order,
+                        ]);
+
+                        $touched = true;
+                    }
+                }
+            } catch (\Throwable $e) {
+                $errors[] = "{$sp->name} (komponen): {$e->getMessage()}";
+            }
+
+            if ($touched) {
+                $components++;
+            }
+        }
+
+        // Tahap 3 — salin resep produksi milik produk yang ikut tersalin.
+        $components += $this->copyRecipesFrom($source, $productMap, $resolveComponent, $errors);
+
         return [
             'copied' => $copied,
             'skipped' => $skipped,
+            'components' => $components,
             'errors' => $errors,
             'details' => $details,
         ];
+    }
+
+    /**
+     * Salin resep produksi beserta bahannya untuk produk yang sudah dipetakan.
+     *
+     * @param  array<int, Product>  $productMap  produk sumber -> produk tujuan
+     * @param  string[]  $errors
+     */
+    private function copyRecipesFrom(Store $source, array $productMap, callable $resolveComponent, array &$errors): int
+    {
+        if ($productMap === []) {
+            return 0;
+        }
+
+        $sourceRecipes = Recipe::query()
+            ->where('store_id', $source->id)
+            ->whereIn('product_id', array_keys($productMap))
+            ->with('ingredients.product')
+            ->get();
+
+        $copied = 0;
+
+        foreach ($sourceRecipes as $recipe) {
+            $destProduct = $productMap[$recipe->product_id] ?? null;
+
+            if (! $destProduct) {
+                continue;
+            }
+
+            $alreadyThere = Recipe::query()
+                ->where('store_id', $this->id)
+                ->where(fn ($q) => $q->where('product_id', $destProduct->id)
+                    ->when(filled($recipe->code), fn ($qq) => $qq->orWhere('code', $recipe->code)))
+                ->exists();
+
+            if ($alreadyThere) {
+                continue;
+            }
+
+            try {
+                $destRecipe = Recipe::query()->create([
+                    'store_id' => $this->id,
+                    'name' => $recipe->name,
+                    'code' => $recipe->code,
+                    'product_id' => $destProduct->id,
+                    'output_quantity' => $recipe->output_quantity,
+                    'output_unit' => $recipe->output_unit,
+                    'is_active' => $recipe->is_active,
+                    'version' => $recipe->version,
+                ]);
+
+                foreach ($recipe->ingredients as $ingredient) {
+                    $destIngredient = $resolveComponent($ingredient->product);
+
+                    if (! $destIngredient) {
+                        $errors[] = "Resep {$recipe->name}: bahan \"{$ingredient->product?->name}\" belum ada di toko tujuan.";
+
+                        continue;
+                    }
+
+                    RecipeIngredient::query()->create([
+                        'recipe_id' => $destRecipe->id,
+                        'product_id' => $destIngredient->id,
+                        'quantity' => $ingredient->quantity,
+                        'base_unit' => $ingredient->base_unit,
+                        'sort_order' => $ingredient->sort_order,
+                    ]);
+                }
+
+                $copied++;
+            } catch (\Throwable $e) {
+                $errors[] = "Resep {$recipe->name}: {$e->getMessage()}";
+            }
+        }
+
+        return $copied;
     }
 
     public function productCategories(): HasMany
@@ -433,6 +709,22 @@ class Store extends Model
 
         $this->subscription_days += $days;
         $this->is_subscription_active = true;
+        $this->save();
+    }
+
+    public function reduceSubscription(int $days): void
+    {
+        if (! $this->subscription_end) {
+            return;
+        }
+
+        $this->subscription_end = $this->subscription_end->subDays($days);
+        $this->subscription_days = max(0, $this->subscription_days - $days);
+
+        if ($this->subscription_end->lt(now())) {
+            $this->is_subscription_active = false;
+        }
+
         $this->save();
     }
 

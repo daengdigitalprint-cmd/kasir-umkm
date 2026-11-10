@@ -386,34 +386,36 @@ class StoreController extends Controller implements HasMiddleware
             ->orderBy('name')
             ->get(['id', 'name', 'location_type']);
 
-        // Sumber produk: Gudang Pusat (jika ada) + Toko Admin utama (jika berbeda dari gudang)
+        // Sumber produk: Gudang Pusat (jika ada) + Outlet Utama + Toko Admin yang sedang aktif
+        $primaryStore = Store::query()
+            ->where('organization_id', $organizationId)
+            ->where('is_active', true)
+            ->where('is_primary', true)
+            ->first();
+
         $sources = [];
+        $seenSourceIds = [];
 
-        if ($centralWarehouse) {
-            $whCounts = $this->countProductsByType($centralWarehouse);
-            $sources[] = [
-                'id' => $centralWarehouse->id,
-                'name' => $centralWarehouse->name,
-                'type' => 'central_warehouse',
-                'raw_material_count' => $whCounts['raw_material'],
-                'sellable_count' => $whCounts['sellable'],
-                'total_count' => $whCounts['raw_material'] + $whCounts['sellable'],
-            ];
-        }
+        $addSource = function (?Store $candidate, string $type) use (&$sources, &$seenSourceIds) {
+            if (! $candidate || in_array($candidate->id, $seenSourceIds, true)) {
+                return;
+            }
 
-        // Toko admin utama (bukan gudang pusat)
-        $adminStore = $user->store;
-        if ($adminStore && $adminStore->id !== ($centralWarehouse?->id)) {
-            $adminCounts = $this->countProductsByType($adminStore);
+            $counts = $this->countProductsByType($candidate);
+            $seenSourceIds[] = $candidate->id;
             $sources[] = [
-                'id' => $adminStore->id,
-                'name' => $adminStore->name,
-                'type' => 'admin_store',
-                'raw_material_count' => $adminCounts['raw_material'],
-                'sellable_count' => $adminCounts['sellable'],
-                'total_count' => $adminCounts['raw_material'] + $adminCounts['sellable'],
+                'id' => $candidate->id,
+                'name' => $candidate->name,
+                'type' => $type,
+                'raw_material_count' => $counts['raw_material'],
+                'sellable_count' => $counts['sellable'],
+                'total_count' => $counts['raw_material'] + $counts['sellable'],
             ];
-        }
+        };
+
+        $addSource($centralWarehouse, 'central_warehouse');
+        $addSource($primaryStore, 'primary_outlet');
+        $addSource($user->store, 'admin_store');
 
         $defaultSourceId = $sources[0]['id'] ?? null;
 
@@ -468,19 +470,20 @@ class StoreController extends Controller implements HasMiddleware
         $results = [];
         $totalCopied = 0;
         $totalSkipped = 0;
+        $totalComponents = 0;
         $allErrors = [];
 
         foreach ($validated['outlet_ids'] as $outletId) {
             $outlet = Store::find($outletId);
             if (! $outlet || (int) $outlet->organization_id !== (int) $organizationId) {
                 $allErrors[] = "Outlet ID {$outletId}: bukan bagian dari grup usaha ini.";
-                $results[] = ['outlet_name' => "Outlet #{$outletId}", 'copied' => 0, 'skipped' => 0, 'errors' => ['Bukan bagian dari grup usaha ini']];
+                $results[] = ['outlet_name' => "Outlet #{$outletId}", 'copied' => 0, 'skipped' => 0, 'components' => 0, 'errors' => ['Bukan bagian dari grup usaha ini']];
 
                 continue;
             }
             if ($outlet->id === $sourceStore->id) {
                 $allErrors[] = "{$outlet->name}: tidak bisa menyalin ke diri sendiri.";
-                $results[] = ['outlet_name' => $outlet->name, 'copied' => 0, 'skipped' => 0, 'errors' => ['Tidak bisa menyalin ke diri sendiri']];
+                $results[] = ['outlet_name' => $outlet->name, 'copied' => 0, 'skipped' => 0, 'components' => 0, 'errors' => ['Tidak bisa menyalin ke diri sendiri']];
 
                 continue;
             }
@@ -489,16 +492,18 @@ class StoreController extends Controller implements HasMiddleware
                 $result = $outlet->copyProductsFrom($sourceStore, $validated['copy_type']);
                 $totalCopied += $result['copied'];
                 $totalSkipped += $result['skipped'];
+                $totalComponents += $result['components'];
                 $allErrors = array_merge($allErrors, $result['errors']);
                 $results[] = [
                     'outlet_name' => $outlet->name,
                     'copied' => $result['copied'],
                     'skipped' => $result['skipped'],
+                    'components' => $result['components'],
                     'errors' => $result['errors'],
                 ];
             } catch (\Throwable $e) {
                 $allErrors[] = "{$outlet->name}: {$e->getMessage()}";
-                $results[] = ['outlet_name' => $outlet->name, 'copied' => 0, 'skipped' => 0, 'errors' => [$e->getMessage()]];
+                $results[] = ['outlet_name' => $outlet->name, 'copied' => 0, 'skipped' => 0, 'components' => 0, 'errors' => [$e->getMessage()]];
             }
         }
 
@@ -506,6 +511,7 @@ class StoreController extends Controller implements HasMiddleware
             'success' => count($allErrors) === 0,
             'total_copied' => $totalCopied,
             'total_skipped' => $totalSkipped,
+            'total_components' => $totalComponents,
             'outlet_count' => count($validated['outlet_ids']),
             'results' => $results,
             'errors' => $allErrors,

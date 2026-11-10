@@ -29,6 +29,7 @@ interface Transaction {
     total_amount: number;
     amount_paid: number;
     change_amount: number;
+    payments?: Array<{ id: number; method: string; amount: number; reference?: string | null }>;
     completed_at: string;
     items: TransactionItem[];
     store: { name: string; address?: string; phone?: string; email?: string };
@@ -87,7 +88,15 @@ const formatDate = (iso: string) =>
     new Date(iso).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 const getPaymentMethodName = (method: string) => {
-    const methods: Record<string, string> = { cash: 'Tunai', card: 'Kartu Kredit/Debit', ewallet: 'E-Wallet', transfer: 'Transfer Bank', other: 'Lainnya' };
+    const methods: Record<string, string> = {
+        cash: 'Tunai',
+        card: 'Kartu Kredit/Debit',
+        ewallet: 'E-Wallet',
+        transfer: 'Transfer Bank',
+        bank_transfer: 'Transfer Bank',
+        qris: 'QRIS',
+        other: 'Lainnya',
+    };
     return methods[method] || method;
 };
 
@@ -197,7 +206,16 @@ const getStatusName = (status: string) => {
                         <span class="text-slate-600">Kembalian</span>
                         <span class="font-medium text-green-600">{{ formatCurrency(transaction.change_amount) }}</span>
                     </div>
-                    <div class="flex justify-between text-sm">
+                    <div v-if="transaction.payments && transaction.payments.length > 1" class="space-y-1">
+                        <span class="text-slate-600">Rincian pembayaran</span>
+                        <div v-for="payment in transaction.payments" :key="payment.id" class="flex justify-between pl-3 text-sm">
+                            <span class="text-slate-600">
+                                {{ getPaymentMethodName(payment.method) }}<span v-if="payment.reference" class="text-xs text-slate-400"> ({{ payment.reference }})</span>
+                            </span>
+                            <span class="font-medium tabular-nums">{{ formatCurrency(payment.amount) }}</span>
+                        </div>
+                    </div>
+                    <div v-else class="flex justify-between text-sm">
                         <span class="text-slate-600">Metode</span>
                         <span class="font-medium flex items-center gap-1">
                             <CreditCard class="h-3.5 w-3.5" />

@@ -82,6 +82,8 @@ function paymentMethodLabel(method: string): string {
         card: 'Kartu',
         ewallet: 'E-Wallet',
         transfer: 'Transfer',
+        bank_transfer: 'Transfer',
+        qris: 'QRIS',
         other: 'Lainnya',
     };
     return m[method] ?? method;
@@ -277,7 +279,24 @@ export function buildThermalReceiptInnerHtml(
         : '';
 
     const payLabel = paymentMethodLabel(String(tx.payment_method));
-    let payBlock = `<div class="struk-row"><span>Bayar (${escapeHtml(payLabel)})</span><span>${formatCurrency(Number(tx.amount_paid))}</span></div>`;
+
+    const barberName = String((tx.barber as { name?: string } | undefined)?.name ?? '').trim();
+    const barberRow = barberName
+        ? `<div class="struk-row struk-small"><span>Teknisi</span><span>${escapeHtml(barberName)}</span></div>`
+        : '';
+    const paymentLines = Array.isArray(tx.payments) ? (tx.payments as { method?: string; amount?: number | string }[]) : [];
+    let payBlock = '';
+    if (paymentLines.length > 1) {
+        // Split tender: uang tunai diterima = total dibayar − porsi non-tunai.
+        const nonCashTotal = paymentLines.filter((line) => line.method !== 'cash').reduce((sum, line) => sum + Number(line.amount ?? 0), 0);
+        for (const line of paymentLines) {
+            const method = String(line.method ?? '');
+            const amount = method === 'cash' ? Number(tx.amount_paid ?? 0) - nonCashTotal : Number(line.amount ?? 0);
+            payBlock += `<div class="struk-row"><span>Bayar (${escapeHtml(paymentMethodLabel(method))})</span><span>${formatCurrency(amount)}</span></div>`;
+        }
+    } else {
+        payBlock = `<div class="struk-row"><span>Bayar (${escapeHtml(payLabel)})</span><span>${formatCurrency(Number(tx.amount_paid))}</span></div>`;
+    }
     if (Number(tx.change_amount) > 0) {
         payBlock += `<div class="struk-row struk-bold"><span>Kembali</span><span>${formatCurrency(Number(tx.change_amount))}</span></div>`;
     }
@@ -299,6 +318,7 @@ export function buildThermalReceiptInnerHtml(
                 <div class="struk-row struk-small"><span>No. Struk</span><span>${escapeHtml(String(tx.transaction_number ?? ''))}</span></div>
                 <div class="struk-row struk-small"><span>Tgl/Jam</span><span>${escapeHtml(tglStr)}</span></div>
                 <div class="struk-row struk-small"><span>Kasir</span><span>${escapeHtml(String((tx.user as { name?: string } | undefined)?.name ?? ''))}</span></div>
+                ${barberRow}
                 ${fnbMeta}
                 <div class="struk-rule"></div>
                 ${itemsHtml}

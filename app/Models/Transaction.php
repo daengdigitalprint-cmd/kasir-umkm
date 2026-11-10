@@ -15,6 +15,7 @@ class Transaction extends Model
         'customer_id',
         'discount_id',
         'user_id',
+        'barber_user_id',
         'cash_shift_id',
         'transaction_number',
         'status_token',
@@ -29,6 +30,7 @@ class Transaction extends Model
         'service_charge_amount',
         'total_amount',
         'amount_paid',
+        'cash_amount',
         'change_amount',
         'payment_details',
         'notes',
@@ -38,6 +40,8 @@ class Transaction extends Model
         'sales_channel',
         'commission_percent',
         'commission_amount',
+        'barber_commission_percent',
+        'barber_commission_amount',
         'completed_at',
         'offline_sale_id',
         'debt_due_at',
@@ -56,11 +60,14 @@ class Transaction extends Model
         'tip_amount' => 'decimal:2',
         'total_amount' => 'decimal:2',
         'amount_paid' => 'decimal:2',
+        'cash_amount' => 'decimal:2',
         'change_amount' => 'decimal:2',
         'payment_details' => 'array',
         'sales_channel' => SalesChannel::class,
         'commission_percent' => 'decimal:2',
         'commission_amount' => 'decimal:2',
+        'barber_commission_percent' => 'decimal:4',
+        'barber_commission_amount' => 'decimal:2',
         'completed_at' => 'datetime',
         'accepted_at' => 'datetime',
         'debt_due_at' => 'datetime',
@@ -78,6 +85,10 @@ class Transaction extends Model
             }
         });
 
+        static::saving(function (Transaction $transaction) {
+            $transaction->fillDefaultCashAmount();
+        });
+
         static::updating(function ($transaction) {
             $statusChanged = $transaction->isDirty('status') && $transaction->getOriginal('status') !== 'completed';
             $completedWithoutVoid = $transaction->status === 'completed' && ! $transaction->is_void;
@@ -91,6 +102,27 @@ class Transaction extends Model
                     ]);
             }
         });
+    }
+
+    /**
+     * Jalur penjualan selain POS (open bill, laundry, antrean, sinkron mobile, dll.)
+     * tidak mengisi cash_amount secara eksplisit. Agar saldo kas shift tetap benar,
+     * transaksi tunai satu metode diisi otomatis sebesar total — sama dengan rumus
+     * lama `payment_method = cash → sum(total_amount)`.
+     */
+    public function fillDefaultCashAmount(): void
+    {
+        if ($this->isDirty('cash_amount') || $this->status !== 'completed') {
+            return;
+        }
+
+        $method = $this->payment_method ?? 'cash';
+
+        if ($method === 'cash' && (float) $this->cash_amount <= 0) {
+            $this->cash_amount = $this->total_amount ?? 0;
+        } elseif ($method !== 'cash' && $this->isDirty('payment_method') && (float) $this->cash_amount > 0) {
+            $this->cash_amount = 0;
+        }
     }
 
     public function store(): BelongsTo
@@ -118,9 +150,29 @@ class Transaction extends Model
         return $this->belongsTo(CashShift::class);
     }
 
+    /** Teknisi (role barber) yang menangani transaksi — barbershop / salon. */
+    public function barber(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'barber_user_id');
+    }
+
     public function items(): HasMany
     {
         return $this->hasMany(TransactionItem::class);
+    }
+
+    /** Rincian pembayaran (split tender). Transaksi satu metode tetap punya satu baris. */
+    public function payments(): HasMany
+    {
+        return $this->hasMany(TransactionPayment::class)
+            ->orderBy('sort_order')
+            ->orderBy('id');
+    }
+
+    /** Transaksi dibayar dengan lebih dari satu metode. */
+    public function isSplitPayment(): bool
+    {
+        return $this->payments()->count() > 1;
     }
 
     public function receivablePayments()

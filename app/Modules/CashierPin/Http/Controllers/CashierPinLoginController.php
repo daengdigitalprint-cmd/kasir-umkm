@@ -83,7 +83,7 @@ class CashierPinLoginController extends Controller
             'logged_in_at' => now()->toIso8601String(),
         ]);
 
-        return redirect()->route('pos.index')
+        return redirect($this->returnPath($request))
             ->with('success', "Selamat bertugas, {$cashier->name}!");
     }
 
@@ -91,7 +91,18 @@ class CashierPinLoginController extends Controller
     {
         $request->session()->forget('active_cashier');
 
-        return redirect()->route('pos.index')
+        return redirect($this->returnPath($request))
             ->with('info', 'Kasir telah keluar.');
+    }
+
+    /**
+     * Tujuan setelah login/keluar PIN: default POS, atau kembali ke halaman absensi
+     * (perangkat bersama untuk absen bergantian). Hanya path internal yang diizinkan.
+     */
+    private function returnPath(Request $request): string
+    {
+        $target = (string) $request->input('redirect_to', '');
+
+        return preg_match('#^/attendance(/|$|\?)#', $target) ? $target : route('pos.index', absolute: false);
     }
 }

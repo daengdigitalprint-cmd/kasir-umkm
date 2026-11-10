@@ -3,14 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\CashShift;
-use App\Models\Customer;
 use App\Models\ReceivablePayment;
 use App\Models\Transaction;
 use App\Support\Accounting\AccountingPeriodGuard;
 use App\Support\Accounting\JournalPoster;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 /**
  * Endpoint penerimaan pelunasan piutang pelanggan.
@@ -23,7 +21,7 @@ class ReceivablePaymentController extends Controller
 {
     public function store(Request $request)
     {
-        $user  = auth()->user();
+        $user = auth()->user();
         $store = $user->store;
 
         if (! $store) {
@@ -31,12 +29,12 @@ class ReceivablePaymentController extends Controller
         }
 
         $validated = $request->validate([
-            'transaction_id'  => 'required|integer|exists:transactions,id',
-            'amount'          => 'required|numeric|min:0.01|max:99999999999.99',
-            'payment_method'  => 'required|string|in:cash,card,ewallet,transfer,other',
-            'received_at'     => 'required|date',
-            'reference_number'=> 'nullable|string|max:255',
-            'notes'           => 'nullable|string|max:1000',
+            'transaction_id' => 'required|integer|exists:transactions,id',
+            'amount' => 'required|numeric|min:0.01|max:99999999999.99',
+            'payment_method' => 'required|string|in:cash,card,ewallet,transfer,other',
+            'received_at' => 'required|date',
+            'reference_number' => 'nullable|string|max:255',
+            'notes' => 'nullable|string|max:1000',
             'idempotency_key' => 'nullable|string|max:255',
         ]);
 
@@ -92,18 +90,18 @@ class ReceivablePaymentController extends Controller
             }
 
             $payment = ReceivablePayment::create([
-                'transaction_id'  => $transaction->id,
-                'store_id'        => $store->id,
-                'customer_id'     => $transaction->customer_id,
-                'user_id'         => $user->id,
-                'cash_shift_id'   => $cashShiftId,
-                'amount'          => $paymentAmount,
-                'payment_method'  => $validated['payment_method'],
-                'received_at'     => $validated['received_at'],
-                'reference_number'=> $validated['reference_number'] ?? null,
-                'notes'           => $validated['notes'] ?? null,
+                'transaction_id' => $transaction->id,
+                'store_id' => $store->id,
+                'customer_id' => $transaction->customer_id,
+                'user_id' => $user->id,
+                'cash_shift_id' => $cashShiftId,
+                'amount' => $paymentAmount,
+                'payment_method' => $validated['payment_method'],
+                'received_at' => $validated['received_at'],
+                'reference_number' => $validated['reference_number'] ?? null,
+                'notes' => $validated['notes'] ?? null,
                 'idempotency_key' => $validated['idempotency_key'] ?? null,
-                'created_by'      => $user->id,
+                'created_by' => $user->id,
             ]);
 
             // Update saldo transaksi
@@ -112,7 +110,7 @@ class ReceivablePaymentController extends Controller
             $newStatus = $newOutstanding <= 0.009 ? 'paid' : 'partial';
 
             $transaction->update([
-                'amount_paid'    => $newAmountPaid,
+                'amount_paid' => $newAmountPaid,
                 'payment_status' => $newStatus,
             ]);
 
@@ -127,10 +125,10 @@ class ReceivablePaymentController extends Controller
 
             if ($request->expectsJson()) {
                 return response()->json([
-                    'success'          => true,
-                    'message'          => $msg,
-                    'payment_status'   => $newStatus,
-                    'outstanding'      => $remainingAfter,
+                    'success' => true,
+                    'message' => $msg,
+                    'payment_status' => $newStatus,
+                    'outstanding' => $remainingAfter,
                 ]);
             }
 

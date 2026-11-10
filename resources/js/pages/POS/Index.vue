@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
@@ -55,6 +55,7 @@ import {
     Smartphone,
     Table2,
     Tag,
+    Ticket,
     Trash2,
     WifiOff,
     X,
@@ -96,6 +97,16 @@ interface ProductBundleItemRow {
     component_variant?: { id: number; name: string; stock_quantity: number } | null;
 }
 
+interface SaleConsumptionComponent {
+    id: number;
+    name: string;
+    stock_quantity: number;
+    track_stock: boolean;
+    unlimited_stock: boolean;
+    inventory_type: string;
+    base_unit?: string | null;
+}
+
 interface SaleConsumption {
     id: number;
     product_variant_id: number | null;
@@ -103,15 +114,7 @@ interface SaleConsumption {
     quantity: number;
     base_unit: string | null;
     sort_order: number;
-    component?: {
-        id: number;
-        name: string;
-        stock_quantity: number;
-        track_stock: boolean;
-        unlimited_stock: boolean;
-        inventory_type: string;
-        base_unit?: string | null;
-    } | null;
+    component?: SaleConsumptionComponent | null;
 }
 
 interface Product {
@@ -264,6 +267,8 @@ interface CartItem {
     quantity: number;
     subtotal: number;
     selectedModifiers: ProductModifierOption[];
+    /** Diskon manual per baris (Rupiah), dibatasi maksimal sebesar subtotal baris. */
+    lineDiscount?: number;
 }
 
 interface PreOrderHydrationLine {
@@ -298,6 +303,8 @@ interface ProductCategory {
 
 interface Props {
     products: Product[];
+    /** Bahan/komponen yang dipakai komponen menu, dikirim sekali lalu dipasangkan di klien. */
+    saleComponents?: SaleConsumptionComponent[];
     popularProductIds: number[];
     categories: ProductCategory[];
     store: {
@@ -313,10 +320,13 @@ interface Props {
         fnb_split_bill_enabled?: boolean;
         open_bill_enabled?: boolean;
         pharmacy_enabled?: boolean;
+        barbershop_enabled?: boolean;
+        barbers?: Array<{ id: number; name: string }>;
         default_service_charge_percent?: number;
         receipt?: ReceiptConfig;
         pos_show_barcode?: boolean;
         wholesale_enabled?: boolean;
+        product_discount_enabled?: boolean;
         online_sales_enabled?: boolean;
         online_commission_gofood?: number;
         online_commission_grabfood?: number;
@@ -341,6 +351,21 @@ const props = withDefaults(defineProps<Props>(), {
     cashShiftOpen: null,
     accountingPeriodLock: null,
 });
+
+/**
+ * URL gambar produk yang gagal dimuat (file terhapus / rusak / 404).
+ * Card produk & thumbnail keranjang lalu menampilkan ikon Package, bukan
+ * ikon "gambar rusak" bawaan browser.
+ */
+const brokenImageUrls = ref<Set<string>>(new Set());
+function hasProductImage(url?: string | null): url is string {
+    return !!url && !brokenImageUrls.value.has(url);
+}
+function markImageBroken(url?: string | null): void {
+    if (!url || brokenImageUrls.value.has(url)) return;
+    // Set baru agar perubahan terdeteksi reaktif.
+    brokenImageUrls.value = new Set(brokenImageUrls.value).add(url);
+}
 
 const allowsAdvancedRetail = useAllowsAdvancedRetail();
 const page = usePage();
@@ -462,7 +487,34 @@ const {
     kickDrawer,
 } = usePrinter();
 
-const localProducts = ref<any[]>(props.products || []);
+/**
+ * Komponen menu dikirim server sekali sebagai daftar terpisah (satu bahan dipakai
+ * banyak menu). Di sini daftar itu dipasangkan kembali ke tiap baris konsumsi
+ * supaya seluruh logika stok di halaman ini tetap membaca `consumption.component`.
+ */
+const saleComponentsById = computed(() => {
+    const map = new Map<number, SaleConsumptionComponent>();
+    for (const component of props.saleComponents ?? []) {
+        map.set(component.id, component);
+    }
+    return map;
+});
+
+function hydrateSaleComponents<T extends { sale_consumptions?: SaleConsumption[] | null }>(list: T[]): T[] {
+    const map = saleComponentsById.value;
+    if (map.size === 0) return list;
+
+    for (const product of list) {
+        for (const consumption of product.sale_consumptions ?? []) {
+            if (!consumption.component) {
+                consumption.component = map.get(consumption.component_product_id) ?? null;
+            }
+        }
+    }
+    return list;
+}
+
+const localProducts = ref<any[]>(hydrateSaleComponents(props.products || []));
 const { syncCatalog } = useProductCache();
 
 // Sinkronisasi produk: gunakan data fresh dari server saat online,
@@ -482,7 +534,7 @@ onMounted(async () => {
         // Tapi tampilkan data fresh dari server (props.products)
         // karena props punya field terbaru (unlimited_stock, dll)
         if (props.products && props.products.length > 0) {
-            localProducts.value = props.products;
+            localProducts.value = hydrateSaleComponents(props.products);
         }
     } else {
         // Offline: gunakan cache IndexedDB
@@ -490,7 +542,7 @@ onMounted(async () => {
         if (cached && cached.length > 0) {
             localProducts.value = cached;
         } else if (props.products && props.products.length > 0) {
-            localProducts.value = props.products;
+            localProducts.value = hydrateSaleComponents(props.products);
         }
     }
 });
@@ -529,6 +581,130 @@ function flushSearchDebounce() {
     }
     searchQueryDebounced.value = searchQuery.value;
 }
+
+// ─── Fokus otomatis ────────────────────────────────────────────────────────
+// Kasir bekerja cepat dan sebagian besar tanpa mouse: kolom cari harus siap
+// diketik begitu halaman terbuka dan setiap kali satu transaksi selesai, dan
+// kolom nominal tunai harus siap diketik begitu langkah pembayaran terbuka.
+const searchInputRef = ref<unknown>(null);
+const cashInputRef = ref<unknown>(null);
+
+/** Ambil elemen <input> asli dari template ref (komponen Input membungkus input). */
+function resolveInputEl(candidate: unknown): HTMLInputElement | null {
+    if (!candidate) return null;
+    if (candidate instanceof HTMLInputElement) return candidate;
+    const node = (candidate as { $el?: unknown }).$el ?? candidate;
+    if (node instanceof HTMLInputElement) return node;
+    if (node instanceof HTMLElement) return node.querySelector('input');
+    return null;
+}
+
+function focusSearchInput(selectAll = false) {
+    nextTick(() => {
+        const el = resolveInputEl(searchInputRef.value);
+        if (!el) return;
+        el.focus();
+        if (selectAll) el.select();
+    });
+}
+
+function focusCashInput() {
+    nextTick(() => {
+        const el = resolveInputEl(cashInputRef.value);
+        if (!el) return;
+        el.focus();
+        el.select();
+    });
+}
+
+// ─── Pintasan keyboard kasir ───────────────────────────────────────────────
+// Pintasan hanya berlaku saat kursor tidak sedang berada di kolom isian, kecuali
+// F2/F4/F8/Esc yang sengaja tetap aktif supaya kasir tidak perlu lepas keyboard.
+// Scanner barcode tipe keyboard-wedge mengetik sangat cepat lalu menekan Enter;
+// karena ia tidak memakai tombol fungsi, pintasan di sini tidak mengganggunya.
+function isTypingTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) return false;
+    if (target.isContentEditable) return true;
+    const tag = target.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+}
+
+function anyOverlayOpen(): boolean {
+    return (
+        variantPickerOpen.value ||
+        modifierPickerOpen.value ||
+        showInvoicePopup.value ||
+        openBillsDrawerOpen.value ||
+        saveOrderDrawerOpen.value
+    );
+}
+
+function onPosKeydown(event: KeyboardEvent) {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+
+    switch (event.key) {
+        case 'F2':
+            event.preventDefault();
+            if (checkoutOpen.value) closeCheckout();
+            focusSearchInput(true);
+            return;
+
+        case 'F4':
+            event.preventDefault();
+            if (checkoutOpen.value || anyOverlayOpen()) return;
+            if (cart.value.length > 0) openCheckout();
+            return;
+
+        case 'F8':
+            event.preventDefault();
+            if (checkoutOpen.value || anyOverlayOpen()) return;
+            if (cart.value.length > 0 && props.store?.open_bill_enabled) openSaveOrderDrawer();
+            return;
+
+        case 'Escape':
+            if (checkoutOpen.value) {
+                event.preventDefault();
+                closeCheckout();
+                focusSearchInput();
+            }
+            return;
+    }
+
+    // Sisanya hanya saat kasir tidak sedang mengetik di kolom isian.
+    if (isTypingTarget(event.target) || anyOverlayOpen()) return;
+
+    if (checkoutOpen.value) {
+        // Di langkah tunai, Enter = bayar dengan nominal saat ini.
+        if (event.key === 'Enter' && paymentStep.value === 'pay') {
+            event.preventDefault();
+            submitFromCashInput();
+        }
+        return;
+    }
+
+    const lastLine = cart.value[cart.value.length - 1];
+    if (!lastLine) return;
+
+    if (event.key === '+') {
+        event.preventDefault();
+        updateQuantity(lastLine.lineId, lastLine.quantity + qtyStep(lastLine.product));
+    } else if (event.key === '-') {
+        event.preventDefault();
+        updateQuantity(lastLine.lineId, lastLine.quantity - qtyStep(lastLine.product));
+    } else if (event.key === 'Delete') {
+        event.preventDefault();
+        removeFromCart(lastLine.lineId);
+    }
+}
+
+onMounted(() => {
+    window.addEventListener('keydown', onPosKeydown);
+    focusSearchInput();
+});
+
+onUnmounted(() => {
+    window.removeEventListener('keydown', onPosKeydown);
+});
 
 /** Open Bills (Order Hold) state */
 const openBillsDrawerOpen = ref(false);
@@ -596,25 +772,25 @@ function scrollCategory(dir: 'left' | 'right') {
     setTimeout(checkCategoryScroll, 350);
 }
 
-/** Jumlah kartu produk per halaman di grid POS — responsif terhadap viewport.
- *  lg (≥1024px, 4 kolom): 12 = 3×4 rata. 2xl (≥1536px, 5 kolom): 15 = 3×5 rata.
- *  md (768–1023px, 3 kolom): 9 = 3×3 rata. */
+/** Ukuran potongan render grid produk — kasir menggulir, bukan berpindah halaman.
+ *  Potongan dibuat kelipatan jumlah kolom supaya baris terakhir selalu rata.
+ *  lg (≥1024px, 4 kolom): 24. 2xl (≥1536px, 5 kolom): 30. md ke bawah: 18. */
 const isXlViewport = ref(false);
 const is2XlViewport = ref(false);
-const productsPerPage = computed(() => {
-    if (is2XlViewport.value) return 15;
-    if (isXlViewport.value) return 12;
-    return 9;
+const productChunkSize = computed(() => {
+    if (is2XlViewport.value) return 30;
+    if (isXlViewport.value) return 24;
+    return 18;
 });
 let _xlMql: MediaQueryList | null = null;
 let _2xlMql: MediaQueryList | null = null;
 const _onXlChange = (e: MediaQueryListEvent) => {
     isXlViewport.value = e.matches;
-    productGridPage.value = 1;
+    resetProductGridScroll();
 };
 const _on2XlChange = (e: MediaQueryListEvent) => {
     is2XlViewport.value = e.matches;
-    productGridPage.value = 1;
+    resetProductGridScroll();
 };
 onMounted(() => {
     _xlMql = window.matchMedia('(min-width: 1024px)');
@@ -627,8 +803,20 @@ onMounted(() => {
 onUnmounted(() => {
     if (_xlMql) _xlMql.removeEventListener('change', _onXlChange);
     if (_2xlMql) _2xlMql.removeEventListener('change', _on2XlChange);
+    if (productGridObserver) {
+        productGridObserver.disconnect();
+        productGridObserver = null;
+    }
 });
-const productGridPage = ref(1);
+
+/** Berapa kartu yang sudah dirender; bertambah saat sentinel di bawah grid terlihat. */
+const productVisibleCount = ref(24);
+const productGridSentinel = ref<HTMLElement | null>(null);
+let productGridObserver: IntersectionObserver | null = null;
+
+function resetProductGridScroll() {
+    productVisibleCount.value = productChunkSize.value;
+}
 const paymentMethod = ref<string | null>(null);
 const amountPaid = ref(0);
 const customerName = ref('');
@@ -652,8 +840,80 @@ const debtDueAt = ref('');
  * - Kredit unpaid & metode non-tunai: langsung proses pada step 2.
  */
 const requiresCashInput = computed(
-    () => (!isCredit.value && paymentMethod.value === 'cash') || (isCredit.value && settlementMode.value === 'partial'),
+    () =>
+        (!isCredit.value && paymentMethod.value === 'cash') ||
+        (isSplitPayment.value && cashDue.value > 0) ||
+        (isCredit.value && settlementMode.value === 'partial'),
 );
+
+// ─── Split tender (bagi pembayaran) ───────────────────────────────────────
+/** Baris non-tunai; sisa tagihan dibayar tunai lewat numpad step 3. */
+type SplitPaymentLine = { method: string; amount: number; reference: string };
+const SPLIT_NON_CASH_METHODS = [
+    { value: 'qris', label: 'QRIS' },
+    { value: 'ewallet', label: 'E-Wallet' },
+    { value: 'card', label: 'Kartu Debit/Kredit' },
+    { value: 'bank_transfer', label: 'Transfer Bank' },
+    { value: 'other', label: 'Lainnya' },
+];
+const SPLIT_MAX_NON_CASH_LINES = 4;
+const splitNonCashLines = ref<SplitPaymentLine[]>([]);
+const isSplitPayment = computed(() => !isCredit.value && paymentMethod.value === 'split');
+const splitNonCashTotal = computed(() => splitNonCashLines.value.reduce((sum, line) => sum + (Number(line.amount) || 0), 0));
+/** Porsi tagihan yang harus dibayar tunai (sama dengan sisa tagihan bila tidak split). */
+const cashDue = computed(() => (isSplitPayment.value ? Math.max(0, balanceDue.value - splitNonCashTotal.value) : balanceDue.value));
+const splitPaymentError = computed<string | null>(() => {
+    if (!isSplitPayment.value) return null;
+    if (splitNonCashLines.value.length === 0) return 'Tambahkan minimal satu pembayaran non-tunai.';
+    if (splitNonCashLines.value.some((line) => !(Number(line.amount) > 0))) return 'Nominal setiap baris harus lebih dari nol.';
+    if (splitNonCashTotal.value - balanceDue.value > 0.009) return 'Total non-tunai melebihi tagihan.';
+    return null;
+});
+
+function startSplitPayment() {
+    paymentMethod.value = 'split';
+    if (splitNonCashLines.value.length === 0) {
+        splitNonCashLines.value = [{ method: 'qris', amount: 0, reference: '' }];
+    }
+}
+
+function addSplitLine() {
+    if (splitNonCashLines.value.length >= SPLIT_MAX_NON_CASH_LINES) return;
+    const remaining = Math.max(0, balanceDue.value - splitNonCashTotal.value);
+    splitNonCashLines.value.push({ method: 'ewallet', amount: remaining, reference: '' });
+}
+
+function removeSplitLine(index: number) {
+    splitNonCashLines.value.splice(index, 1);
+}
+
+/** Field pembayaran untuk payload server: tunggal atau rincian split. */
+function buildPaymentFields(): Record<string, unknown> {
+    if (!isSplitPayment.value) {
+        return { payment_method: paymentMethod.value, amount_paid: amountPaid.value };
+    }
+    const payments = splitNonCashLines.value.map((line) => ({
+        method: line.method,
+        amount: Number(line.amount),
+        reference: line.reference.trim() || null,
+    }));
+    if (amountPaid.value > 0) {
+        payments.push({ method: 'cash', amount: amountPaid.value, reference: null });
+    }
+    const dominant = payments.reduce((best, line) => (line.amount > best.amount ? line : best), payments[0]);
+    return {
+        payment_method: ['cash', 'card', 'ewallet', 'transfer', 'other'].includes(dominant.method) ? dominant.method : 'other',
+        amount_paid: payments.reduce((sum, line) => sum + line.amount, 0),
+        payments,
+    };
+}
+
+/** Porsi tunai bersih (setelah kembalian) dari pembayaran yang sedang diproses. */
+function currentCashPortion(): number {
+    if (isCredit.value) return Math.min(amountPaid.value, balanceDue.value);
+    if (isSplitPayment.value) return Math.min(amountPaid.value, cashDue.value);
+    return paymentMethod.value === 'cash' ? balanceDue.value : 0;
+}
 
 /**
  * Dari step "method", lanjut ke step "pay" bila tunai, atau langsung proses
@@ -661,12 +921,18 @@ const requiresCashInput = computed(
  */
 function confirmPaymentMethod() {
     if (!paymentMethod.value) return;
+    if (splitPaymentError.value) return;
+    if (isSplitPayment.value) {
+        // Nominal tunai default = sisa tagihan setelah non-tunai.
+        amountPaid.value = cashDue.value;
+    }
     if (requiresCashInput.value) {
         paymentStep.value = 'pay';
         // Isi otomatis nominal pas saat pertama kali masuk step tunai.
         if (!amountPaid.value || amountPaid.value <= 0) {
-            amountPaid.value = balanceDue.value;
+            amountPaid.value = cashDue.value;
         }
+        focusCashInput();
         return;
     }
     // Non-tunai / kredit: langsung proses tanpa step input nominal.
@@ -677,10 +943,11 @@ function confirmPaymentMethod() {
  * Buka popup modal checkout — mulai dari step metode pembayaran.
  */
 function openCheckout() {
-    if (cart.length === 0) return;
+    if (cart.value.length === 0) return;
     checkoutOpen.value = true;
     paymentStep.value = 'method';
     paymentMethod.value = null;
+    splitNonCashLines.value = [];
     amountPaid.value = 0;
     cartSheetOpen.value = false;
 }
@@ -845,9 +1112,25 @@ const prescription = ref({
     issued_at: '',
 });
 const isProcessingPayment = ref(false);
+
+// Kunci idempotensi satu transaksi: dibuat sekali lalu dipakai ulang untuk setiap
+// percobaan kirim. Kalau jaringan putus setelah server menyimpan, kiriman ulang
+// mengembalikan transaksi yang sama alih-alih membuat transaksi kedua.
+const posIdempotencyKey = ref<string | null>(null);
+
+function currentIdempotencyKey(): string {
+    if (!posIdempotencyKey.value) {
+        posIdempotencyKey.value =
+            typeof crypto !== 'undefined' && 'randomUUID' in crypto
+                ? crypto.randomUUID()
+                : `pos-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+    }
+    return posIdempotencyKey.value;
+}
 const discountCode = ref('');
 const discountError = ref('');
 const discountOpen = ref(false);
+const voucherOpen = ref(false);
 const appliedDiscount = ref<ActiveDiscount | null>(null);
 const promoListOpen = ref(false);
 const promoCoupons = computed(() => props.activeDiscounts.filter((d) => d.code && d.code.trim() !== ''));
@@ -855,6 +1138,53 @@ const selectPromo = (d: ActiveDiscount) => {
     discountCode.value = d.code ?? '';
     promoListOpen.value = false;
     applyDiscountCode();
+};
+
+// ── Voucher loyalitas (ditukar dari poin, kode RWD-…)
+const loyaltyVoucherCode = ref('');
+const loyaltyVoucherError = ref('');
+const appliedLoyaltyVoucher = ref<{ code: string; value: number; reward_name: string | null; customer_name: string | null } | null>(null);
+const loyaltyVoucherValue = computed(() => appliedLoyaltyVoucher.value?.value ?? 0);
+
+const applyLoyaltyVoucher = async () => {
+    loyaltyVoucherError.value = '';
+    const raw = loyaltyVoucherCode.value.trim();
+    if (!raw) {
+        appliedLoyaltyVoucher.value = null;
+        return;
+    }
+    try {
+        const res = await fetch('/pos/loyalty-voucher-preview', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '',
+                Accept: 'application/json',
+            },
+            body: JSON.stringify({ code: raw }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+            appliedLoyaltyVoucher.value = null;
+            loyaltyVoucherError.value = data.message ?? 'Kode voucher tidak valid.';
+            return;
+        }
+        appliedLoyaltyVoucher.value = {
+            code: data.voucher.code,
+            value: Number(data.voucher.value),
+            reward_name: data.voucher.reward_name ?? null,
+            customer_name: data.voucher.customer_name ?? null,
+        };
+    } catch {
+        appliedLoyaltyVoucher.value = null;
+        loyaltyVoucherError.value = 'Gagal memeriksa voucher. Coba lagi.';
+    }
+};
+
+const removeLoyaltyVoucher = () => {
+    loyaltyVoucherCode.value = '';
+    appliedLoyaltyVoucher.value = null;
+    loyaltyVoucherError.value = '';
 };
 
 const modifierPickerOpen = ref(false);
@@ -869,6 +1199,8 @@ const serviceChargePercent = ref(0);
 const tipAmount = ref(0);
 const orderType = ref<'dine_in' | 'takeaway' | 'delivery'>('dine_in');
 const tableReference = ref('');
+/** Teknisi (barbershop) yang melayani transaksi ini. */
+const selectedBarberId = ref<number | null>(null);
 /** Sumber pesanan: dari mana order datang (walk_in, gofood, dll). */
 const salesChannel = ref<'walk_in' | 'dine_in' | 'takeaway' | 'delivery' | 'gofood' | 'grabfood' | 'shopeefood'>('walk_in');
 /** Komisi pesanan online (otomatis terisi saat pilih gofood/grabfood/shopeefood, bisa edit). */
@@ -943,21 +1275,38 @@ const filteredProducts = computed(() => {
     });
 });
 
-const productGridTotalPages = computed(() => {
-    const n = filteredProducts.value.length;
-    if (n === 0) {
-        return 1;
-    }
-    return Math.ceil(n / productsPerPage.value);
-});
+/** Produk yang benar-benar dirender. Sisanya menyusul saat kasir menggulir. */
+const visibleProducts = computed(() => filteredProducts.value.slice(0, productVisibleCount.value));
 
-const productGridPageSafe = computed(() => Math.min(Math.max(1, productGridPage.value), productGridTotalPages.value));
+const hasMoreProducts = computed(() => productVisibleCount.value < filteredProducts.value.length);
 
-const paginatedProducts = computed(() => {
-    const list = filteredProducts.value;
-    const page = productGridPageSafe.value;
-    const start = (page - 1) * productsPerPage.value;
-    return list.slice(start, start + productsPerPage.value);
+function loadMoreProducts() {
+    if (!hasMoreProducts.value) return;
+    productVisibleCount.value = Math.min(productVisibleCount.value + productChunkSize.value, filteredProducts.value.length);
+}
+
+// Filter berubah (kategori/pencarian) → kembali ke awal daftar.
+watch([searchQueryDebounced, activeCategoryId], () => resetProductGridScroll());
+
+onMounted(() => {
+    productVisibleCount.value = productChunkSize.value;
+    productGridObserver = new IntersectionObserver(
+        (entries) => {
+            if (entries.some((entry) => entry.isIntersecting)) {
+                loadMoreProducts();
+            }
+        },
+        { rootMargin: '200px' },
+    );
+    watch(
+        productGridSentinel,
+        (el, _old, onCleanup) => {
+            if (!productGridObserver || !el) return;
+            productGridObserver.observe(el);
+            onCleanup(() => productGridObserver?.unobserve(el));
+        },
+        { immediate: true },
+    );
 });
 
 // Cache info stok per produk di halaman aktif: stockDisplay+lineStock dihitung
@@ -965,7 +1314,7 @@ const paginatedProducts = computed(() => {
 // cart berubah). Menghindari loop sale_consumptions/bundle_items berulang.
 const productStockInfo = computed(() => {
     const map = new Map<number, { text: string; colorClass: string; disabled: boolean }>();
-    for (const product of paginatedProducts.value) {
+    for (const product of visibleProducts.value) {
         const sd = stockDisplay(product, null);
         map.set(product.id, {
             text: sd.text,
@@ -985,10 +1334,6 @@ function stockInfo(product: Product): { text: string; colorClass: string; disabl
         }
     );
 }
-
-watch(searchQueryDebounced, () => {
-    productGridPage.value = 1;
-});
 
 // --- Barcode scanner (POS) ---
 const posBarcodeScanError = ref<string | null>(null);
@@ -1164,12 +1509,6 @@ function handleSearchEnter() {
         searchQuery.value = '';
     }
 }
-
-watch(productGridTotalPages, (total) => {
-    if (productGridPage.value > total) {
-        productGridPage.value = total;
-    }
-});
 
 function normalizedModifierOptions(product: Product): ProductModifierOption[] {
     const raw = product.modifier_options;
@@ -1400,7 +1739,7 @@ function addToCartBlockReason(product: Product): string | null {
         }
         return null;
     }
-    if (stockNum(product) <= 0 && product.track_stock && !product.allow_negative_stock) {
+    if (stockNum(product) <= 0 && product.track_stock && !product.unlimited_stock && !product.allow_negative_stock) {
         return `Stok "${product.name}" habis.`;
     }
     if (product.has_variants) {
@@ -1589,7 +1928,7 @@ function requestAddToCart(product: Product) {
             return;
         }
     }
-    if (stockNum(product) <= 0 && product.track_stock && !product.allow_negative_stock) {
+    if (stockNum(product) <= 0 && product.track_stock && !product.unlimited_stock && !product.allow_negative_stock) {
         return;
     }
     // Produk berbasis komponen (sale_consumptions): tampilkan detail stok komponen
@@ -1690,7 +2029,7 @@ const updateQuantity = (lineId: string, newQuantity: number) => {
         const dec = !!p.allows_decimal;
         if (rounded <= 0 || (dec && rounded < 0.0001)) {
             removeFromCart(lineId);
-        } else if (lteStock(rounded, stk, dec)) {
+        } else if (p.allow_negative_stock || lteStock(rounded, stk, dec)) {
             item.quantity = dec ? rounded : Math.round(rounded);
             recalcLine(item);
         }
@@ -1727,6 +2066,32 @@ const subtotal = computed(() => {
     return cart.value.reduce((sum, item) => sum + Number(item.subtotal), 0);
 });
 
+/** Modul Diskon per Produk (pengaturan toko); default nonaktif bila flag tidak dikirim. */
+const productDiscountEnabled = computed(() => props.store?.product_discount_enabled === true);
+
+function effectiveLineDiscount(item: CartItem): number {
+    if (!productDiscountEnabled.value) {
+        return 0;
+    }
+    const raw = Math.max(0, Number(item.lineDiscount) || 0);
+    return Math.min(Math.round(raw * 100) / 100, Number(item.subtotal));
+}
+
+const lineDiscountTotal = computed(() => Math.round(cart.value.reduce((sum, item) => sum + effectiveLineDiscount(item), 0) * 100) / 100);
+
+const netSubtotal = computed(() => Math.max(0, Math.round((subtotal.value - lineDiscountTotal.value) * 100) / 100));
+
+const discountEditingLineId = ref<string | null>(null);
+
+function toggleLineDiscountEditor(item: CartItem) {
+    discountEditingLineId.value = discountEditingLineId.value === item.lineId ? null : item.lineId;
+}
+
+function clearLineDiscount(item: CartItem) {
+    item.lineDiscount = 0;
+    discountEditingLineId.value = null;
+}
+
 function cartLineMatchesDiscountScope(d: ActiveDiscount, item: CartItem): boolean {
     const pIds = d.applicable_products;
     const cats = d.applicable_categories;
@@ -1748,7 +2113,7 @@ function eligibleSubtotalForDiscount(d: ActiveDiscount): number {
     let el = 0;
     for (const item of cart.value) {
         if (cartLineMatchesDiscountScope(d, item)) {
-            el += Number(item.subtotal);
+            el += Number(item.subtotal) - effectiveLineDiscount(item);
         }
     }
     return el;
@@ -1787,7 +2152,7 @@ function buyXGetYDiscountAmount(d: ActiveDiscount): number {
         const disc = Math.min(Math.round(freeUnits * unitAvg * 100) / 100, g.sub);
         total += disc;
     }
-    return Math.min(Math.round(total * 100) / 100, subtotal.value);
+    return Math.min(Math.round(total * 100) / 100, netSubtotal.value);
 }
 
 const applyDiscountCode = () => {
@@ -1827,7 +2192,15 @@ const discountAmount = computed(() => {
     return Math.min(Number(d.value), elig);
 });
 
-const afterDiscount = computed(() => Math.max(0, Math.round((subtotal.value - discountAmount.value) * 100) / 100));
+const afterDiscount = computed(() => Math.max(0, Math.round((netSubtotal.value - discountAmount.value) * 100) / 100));
+
+/** Nilai voucher loyalitas yang benar-benar terpakai (dibatasi sisa tagihan setelah diskon). */
+const appliedVoucherAmount = computed(() =>
+    Math.min(Math.round(loyaltyVoucherValue.value * 100) / 100, afterDiscount.value),
+);
+
+/** Sisa tagihan setelah diskon promo & voucher loyalitas (basis pajak & service charge). */
+const afterVoucher = computed(() => Math.max(0, Math.round((afterDiscount.value - appliedVoucherAmount.value) * 100) / 100));
 
 const serviceChargeAmount = computed(() => {
     if (!props.store?.fnb_enabled) {
@@ -1837,7 +2210,7 @@ const serviceChargeAmount = computed(() => {
     if (pct <= 0) {
         return 0;
     }
-    return Math.round(afterDiscount.value * (pct / 100) * 100) / 100;
+    return Math.round(afterVoucher.value * (pct / 100) * 100) / 100;
 });
 
 const taxAmount = computed(() => {
@@ -1848,14 +2221,14 @@ const taxAmount = computed(() => {
         return 0;
     }
 
-    const base = serviceChargeAmount.value > 0 ? afterDiscount.value + serviceChargeAmount.value : afterDiscount.value;
+    const base = serviceChargeAmount.value > 0 ? afterVoucher.value + serviceChargeAmount.value : afterVoucher.value;
 
     return Math.round(base * (taxRate / 100) * 100) / 100;
 });
 
 const totalAmount = computed(() => {
     const tip = props.store?.fnb_enabled ? Math.max(0, Number(tipAmount.value) || 0) : 0;
-    return Math.round((afterDiscount.value + serviceChargeAmount.value + taxAmount.value + tip) * 100) / 100;
+    return Math.round((afterVoucher.value + serviceChargeAmount.value + taxAmount.value + tip) * 100) / 100;
 });
 
 /** DP yang benar-benar mengurangi tagihan (tidak melebihi total). */
@@ -1895,7 +2268,7 @@ const splitBillPreview = computed(() => {
 
 watch([totalAmount, paymentMethod, balanceDue], () => {
     if (isCredit.value) return; // jangan timpa saat mode kredit
-    if (paymentMethod.value && paymentMethod.value !== 'cash') {
+    if (paymentMethod.value && paymentMethod.value !== 'cash' && paymentMethod.value !== 'split') {
         amountPaid.value = balanceDue.value;
     }
 });
@@ -1923,7 +2296,7 @@ watch(
 );
 
 const changeAmount = computed(() => {
-    return Math.max(0, amountPaid.value - balanceDue.value);
+    return Math.max(0, amountPaid.value - cashDue.value);
 });
 
 /** Pecahan uang kertas yang beredar di Indonesia. */
@@ -1936,7 +2309,7 @@ const CASH_ROUNDING_STEPS = [5000, 10000, 25000, 50000, 100000];
  * Hanya nominal di atas tagihan yang ditampilkan, supaya kasir tidak salah input.
  */
 const cashSuggestions = computed<number[]>(() => {
-    const due = balanceDue.value;
+    const due = cashDue.value;
     if (due <= 0) {
         return [];
     }
@@ -1960,6 +2333,7 @@ const cashSuggestions = computed<number[]>(() => {
 /** Isi jumlah bayar dari tombol saran; kembalian ikut terhitung otomatis. */
 const applyCashSuggestion = (nominal: number) => {
     amountPaid.value = nominal;
+    cashInputTyping.value = false;
 };
 
 const numpadInput = (digit: string): void => {
@@ -1968,10 +2342,34 @@ const numpadInput = (digit: string): void => {
     amountPaid.value = Number(next);
 };
 
+/** Tampilan kolom tunai: diformat saat tidak diketik, angka mentah saat diketik. */
+const cashInputTyping = ref(false);
+const cashInputDisplay = computed(() => {
+    if (cashInputTyping.value) {
+        return amountPaid.value > 0 ? String(Math.round(amountPaid.value)) : '';
+    }
+    return amountPaid.value > 0 ? formatCurrency(amountPaid.value) : '—';
+});
+
+/** Terima ketikan angka dari keyboard fisik; non-digit diabaikan. */
+function onCashInput(raw: string) {
+    cashInputTyping.value = true;
+    const digits = raw.replace(/\D/g, '');
+    amountPaid.value = digits === '' ? 0 : Number(digits);
+}
+
+function submitFromCashInput() {
+    cashInputTyping.value = false;
+    if (!isProcessingPayment.value && amountPaid.value >= cashDue.value) {
+        processPayment();
+    }
+}
+
 const numpadBackspace = (): void => {
     const current = String(Math.round(amountPaid.value || 0));
     const next = current.length > 1 ? current.slice(0, -1) : '0';
     amountPaid.value = Number(next);
+    cashInputTyping.value = false;
 };
 
 /** Reset keranjang dan state pembayaran setelah transaksi selesai */
@@ -1989,6 +2387,7 @@ function resetCartState() {
     discountCode.value = '';
     appliedDiscount.value = null;
     discountError.value = '';
+    removeLoyaltyVoucher();
     tipAmount.value = 0;
     tableReference.value = '';
     orderType.value = 'dine_in';
@@ -2001,17 +2400,23 @@ function resetCartState() {
     activePreOrderId.value = null;
     activePreOrderNumber.value = null;
     preOrderDepositReceived.value = 0;
+    cashInputTyping.value = false;
+    splitNonCashLines.value = [];
+    // Transaksi berikutnya memakai kunci idempotensi baru.
+    posIdempotencyKey.value = null;
     resetCreditMode();
+    focusSearchInput();
 }
 
 /** Update saldo shift secara lokal (optimistic) agar UI langsung terasa. */
-function applyOptimisticCashShiftUpdate(paymentMethod: string, totalAmount: number) {
+function applyOptimisticCashShiftUpdate(cashPortion: number, totalAmount: number) {
     const shift = cashShiftOpen.value;
     if (!shift) return;
+    const cash = Math.max(0, Math.min(cashPortion, totalAmount));
     cashShiftOpen.value = {
         ...shift,
-        expected_cash: paymentMethod === 'cash' ? shift.expected_cash + totalAmount : shift.expected_cash,
-        expected_non_cash: paymentMethod !== 'cash' ? (shift.expected_non_cash ?? 0) + totalAmount : (shift.expected_non_cash ?? 0),
+        expected_cash: shift.expected_cash + cash,
+        expected_non_cash: (shift.expected_non_cash ?? 0) + (totalAmount - cash),
     };
 }
 
@@ -2347,7 +2752,11 @@ const processPayment = async () => {
     if (!(await requireOpenAccountingPeriod())) return;
     if (cart.value.length === 0) return;
     // Mode kredit: izinkan amountPaid < balanceDue asal pelanggan sudah dipilih
-    if (!isCredit.value && amountPaid.value < balanceDue.value) return;
+    if (!isCredit.value && amountPaid.value < cashDue.value) return;
+    if (splitPaymentError.value) {
+        await modalError('Pembayaran belum lengkap', splitPaymentError.value);
+        return;
+    }
     if (isCredit.value && !creditCustomerId.value) {
         await modalError(
             'Pelanggan wajib dipilih',
@@ -2383,6 +2792,9 @@ const processPayment = async () => {
 
     isProcessingPayment.value = true;
 
+    const cashPortionForShift = currentCashPortion();
+    const changeForReceipt = changeAmount.value;
+
     // ─── Bangun payload transaksi (sama untuk online & offline)
     const paymentData: Record<string, unknown> = {
         storeId: props.store?.id,
@@ -2392,17 +2804,22 @@ const processPayment = async () => {
             quantity: item.quantity,
             unit_price: lineUnitPrice(item.product, item.variant),
             subtotal: item.subtotal,
+            line_discount: effectiveLineDiscount(item),
             modifiers: item.selectedModifiers.map((m) => ({ key: m.key })),
             product_name: item.product.name,
             variant_name: item.variant?.name ?? null,
         })),
-        payment_method: paymentMethod.value,
-        amount_paid: amountPaid.value,
+        ...buildPaymentFields(),
         total_amount: totalAmount.value,
-        discount_amount: discountAmount.value,
-        customer_name: customerName.value || (isCredit.value ? creditCustomerName.value : null) || null,
+        discount_amount: Math.round((discountAmount.value + lineDiscountTotal.value) * 100) / 100,
+        customer_name:
+            customerName.value ||
+            appliedLoyaltyVoucher.value?.customer_name ||
+            (isCredit.value ? creditCustomerName.value : null) ||
+            null,
         customer_type: customerType.value,
         discount_code: appliedDiscount.value?.code || null,
+        loyalty_voucher_code: appliedLoyaltyVoucher.value?.code || null,
         created_at: new Date().toISOString(),
         // ── Kredit / piutang
         is_credit: isCredit.value || false,
@@ -2423,6 +2840,9 @@ const processPayment = async () => {
         paymentData.commission_percent = commissionPercent.value;
     }
     if (activePreOrderId.value !== null) paymentData.pre_order_id = activePreOrderId.value;
+    if (props.store?.barbershop_enabled && selectedBarberId.value) {
+        paymentData.barber_user_id = selectedBarberId.value;
+    }
     if (props.store?.pharmacy_enabled) {
         const pr = String(pharmacySaleReference.value).trim();
         const prescriptionPayload = Object.fromEntries(Object.entries(prescription.value).filter(([, value]) => String(value).trim()));
@@ -2454,8 +2874,9 @@ const processPayment = async () => {
                 items: paymentData.items,
                 payment_method: paymentData.payment_method,
                 amount_paid: paymentData.amount_paid,
+                payments: paymentData.payments ?? null,
                 total_amount: paymentData.total_amount,
-                change_amount: changeAmount.value,
+                change_amount: changeForReceipt,
                 customer_name: paymentData.customer_name,
                 payment_details:
                     props.store?.pharmacy_enabled &&
@@ -2478,7 +2899,7 @@ const processPayment = async () => {
             playSuccessSound();
             lastCustomerPhone.value = customerPhone.value;
             showInvoicePopup.value = true;
-            applyOptimisticCashShiftUpdate(paymentData.payment_method as string, paymentData.total_amount as number);
+            applyOptimisticCashShiftUpdate(cashPortionForShift, paymentData.total_amount as number);
             resetCartState();
         } catch (e) {
             await modalError('Gagal Simpan Offline', e instanceof Error ? e.message : 'Tidak dapat menyimpan transaksi secara offline.');
@@ -2496,6 +2917,7 @@ const processPayment = async () => {
             headers: {
                 'Content-Type': 'application/json',
                 'X-XSRF-TOKEN': csrfTokenPos(),
+                'X-Pos-Idempotency-Key': currentIdempotencyKey(),
                 Accept: 'application/json',
             },
             body: JSON.stringify(paymentData),
@@ -2526,7 +2948,7 @@ const processPayment = async () => {
             playSuccessSound();
             lastCustomerPhone.value = customerPhone.value;
             showInvoicePopup.value = true;
-            applyOptimisticCashShiftUpdate(paymentMethod.value, totalAmount.value);
+            applyOptimisticCashShiftUpdate(cashPortionForShift, totalAmount.value);
             resetCartState();
             void refreshCashShift();
         } else {
@@ -2564,8 +2986,9 @@ const processPayment = async () => {
                     items: paymentData.items,
                     payment_method: paymentData.payment_method,
                     amount_paid: paymentData.amount_paid,
+                    payments: paymentData.payments ?? null,
                     total_amount: paymentData.total_amount,
-                    change_amount: changeAmount.value,
+                    change_amount: changeForReceipt,
                     customer_name: paymentData.customer_name,
                     payment_details:
                         props.store?.pharmacy_enabled &&
@@ -2588,7 +3011,7 @@ const processPayment = async () => {
                 playSuccessSound();
                 lastCustomerPhone.value = customerPhone.value;
                 showInvoicePopup.value = true;
-                applyOptimisticCashShiftUpdate(paymentData.payment_method as string, paymentData.total_amount as number);
+                applyOptimisticCashShiftUpdate(cashPortionForShift, paymentData.total_amount as number);
                 resetCartState();
             } catch {
                 await modalError('Terjadi Kesalahan!', 'Gagal memproses pembayaran dan tidak dapat menyimpan offline.');
@@ -2606,10 +3029,10 @@ const processPayment = async () => {
 async function payActiveOpenBill() {
     if (activePreOrderId.value === null) return;
     isProcessingPayment.value = true;
+    const cashPortionForShift = currentCashPortion();
     try {
         const payload: Record<string, unknown> = {
-            payment_method: paymentMethod.value,
-            amount_paid: amountPaid.value,
+            ...buildPaymentFields(),
             discount_code: appliedDiscount.value?.code || null,
         };
         if (props.store?.fnb_enabled) {
@@ -2650,7 +3073,7 @@ async function payActiveOpenBill() {
         transactionData.value = result.transaction;
         playSuccessSound();
         showInvoicePopup.value = true;
-        applyOptimisticCashShiftUpdate(paymentMethod.value, totalAmount.value);
+        applyOptimisticCashShiftUpdate(cashPortionForShift, totalAmount.value);
         resetCartState();
         void refreshCashShift();
         void fetchOpenBills();
@@ -2684,6 +3107,7 @@ const clearCart = async () => {
     discountCode.value = '';
     appliedDiscount.value = null;
     discountError.value = '';
+    removeLoyaltyVoucher();
     tipAmount.value = 0;
     tableReference.value = '';
     orderType.value = 'dine_in';
@@ -3368,8 +3792,9 @@ const sendWhatsAppInvoice = () => {
                                 <div class="relative">
                                     <Search class="absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 transform text-gray-400" />
                                     <Input
+                                        ref="searchInputRef"
                                         v-model="searchQuery"
-                                        placeholder="Cari produk, SKU, atau barcode..."
+                                        placeholder="Cari produk, SKU, atau barcode…  (F2)"
                                         class="h-9 border-gray-300 pl-9 text-sm focus:border-primary/70 focus:ring-primary/70"
                                         @keyup.enter="handleSearchEnter"
                                     />
@@ -3400,7 +3825,6 @@ const sendWhatsAppInvoice = () => {
                                             "
                                             @click="
                                                 activeCategoryId = null;
-                                                productGridPage = 1;
                                             "
                                         >
                                             Semua
@@ -3415,7 +3839,6 @@ const sendWhatsAppInvoice = () => {
                                             "
                                             @click="
                                                 activeCategoryId = -1;
-                                                productGridPage = 1;
                                             "
                                         >
                                             <span class="flex items-center gap-1"><Flame class="h-3.5 w-3.5 text-orange-500" /> Populer</span>
@@ -3432,7 +3855,6 @@ const sendWhatsAppInvoice = () => {
                                             "
                                             @click="
                                                 activeCategoryId = cat.id;
-                                                productGridPage = 1;
                                             "
                                         >
                                             {{ cat.name }}
@@ -3455,7 +3877,7 @@ const sendWhatsAppInvoice = () => {
                             <div v-if="filteredProducts.length > 0" class="space-y-4">
                                 <div class="grid grid-cols-1 gap-2 md:grid-cols-3 md:gap-3 lg:grid-cols-4 2xl:grid-cols-5">
                                     <Card
-                                        v-for="product in paginatedProducts"
+                                        v-for="product in visibleProducts"
                                         :key="product.id"
                                         class="cursor-pointer border border-gray-200 py-0 shadow-none transition-all duration-200 hover:border-blue-300 hover:shadow-sm"
                                         @click="requestAddToCart(product)"
@@ -3466,22 +3888,23 @@ const sendWhatsAppInvoice = () => {
                                                 <div
                                                     class="flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gray-100 sm:h-20 sm:w-20"
                                                 >
-                                                    <div v-if="product.image_url" class="h-full w-full">
+                                                    <div v-if="hasProductImage(product.image_url)" class="h-full w-full">
                                                         <img
                                                             :src="product.image_url"
                                                             :alt="product.name"
                                                             loading="lazy"
                                                             decoding="async"
                                                             class="h-full w-full rounded-xl object-cover"
+                                                            @error="markImageBroken(product.image_url)"
                                                         />
                                                     </div>
-                                                    <div v-else class="text-gray-400">
-                                                        <Package class="h-6 w-6 sm:h-7 sm:w-7" />
+                                                    <div v-else>
+                                                        <Package class="h-6 w-6 text-gray-400" />
                                                     </div>
                                                 </div>
 
                                                 <div class="min-w-0 flex-1">
-                                                    <h3 class="mb-0.5 truncate text-sm font-semibold text-gray-900">
+                                                    <h3 class="mb-0.5 truncate text-base font-semibold text-gray-900">
                                                         {{ product.name }}
                                                     </h3>
                                                     <Badge
@@ -3530,21 +3953,22 @@ const sendWhatsAppInvoice = () => {
                                                 <div
                                                     class="mb-2 flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg bg-gray-100"
                                                 >
-                                                    <div v-if="product.image_url" class="h-full w-full">
+                                                    <div v-if="hasProductImage(product.image_url)" class="h-full w-full">
                                                         <img
                                                             :src="product.image_url"
                                                             :alt="product.name"
                                                             loading="lazy"
                                                             decoding="async"
                                                             class="h-full w-full object-cover"
+                                                            @error="markImageBroken(product.image_url)"
                                                         />
                                                     </div>
-                                                    <div v-else class="text-gray-300">
-                                                        <Package class="h-8 w-8" />
+                                                    <div v-else>
+                                                        <Package class="h-6 w-6 text-gray-400" />
                                                     </div>
                                                 </div>
 
-                                                <h3 class="mb-0.5 line-clamp-2 min-h-[2em] text-[11px] leading-tight font-semibold text-gray-900">
+                                                <h3 class="mb-0.5 line-clamp-2 min-h-[2em] text-base leading-tight font-semibold text-gray-900">
                                                     {{ product.name }}
                                                 </h3>
 
@@ -3603,42 +4027,19 @@ const sendWhatsAppInvoice = () => {
                                     </Card>
                                 </div>
 
-                                <div
-                                    v-if="productGridTotalPages > 1"
-                                    class="flex flex-col gap-3 border-t border-gray-100 pt-2 sm:flex-row sm:items-center sm:justify-between"
-                                >
-                                    <p class="text-xs text-gray-500 tabular-nums">
-                                        Menampilkan
-                                        {{ (productGridPageSafe - 1) * productsPerPage + 1 }}–{{
-                                            Math.min(productGridPageSafe * productsPerPage, filteredProducts.length)
-                                        }}
-                                        dari {{ filteredProducts.length }}
-                                    </p>
-                                    <div class="flex items-center justify-center gap-2">
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            class="h-9 gap-1"
-                                            :disabled="productGridPageSafe <= 1"
-                                            @click="productGridPage = Math.max(1, productGridPage - 1)"
-                                        >
-                                            <ChevronLeft class="h-4 w-4" />
-                                            Sebelumnya
-                                        </Button>
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            class="h-9 gap-1"
-                                            :disabled="productGridPageSafe >= productGridTotalPages"
-                                            @click="productGridPage = Math.min(productGridTotalPages, productGridPage + 1)"
-                                        >
-                                            Berikutnya
-                                            <ChevronRight class="h-4 w-4" />
-                                        </Button>
-                                    </div>
+                                <!-- Sentinel: begitu terlihat, potongan produk berikutnya dirender. -->
+                                <div ref="productGridSentinel" class="h-1 w-full"></div>
+
+                                <div v-if="hasMoreProducts" class="flex justify-center pt-1">
+                                    <Button type="button" variant="outline" size="sm" class="h-9 gap-1" @click="loadMoreProducts">
+                                        <ChevronDown class="h-4 w-4" />
+                                        Tampilkan lebih banyak
+                                    </Button>
                                 </div>
+
+                                <p v-if="filteredProducts.length > visibleProducts.length" class="pt-1 text-center text-xs text-gray-500 tabular-nums">
+                                    {{ visibleProducts.length }} dari {{ filteredProducts.length }} produk
+                                </p>
                             </div>
 
                             <!-- Empty State -->
@@ -3712,10 +4113,11 @@ const sendWhatsAppInvoice = () => {
                                     <!-- Thumbnail produk -->
                                     <div class="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-gray-100">
                                         <img
-                                            v-if="item.product.image_url"
+                                            v-if="hasProductImage(item.product.image_url)"
                                             :src="item.product.image_url"
                                             :alt="item.product.name"
                                             class="h-full w-full object-cover"
+                                            @error="markImageBroken(item.product.image_url)"
                                         />
                                         <div
                                             v-else
@@ -3773,6 +4175,7 @@ const sendWhatsAppInvoice = () => {
                                                     size="sm"
                                                     variant="outline"
                                                     :disabled="
+                                                        !item.product.allow_negative_stock &&
                                                         !lteStock(
                                                             roundCartQty(item.quantity + qtyStep(item.product), item.product),
                                                             lineStock(item.product, item.variant),
@@ -3786,6 +4189,34 @@ const sendWhatsAppInvoice = () => {
                                                 </Button>
                                             </div>
                                         </div>
+                                        <!-- Diskon per baris -->
+                                        <div v-if="productDiscountEnabled" class="mt-1 flex items-center justify-between gap-2 text-[11px]">
+                                            <button
+                                                type="button"
+                                                class="font-medium text-emerald-700 hover:underline"
+                                                @click="toggleLineDiscountEditor(item)"
+                                            >
+                                                {{ effectiveLineDiscount(item) > 0 ? 'Ubah diskon' : '+ Diskon' }}
+                                            </button>
+                                            <span v-if="effectiveLineDiscount(item) > 0" class="font-semibold text-emerald-700 tabular-nums">
+                                                −{{ formatCurrency(effectiveLineDiscount(item)) }}
+                                            </span>
+                                        </div>
+                                        <div
+                                            v-if="productDiscountEnabled && discountEditingLineId === item.lineId"
+                                            class="mt-1 flex items-center gap-1.5"
+                                        >
+                                            <Input
+                                                v-model.number="item.lineDiscount"
+                                                type="number"
+                                                min="0"
+                                                :max="item.subtotal"
+                                                inputmode="numeric"
+                                                placeholder="Nominal diskon (Rp)"
+                                                class="h-7 text-xs"
+                                            />
+                                            <Button size="sm" variant="ghost" class="h-7 px-2 text-xs" @click="clearLineDiscount(item)">Hapus</Button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -3798,6 +4229,7 @@ const sendWhatsAppInvoice = () => {
                                     class="h-12 w-full bg-primary font-medium text-white hover:bg-primary/90 disabled:opacity-50"
                                 >
                                     <span class="truncate">Lanjut Bayar</span>
+                                    <kbd class="ml-2 hidden rounded border border-white/40 px-1.5 py-0.5 text-[10px] font-semibold md:inline">F4</kbd>
                                     <ArrowRight class="ml-1.5 h-4 w-4 shrink-0" />
                                 </Button>
                             </div>
@@ -3813,6 +4245,10 @@ const sendWhatsAppInvoice = () => {
                             >
                                 <DialogContent class="pos-checkout-dialog flex max-h-[90vh] flex-col gap-0 p-0 sm:max-w-2xl">
                                     <!-- Tombol X ditangani oleh DialogContent bawaan -->
+                                    <DialogTitle class="sr-only">Pembayaran</DialogTitle>
+                                    <DialogDescription class="sr-only">
+                                        Selesaikan pembayaran transaksi, pilih metode, dan masukkan nominal uang diterima.
+                                    </DialogDescription>
 
                                     <!-- ═══ Step 2: Pilih metode pembayaran ═══ -->
                                     <div v-if="paymentStep === 'method'" class="flex-1 space-y-4 overflow-y-auto px-5 pt-12 pb-4">
@@ -4142,6 +4578,56 @@ const sendWhatsAppInvoice = () => {
 
                                         <Separator />
 
+                                        <!-- Voucher loyalitas -->
+                                        <Collapsible v-model:open="voucherOpen">
+                                            <CollapsibleTrigger
+                                                class="group flex w-full items-center gap-2 text-sm font-medium text-gray-700 transition-colors hover:text-gray-900"
+                                            >
+                                                <Ticket class="h-4 w-4 text-gray-400 group-hover:text-gray-600" />
+                                                <span>Voucher poin</span>
+                                                <span
+                                                    v-if="appliedLoyaltyVoucher"
+                                                    class="ml-auto rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700"
+                                                >
+                                                    -{{ formatCurrency(appliedVoucherAmount) }}
+                                                </span>
+                                                <ChevronDown
+                                                    v-else
+                                                    class="ml-auto h-3.5 w-3.5 text-gray-400 transition-transform duration-200 group-hover:text-gray-600"
+                                                    :class="voucherOpen ? 'rotate-180' : ''"
+                                                />
+                                            </CollapsibleTrigger>
+                                            <CollapsibleContent class="pt-3">
+                                                <div class="flex gap-2">
+                                                    <Input
+                                                        v-model="loyaltyVoucherCode"
+                                                        class="h-10 border-gray-300 font-mono uppercase"
+                                                        placeholder="Contoh: RWD-A1B2C3D4"
+                                                        @keyup.enter="applyLoyaltyVoucher"
+                                                    />
+                                                    <Button
+                                                        v-if="!appliedLoyaltyVoucher"
+                                                        type="button"
+                                                        variant="outline"
+                                                        class="h-10 shrink-0"
+                                                        @click="applyLoyaltyVoucher"
+                                                    >
+                                                        Terapkan
+                                                    </Button>
+                                                    <Button v-else type="button" variant="outline" class="h-10 shrink-0" @click="removeLoyaltyVoucher">
+                                                        Hapus
+                                                    </Button>
+                                                </div>
+                                                <p v-if="loyaltyVoucherError" class="mt-2 text-xs text-red-600">{{ loyaltyVoucherError }}</p>
+                                                <p v-else-if="appliedLoyaltyVoucher" class="mt-2 text-xs text-emerald-700">
+                                                    {{ appliedLoyaltyVoucher.reward_name || 'Voucher' }} —
+                                                    {{ appliedLoyaltyVoucher.customer_name ? 'pemilik: ' + appliedLoyaltyVoucher.customer_name : 'siapa saja' }}
+                                                </p>
+                                            </CollapsibleContent>
+                                        </Collapsible>
+
+                                        <Separator />
+
                                         <!-- F&B -->
                                         <div
                                             v-if="store && store.fnb_enabled"
@@ -4219,6 +4705,10 @@ const sendWhatsAppInvoice = () => {
                                                 <span class="text-gray-600">Subtotal:</span>
                                                 <span class="font-medium">{{ formatCurrency(subtotal) }}</span>
                                             </div>
+                                            <div v-if="lineDiscountTotal > 0" class="flex justify-between text-sm text-emerald-700">
+                                                <span>Diskon item:</span>
+                                                <span class="font-medium">−{{ formatCurrency(lineDiscountTotal) }}</span>
+                                            </div>
                                             <div v-if="discountAmount > 0" class="flex justify-between text-sm text-emerald-700">
                                                 <span>Diskon:</span>
                                                 <span class="font-medium">−{{ formatCurrency(discountAmount) }}</span>
@@ -4293,6 +4783,27 @@ const sendWhatsAppInvoice = () => {
                                             </div>
                                         </div>
 
+                                        <!-- Teknisi (khusus barbershop) -->
+                                        <div
+                                            v-if="store?.barbershop_enabled && (store?.barbers?.length ?? 0) > 0"
+                                            class="space-y-2"
+                                        >
+                                            <Label class="text-sm font-medium text-gray-700">Teknisi</Label>
+                                            <select
+                                                v-model="selectedBarberId"
+                                                class="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500"
+                                            >
+                                                <option :value="null">— Pilih teknisi —</option>
+                                                <option
+                                                    v-for="barber in store?.barbers ?? []"
+                                                    :key="barber.id"
+                                                    :value="barber.id"
+                                                >
+                                                    {{ barber.name }}
+                                                </option>
+                                            </select>
+                                        </div>
+
                                         <!-- Metode Pembayaran -->
                                         <div v-if="!isCredit" class="space-y-3">
                                             <Label class="text-sm font-medium text-gray-700">Metode Pembayaran</Label>
@@ -4321,12 +4832,84 @@ const sendWhatsAppInvoice = () => {
                                                 <Button
                                                     :variant="paymentMethod === 'other' ? 'default' : 'outline'"
                                                     size="sm"
-                                                    class="col-span-2 h-10"
+                                                    class="h-10"
                                                     @click="paymentMethod = 'other'"
                                                 >
                                                     <CircleDollarSign class="mr-2 h-4 w-4" />
                                                     Lainnya
                                                 </Button>
+                                                <Button
+                                                    :variant="paymentMethod === 'split' ? 'default' : 'outline'"
+                                                    size="sm"
+                                                    class="h-10"
+                                                    @click="startSplitPayment()"
+                                                >
+                                                    <Plus class="mr-2 h-4 w-4" />
+                                                    Bagi Pembayaran
+                                                </Button>
+                                            </div>
+
+                                            <!-- Rincian split tender -->
+                                            <div v-if="isSplitPayment" class="space-y-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                                                <div
+                                                    v-for="(line, index) in splitNonCashLines"
+                                                    :key="index"
+                                                    class="space-y-1.5 rounded-md border border-gray-200 bg-white p-2"
+                                                >
+                                                    <div class="flex items-center gap-2">
+                                                        <select
+                                                            v-model="line.method"
+                                                            class="h-9 flex-1 rounded-md border border-gray-300 bg-white px-2 text-sm"
+                                                            :aria-label="`Metode pembayaran ${index + 1}`"
+                                                        >
+                                                            <option v-for="method in SPLIT_NON_CASH_METHODS" :key="method.value" :value="method.value">
+                                                                {{ method.label }}
+                                                            </option>
+                                                        </select>
+                                                        <input
+                                                            v-model.number="line.amount"
+                                                            type="number"
+                                                            min="0"
+                                                            inputmode="numeric"
+                                                            class="h-9 w-32 rounded-md border border-gray-300 px-2 text-right text-sm tabular-nums"
+                                                            :aria-label="`Nominal pembayaran ${index + 1}`"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            class="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-red-500 hover:bg-red-50"
+                                                            :aria-label="`Hapus pembayaran ${index + 1}`"
+                                                            @click="removeSplitLine(index)"
+                                                        >
+                                                            <Trash2 class="h-4 w-4" />
+                                                        </button>
+                                                    </div>
+                                                    <input
+                                                        v-model="line.reference"
+                                                        type="text"
+                                                        maxlength="100"
+                                                        placeholder="No. referensi (opsional)"
+                                                        class="h-8 w-full rounded-md border border-gray-300 px-2 text-xs"
+                                                    />
+                                                </div>
+                                                <Button
+                                                    v-if="splitNonCashLines.length < SPLIT_MAX_NON_CASH_LINES"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    class="h-8 w-full"
+                                                    @click="addSplitLine()"
+                                                >
+                                                    <Plus class="mr-1 h-3.5 w-3.5" />
+                                                    Tambah Metode Non-Tunai
+                                                </Button>
+                                                <div class="flex items-center justify-between text-sm">
+                                                    <span class="text-gray-600">Total non-tunai</span>
+                                                    <span class="font-semibold tabular-nums">{{ formatCurrency(splitNonCashTotal) }}</span>
+                                                </div>
+                                                <div class="flex items-center justify-between text-sm">
+                                                    <span class="text-gray-600">Sisa dibayar tunai</span>
+                                                    <span class="font-semibold text-primary tabular-nums">{{ formatCurrency(cashDue) }}</span>
+                                                </div>
+                                                <p v-if="splitPaymentError" class="text-xs text-red-600">{{ splitPaymentError }}</p>
                                             </div>
                                         </div>
 
@@ -4335,6 +4918,7 @@ const sendWhatsAppInvoice = () => {
                                             @click="confirmPaymentMethod"
                                             :disabled="
                                                 !paymentMethod ||
+                                                !!splitPaymentError ||
                                                 !!accountingPeriodLock ||
                                                 (allowsAdvancedRetail && !cashShiftOpen) ||
                                                 (isCredit && !creditReadyToProcess) ||
@@ -4379,18 +4963,23 @@ const sendWhatsAppInvoice = () => {
                                                 <div
                                                     class="flex items-center justify-between rounded-lg bg-red-500 px-3 py-2 text-white sm:rounded-xl sm:px-5 sm:py-4"
                                                 >
-                                                    <span class="text-sm font-medium sm:text-base">Total tagihan</span>
-                                                    <span class="text-lg font-bold tabular-nums sm:text-xl">{{ formatCurrency(balanceDue) }}</span>
+                                                    <span class="text-sm font-medium sm:text-base">{{
+                                                        isSplitPayment ? 'Sisa dibayar tunai' : 'Total tagihan'
+                                                    }}</span>
+                                                    <span class="text-lg font-bold tabular-nums sm:text-xl">{{ formatCurrency(cashDue) }}</span>
                                                 </div>
+                                                <p v-if="isSplitPayment" class="text-xs text-gray-500">
+                                                    Total {{ formatCurrency(balanceDue) }} · non-tunai {{ formatCurrency(splitNonCashTotal) }}
+                                                </p>
 
                                                 <!-- Quick cash buttons -->
                                                 <div class="grid grid-cols-3 gap-1.5 sm:grid-cols-2 sm:gap-2">
                                                     <button
                                                         type="button"
-                                                        @click="applyCashSuggestion(balanceDue)"
+                                                        @click="applyCashSuggestion(cashDue)"
                                                         :class="[
                                                             'rounded-lg border px-2 py-2 text-xs font-medium transition-colors sm:px-4 sm:py-3 sm:text-base',
-                                                            amountPaid === balanceDue
+                                                            amountPaid === cashDue
                                                                 ? 'border-primary bg-primary/10 text-primary'
                                                                 : 'border-gray-200 text-gray-700 hover:bg-gray-50',
                                                         ]"
@@ -4415,11 +5004,18 @@ const sendWhatsAppInvoice = () => {
 
                                                 <!-- Input Uang Diterima -->
                                                 <div class="space-y-1">
-                                                    <label class="text-xs font-medium tracking-wider text-gray-500 uppercase">Uang Diterima</label>
+                                                    <label class="text-xs font-medium tracking-wider text-gray-500 uppercase" for="pos-cash-input">
+                                                        Uang Diterima
+                                                    </label>
                                                     <input
+                                                        id="pos-cash-input"
+                                                        ref="cashInputRef"
                                                         type="text"
-                                                        readonly
-                                                        :value="amountPaid > 0 ? formatCurrency(amountPaid) : '—'"
+                                                        inputmode="numeric"
+                                                        autocomplete="off"
+                                                        :value="cashInputDisplay"
+                                                        @input="onCashInput(($event.target as HTMLInputElement).value)"
+                                                        @keyup.enter="submitFromCashInput"
                                                         :class="[
                                                             'w-full rounded-lg border-2 bg-white px-3 py-2.5 text-right text-xl font-bold tabular-nums transition-colors sm:rounded-xl sm:px-5 sm:py-4 sm:text-2xl',
                                                             amountPaid > 0 ? 'border-primary text-primary' : 'border-gray-300 text-gray-400',
@@ -4515,7 +5111,7 @@ const sendWhatsAppInvoice = () => {
                                                         :disabled="
                                                             !!accountingPeriodLock ||
                                                             (allowsAdvancedRetail && !cashShiftOpen) ||
-                                                            (!isCredit && amountPaid < balanceDue) ||
+                                                            (!isCredit && amountPaid < cashDue) ||
                                                             !creditReadyToProcess ||
                                                             isProcessingPayment ||
                                                             (cartHasPrescriptionLine &&
@@ -4546,12 +5142,17 @@ const sendWhatsAppInvoice = () => {
                                                 >
                                                     <Save class="h-4 w-4 shrink-0" />
                                                     Simpan Order
+                                                    <kbd class="hidden rounded border border-emerald-400 px-1.5 py-0.5 text-[10px] font-semibold md:inline">F8</kbd>
                                                 </button>
                                             </div>
                                         </div>
 
                                         <!-- Ringkas Harga di bawah numpad -->
                                         <div class="mt-2 shrink-0 space-y-1 text-xs text-gray-600 sm:mt-3 sm:text-sm">
+                                            <div v-if="lineDiscountTotal > 0" class="flex justify-between text-emerald-700">
+                                                <span>Diskon item:</span>
+                                                <span class="tabular-nums">-{{ formatCurrency(lineDiscountTotal) }}</span>
+                                            </div>
                                             <div v-if="discountAmount > 0" class="flex justify-between text-emerald-700">
                                                 <span>Diskon:</span>
                                                 <span class="tabular-nums">-{{ formatCurrency(discountAmount) }}</span>
@@ -4691,13 +5292,13 @@ const sendWhatsAppInvoice = () => {
             <Teleport to="body">
                 <div
                     v-if="showInvoicePopup && transactionData"
-                    class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
+                    class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 p-4"
                     role="dialog"
                     aria-modal="true"
                     aria-labelledby="pos-invoice-title"
                     @click.self="closeInvoicePopup"
                 >
-                    <div class="pos-invoice-popup max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl" @click.stop>
+                    <div class="pos-invoice-popup max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-[0_0_0_1px_rgb(15_23_42/0.04),0_4px_6px_-1px_rgb(15_23_42/0.08),0_32px_64px_-16px_rgb(15_23_42/0.45)]" @click.stop>
                         <div class="flex items-start justify-between gap-3 border-b border-slate-100 p-4">
                             <div class="flex items-center gap-2">
                                 <CheckCircle2 class="h-6 w-6 shrink-0 text-emerald-500" aria-hidden="true" />

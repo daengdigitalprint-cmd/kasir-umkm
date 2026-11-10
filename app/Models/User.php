@@ -7,11 +7,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
 
     /**
      * The attributes that are mass assignable.
@@ -122,6 +123,31 @@ class User extends Authenticatable
         return $this->getRoleForActiveStore() === 'kitchen';
     }
 
+    /** Teknisi barbershop / salon. */
+    public function isBarber(): bool
+    {
+        return $this->getRoleForActiveStore() === 'barber';
+    }
+
+    /** Semua teknisi (role barber) aktif di satu toko. */
+    public static function barbersForStore(Store|int $store): \Illuminate\Database\Eloquent\Collection
+    {
+        $storeId = $store instanceof Store ? $store->id : $store;
+
+        return static::query()
+            ->where('is_active', true)
+            ->where(function ($query) use ($storeId) {
+                $query->whereHas(
+                    'stores',
+                    fn ($q) => $q->where('stores.id', $storeId)->where('store_user.role', 'barber')
+                )->orWhere(function ($q) use ($storeId) {
+                    $q->where('role', 'barber')->where('store_id', $storeId);
+                });
+            })
+            ->orderBy('name')
+            ->get();
+    }
+
     public function isOwner(): bool
     {
         $activeRole = $this->getRoleForActiveStore();
@@ -197,15 +223,6 @@ class User extends Authenticatable
     /** Daftar menu_key yang diizinkan untuk role user ini. */
     public function allowedMenus(): array
     {
-        // region debug-point 1
-        \Log::info("User {$this->id} allowedMenus called", [
-            'user_id' => $this->id,
-            'user_role' => $this->role,
-            'store_id' => $this->store_id,
-            'method' => 'allowedMenus',
-        ]);
-        // endregion debug-point 1
-
         if ($this->isSuperAdmin()) {
             return RoleMenuPermission::distinct()->pluck('menu_key')->all();
         }
@@ -213,23 +230,7 @@ class User extends Authenticatable
         // Gunakan role dari store yang sedang aktif jika ada
         $effectiveRole = $this->getRoleForActiveStore();
 
-        // region debug-point 2
-        \Log::info("User {$this->id} effective role", [
-            'effective_role' => $effectiveRole,
-            'global_role' => $this->role,
-            'store_id' => $this->store_id,
-        ]);
-        // endregion debug-point 2
-
         $menus = RoleMenuPermission::allowedMenus($effectiveRole);
-
-        // region debug-point 3
-        \Log::info("User {$this->id} allowed menus", [
-            'role' => $effectiveRole,
-            'menu_count' => count($menus),
-            'menus' => $menus,
-        ]);
-        // endregion debug-point 3
 
         return $menus;
     }
@@ -241,14 +242,6 @@ class User extends Authenticatable
      */
     public function getRoleForActiveStore(): string
     {
-        // region debug-point 4
-        \Log::info("User {$this->id} getRoleForActiveStore called", [
-            'user_id' => $this->id,
-            'global_role' => $this->role,
-            'store_id' => $this->store_id,
-        ]);
-        // endregion debug-point 4
-
         $storeQuery = $this->stores();
         if ($this->store_id) {
             $storeQuery->where('stores.id', $this->store_id);
@@ -256,27 +249,12 @@ class User extends Authenticatable
         $store = $storeQuery->first();
 
         if ($store) {
-            // region debug-point 5
-            \Log::info("User {$this->id} pivot check", [
-                'store_id' => $this->store_id,
-                'store_found' => $store ? true : false,
-                'has_pivot' => $store && $store->pivot ? true : false,
-                'pivot_role' => $store && $store->pivot ? $store->pivot->role : null,
-            ]);
-            // endregion debug-point 5
-
             if ($store && $store->pivot && $store->pivot->role) {
                 return $store->pivot->role;
             }
         }
 
         // Fallback ke role global
-        // region debug-point 6
-        \Log::info("User {$this->id} using fallback role", [
-            'fallback_role' => $this->role,
-        ]);
-        // endregion debug-point 6
-
         return $this->role ?? 'cashier';
     }
 

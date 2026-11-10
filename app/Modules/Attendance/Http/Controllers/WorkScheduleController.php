@@ -67,7 +67,7 @@ class WorkScheduleController extends AdminAttendanceController
     private function validateData(Request $request): array
     {
         return $request->validate([
-            'employee_id' => 'required|integer|exists:employees,id',
+            'employee_id' => ['required', 'integer', $this->storeEmployeeRule()],
             'name' => 'required|string|max:100',
             'work_days' => 'required|array|min:1',
             'work_days.*' => 'integer|between:1,7',

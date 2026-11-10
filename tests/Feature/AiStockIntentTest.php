@@ -26,6 +26,15 @@ function toolRequiresConfirmation(string $toolName): bool
     return $method->invoke($service, $toolName);
 }
 
+function formatAiToolResult(string $toolName, array $data, string $message): string
+{
+    $service = new AiService;
+    $method = new ReflectionMethod($service, 'formatDirectToolResult');
+    $method->setAccessible(true);
+
+    return $method->invoke($service, $toolName, $data, $message);
+}
+
 function makeCheckStockResult(AiConversation $conversation, array $products): void
 {
     AiMessage::create([
@@ -292,6 +301,67 @@ it('meneruskan ambang diskon, void, dan scope semua cabang ke deteksi anomali', 
         ->and($allBranches['arguments']['scope'])->toBe('all');
 });
 
+it('menampilkan rincian temuan audit dalam tabel saat meminta data', function () {
+    $output = formatAiToolResult('detect_transaction_anomalies', [
+        'date_from' => '01/09/2026 00:00',
+        'date_to' => '30/09/2026 23:59',
+        'discount_anomalies' => [
+            [
+                'transaction_number' => 'TRX-001',
+                'cashier' => 'Budi',
+                'created_at' => '12/09/2026 10:15',
+                'discount_pct' => 35.0,
+                'discount_amount' => 35000.0,
+            ],
+        ],
+        'void_patterns' => [
+            ['cashier' => 'Siti', 'void_count' => 3, 'total_void_amount' => 300000.0],
+        ],
+        'cash_differences' => [
+            [
+                'cashier' => 'Andi',
+                'closed_at' => '20/09/2026 21:00',
+                'expected_cash' => 500000.0,
+                'counted_cash' => 480000.0,
+                'difference' => -20000.0,
+            ],
+        ],
+        'total_flags' => 3,
+    ], '## Ringkasan Audit Transaksi');
+
+    expect($output)->toContain('## Ringkasan Audit Transaksi')
+        ->toContain('**Periode:** 01/09/2026 00:00 — 30/09/2026 23:59')
+        ->toContain('### Diskon tidak wajar')
+        ->toContain('| # | Transaksi | Kasir | Waktu | Diskon | Nilai diskon |')
+        ->toContain('TRX-001')
+        ->toContain('35%')
+        ->toContain('Rp 35.000')
+        ->toContain('### Void berulang')
+        ->toContain('| # | Kasir | Jumlah void | Nilai void |')
+        ->toContain('Siti')
+        ->toContain('3 kali')
+        ->toContain('### Selisih kas shift')
+        ->toContain('| # | Kasir | Ditutup | Seharusnya | Hitungan fisik | Selisih |')
+        ->toContain('Andi')
+        ->toContain('**Rp -20.000**');
+});
+
+it('tidak membuat tabel rinci saat audit tidak menemukan temuan', function () {
+    $output = formatAiToolResult('detect_transaction_anomalies', [
+        'date_from' => '01/09/2026 00:00',
+        'date_to' => '30/09/2026 23:59',
+        'discount_anomalies' => [],
+        'void_patterns' => [],
+        'cash_differences' => [],
+        'total_flags' => 0,
+    ], '- **Status:** Tidak ada transaksi mencurigakan.');
+
+    expect($output)->toContain('- **Status:** Tidak ada transaksi mencurigakan.')
+        ->toContain('**Periode:** 01/09/2026 00:00 — 30/09/2026 23:59')
+        ->not->toContain('### Selisih kas shift')
+        ->not->toContain('| # | Kasir |');
+});
+
 it('mengenali permintaan prediksi/forecast penjualan', function (string $message) {
     expect(detectAiIntent($message)['tool'])->toBe('forecast_sales');
 })->with([
@@ -397,4 +467,147 @@ it('menyertakan panduan tool search_customer pada prompt', function () {
 
     expect($prompt)->toContain('search_customer')
         ->toContain('cari pelanggan');
+});
+
+it('mengenali cek komisi barber sebagai tool get_barber_commissions', function (string $message) {
+    $result = detectAiIntent($message);
+
+    expect($result['tool'])->toBe('get_barber_commissions');
+})->with([
+    'cek komisi barber' => 'cek komisi barber',
+    'komisi barber' => 'komisi barber',
+    'komisi teknisi' => 'cek komisi teknisi',
+    'komisi cukur' => 'komisi cukur bulan ini',
+    'komisi tanpa tugas' => 'berapa komisi barber saya?',
+]);
+
+it('meneruskan periode pada permintaan komisi barber', function () {
+    expect(detectAiIntent('cek komisi barber hari ini')['arguments']['period'])->toBe('today')
+        ->and(detectAiIntent('komisi barber bulan ini')['arguments']['period'])->toBe('this_month')
+        ->and(detectAiIntent('cek komisi barber')['arguments']['period'])->toBe('this_month');
+});
+
+it('mengekstrak nama barber dan scope semua cabang pada permintaan komisi', function () {
+    $byName = detectAiIntent('komisi barber Andi bulan ini');
+    $allBranches = detectAiIntent('cek komisi barber semua cabang');
+
+    expect($byName['arguments']['barber_name'])->toBe('Andi')
+        ->and($byName['arguments']['period'])->toBe('this_month')
+        ->and($allBranches['arguments']['scope'])->toBe('all');
+});
+
+it('menyertakan panduan tool get_barber_commissions pada prompt', function () {
+    $prompt = (new \App\Services\AI\AiPromptBuilder)->buildToolDescriptionsPrompt([
+        new \App\Tools\Reports\BarberCommissionTool,
+    ]);
+
+    expect($prompt)->toContain('get_barber_commissions')
+        ->toContain('komisi barber');
+});
+
+it('membalas permintaan tambah produk tanpa detail berupa klarifikasi, bukan sapaan', function () {
+    $result = detectAiIntent('Saya ingin menambah produk baru');
+
+    expect($result)->toHaveKey('text')
+        ->and($result)->not->toHaveKey('tool')
+        ->and($result['text'])->toContain('nama produk')
+        ->and($result['text'])->toContain('harga');
+});
+
+it('membalas tambah produk yang belum ada harganya berupa pertanyaan harga', function () {
+    $result = detectAiIntent('tambah produk Kopi Susu');
+
+    expect($result)->toHaveKey('text')
+        ->and($result['text'])->toContain('Kopi Susu')
+        ->and($result['text'])->toContain('harga');
+});
+
+it('tetap membuat produk saat nama dan harga lengkap', function () {
+    $result = detectAiIntent('tambah produk Kopi Susu harga 15000 modal 10000 stok 20 satuan pcs kategori Minuman');
+
+    expect($result['tool'])->toBe('create_product')
+        ->and($result['arguments']['name'])->toContain('Kopi Susu')
+        ->and($result['arguments']['price'])->toBe(15000.0)
+        ->and($result['arguments']['cost'])->toBe(10000.0)
+        ->and($result['arguments']['stock'])->toBe(20);
+});
+
+it('tidak menganggap tambah stok sebagai permintaan tambah produk', function () {
+    expect(detectAiIntent('tambah stok Bubuk Red Velvet 100 pcs'))->toBeNull();
+});
+
+it('mengenali tanggal spesifik dalam format "tanggal N" sebagai ringkasan penjualan', function () {
+    $result = detectAiIntent('tanggal 24');
+
+    expect($result['tool'])->toBe('get_sales_summary')
+        ->and($result['arguments']['date_from'])->toMatch('/^\d{4}-\d{2}-24$/')
+        ->and($result['arguments']['date_to'])->toBe($result['arguments']['date_from']);
+});
+
+it('mengenali tanggal spesifik dalam format DD/MM/YYYY', function () {
+    $result = detectAiIntent('penjualan 24/09/2026');
+
+    expect($result['tool'])->toBe('get_sales_summary')
+        ->and($result['arguments']['date_from'])->toBe('2026-09-24')
+        ->and($result['arguments']['date_to'])->toBe('2026-09-24');
+});
+
+it('mengenali tanggal spesifik dalam format DD Bulan YYYY', function () {
+    $result = detectAiIntent('penjualan 24 September 2026');
+
+    expect($result['tool'])->toBe('get_sales_summary')
+        ->and($result['arguments']['date_from'])->toBe('2026-09-24')
+        ->and($result['arguments']['date_to'])->toBe('2026-09-24');
+});
+
+it('mengenali tanggal spesifik dalam format DD Bulan tanpa tahun', function () {
+    $result = detectAiIntent('cek penjualan 24 September');
+
+    expect($result['tool'])->toBe('get_sales_summary')
+        ->and($result['arguments']['date_from'])->toMatch('/^\d{4}-09-24$/');
+});
+
+it('menggunakan tool yang sama dengan percakapan sebelumnya untuk follow-up tanggal', function () {
+    $conversation = AiConversation::create([
+        'user_id' => User::factory()->create()->id,
+        'title' => 'cek penjualan kemarin',
+    ]);
+
+    // Simulasi tool get_sales_summary sudah dieksekusi sebelumnya
+    AiMessage::create([
+        'conversation_id' => $conversation->id,
+        'role' => 'user',
+        'content' => 'Hasil dari tool get_sales_summary: '.json_encode([
+            'success' => true,
+            'data' => [],
+            'message' => 'ok',
+        ]),
+    ]);
+
+    $result = detectAiIntent('tanggal 24', $conversation);
+
+    expect($result['tool'])->toBe('get_sales_summary')
+        ->and($result['arguments']['date_from'])->toMatch('/^\d{4}-\d{2}-24$/');
+});
+
+it('menggunakan get_top_products saat percakapan sebelumnya tentang produk terlaris', function () {
+    $conversation = AiConversation::create([
+        'user_id' => User::factory()->create()->id,
+        'title' => 'cek produk terlaris',
+    ]);
+
+    AiMessage::create([
+        'conversation_id' => $conversation->id,
+        'role' => 'user',
+        'content' => 'Hasil dari tool get_top_products: '.json_encode([
+            'success' => true,
+            'data' => [],
+            'message' => 'ok',
+        ]),
+    ]);
+
+    $result = detectAiIntent('tanggal 24', $conversation);
+
+    expect($result['tool'])->toBe('get_top_products')
+        ->and($result['arguments']['date_from'])->toMatch('/^\d{4}-\d{2}-24$/');
 });

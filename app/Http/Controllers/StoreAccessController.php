@@ -54,7 +54,7 @@ class StoreAccessController extends Controller
     {
         $validated = $request->validate([
             'email' => ['required', 'email', 'max:255'],
-            'role' => ['required', 'string', 'in:admin,manager,cashier,kitchen,warehouse,owner'],
+            'role' => ['required', 'string', 'in:admin,manager,cashier,kitchen,warehouse,owner,barber'],
         ]);
 
         $actor = $request->user();
@@ -122,7 +122,7 @@ class StoreAccessController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', Rule::unique('users', 'email')],
             'password' => ['required', 'confirmed', Password::defaults()],
-            'role' => ['required', 'string', 'in:admin,manager,cashier,kitchen,warehouse,owner'],
+            'role' => ['required', 'string', 'in:admin,manager,cashier,kitchen,warehouse,owner,barber'],
         ]);
 
         $actor = $request->user();
@@ -180,7 +180,7 @@ class StoreAccessController extends Controller
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'email' => ['sometimes', 'required', 'string', 'lowercase', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'password' => ['nullable', 'confirmed', Password::defaults()],
-            'role' => ['required', 'string', 'in:admin,manager,cashier,kitchen,warehouse,owner'],
+            'role' => ['required', 'string', 'in:admin,manager,cashier,kitchen,warehouse,owner,barber'],
         ]);
 
         $actor = $request->user();
@@ -347,7 +347,7 @@ class StoreAccessController extends Controller
             abort(403);
         }
 
-        $roles = ['admin', 'manager', 'cashier', 'kitchen', 'warehouse', 'owner'];
+        $roles = ['admin', 'manager', 'cashier', 'kitchen', 'warehouse', 'owner', 'barber'];
 
         $permissions = [];
         foreach ($roles as $role) {
@@ -370,7 +370,7 @@ class StoreAccessController extends Controller
         }
 
         $validated = $request->validate([
-            'role' => ['required', 'string', 'in:admin,manager,cashier,warehouse,owner'],
+            'role' => ['required', 'string', 'in:admin,manager,cashier,warehouse,owner,kitchen,barber'],
             'menus' => ['required', 'array'],
             'menus.*' => ['required', 'string', 'max:64'],
         ]);

@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Customer;
 use App\Models\Discount;
 use App\Models\JournalEntry;
-use App\Models\LoyaltyPointLedger;
 use App\Models\PreOrder;
 use App\Models\Product;
 use App\Models\ProductBundleItem;
@@ -131,6 +130,10 @@ class TransactionController extends Controller
             abort(403);
         }
 
+        if (auth()->user()->isCashier() && (int) $transaction->user_id !== (int) auth()->id()) {
+            return response()->json(['message' => 'Kasir hanya dapat membatalkan transaksinya sendiri.'], 403);
+        }
+
         if ($transaction->status !== 'completed') {
             return response()->json(['message' => 'Hanya transaksi yang sudah selesai yang dapat di-void.'], 422);
         }
@@ -217,6 +220,7 @@ class TransactionController extends Controller
                             $batchProduct = $allocation->componentProduct;
                             if ($batchProduct) {
                                 $synced = (string) ProductionBatch::where('product_id', $batchProduct->id)
+                                    ->where('store_id', $transaction->store_id)
                                     ->where('status', ProductionBatch::STATUS_COMPLETED)
                                     ->sum('output_quantity_remaining');
                                 $batchProduct->update(['stock_quantity' => $synced]);
@@ -327,46 +331,19 @@ class TransactionController extends Controller
 
                 // 4. Batalkan poin loyalitas
                 if ($transaction->customer_id) {
-                    $earnedLedger = LoyaltyPointLedger::where('customer_id', $transaction->customer_id)
-                        ->where('source_type', Transaction::class)
-                        ->where('source_id', $transaction->id)
-                        ->where('type', 'earn')
-                        ->where('points_remaining', '>', 0)
-                        ->first();
+                    $pointsReversed = app(\App\Services\LoyaltyService::class)->reverseEarnedPoints(
+                        $transaction,
+                        'Pembatalan poin void transaksi #'.$transaction->transaction_number,
+                        auth()->id(),
+                    );
 
-                    if ($earnedLedger) {
-                        $pointsToReverse = (int) $earnedLedger->points_remaining;
-                        $earnedLedger->update(['points_remaining' => 0]);
-
-                        $customer = Customer::lockForUpdate()->find($transaction->customer_id);
-                        if ($customer) {
-                            $newBalance = max(0, $customer->points_balance - $pointsToReverse);
-                            $newEarnedTotal = max(0, $customer->points_earned_total - $pointsToReverse);
-
-                            LoyaltyPointLedger::create([
-                                'store_id' => $transaction->store_id,
-                                'customer_id' => $customer->id,
-                                'type' => 'adjust',
-                                'points' => -$pointsToReverse,
-                                'balance_after' => $newBalance,
-                                'points_remaining' => 0,
-                                'expires_at' => null,
-                                'description' => 'Pembatalan poin void transaksi #'.$transaction->transaction_number,
-                                'source_type' => Transaction::class,
-                                'source_id' => $transaction->id,
-                                'created_by' => auth()->id(),
-                                'integrity_hash' => null,
-                            ]);
-
-                            $customer->update([
-                                'points_balance' => $newBalance,
-                                'points_earned_total' => $newEarnedTotal,
-                            ]);
-
-                            $details['loyalty_points_reversed'] = $pointsToReverse;
-                        }
+                    if ($pointsReversed > 0) {
+                        $details['loyalty_points_reversed'] = $pointsReversed;
                     }
                 }
+
+                $details['loyalty_vouchers_released'] = app(\App\Services\LoyaltyService::class)
+                    ->releaseVouchersForTransaction($transaction);
 
                 // 5. Perbarui statistik pelanggan
                 if ($transaction->customer_id && $transaction->customer) {
@@ -532,6 +509,7 @@ class TransactionController extends Controller
                             $batchProduct = $allocation->componentProduct;
                             if ($batchProduct) {
                                 $synced = (string) ProductionBatch::where('product_id', $batchProduct->id)
+                                    ->where('store_id', $transaction->store_id)
                                     ->where('status', ProductionBatch::STATUS_COMPLETED)
                                     ->sum('output_quantity_remaining');
                                 $batchProduct->update(['stock_quantity' => $synced]);
@@ -646,44 +624,14 @@ class TransactionController extends Controller
 
                 // 4. Batalkan poin loyalitas
                 if ($transaction->customer_id) {
-                    $earnedLedger = LoyaltyPointLedger::where('customer_id', $transaction->customer_id)
-                        ->where('source_type', Transaction::class)
-                        ->where('source_id', $transaction->id)
-                        ->where('type', 'earn')
-                        ->where('points_remaining', '>', 0)
-                        ->first();
+                    $pointsReversed = app(\App\Services\LoyaltyService::class)->reverseEarnedPoints(
+                        $transaction,
+                        'Pembatalan poin transaksi #'.$transaction->transaction_number,
+                        auth()->id(),
+                    );
 
-                    if ($earnedLedger) {
-                        $pointsToReverse = (int) $earnedLedger->points_remaining;
-                        $earnedLedger->update(['points_remaining' => 0]);
-
-                        $customer = Customer::lockForUpdate()->find($transaction->customer_id);
-                        if ($customer) {
-                            $newBalance = max(0, $customer->points_balance - $pointsToReverse);
-                            $newEarnedTotal = max(0, $customer->points_earned_total - $pointsToReverse);
-
-                            LoyaltyPointLedger::create([
-                                'store_id' => $transaction->store_id,
-                                'customer_id' => $customer->id,
-                                'type' => 'adjust',
-                                'points' => -$pointsToReverse,
-                                'balance_after' => $newBalance,
-                                'points_remaining' => 0,
-                                'expires_at' => null,
-                                'description' => 'Pembatalan poin transaksi #'.$transaction->transaction_number,
-                                'source_type' => Transaction::class,
-                                'source_id' => $transaction->id,
-                                'created_by' => auth()->id(),
-                                'integrity_hash' => null,
-                            ]);
-
-                            $customer->update([
-                                'points_balance' => $newBalance,
-                                'points_earned_total' => $newEarnedTotal,
-                            ]);
-
-                            $details['loyalty_points_reversed'] = $pointsToReverse;
-                        }
+                    if ($pointsReversed > 0) {
+                        $details['loyalty_points_reversed'] = $pointsReversed;
                     }
                 }
 

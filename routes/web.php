@@ -15,8 +15,9 @@ Route::get('/robots.txt', function () {
 })->name('robots');
 
 Route::get('/sitemap.xml', function () {
-    $maskotPath = public_path('maskot.webp');
-    $lastmodHome = is_file($maskotPath) ? date('Y-m-d', filemtime($maskotPath)) : null;
+    // lastmod beranda = waktu konten landing terakhir di-prerender (berubah saat konten berubah).
+    $homeSource = is_file(LandingSeo::landingPrerenderPath()) ? LandingSeo::landingPrerenderPath() : public_path('maskot.webp');
+    $lastmodHome = is_file($homeSource) ? date('Y-m-d', filemtime($homeSource)) : null;
 
     $urls = [
         array_filter([
@@ -67,6 +68,8 @@ Route::get('/', function () {
 
     return Inertia::render('Landing/Index', [
         'maskotUrl' => LandingSeo::maskotAssetUrl(),
+        'landingAssetVersion' => LandingSeo::landingAssetVersion(),
+        'landingOptimized' => LandingSeo::landingOptimized(),
         'canonicalUrl' => url('/'),
         'ogImageUrl' => $og['url'],
         'ogImageType' => $og['mime'],
@@ -221,6 +224,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('products.import');
         Route::post('products/bulk-delete', [App\Http\Controllers\ProductController::class, 'bulkDestroy'])
             ->name('products.bulk-delete');
+        Route::post('products/sample-services', [App\Http\Controllers\ProductController::class, 'sampleServices'])
+            ->name('products.sample-services');
     });
 
     Route::resource('products', App\Http\Controllers\ProductController::class)->middleware(['store.active', 'role.inventory']);
@@ -270,13 +275,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('kpi', [App\Http\Controllers\KPIController::class, 'index'])->name('kpi.index')->middleware(['store.active']);
     Route::post('kpi/settings', [App\Http\Controllers\KPIController::class, 'settings'])->name('kpi.settings')->middleware(['store.active', 'role.store_admin']);
 
-    // Program Loyalitas & Poin
-    Route::prefix('loyalty')->name('loyalty.')->middleware(['store.active', 'role.backoffice'])->group(function () {
+    // Program Loyalitas & Poin (fitur paket GrowUp ke atas — dijaga middleware plan.advanced)
+    Route::prefix('loyalty')->name('loyalty.')->middleware(['store.active', 'role.backoffice', 'plan.advanced'])->group(function () {
         Route::get('/', [App\Http\Controllers\LoyaltyController::class, 'index'])->name('index');
         Route::put('/settings', [App\Http\Controllers\LoyaltyController::class, 'updateSettings'])->name('settings.update');
         Route::post('/rewards', [App\Http\Controllers\LoyaltyController::class, 'storeReward'])->name('rewards.store');
         Route::match(['put', 'patch'], '/rewards/{reward}', [App\Http\Controllers\LoyaltyController::class, 'updateReward'])->name('rewards.update');
         Route::delete('/rewards/{reward}', [App\Http\Controllers\LoyaltyController::class, 'destroyReward'])->name('rewards.destroy');
+        Route::patch('/rewards/{reward}/toggle', [App\Http\Controllers\LoyaltyController::class, 'toggleReward'])->name('rewards.toggle');
         Route::post('/redeem', [App\Http\Controllers\LoyaltyController::class, 'redeem'])->name('redeem');
         Route::post('/adjust', [App\Http\Controllers\LoyaltyController::class, 'adjust'])->name('adjust');
         Route::post('/promo', [App\Http\Controllers\LoyaltyController::class, 'broadcastPromo'])->name('promo');
@@ -309,6 +315,21 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware(['store.active', 'role.inventory', 'plan.advanced']);
     Route::post('stock-opnames/{stock_opname}/cancel', [App\Http\Controllers\StockOpnameController::class, 'cancel'])
         ->name('stock-opnames.cancel')
+        ->middleware(['store.active', 'role.inventory', 'plan.advanced']);
+    Route::delete('stock-opnames/{stock_opname}', [App\Http\Controllers\StockOpnameController::class, 'destroy'])
+        ->name('stock-opnames.destroy')
+        ->middleware(['store.active', 'role.inventory', 'plan.advanced']);
+    Route::get('stock-opnames/{stock_opname}/template', [App\Http\Controllers\StockOpnameController::class, 'template'])
+        ->name('stock-opnames.template')
+        ->middleware(['store.active', 'role.inventory', 'plan.advanced']);
+    Route::post('stock-opnames/{stock_opname}/imports', [App\Http\Controllers\StockOpnameController::class, 'importStore'])
+        ->name('stock-opnames.imports.store')
+        ->middleware(['store.active', 'role.inventory', 'plan.advanced']);
+    Route::get('stock-opnames/{stock_opname}/imports/{import}', [App\Http\Controllers\StockOpnameController::class, 'importShow'])
+        ->name('stock-opnames.imports.show')
+        ->middleware(['store.active', 'role.inventory', 'plan.advanced']);
+    Route::post('stock-opnames/{stock_opname}/imports/{import}/apply', [App\Http\Controllers\StockOpnameController::class, 'importApply'])
+        ->name('stock-opnames.imports.apply')
         ->middleware(['store.active', 'role.inventory', 'plan.advanced']);
     Route::resource('stock-opnames', App\Http\Controllers\StockOpnameController::class)
         ->only(['index', 'create', 'store', 'show'])
@@ -417,9 +438,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/', [App\Http\Controllers\POSController::class, 'index'])->name('index');
         Route::get('/cash-shift-current', [App\Http\Controllers\POSController::class, 'cashShiftCurrent'])->name('cash-shift-current');
         Route::get('/transactions', [App\Http\Controllers\POSController::class, 'transactionHistory'])->name('transactions');
+        Route::post('/transactions/{transaction}/void', [App\Http\Controllers\TransactionController::class, 'void'])->name('transactions.void');
         Route::post('/add-item', [App\Http\Controllers\POSController::class, 'addItem'])->name('add-item');
         Route::post('/remove-item', [App\Http\Controllers\POSController::class, 'removeItem'])->name('remove-item');
         Route::post('/process-payment', [App\Http\Controllers\POSController::class, 'processPayment'])->name('process-payment');
+        // Validasi kode voucher loyalitas sebelum pembayaran (tanpa mengubah status).
+        Route::post('/loyalty-voucher-preview', [App\Http\Controllers\LoyaltyController::class, 'previewVoucher'])->name('loyalty-voucher.preview');
 
         // Open Bills (Order Hold)
         Route::get('/order-holds', [App\Http\Controllers\POSController::class, 'orderHolds'])->name('order-holds');
@@ -463,26 +487,29 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Modul Antrian
     Route::get('/queues', [App\Http\Controllers\QueueController::class, 'index'])
         ->name('queues.index')
-        ->middleware(['store.active', 'role.pos']);
+        ->middleware(['store.active', 'queue.access']);
     Route::post('/queues', [App\Http\Controllers\QueueController::class, 'store'])
         ->name('queues.store')
-        ->middleware(['store.active', 'role.pos']);
+        ->middleware(['store.active', 'queue.access']);
+    Route::post('/queues/{queue}/entries', [App\Http\Controllers\QueueController::class, 'storeEntry'])
+        ->name('queue-entries.store')
+        ->middleware(['store.active', 'queue.access']);
     Route::get('/queues/{queue}', [App\Http\Controllers\QueueController::class, 'show'])
         ->name('queues.show')
-        ->middleware(['store.active', 'role.pos']);
+        ->middleware(['store.active', 'queue.access']);
     Route::patch('/queues/{queue}', [App\Http\Controllers\QueueController::class, 'update'])
         ->name('queues.update')
-        ->middleware(['store.active', 'role.pos']);
+        ->middleware(['store.active', 'queue.access']);
     Route::delete('/queues/{queue}', [App\Http\Controllers\QueueController::class, 'destroy'])
         ->name('queues.destroy')
-        ->middleware(['store.active', 'role.pos']);
+        ->middleware(['store.active', 'queue.access']);
 
     Route::patch('/queue-entries/{queue_entry}', [App\Http\Controllers\QueueController::class, 'updateEntry'])
         ->name('queue-entries.update')
-        ->middleware(['store.active', 'menu:kitchen_queue']);
+        ->middleware(['store.active', 'queue.access']);
     Route::delete('/queue-entries/{queue_entry}', [App\Http\Controllers\QueueController::class, 'destroyEntry'])
         ->name('queue-entries.destroy')
-        ->middleware(['store.active', 'role.pos']);
+        ->middleware(['store.active', 'queue.access']);
 
     // Modul Scan Meja (Manajemen Meja)
     Route::get('/tables', [App\Http\Controllers\TableController::class, 'index'])
@@ -524,6 +551,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::prefix('reports')->name('reports.')->middleware(['store.active', 'role.backoffice'])->group(function () {
         Route::get('/', [App\Http\Controllers\ReportController::class, 'index'])->name('index');
         Route::get('/sales', [App\Http\Controllers\ReportController::class, 'sales'])->name('sales');
+        Route::get('/commissions', [App\Http\Controllers\ReportController::class, 'barberCommissions'])
+            ->name('commissions')
+            ->middleware('plan.advanced');
         Route::get('/purchases', [App\Http\Controllers\ReportController::class, 'purchases'])->name('purchases');
         Route::get('/production', [App\Http\Controllers\ReportController::class, 'production'])->name('production');
         Route::get('/inventory', [App\Http\Controllers\ReportController::class, 'inventory'])->name('inventory');
@@ -607,6 +637,7 @@ Route::prefix('superadmin')->name('superadmin.')->middleware(['auth', 'superadmi
 
     // Store management
     Route::post('/stores/{store}/extend', [SuperAdminController::class, 'extendSubscription'])->name('stores.extend');
+    Route::post('/stores/{store}/reduce', [SuperAdminController::class, 'reduceSubscription'])->name('stores.reduce');
     Route::post('/stores/{store}/toggle', [SuperAdminController::class, 'toggleStoreStatus'])->name('stores.toggle');
     Route::post('/stores/{store}/activate-trial', [SuperAdminController::class, 'activateProTrial'])->name('stores.activate-trial');
     Route::post('/stores/{store}/stop-trial', [SuperAdminController::class, 'stopProTrial'])->name('stores.stop-trial');
@@ -665,7 +696,7 @@ Route::prefix('api/guest')->name('guest.')->group(function () {
 });
 
 // AI Assistant Routes
-Route::middleware(['auth', 'throttle:30,1'])->prefix('ai')->name('ai.')->group(function () {
+Route::middleware(['auth', 'throttle:30,1', 'ai.enabled'])->prefix('ai')->name('ai.')->group(function () {
     // Chat
     Route::get('/chat', fn () => Inertia::render('Ai/Chat'))->name('chat.page');
     Route::post('/chat', [App\Http\Controllers\Ai\AiChatController::class, 'chat'])->name('chat');

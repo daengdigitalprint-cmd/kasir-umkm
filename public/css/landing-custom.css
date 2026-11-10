@@ -738,3 +738,80 @@ section.section-padding,
     padding-top: 2rem;
     padding-bottom: 2rem;
 }
+
+/* ==========================================================================
+   Performa: animasi composited & gambar
+   ========================================================================== */
+
+/* Progress bar proses: animasi `width` (tidak bisa di-composite GPU) diganti
+   transform: scaleX — hasil visual sama, berjalan di compositor thread. */
+.fs-process-item.fs-process-item::after {
+    width: 100%;
+    transform: scaleX(0);
+    transform-origin: left center;
+}
+.fs-process-item.fs-process-item.active::after {
+    animation: lpScaleX 3s linear infinite;
+}
+@keyframes lpScaleX {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+}
+
+/* <img> yang diberi atribut width/height (untuk mencegah layout shift):
+   tinggi tetap mengikuti rasio saat lebarnya diatur CSS. Specificity 0
+   lewat :where() sehingga aturan template yang lebih spesifik tetap menang. */
+:where(img[width][height]) {
+    height: auto;
+}
+
+/* ==========================================================================
+   SEO: struktur heading tanpa mengubah tampilan
+   --------------------------------------------------------------------------
+   Teks dekoratif (angka, harga, nama di marquee) kini <div> (bukan <h2>/<h3>;
+   <div> dipilih karena tidak terkena aturan kontekstual template seperti ".x p"), dan sub-judul turun dari <h2> ke <h3>. Aturan di bawah menyalin gaya tag
+   heading dari main.css ("typography css") dengan specificity yang SAMA
+   (0,0,1 via :where) sehingga aturan class template tetap menang seperti dulu.
+   ========================================================================== */
+div:where(.lp-h2),
+div:where(.lp-h3) {
+    margin: 0;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    color: var(--color-heading);
+    font-family: var(--font-heading);
+}
+div:where(.lp-h2) {
+    font-size: 32px;
+}
+/* Padanan aturan global "h1..h6 { letter-spacing: -0.015em !important }" di atas. */
+div:where(.lp-h2),
+div:where(.lp-h3) {
+    letter-spacing: -0.015em !important;
+}
+div:where(.lp-h3) {
+    font-size: 22px;
+}
+/* Sub-judul yang kini <h3>/<h1> tetap berukuran seperti <h2> sebelumnya. */
+h1:where(.lp-fs-h2),
+h3:where(.lp-fs-h2) {
+    font-size: 32px;
+}
+h1:where(.lp-fs-h2) {
+    margin: 0;
+}
+
+/* Toggle menu mobile kini <button> (dulu <a href="javascript:void(0)">): netralkan gaya
+   bawaan browser; specificity 0 agar aturan .xb-nav-mobile template tetap berlaku. */
+:where(button.xb-nav-mobile) {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    /* sama seperti <a> sebelumnya (warna link bootstrap, perataan awal) */
+    color: rgba(var(--bs-link-color-rgb), var(--bs-link-opacity, 1));
+    text-align: start;
+    cursor: pointer;
+}

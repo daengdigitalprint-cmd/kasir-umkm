@@ -59,17 +59,18 @@ class EmployeeAttendanceController extends AdminAttendanceController
         $leaves = LeaveRequest::query()
             ->where('store_id', $store->id)
             ->where('employee_id', $employee->id)
+            ->with('approver')
             ->orderByDesc('created_at')
             ->get()
             ->map(fn ($l) => [
                 'id' => $l->id,
-                'type' => $l->type,
+                'type' => $l->leave_type,
                 'start_date' => $l->start_date->toDateString(),
                 'end_date' => $l->end_date->toDateString(),
                 'reason' => $l->reason,
                 'status' => $l->status,
-                'reviewed_by' => $l->reviewer?->name,
-                'review_note' => $l->review_note,
+                'reviewed_by' => $l->approver?->name,
+                'review_note' => null,
             ]);
 
         return Inertia::render('Attendance/MyLeaves', [
@@ -83,7 +84,7 @@ class EmployeeAttendanceController extends AdminAttendanceController
         $employee = $this->resolveEmployeeForUser(Auth::user(), $store);
 
         $validated = $request->validate([
-            'type' => 'required|string|max:50',
+            'type' => 'required|string|in:annual,sick,maternity,marriage,bereavement,unpaid,other',
             'start_date' => 'required|date|before_or_equal:end_date',
             'end_date' => 'required|date|after_or_equal:start_date',
             'reason' => 'nullable|string|max:255',
@@ -92,7 +93,7 @@ class EmployeeAttendanceController extends AdminAttendanceController
         LeaveRequest::create([
             'store_id' => $store->id,
             'employee_id' => $employee->id,
-            'type' => $validated['type'],
+            'leave_type' => $validated['type'],
             'start_date' => $validated['start_date'],
             'end_date' => $validated['end_date'],
             'reason' => $validated['reason'] ?? null,
@@ -112,6 +113,7 @@ class EmployeeAttendanceController extends AdminAttendanceController
         $overtimes = OvertimeRequest::query()
             ->where('store_id', $store->id)
             ->where('employee_id', $employee->id)
+            ->with('approver')
             ->orderByDesc('created_at')
             ->get()
             ->map(fn ($o) => [
@@ -120,8 +122,8 @@ class EmployeeAttendanceController extends AdminAttendanceController
                 'hours' => $o->hours,
                 'reason' => $o->reason,
                 'status' => $o->status,
-                'reviewed_by' => $o->reviewer?->name,
-                'review_note' => $o->review_note,
+                'reviewed_by' => $o->approver?->name,
+                'review_note' => null,
             ]);
 
         return Inertia::render('Attendance/MyOvertimes', [

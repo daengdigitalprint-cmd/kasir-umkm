@@ -60,163 +60,98 @@
 	/*------------------------------------------
 	= dynamic reveal animation
 	-------------------------------------------*/
-	function xb_reveal_animation() {
-		// Hide logic moved to xb_init_hide() for performance
+	/*
+	 * Perf: sebelumnya tiap elemen = gsap.fromTo + ScrollTrigger. Pembuatan
+	 * ScrollTrigger membaca layout (getBoundingClientRect) tepat setelah
+	 * fromTo menulis style -> "forced reflow" berulang per elemen.
+	 * Sekarang: (1) semua tulis DOM dulu, (2) tween dibuat paused,
+	 * (3) diputar oleh IntersectionObserver (tanpa baca layout sinkron).
+	 */
+	function xb_play_on_view(tweens, rootMarginBottom) {
+		if (!tweens.length) return;
+		if (!('IntersectionObserver' in window)) {
+			tweens.forEach(function (t) { t.tween.play(); });
+			return;
+		}
+		var map = new Map();
+		tweens.forEach(function (t) { map.set(t.el, t.tween); });
+		var io = new IntersectionObserver(function (entries) {
+			entries.forEach(function (entry) {
+				if (!entry.isIntersecting) return;
+				var tw = map.get(entry.target);
+				if (tw) tw.play();
+				io.unobserve(entry.target);
+				map.delete(entry.target);
+			});
+		}, { rootMargin: '0px 0px -' + rootMarginBottom + '% 0px', threshold: 0 });
+		tweens.forEach(function (t) { io.observe(t.el); });
+	}
 
-		// Helper function to parse delay
+	function xb_reveal_animation() {
 		function getDelay(el) {
-			let attr = el.attr('data-animation-delay') || el.attr('animation-delay');
+			var attr = el.getAttribute('data-animation-delay') || el.getAttribute('animation-delay');
 			if (!attr) return 0;
-			if (attr.includes('ms')) return parseFloat(attr) / 1000;
-			if (attr.includes('s')) return parseFloat(attr);
-			return parseFloat(attr) / 1000; // Default to ms if unitless
+			if (attr.indexOf('ms') !== -1) return parseFloat(attr) / 1000;
+			if (attr.indexOf('s') !== -1) return parseFloat(attr);
+			return parseFloat(attr) / 1000;
 		}
 
-		// Hero Title Reveal (Scale + Blur + Y)
-		$('.heroTitleUp').each(function () {
-			let el = $(this);
-			let delay = getDelay(el);
-
-			gsap.fromTo(el, {
-				scale: 0.9,
-				y: 50,
-				skewY: 3,
-				autoAlpha: 0,
-				filter: "blur(20px)"
-			}, {
-				scale: 1,
-				y: 0,
-				skewY: 0,
-				autoAlpha: 1,
-				filter: "blur(0px)",
-				duration: 1.2,
-				delay: delay,
-				ease: "expo.out",
-				scrollTrigger: {
-					trigger: el,
-					start: "top 95%",
-					toggleActions: "play none none none"
-				}
+		// Fase tulis: pecah kata untuk semua .xbFadeUp sekaligus.
+		var fadeUpEls = Array.prototype.slice.call(document.querySelectorAll('.xbFadeUp'));
+		fadeUpEls.forEach(function (el) {
+			var words = el.textContent.trim().split(/\s+/);
+			var frag = document.createDocumentFragment();
+			words.forEach(function (word, i) {
+				var wrapper = document.createElement('span');
+				wrapper.className = 'xb-word-cache';
+				wrapper.style.cssText = 'display:inline-block;overflow:hidden;';
+				var inner = document.createElement('span');
+				inner.className = 'xb-word-inner';
+				inner.style.display = 'inline-block';
+				inner.textContent = word + (i < words.length - 1 ? ' ' : '');
+				wrapper.appendChild(inner);
+				frag.appendChild(wrapper);
 			});
+			el.textContent = '';
+			el.appendChild(frag);
 		});
 
-		// Global Section Title Reveal (Word-by-Word Reveal)
-		$('.xbFadeUp').each(function () {
-			let el = $(this);
-			let delay = getDelay(el);
+		var configs = [
+			{ sel: '.heroTitleUp', from: { scale: 0.9, y: 50, skewY: 3, autoAlpha: 0, filter: 'blur(20px)' }, to: { scale: 1, y: 0, skewY: 0, autoAlpha: 1, filter: 'blur(0px)', duration: 1.2, ease: 'expo.out' } },
+			{ sel: '.xbFadeUpImg', from: { y: 80, scale: 0.9, autoAlpha: 0 }, to: { y: 0, scale: 1, autoAlpha: 1, duration: 1.2, ease: 'power2.out' } },
+			{ sel: '.xbFadeUpContent', from: { y: 20, autoAlpha: 0 }, to: { y: 0, autoAlpha: 1, duration: 0.8, ease: 'power2.out' } },
+			{ sel: '.xbFadeUpItem', from: { y: 30, autoAlpha: 0 }, to: { y: 0, autoAlpha: 1, duration: 1, ease: 'power2.out' } },
+		];
 
-			// Professional manual word splitting
-			let content = el.text().trim();
-			let words = content.split(/\s+/);
-			el.empty();
-
-			words.forEach((word, i) => {
-				let wrapper = $('<span class="xb-word-cache" style="display: inline-block; overflow: hidden;"></span>');
-				let inner = $(`<span class="xb-word-inner" style="display: inline-block;">${word}${i < words.length - 1 ? '&nbsp;' : ''}</span>`);
-				wrapper.append(inner);
-				el.append(wrapper);
+		// Fase animasi: tween paused (gsap hanya menulis style, tidak membaca layout).
+		configs.forEach(function (cfg) {
+			var list = [];
+			document.querySelectorAll(cfg.sel).forEach(function (el) {
+				var to = Object.assign({}, cfg.to, { delay: getDelay(el), paused: true });
+				list.push({ el: el, tween: gsap.fromTo(el, cfg.from, to) });
 			});
-
-			let inners = el.find('.xb-word-inner');
-			gsap.fromTo(inners, {
-				yPercent: 100,
-				rotateZ: 3,
-				autoAlpha: 0
-			}, {
-				yPercent: 0,
-				rotateZ: 0,
-				autoAlpha: 1,
-				duration: 1,
-				delay: delay,
-				stagger: 0.05,
-				ease: "power4.out",
-				scrollTrigger: {
-					trigger: el,
-					start: "top 90%",
-					toggleActions: "play none none none"
-				}
-			});
+			xb_play_on_view(list, 5);
 		});
 
-		// Image Reveal (Deep Scale + Y)
-		$('.xbFadeUpImg').each(function () {
-			let el = $(this);
-			let delay = getDelay(el);
-
-			gsap.fromTo(el, {
-				y: 80,
-				scale: 0.9,
-				autoAlpha: 0,
-			}, {
-				y: 0,
-				scale: 1,
-				autoAlpha: 1,
-				duration: 1.2,
-				delay: delay,
-				ease: "power2.out",
-				scrollTrigger: {
-					trigger: el,
-					start: "top 95%",
-					toggleActions: "play none none none"
-				}
+		var wordList = [];
+		fadeUpEls.forEach(function (el) {
+			var inners = el.querySelectorAll('.xb-word-inner');
+			wordList.push({
+				el: el,
+				tween: gsap.fromTo(inners, { yPercent: 100, rotateZ: 3, autoAlpha: 0 }, {
+					yPercent: 0, rotateZ: 0, autoAlpha: 1, duration: 1, delay: getDelay(el),
+					stagger: 0.05, ease: 'power4.out', paused: true,
+				}),
 			});
 		});
-
-		// Content/Text Reveal (Simple Y + Alpha)
-		$('.xbFadeUpContent').each(function () {
-			let el = $(this);
-			let delay = getDelay(el);
-
-			gsap.fromTo(el, {
-				y: 20,
-				autoAlpha: 0
-			}, {
-				y: 0,
-				autoAlpha: 1,
-				duration: 0.8,
-				delay: delay,
-				ease: "power2.out",
-				scrollTrigger: {
-					trigger: el,
-					start: "top 95%",
-					toggleActions: "play none none none"
-				}
-			});
-		});
-
-		// Item Reveal (Medium Y + Alpha)
-		$('.xbFadeUpItem').each(function () {
-			let el = $(this);
-			let delay = getDelay(el);
-
-			gsap.fromTo(el, {
-				y: 30,
-				autoAlpha: 0
-			}, {
-				y: 0,
-				autoAlpha: 1,
-				duration: 1,
-				delay: delay,
-				ease: "power2.out",
-				scrollTrigger: {
-					trigger: el,
-					start: "top 95%",
-					toggleActions: "play none none none"
-				}
-			});
-		});
+		xb_play_on_view(wordList, 10);
 	}
 
 	/*------------------------------------------
 	= back to top
 	-------------------------------------------*/
-	$(window).scroll(function () {
-		if ($(this).scrollTop() > 500) {
-			$('.xb-backtotop').addClass('active');
-		} else {
-			$('.xb-backtotop').removeClass('active');
-		}
-	});
+	// Scroll handler back-to-top digabung di stickyHeader() (satu listener
+	// passive + rAF, pakai window.scrollY, toggle class hanya saat berubah).
 	$(function () {
 		$(".scroll").on('click', function () {
 			$("html,body").animate({ scrollTop: 0 }, "slow");
@@ -236,31 +171,44 @@
 			$('.xb-header').addClass('original').clone(true).insertAfter('.xb-header').addClass('xb-header-area-sticky xb-sticky-stt').removeClass('original');
 		}
 
-		// Handle scroll events
-		$(window).on("scroll", function () {
-			var currentScrollPosition = $(window).scrollTop();
+		// Cache elemen sekali (bukan query DOM di setiap event scroll).
+		var headerArea = document.getElementById('xb-header-area');
+		var isSticky = !!(headerArea && headerArea.classList.contains('is-sticky'));
+		var stbEls = document.querySelectorAll('.xb-header-area-sticky.xb-sticky-stb');
+		var sttEls = document.querySelectorAll('.xb-header-area-sticky.xb-sticky-stt');
+		var backTopEls = document.querySelectorAll('.xb-backtotop');
+		var state = { backTop: null, stb: null, stt: null };
+		var ticking = false;
 
-			// Determine scroll direction
+		function setClass(list, cls, on) {
+			for (var i = 0; i < list.length; i++) list[i].classList.toggle(cls, on);
+		}
+
+		function onFrame() {
+			ticking = false;
+			var currentScrollPosition = window.scrollY || window.pageYOffset || 0;
 			scrollDirection = currentScrollPosition < lastScrollPosition ? "up" : "down";
 			lastScrollPosition = currentScrollPosition;
 
-			// Check if element with ID 'xb-header-area' has class 'is-sticky'
-			if ($("#xb-header-area").hasClass("is-sticky")) {
-				// Add or remove classes based on scroll position for sticky header and mobile header
-				if (lastScrollPosition > 100) {
-					$(".xb-header-area-sticky.xb-sticky-stb").addClass("xb-header-fixed");
-				} else {
-					$(".xb-header-area-sticky.xb-sticky-stb").removeClass("xb-header-fixed");
-				}
-
-				// Add or remove classes for sticky header based on scroll direction
-				if (scrollDirection === "up" && lastScrollPosition > 100) {
-					$(".xb-header-area-sticky.xb-sticky-stt").addClass("xb-header-fixed");
-				} else {
-					$(".xb-header-area-sticky.xb-sticky-stt").removeClass("xb-header-fixed");
-				}
+			var backTop = currentScrollPosition > 500;
+			if (backTop !== state.backTop) {
+				state.backTop = backTop;
+				setClass(backTopEls, 'active', backTop);
 			}
-		});
+
+			if (isSticky) {
+				var stb = lastScrollPosition > 100;
+				var stt = scrollDirection === "up" && lastScrollPosition > 100;
+				if (stb !== state.stb) { state.stb = stb; setClass(stbEls, 'xb-header-fixed', stb); }
+				if (stt !== state.stt) { state.stt = stt; setClass(sttEls, 'xb-header-fixed', stt); }
+			}
+		}
+
+		window.addEventListener('scroll', function () {
+			if (ticking) return;
+			ticking = true;
+			requestAnimationFrame(onFrame);
+		}, { passive: true });
 	}
 	stickyHeader();
 
@@ -403,7 +351,7 @@
 	/*------------------------------------------
 	= nice select
 	-------------------------------------------*/
-	$('select').niceSelect();
+	if ($.fn.niceSelect && $('select').length) $('select').niceSelect();
 
 	/*------------------------------------------
 	= data background and bg color
@@ -419,35 +367,64 @@
 	/*------------------------------------------
 	= aos animation
 	-------------------------------------------*/
+	/*
+	 * Pengganti WOW.js: WOW mengecek posisi tiap elemen (offsetTop berantai)
+	 * lewat interval scroll -> forced reflow. Versi ini memakai IntersectionObserver.
+	 * Perilaku dipertahankan: nonaktif di mobile (setara opsi mobile:false).
+	 */
 	function wowAnimation() {
-		var wow = new WOW({
-			boxClass: 'wow',
-			animateClass: 'animated',
-			offset: 0,
-			mobile: false,
-			live: true
+		if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) return;
+		if (!('IntersectionObserver' in window)) return;
+		var boxes = document.querySelectorAll('.wow');
+		if (!boxes.length) return;
+
+		var io = new IntersectionObserver(function (entries) {
+			entries.forEach(function (entry) {
+				if (!entry.isIntersecting) return;
+				var box = entry.target;
+				io.unobserve(box);
+				var duration = box.getAttribute('data-wow-duration');
+				var delay = box.getAttribute('data-wow-delay');
+				var iteration = box.getAttribute('data-wow-iteration');
+				if (duration) box.style.animationDuration = duration;
+				if (delay) box.style.animationDelay = delay;
+				if (iteration) box.style.animationIterationCount = iteration;
+				box.style.animationName = '';
+				box.style.visibility = 'visible';
+				box.classList.add('animated');
+			});
+		}, { threshold: 0 });
+
+		// Tulis semua dulu, baru observe (tanpa baca layout di antaranya).
+		boxes.forEach(function (box) {
+			box.style.visibility = 'hidden';
+			box.style.animationName = 'none';
 		});
-		wow.init();
+		boxes.forEach(function (box) { io.observe(box); });
 	}
 
 	/*------------------------------------------
 	= counter
 	-------------------------------------------*/
-	if ($(".xbo").length) {
-		$('.xbo').appear();
-		$(document.body).on('appear', '.xbo', function (e) {
-			var odo = $(".xbo");
-			odo.each(function () {
-				var countNumber = $(this).attr("data-count");
-				$(this).html(countNumber);
-			});
-			window.xboOptions = {
-				format: 'd',
-			};
+	// Pengganti jquery.appear (yang membaca offset()/height() setiap scroll).
+	(function () {
+		var xbo = document.querySelectorAll('.xbo');
+		if (!xbo.length) return;
+		function fill() {
+			xbo.forEach(function (el) { el.textContent = el.getAttribute('data-count'); });
+			window.xboOptions = { format: 'd' };
+		}
+		if (!('IntersectionObserver' in window)) { fill(); return; }
+		var io = new IntersectionObserver(function (entries) {
+			if (entries.some(function (e) { return e.isIntersecting; })) {
+				fill();
+				io.disconnect();
+			}
 		});
-	}
+		xbo.forEach(function (el) { io.observe(el); });
+	})();
 
-	if ($(".xbo_trigger").length) {
+	if ($(".xbo_trigger").length && typeof Odometer !== 'undefined' && $.fn.appear) {
 		var odo = $(".xbo_trigger");
 		odo.each(function () {
 			var countNumber = $(this).attr("data-count");
@@ -482,7 +459,7 @@
 	/*------------------------------------------
 	= isotop
 	-------------------------------------------*/
-	$('.grid').imagesLoaded(function () {
+	if ($('.grid').length && $.fn.imagesLoaded && $.fn.isotope) $('.grid').imagesLoaded(function () {
 		var $grid = $('.grid').isotope({
 			itemSelector: '.grid-item',
 			percenxbosition: true,
@@ -509,7 +486,7 @@
 	/*------------------------------------------
 	= Background Parallax - Start
 	-------------------------------------------*/
-	$('.parallaxie').parallaxie({
+	if ($.fn.parallaxie && $('.parallaxie').length) $('.parallaxie').parallaxie({
 		speed: 0.5,
 		offset: 0,
 	});
@@ -517,7 +494,7 @@
 	/*------------------------------------------
 	= story slide
 	-------------------------------------------*/
-	var slider = new Swiper(".xb-story-slider", {
+	var slider = typeof Swiper === "undefined" ? null : new Swiper(".xb-story-slider", {
 		loop: true,
 		speed: 400,
 		spaceBetween: 50,
@@ -535,7 +512,7 @@
 	/*------------------------------------------
 	= team slide
 	-------------------------------------------*/
-	var slider = new Swiper(".fs-story-slider", {
+	var slider = typeof Swiper === "undefined" ? null : new Swiper(".fs-story-slider", {
 		loop: true,
 		speed: 400,
 		spaceBetween: 30,
@@ -569,7 +546,7 @@
 	/*------------------------------------------
 	= project slide
 	-------------------------------------------*/
-	var slider = new Swiper(".blog-slider", {
+	var slider = typeof Swiper === "undefined" ? null : new Swiper(".blog-slider", {
 		loop: true,
 		speed: 400,
 		spaceBetween: 0,
@@ -591,7 +568,7 @@
 	/*------------------------------------------
 	= testimonial slide
 	-------------------------------------------*/
-	var swiper = new Swiper(".xb-testimonial-author", {
+	var swiper = typeof Swiper === "undefined" ? null : new Swiper(".xb-testimonial-author", {
 		spaceBetween: 1,
 		slidesPerView: 6,
 		autoplay: {
@@ -599,7 +576,7 @@
 			delay: 6000
 		},
 	});
-	var swiper2 = new Swiper(".xb-testimonial-slider", {
+	var swiper2 = typeof Swiper === "undefined" ? null : new Swiper(".xb-testimonial-slider", {
 		loop: true,
 		speed: 400,
 		spaceBetween: 0,
@@ -608,9 +585,9 @@
 			nextEl: ".swiper-button-next",
 			prevEl: ".swiper-button-prev",
 		},
-		thumbs: {
+		thumbs: swiper ? {
 			swiper: swiper,
-		},
+		} : undefined,
 	});
 
 	/*------------------------------------------
@@ -640,16 +617,18 @@
 	/*------------------------------------------
 	= magnificPopup
 	-------------------------------------------*/
-	$('.popup-image').magnificPopup({
-		type: 'image',
-		gallery: {
-			enabled: true
-		}
-	});
-	$('.popup-video').magnificPopup({
-		type: 'iframe',
-		mainClass: 'mfp-zoom-in',
-	});
+	if ($.fn.magnificPopup) {
+		$('.popup-image').magnificPopup({
+			type: 'image',
+			gallery: {
+				enabled: true
+			}
+		});
+		$('.popup-video').magnificPopup({
+			type: 'iframe',
+			mainClass: 'mfp-zoom-in',
+		});
+	}
 
 	/*------------------------------------------
 	= Accordion Box
@@ -677,38 +656,48 @@
 	/*------------------------------------------
 	= marquee
 	-------------------------------------------*/
-	$('.marquee-left').marquee({
-		speed: 20,
-		gap: 0,
-		delayBeforeStart: 0,
-		direction: 'left',
-		duplicated: true,
-		pauseOnHover: false,
-		startVisible: true,
-	});
-	$('.marquee-left-2').marquee({
-		speed: 20,
-		gap: 0,
-		delayBeforeStart: 0,
-		direction: 'left',
-		duplicated: true,
-		pauseOnHover: true,
-		startVisible: true,
-	});
-	$('.marquee-right').marquee({
-		speed: 20,
-		gap: 0,
-		delayBeforeStart: 0,
-		direction: 'right',
-		duplicated: true,
-		pauseOnHover: false,
-		startVisible: true,
-	});
+	// Inisialisasi marquee mengukur lebar elemen (baca layout). Ditunda ke
+	// idle time supaya tidak jatuh di task kritis saat halaman dimuat.
+	function initMarquees() {
+		if (!$.fn.marquee) return;
+		$('.marquee-left').marquee({
+			speed: 20,
+			gap: 0,
+			delayBeforeStart: 0,
+			direction: 'left',
+			duplicated: true,
+			pauseOnHover: false,
+			startVisible: true,
+		});
+		$('.marquee-left-2').marquee({
+			speed: 20,
+			gap: 0,
+			delayBeforeStart: 0,
+			direction: 'left',
+			duplicated: true,
+			pauseOnHover: true,
+			startVisible: true,
+		});
+		$('.marquee-right').marquee({
+			speed: 20,
+			gap: 0,
+			delayBeforeStart: 0,
+			direction: 'right',
+			duplicated: true,
+			pauseOnHover: false,
+			startVisible: true,
+		});
+	}
+	if ('requestIdleCallback' in window) {
+		window.requestIdleCallback(initMarquees, { timeout: 2500 });
+	} else {
+		setTimeout(initMarquees, 300);
+	}
 
 	/*------------------------------------------
 	= button text hover animation
 	-------------------------------------------*/
-	document.fonts.ready.then(function () {
+	if (typeof SplitText !== 'undefined' && document.querySelector('[data-link-shadow]')) document.fonts.ready.then(function () {
 		const splitLink = new SplitText("[data-link-shadow]", {
 			type: "lines, chars",
 			mask: "lines",
@@ -787,7 +776,7 @@
 		});
 		activeServiceList(active_bg, element);
 	}
-	service_animation();
+	if (document.querySelector('.xb-item-list')) service_animation();
 
 	/*------------------------------------------
 	= price Toggle button

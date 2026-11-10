@@ -5,6 +5,8 @@ namespace App\Modules\Attendance\Http\Controllers;
 use App\Models\Store;
 use App\Modules\Attendance\Models\Employee;
 use App\Modules\Attendance\Models\LeaveRequest;
+use App\Modules\Attendance\Services\AttendanceService;
+use App\Services\ActivityLogger;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -52,10 +54,23 @@ class LeaveRequestController extends AdminAttendanceController
             'status' => 'required|in:approved,rejected',
         ]);
 
+        if ((int) $leaf->employee?->user_id === (int) auth()->id()) {
+            return back()->with('error', 'Pengajuan cuti milik sendiri harus disetujui oleh atasan/pemilik lain.');
+        }
+
         $leaf->status = $validated['status'];
         $leaf->approved_by = $validated['status'] === 'approved' ? auth()->id() : null;
         $leaf->approved_at = $validated['status'] === 'approved' ? now() : null;
         $leaf->save();
+
+        // Cuti disetujui langsung tercatat di absensi (tidak dianggap alpa, terbaca payroll).
+        app(AttendanceService::class)->syncLeave($leaf);
+
+        ActivityLogger::log($store, 'leave.'.$validated['status'],
+            ($validated['status'] === 'approved' ? 'Menyetujui' : 'Menolak')." cuti {$leaf->employee?->name} {$leaf->start_date?->toDateString()} s.d. {$leaf->end_date?->toDateString()}",
+            $leaf,
+            ['leave_type' => $leaf->leave_type],
+        );
 
         return back()->with('success', $validated['status'] === 'approved'
             ? 'Cuti disetujui.'
@@ -68,6 +83,9 @@ class LeaveRequestController extends AdminAttendanceController
         $this->authorizeAdmin();
         $this->ensureOwned($leaf, $store);
 
+        // Hapus baris absensi yang dibuat dari cuti ini sebelum pengajuannya dihapus.
+        $leaf->status = 'rejected';
+        app(AttendanceService::class)->syncLeave($leaf);
         $leaf->delete();
 
         return back()->with('success', 'Pengajuan cuti dihapus.');
@@ -76,8 +94,8 @@ class LeaveRequestController extends AdminAttendanceController
     private function validateData(Request $request): array
     {
         return $request->validate([
-            'employee_id' => 'required|integer|exists:employees,id',
-            'leave_type' => 'required|string|max:30',
+            'employee_id' => ['required', 'integer', $this->storeEmployeeRule()],
+            'leave_type' => 'required|string|in:annual,sick,maternity,marriage,bereavement,unpaid,other',
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
             'reason' => 'nullable|string|max:1000',

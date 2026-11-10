@@ -40,8 +40,21 @@ class CashShift extends Model
         static::creating(function (CashShift $shift) {
             if (empty($shift->shift_number)) {
                 // Ambil nama kasir: prioritaskan employee (PIN mode), fallback ke user
-                $shift->loadMissing(['employee', 'user']);
-                $name = $shift->employee?->name ?? $shift->user?->name ?? 'KASIR';
+                $name = null;
+
+                if ($shift->employee_id) {
+                    $employeeName = \App\Modules\Attendance\Models\Employee::query()
+                        ->where('id', $shift->employee_id)
+                        ->value('name');
+                    $name = $employeeName;
+                }
+
+                if (! $name && $shift->user_id) {
+                    $userName = User::query()->where('id', $shift->user_id)->value('name');
+                    $name = $userName;
+                }
+
+                $name = $name ?? 'KASIR';
                 $firstName = Str::before($name, ' ');
                 $code = Str::upper(Str::slug($firstName, ''));
 

@@ -5,8 +5,12 @@ namespace App\Http\Controllers;
 use App\Events\KitchenQueueUpdated;
 use App\Models\Queue;
 use App\Models\QueueEntry;
+use App\Models\Store;
+use App\Models\User;
+use App\Support\BarbershopFeatures;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class QueueController extends Controller
@@ -45,6 +49,22 @@ class QueueController extends Controller
         ];
     }
 
+    /** Prop tambahan untuk papan antrian: mode barbershop + daftar teknisi. */
+    private function barbershopProps(Store $store): array
+    {
+        $enabled = BarbershopFeatures::enabled($store);
+
+        return [
+            'barbershopEnabled' => $enabled,
+            'barbers' => $enabled
+                ? User::barbersForStore($store)
+                    ->map(fn (User $u) => ['id' => $u->id, 'name' => $u->name])
+                    ->values()
+                    ->all()
+                : [],
+        ];
+    }
+
     private function serializeEntry(QueueEntry $e): array
     {
         return [
@@ -61,6 +81,8 @@ class QueueController extends Controller
             'priority' => $e->priority,
             'notes' => $e->notes,
             'items' => $e->items,
+            'barber_user_id' => $e->barber_user_id,
+            'barber_name' => $e->barber?->name,
             'called_at' => $e->called_at?->toIso8601String(),
             'completed_at' => $e->completed_at?->toIso8601String(),
             'created_at' => $e->created_at?->toIso8601String(),
@@ -85,7 +107,7 @@ class QueueController extends Controller
             ->map(fn (Queue $q) => $this->serializeQueue($q));
 
         $entries = $store->queueEntries()
-            ->with('queue:id,name,code')
+            ->with(['queue:id,name,code', 'barber:id,name'])
             ->whereNull('transaction_id')
             ->where('status', '!=', 'cancelled')
             ->whereDate('created_at', today())
@@ -101,6 +123,7 @@ class QueueController extends Controller
                 'id' => $store->id,
                 'name' => $store->name,
             ],
+            ...$this->barbershopProps($store),
         ]);
     }
 
@@ -116,6 +139,7 @@ class QueueController extends Controller
         }
 
         $entries = $queue->entries()
+            ->with('barber:id,name')
             ->latest()
             ->limit(200)
             ->get()
@@ -133,6 +157,7 @@ class QueueController extends Controller
                 'id' => $store->id,
                 'name' => $store->name,
             ],
+            ...$this->barbershopProps($store),
         ]);
     }
 
@@ -217,26 +242,45 @@ class QueueController extends Controller
             'customer_phone' => 'nullable|string|max:40',
             'notes' => 'nullable|string|max:500',
             'priority' => 'nullable|integer|min:0|max:10',
+            'barber_user_id' => 'nullable|integer|exists:users,id',
             'items' => 'nullable|array',
             'items.*.product_name' => 'required_with:items|string',
             'items.*.quantity' => 'required_with:items|numeric|min:1',
         ]);
 
-        $lastNumber = $queue->entries()->max('number');
-        $nextNumber = $lastNumber ? ((int) $lastNumber + 1) : 1;
+        $barberUserId = null;
 
-        $entry = $queue->entries()->create([
-            'store_id' => $store->id,
-            'number' => $nextNumber,
-            'status' => 'waiting',
-            'order_type' => $validated['order_type'] ?? null,
-            'table_number' => $validated['table_number'] ?? null,
-            'customer_name' => $validated['customer_name'] ?? null,
-            'customer_phone' => $validated['customer_phone'] ?? null,
-            'notes' => $validated['notes'] ?? null,
-            'priority' => $validated['priority'] ?? 0,
-            'items' => $validated['items'] ?? null,
-        ]);
+        if (BarbershopFeatures::enabled($store) && $request->filled('barber_user_id')) {
+            $barberUserId = (int) $validated['barber_user_id'];
+
+            if (! User::barbersForStore($store)->contains('id', $barberUserId)) {
+                throw ValidationException::withMessages([
+                    'barber_user_id' => 'Teknisi tidak valid atau bukan anggota toko.',
+                ]);
+            }
+        }
+
+        $entry = DB::transaction(function () use ($queue, $store, $validated, $barberUserId) {
+            // Kunci baris queue agar penomoran antrian terserialisasi antar request.
+            Queue::query()->whereKey($queue->id)->lockForUpdate()->first();
+
+            $lastNumber = $queue->entries()->max('number');
+            $nextNumber = $lastNumber ? ((int) $lastNumber + 1) : 1;
+
+            return $queue->entries()->create([
+                'store_id' => $store->id,
+                'number' => $nextNumber,
+                'status' => 'waiting',
+                'order_type' => $validated['order_type'] ?? null,
+                'table_number' => $validated['table_number'] ?? null,
+                'customer_name' => $validated['customer_name'] ?? null,
+                'customer_phone' => $validated['customer_phone'] ?? null,
+                'notes' => $validated['notes'] ?? null,
+                'priority' => $validated['priority'] ?? 0,
+                'barber_user_id' => $barberUserId,
+                'items' => $validated['items'] ?? null,
+            ]);
+        });
 
         event(KitchenQueueUpdated::fromEntry($entry->load('transaction:id,transaction_number,order_type,table_reference')));
 
@@ -260,9 +304,9 @@ class QueueController extends Controller
 
         $newStatus = $validated['status'];
         $allowedTransitions = [
-            'waiting' => ['serving'],
-            'serving' => ['ready'],
-            'ready' => [],
+            'waiting' => ['serving', 'cancelled'],
+            'serving' => ['ready', 'completed'],
+            'ready' => ['completed'],
         ];
 
         if (! in_array($newStatus, $allowedTransitions[$queueEntry->status] ?? [], true)) {
@@ -278,7 +322,6 @@ class QueueController extends Controller
         if ($newStatus === 'completed' && $queueEntry->status !== 'completed') {
             $updates['completed_at'] = now();
         }
-
         DB::transaction(function () use ($queueEntry, $updates, $newStatus) {
             $queueEntry->update($updates);
 
@@ -295,7 +338,7 @@ class QueueController extends Controller
             }
         });
 
-        KitchenQueueUpdated::dispatch(KitchenQueueUpdated::fromEntry($queueEntry->load('transaction:id,transaction_number,order_type,table_reference')));
+        event(KitchenQueueUpdated::fromEntry($queueEntry->load('transaction:id,transaction_number,order_type,table_reference')));
 
         return response()->json([
             'success' => true,

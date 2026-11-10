@@ -11,7 +11,13 @@ type DashboardTab = {
     id: string;
     label: string;
     icon: string;
+    /** Lebar ikon SVG (persegi). */
+    iconSize: number;
     src: string;
+    /** Versi 800px untuk layar kecil (scripts/optimize-landing-images.py). */
+    src800: string;
+    /** Lebar asli `src` (untuk srcset). */
+    srcWidth: number;
     active: boolean;
 };
 
@@ -20,28 +26,40 @@ const tabs = computed<DashboardTab[]>(() => [
         id: 'dashboard',
         label: 'Kontrol Produk',
         icon: 'das_icon01.svg',
+        iconSize: 18,
         src: '/kontrol-produk.webp',
+        src800: '/kontrol-produk-800.webp',
+        srcWidth: 1550,
         active: true,
     },
     {
         id: 'document',
         label: 'Manajemen Stok',
         icon: 'das_icon02.svg',
+        iconSize: 20,
         src: '/produk.webp',
+        src800: '/produk-800.webp',
+        srcWidth: 1660,
         active: false,
     },
     {
         id: 'sheet',
         label: 'Laporan Penjualan',
         icon: 'das_icon03.svg',
+        iconSize: 18,
         src: '/laporan-keuangan.webp',
+        src800: '/laporan-keuangan-800.webp',
+        srcWidth: 1872,
         active: false,
     },
     {
         id: 'whiteboard',
         label: 'Multi-Cabang',
         icon: 'das_icon04.svg',
+        iconSize: 20,
         src: '/multi%20cabang.webp',
+        src800: '/multi-cabang-800.webp',
+        srcWidth: 1616,
         active: false,
     },
 ]);
@@ -56,7 +74,7 @@ const tabs = computed<DashboardTab[]>(() => [
 <template>
     <!-- dashboard start -->
     <section class="dashboard" id="fitur">
-        <div class="container mxw-1330">
+        <div class="mxw-1330 container">
             <div class="fs-dashboard-wrapper xbFadeUpItem" data-animation-delay="300ms">
                 <ul class="fs-dashboard-nav xb-corner-shape ul_li nav nav-pills" id="pills-tab" role="tablist">
                     <li class="nav-item" role="presentation" v-for="tab in tabs" :key="tab.id">
@@ -71,7 +89,15 @@ const tabs = computed<DashboardTab[]>(() => [
                             :aria-controls="`pills-${tab.id}`"
                             :aria-selected="tab.active ? 'true' : 'false'"
                         >
-                            <img :src="`${base}/img/icon/${tab.icon}`" alt="icon" loading="lazy" decoding="async"> {{ tab.label }}
+                            <img
+                                :src="`${base}/img/icon/${tab.icon}`"
+                                :width="tab.iconSize"
+                                :height="tab.iconSize"
+                                alt=""
+                                loading="lazy"
+                                decoding="async"
+                            />
+                            {{ tab.label }}
                         </button>
                     </li>
                 </ul>
@@ -88,23 +114,35 @@ const tabs = computed<DashboardTab[]>(() => [
                         <div>
                             <img
                                 :src="tab.src"
-                                alt="image"
+                                :srcset="`${tab.src800} 800w, ${tab.src} ${tab.srcWidth}w`"
+                                sizes="(max-width: 991px) 100vw, 851px"
+                                :alt="`Tampilan fitur ${tab.label} di aplikasi kasir UMKM Kasir`"
                                 :fetchpriority="tab.active ? 'high' : undefined"
                                 :loading="tab.active ? undefined : 'lazy'"
                                 decoding="async"
                                 width="1280"
                                 height="800"
-                                style="max-width: 100%; height: auto;"
-                            >
+                                style="max-width: 100%; height: auto"
+                            />
                         </div>
                     </div>
                 </div>
                 <div class="xb-section-shape dashboard-shape">
-                    <div class="shape shape--1"><img :src="`${base}/img/shape/das_shape03.png`" alt="" loading="lazy" decoding="async"></div>
-                    <div class="shape shape--2"><img :src="`${base}/img/shape/das_shape04.png`" alt="" loading="lazy" decoding="async"></div>
-                    <div class="shape shape--3"><img :src="`${base}/img/shape/das_shape01.png`" alt="" loading="lazy" decoding="async"></div>
-                    <div class="shape shape--4"><img :src="`${base}/img/shape/das_shape02.png`" alt="" loading="lazy" decoding="async"></div>
-                    <div class="shape shape--5"><img :src="`${base}/img/shape/circle-blur.png`" alt="" loading="lazy" decoding="async"></div>
+                    <div class="shape shape--1">
+                        <img width="195" height="337" :src="`${base}/img/shape/das_shape03.png`" alt="" loading="lazy" decoding="async" />
+                    </div>
+                    <div class="shape shape--2">
+                        <img width="195" height="337" :src="`${base}/img/shape/das_shape04.png`" alt="" loading="lazy" decoding="async" />
+                    </div>
+                    <div class="shape shape--3">
+                        <img width="255" height="264" :src="`${base}/img/shape/das_shape01.png`" alt="" loading="lazy" decoding="async" />
+                    </div>
+                    <div class="shape shape--4">
+                        <img width="255" height="264" :src="`${base}/img/shape/das_shape02.png`" alt="" loading="lazy" decoding="async" />
+                    </div>
+                    <div class="shape shape--5">
+                        <img width="1328" height="388" :src="`${base}/img/shape/circle-blur.webp`" alt="" loading="lazy" decoding="async" />
+                    </div>
                 </div>
             </div>
         </div>
@@ -113,67 +151,130 @@ const tabs = computed<DashboardTab[]>(() => [
 
     <!-- solution start -->
     <section class="solution" id="manfaat">
-        <div class="container mxw-1330">
+        <div class="mxw-1330 container">
             <div class="fs-solution-wrapper plr-20">
-                <div class="sec-title text-center mb-65" style="padding-top: 30px;">
-                    <h2 class="title wow fadeInUp" data-wow-delay="0ms"
-                        data-wow-duration="600ms">Masalah Anda, Solusi Kami</h2>
+                <div class="sec-title mb-65 text-center" style="padding-top: 30px">
+                    <h2 class="title wow fadeInUp" data-wow-delay="0ms" data-wow-duration="600ms">Masalah Anda, Solusi Kami</h2>
                 </div>
                 <div class="row mt-none-30">
                     <div class="col-lg-6 mt-30">
                         <div class="fs-solution-item wow fadeInUp" data-wow-delay="0ms" data-wow-duration="600ms">
-                            <h2 class="xb-title">Masalahnya</h2>
-                            <p class="xb-content">Mengelola penjualan, stok, dan laporan secara manual menyebabkan kesalahan hitung, keterlambatan, dan biaya tersembunyi yang membuat operasional lebih lambat dan sulit dikendalikan.</p>
+                            <h3 class="xb-title lp-fs-h2">Masalahnya</h3>
+                            <p class="xb-content">
+                                Mengelola penjualan, stok, dan laporan secara manual menyebabkan kesalahan hitung, keterlambatan, dan biaya
+                                tersembunyi yang membuat operasional lebih lambat dan sulit dikendalikan.
+                            </p>
                             <div class="fs-solution-chart_box">
                                 <div class="xb-item--holder">
                                     <div class="xb-item--chart_img">
-                                        <img :src="`${base}/img/shape/chart-circle.png`" alt="" loading="lazy" decoding="async">
+                                        <img
+                                            width="332"
+                                            height="169"
+                                            :src="`${base}/img/shape/chart-circle.png`"
+                                            alt=""
+                                            loading="lazy"
+                                            decoding="async"
+                                        />
                                     </div>
                                     <p class="xb-item--content">Total Transaksi</p>
-                                    <h2 class="xb-item--number xb-odm">
+                                    <div class="xb-item--number xb-odm lp-h2">
                                         <span class="suffix">Rp</span><span class="xbo" data-count="12,450">00</span>
-                                    </h2>
+                                    </div>
                                     <ul class="xb-item--meta ul_li">
-                                        <li>Rata-rata waktu: <span> <i class="fa-solid fa-angle-left"></i>3m </span> </li>
+                                        <li>
+                                            Rata-rata waktu: <span> <i class="fa-solid fa-angle-left"></i>3m </span>
+                                        </li>
                                         <li>Tingkat sukses: <span>49.9%</span></li>
                                     </ul>
                                 </div>
                                 <div class="fs-tag-list">
                                     <div class="xb-item--warning_img">
-                                        <img :src="`${base}/img/shape/warning.png`" alt="" loading="lazy" decoding="async">
+                                        <img width="144" height="160" :src="`${base}/img/shape/warning.png`" alt="" loading="lazy" decoding="async" />
                                     </div>
                                     <div class="xb-item--list_box">
                                         <ul class="xb-item--list ul_li_between">
-                                            <li><span><i class="fa-solid fa-circle-exclamation"></i></span>Kontrol Terbatas</li>
-                                            <li><span><i class="fa-solid fa-triangle-exclamation"></i></span>Biaya Tersembunyi</li>
+                                            <li>
+                                                <span><i class="fa-solid fa-circle-exclamation"></i></span>Kontrol Terbatas
+                                            </li>
+                                            <li>
+                                                <span><i class="fa-solid fa-triangle-exclamation"></i></span>Biaya Tersembunyi
+                                            </li>
                                         </ul>
                                         <ul class="xb-item--list ul_li_between justify-content-center">
-                                            <li><span><i class="fa-solid fa-triangle-exclamation"></i></span>Integrasi Lambat</li>
+                                            <li>
+                                                <span><i class="fa-solid fa-triangle-exclamation"></i></span>Integrasi Lambat
+                                            </li>
                                         </ul>
                                         <ul class="xb-item--list ul_li_between">
-                                            <li><span><i class="fa-solid fa-circle-exclamation"></i></span>Sistem Terpisah</li>
-                                            <li><span><i class="fa-solid fa-circle-exclamation"></i></span>Tidak Standar</li>
+                                            <li>
+                                                <span><i class="fa-solid fa-circle-exclamation"></i></span>Sistem Terpisah
+                                            </li>
+                                            <li>
+                                                <span><i class="fa-solid fa-circle-exclamation"></i></span>Tidak Standar
+                                            </li>
                                         </ul>
                                     </div>
                                 </div>
                                 <div class="xb-item--shape">
                                     <div class="shape shape--1">
-                                        <img :src="`${base}/img/shape/solution_shape01.png`" alt="shape" loading="lazy" decoding="async">
+                                        <img
+                                            width="195"
+                                            height="337"
+                                            :src="`${base}/img/shape/solution_shape01.png`"
+                                            alt=""
+                                            loading="lazy"
+                                            decoding="async"
+                                        />
                                     </div>
                                     <div class="shape shape--2">
-                                        <img :src="`${base}/img/shape/solution_shape02.png`" alt="shape" loading="lazy" decoding="async">
+                                        <img
+                                            width="195"
+                                            height="337"
+                                            :src="`${base}/img/shape/solution_shape02.png`"
+                                            alt=""
+                                            loading="lazy"
+                                            decoding="async"
+                                        />
                                     </div>
                                     <div class="shape shape--3">
-                                        <img :src="`${base}/img/shape/solution_shape03.png`" alt="shape" loading="lazy" decoding="async">
+                                        <img
+                                            width="264"
+                                            height="299"
+                                            :src="`${base}/img/shape/solution_shape03.png`"
+                                            alt=""
+                                            loading="lazy"
+                                            decoding="async"
+                                        />
                                     </div>
                                     <div class="shape shape--4">
-                                        <img :src="`${base}/img/shape/solution_shape04.png`" alt="shape" loading="lazy" decoding="async">
+                                        <img
+                                            width="264"
+                                            height="299"
+                                            :src="`${base}/img/shape/solution_shape04.png`"
+                                            alt=""
+                                            loading="lazy"
+                                            decoding="async"
+                                        />
                                     </div>
                                     <div class="shape shape--5">
-                                        <img :src="`${base}/img/shape/circle-blur02.png`" alt="shape" loading="lazy" decoding="async">
+                                        <img
+                                            width="204"
+                                            height="370"
+                                            :src="`${base}/img/shape/circle-blur02.png`"
+                                            alt=""
+                                            loading="lazy"
+                                            decoding="async"
+                                        />
                                     </div>
                                     <div class="shape shape--6">
-                                        <img :src="`${base}/img/shape/circle-blur02.png`" alt="shape" loading="lazy" decoding="async">
+                                        <img
+                                            width="204"
+                                            height="370"
+                                            :src="`${base}/img/shape/circle-blur02.png`"
+                                            alt=""
+                                            loading="lazy"
+                                            decoding="async"
+                                        />
                                     </div>
                                 </div>
                             </div>
@@ -181,54 +282,159 @@ const tabs = computed<DashboardTab[]>(() => [
                     </div>
                     <div class="col-lg-6 mt-30">
                         <div class="fs-solution-item wow fadeInUp" data-wow-delay="150ms" data-wow-duration="600ms">
-                            <h2 class="xb-title">Solusinya</h2>
-                            <p class="xb-content">UMKM Kasir memberi Anda satu platform untuk mengelola produk, stok, transaksi, dan laporan — semua dalam satu tempat.</p>
+                            <h3 class="xb-title lp-fs-h2">Solusinya</h3>
+                            <p class="xb-content">
+                                UMKM Kasir memberi Anda satu platform untuk mengelola produk, stok, transaksi, dan laporan — semua dalam satu tempat.
+                            </p>
                             <div class="fs-solution-chart_box fa-chart-two">
                                 <div class="xb-item--holder">
                                     <div class="xb-item--chart_img">
-                                        <img :src="`${base}/img/shape/chart-circle02.png`" alt="" loading="lazy" decoding="async">
+                                        <img
+                                            width="332"
+                                            height="169"
+                                            :src="`${base}/img/shape/chart-circle02.png`"
+                                            alt=""
+                                            loading="lazy"
+                                            decoding="async"
+                                        />
                                     </div>
                                     <p class="xb-item--content">Total Transaksi</p>
-                                    <h2 class="xb-item--number xb-odm">
+                                    <div class="xb-item--number xb-odm lp-h2">
                                         <span class="suffix">Rp</span><span class="xbo" data-count="12,550">00</span>
-                                    </h2>
+                                    </div>
                                     <ul class="xb-item--meta ul_li">
-                                        <li>Rata-rata waktu: <span> <i class="fa-solid fa-angle-left"></i>3d </span> </li>
+                                        <li>
+                                            Rata-rata waktu: <span> <i class="fa-solid fa-angle-left"></i>3d </span>
+                                        </li>
                                         <li>Tingkat sukses: <span>99.9%</span></li>
                                     </ul>
                                 </div>
                                 <div class="fs-tag-list">
                                     <div class="xb-item--list_box ul_li">
                                         <ul class="xb-item--list ul_li">
-                                            <li><span><img :src="`${base}/img/icon/sol-icon01.svg`" alt="icon" loading="lazy" decoding="async"></span>Platform All-in-One</li>
-                                            <li><span><img :src="`${base}/img/icon/sol-icon02.svg`" alt="icon" loading="lazy" decoding="async"></span>Transparansi Biaya</li>
-                                            <li><span><img :src="`${base}/img/icon/sol-icon03.svg`" alt="icon" loading="lazy" decoding="async"></span>Integrasi Cepat</li>
-                                            <li><span><img :src="`${base}/img/icon/sol-icon04.svg`" alt="icon" loading="lazy" decoding="async"></span>Sistem Sederhana</li>
+                                            <li>
+                                                <span
+                                                    ><img
+                                                        width="24"
+                                                        height="24"
+                                                        :src="`${base}/img/icon/sol-icon01.svg`"
+                                                        alt=""
+                                                        loading="lazy"
+                                                        decoding="async" /></span
+                                                >Platform All-in-One
+                                            </li>
+                                            <li>
+                                                <span
+                                                    ><img
+                                                        width="24"
+                                                        height="24"
+                                                        :src="`${base}/img/icon/sol-icon02.svg`"
+                                                        alt=""
+                                                        loading="lazy"
+                                                        decoding="async" /></span
+                                                >Transparansi Biaya
+                                            </li>
+                                            <li>
+                                                <span
+                                                    ><img
+                                                        width="24"
+                                                        height="24"
+                                                        :src="`${base}/img/icon/sol-icon03.svg`"
+                                                        alt=""
+                                                        loading="lazy"
+                                                        decoding="async" /></span
+                                                >Integrasi Cepat
+                                            </li>
+                                            <li>
+                                                <span
+                                                    ><img
+                                                        width="24"
+                                                        height="24"
+                                                        :src="`${base}/img/icon/sol-icon04.svg`"
+                                                        alt=""
+                                                        loading="lazy"
+                                                        decoding="async" /></span
+                                                >Sistem Sederhana
+                                            </li>
                                         </ul>
                                         <ul class="xb-item--list ul_li">
-                                            <li><span><img :src="`${base}/img/icon/sol-icon05.svg`" alt="icon" loading="lazy" decoding="async"></span>Dasbor Kontrol Penuh</li>
-                                            <li class="logo-img"><img src="/cecklist.webp" alt="" loading="lazy" decoding="async"></li>
+                                            <li>
+                                                <span
+                                                    ><img
+                                                        width="24"
+                                                        height="24"
+                                                        :src="`${base}/img/icon/sol-icon05.svg`"
+                                                        alt=""
+                                                        loading="lazy"
+                                                        decoding="async" /></span
+                                                >Dasbor Kontrol Penuh
+                                            </li>
+                                            <li class="logo-img">
+                                                <img width="1024" height="1024" src="/cecklist-sm.webp" alt="" loading="lazy" decoding="async" />
+                                            </li>
                                         </ul>
                                     </div>
                                 </div>
                                 <div class="xb-item--shape">
                                     <div class="shape shape--1">
-                                        <img :src="`${base}/img/shape/solution_shape05.png`" alt="shape" loading="lazy" decoding="async">
+                                        <img
+                                            width="195"
+                                            height="337"
+                                            :src="`${base}/img/shape/solution_shape05.png`"
+                                            alt=""
+                                            loading="lazy"
+                                            decoding="async"
+                                        />
                                     </div>
                                     <div class="shape shape--2">
-                                        <img :src="`${base}/img/shape/solution_shape06.png`" alt="shape" loading="lazy" decoding="async">
+                                        <img
+                                            width="195"
+                                            height="337"
+                                            :src="`${base}/img/shape/solution_shape06.png`"
+                                            alt=""
+                                            loading="lazy"
+                                            decoding="async"
+                                        />
                                     </div>
                                     <div class="shape shape--3">
-                                        <img :src="`${base}/img/shape/solution_shape07.png`" alt="shape" loading="lazy" decoding="async">
+                                        <img
+                                            width="264"
+                                            height="299"
+                                            :src="`${base}/img/shape/solution_shape07.png`"
+                                            alt=""
+                                            loading="lazy"
+                                            decoding="async"
+                                        />
                                     </div>
                                     <div class="shape shape--4">
-                                        <img :src="`${base}/img/shape/solution_shape08.png`" alt="shape" loading="lazy" decoding="async">
+                                        <img
+                                            width="264"
+                                            height="300"
+                                            :src="`${base}/img/shape/solution_shape08.png`"
+                                            alt=""
+                                            loading="lazy"
+                                            decoding="async"
+                                        />
                                     </div>
                                     <div class="shape shape--5">
-                                        <img :src="`${base}/img/shape/circle-blur03.png`" alt="shape" loading="lazy" decoding="async">
+                                        <img
+                                            width="204"
+                                            height="370"
+                                            :src="`${base}/img/shape/circle-blur03.png`"
+                                            alt=""
+                                            loading="lazy"
+                                            decoding="async"
+                                        />
                                     </div>
                                     <div class="shape shape--6">
-                                        <img :src="`${base}/img/shape/circle-blur03.png`" alt="shape" loading="lazy" decoding="async">
+                                        <img
+                                            width="204"
+                                            height="370"
+                                            :src="`${base}/img/shape/circle-blur03.png`"
+                                            alt=""
+                                            loading="lazy"
+                                            decoding="async"
+                                        />
                                     </div>
                                 </div>
                             </div>
@@ -345,6 +551,4 @@ const tabs = computed<DashboardTab[]>(() => [
 .solution .fs-solution-chart_box {
     flex: 1;
 }
-
-
 </style>

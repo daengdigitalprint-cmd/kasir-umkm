@@ -21,15 +21,12 @@ const base = computed(() => props.assetsBase ?? '/buyer-assets');
                         <div class="gt-about-content">
                             <div class="gt-section-title style-3 mb-0">
                                 <h6 class="tt-capitalize wow fadeInUp">Mengapa UMKM Kasir</h6>
-                                <h2 class="char-animation">
-                                    Pengalaman kasir yang bikin
-                                    pelanggan UMKM betah kembali
-                                </h2>
+                                <h2 class="char-animation">Pengalaman kasir yang bikin pelanggan UMKM betah kembali</h2>
                             </div>
                             <p class="gt-text wow fadeInUp" data-wow-delay=".3s">
-                                UMKM Kasir membantu Anda mengelola produk, transaksi, dan laporan dalam satu aplikasi web.
-                                Tidak perlu lagi banyak buku catatan atau spreadsheet yang rentan hilang — semua data
-                                tersimpan rapi, mudah dicari, dan siap dipakai kapan pun.
+                                UMKM Kasir membantu Anda mengelola produk, transaksi, dan laporan dalam satu aplikasi web. Tidak perlu lagi banyak
+                                buku catatan atau spreadsheet yang rentan hilang — semua data tersimpan rapi, mudah dicari, dan siap dipakai kapan
+                                pun.
                             </p>
                             <ul class="gt-list-items wow fadeInUp" data-wow-delay=".5s">
                                 <li>
@@ -37,8 +34,8 @@ const base = computed(() => props.assetsBase ?? '/buyer-assets');
                                     <div class="gt-content">
                                         <h4>Semua dalam satu aplikasi</h4>
                                         <p>
-                                            Otomatiskan penjualan, stok, dan laporan di satu tempat. Hindari data yang
-                                            tercecer dan pastikan setiap tim bekerja dengan informasi yang sama.
+                                            Otomatiskan penjualan, stok, dan laporan di satu tempat. Hindari data yang tercecer dan pastikan setiap
+                                            tim bekerja dengan informasi yang sama.
                                         </p>
                                     </div>
                                 </li>
@@ -47,8 +44,8 @@ const base = computed(() => props.assetsBase ?? '/buyer-assets');
                                     <div class="gt-content">
                                         <h4>Harga terjangkau</h4>
                                         <p>
-                                            Dapatkan fitur lengkap implementasi mudah, dan dukungan ramah dengan harga
-                                            yang sesuai kantong UMKM Indonesia.
+                                            Dapatkan fitur lengkap implementasi mudah, dan dukungan ramah dengan harga yang sesuai kantong UMKM
+                                            Indonesia.
                                         </p>
                                     </div>
                                 </li>
@@ -57,16 +54,14 @@ const base = computed(() => props.assetsBase ?? '/buyer-assets');
                                     <div class="gt-content">
                                         <h4>Cocok untuk usaha masa depan</h4>
                                         <p>
-                                            Skalabel dari satu outlet hingga banyak cabang. Pertumbuhan bisnis Anda tidak
-                                            akan tersendat oleh keterbatasan aplikasi.
+                                            Skalabel dari satu outlet hingga banyak cabang. Pertumbuhan bisnis Anda tidak akan tersendat oleh
+                                            keterbatasan aplikasi.
                                         </p>
                                     </div>
                                 </li>
                             </ul>
                             <div class="mt-4">
-                                <Link href="/register" class="gt-theme-btn style-3 bg-theme">
-                                    Mulai sekarang
-                                </Link>
+                                <Link href="/register" class="gt-theme-btn style-3 bg-theme"> Mulai sekarang </Link>
                             </div>
                         </div>
                     </div>

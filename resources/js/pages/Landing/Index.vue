@@ -8,83 +8,92 @@ import LandingNav from '@/components/landing/LandingNav.vue';
 import LandingPricing from '@/components/landing/LandingPricing.vue';
 import LandingUseCase from '@/components/landing/LandingUseCase.vue';
 import LandingValue from '@/components/landing/LandingValue.vue';
-import { Head } from '@inertiajs/vue3';
-import { computed, onMounted, onUnmounted } from 'vue';
+import { Head, router } from '@inertiajs/vue3';
+import { onMounted, onUnmounted } from 'vue';
 
 /** PWA standalone / iOS "Add to Home Screen": langsung ke login, bukan landing. */
 if (typeof window !== 'undefined') {
     const path = window.location.pathname;
     if (path === '/' || path === '') {
         const standalone =
-            window.matchMedia('(display-mode: standalone)').matches ||
-            (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+            window.matchMedia('(display-mode: standalone)').matches || (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
         if (standalone) {
             window.location.replace('/login');
         }
     }
 }
 
-const props = defineProps<{
-    maskotUrl?: string;
-    canonicalUrl?: string;
-    ogImageUrl?: string;
-    ogImageType?: string;
-    ogImageWidth?: number | null;
-    ogImageHeight?: number | null;
-}>();
+const props = withDefaults(
+    defineProps<{
+        maskotUrl?: string;
+        canonicalUrl?: string;
+        ogImageUrl?: string;
+        ogImageType?: string;
+        ogImageWidth?: number | null;
+        ogImageHeight?: number | null;
+        /** Hash filemtime aset sastik (LandingSeo::landingAssetVersion) untuk cache-busting. */
+        landingAssetVersion?: string;
+        /** false bila aset teroptimasi (landing.min.css, gsap-core.min.js, ...) belum ter-deploy. */
+        landingOptimized?: boolean;
+    }>(),
+    {
+        // Wajib eksplisit: Vue meng-cast prop Boolean yang tidak dikirim menjadi false.
+        landingOptimized: true,
+    },
+);
 
-const pageTitle = 'UMKM Kasir — Kasir Modern untuk Usaha Anda';
-const pageDescription =
-    'Kasir modern untuk UMKM — kelola produk, stok, transaksi POS, shift kasir, dan laporan dalam satu aplikasi web.';
+/** Harus sama dengan LandingSeo::HOME_TITLE (judul server untuk crawler). */
+const pageTitle = 'Aplikasi Kasir Online Gratis untuk UMKM | UMKM Kasir';
 
 const maskotUrl = props.maskotUrl ?? '/logo-macca.png';
-const canonicalUrl = props.canonicalUrl ?? '';
-
-const shareImageUrl = computed(() => props.ogImageUrl ?? maskotUrl);
-const shareImageType = computed(() => props.ogImageType ?? 'image/webp');
 
 /** Aset template Sastik (disalin ke public/sastik-assets). */
 const assetsBase = '/sastik-assets';
 
-/** Fase 1: jQuery (harus duluan — semua plugin bergantung). */
-const jqueryScript = `${assetsBase}/js/jquery-3.7.1.min.js`;
+/**
+ * Query versi untuk aset sastik. Tanpa ini browser bisa memakai main.js lama
+ * dari cache bersama Index.vue baru (mis. main.js lama memanggil `new WOW()`
+ * padahal wow.min.js sudah tidak dimuat -> error di callback GSAP).
+ */
+const assetQuery = props.landingAssetVersion ? `?v=${props.landingAssetVersion}` : '';
+const withVersion = (url: string) => `${url}${assetQuery}`;
 
-/** Fase 2: Plugin inti yang menjalankan layout/interaksi saat DOM ready.
- * lenis.js termasuk di sini karena main.js langsung memuat
- * `new Lenis()` di tahap inti — tidak boleh ditunda.
- * parallaxie.js juga wajib di fase ini karena main.js memanggil
- * `$('.parallaxie').parallaxie()` di tahap inti.
+/** Aset teroptimasi tersedia di server? (default true bila prop tidak dikirim) */
+const optimized = props.landingOptimized;
+
+/** CSS asli (urutan cascade sama dengan bundle) — dipakai jika bundle belum ter-deploy. */
+const fallbackStylesheets = [
+    `${assetsBase}/css/bootstrap.min.css`,
+    `${assetsBase}/css/fontawesome.css`,
+    `${assetsBase}/css/main.css`,
+    '/css/landing-custom.css',
+    `${assetsBase}/css/animate.css`,
+];
+
+/** Fase 1: jQuery (harus duluan — semua plugin bergantung). */
+const jqueryScript = withVersion(`${assetsBase}/js/jquery-3.7.1.min.js`);
+
+/** Fase 2: Plugin yang benar-benar dipakai landing ini.
+ * - bootstrap: tab dashboard (data-bs-toggle="pill")
+ * - marquee: .marquee-left / .marquee-right
+ * - lenis: smooth scroll (main.js)
+ * - gsap-core.min.js: GSAP core saja (animasi reveal). plugin.js asli = GSAP +
+ *   ScrollTrigger + SplitText + plugin lain (127 KB) yang tidak dipakai main.js;
+ *   dipakai hanya sebagai fallback bila gsap-core.min.js belum ter-deploy.
+ * Plugin template lain (swiper, wow, appear, isotope, imagesloaded,
+ * nice-select, magnific-popup, jquery-ui, odometer, easing, scrollspy,
+ * parallaxie, parallax) tidak dipakai — main.js sudah di-guard dan WOW/appear
+ * diganti IntersectionObserver (menghindari forced reflow saat scroll).
  */
 const pluginScripts: string[] = [
     `${assetsBase}/js/bootstrap.bundle.min.js`,
-    `${assetsBase}/js/swiper.min.js`,
-    `${assetsBase}/js/wow.min.js`,
-    `${assetsBase}/js/appear.js`,
-    `${assetsBase}/js/imagesloaded.pkgd.min.js`,
-    `${assetsBase}/js/isotope.pkgd.min.js`,
-    `${assetsBase}/js/jquery.nice-select.min.js`,
     `${assetsBase}/js/jquery.marquee.min.js`,
-    `${assetsBase}/js/jquery.magnific-popup.min.js`,
-    `${assetsBase}/js/jqueryui.js`,
-    `${assetsBase}/js/odometer.min.js`,
-    `${assetsBase}/js/easing.min.js`,
-    `${assetsBase}/js/scrollspy.js`,
     `${assetsBase}/js/lenis.js`,
-    `${assetsBase}/js/parallaxie.js`,
-    `${assetsBase}/js/plugin.js`,
-];
-
-/**
- * Fase 2b: Skrip non-kritis (tidak dipanggil main.js).
- * Dimuat via idle callback setelah `main.js` selesai, sehingga tidak
- * menambah hierarki dependensi kritis (LCP/FCP).
- */
-const deferredScripts: string[] = [
-    `${assetsBase}/js/parallax.min.js`,
-];
+    optimized ? `${assetsBase}/js/gsap-core.min.js` : `${assetsBase}/js/plugin.js`,
+].map(withVersion);
 
 /** Fase 3: main.js (harus terakhir — depends on semua plugin inti). */
-const mainScript = `${assetsBase}/js/main.js`;
+const mainScript = withVersion(`${assetsBase}/js/main.js`);
 
 const loadedScripts: HTMLScriptElement[] = [];
 
@@ -116,14 +125,94 @@ async function loadScriptsOptimized(): Promise<void> {
     await loadScript(mainScript);
 }
 
-async function loadDeferredScripts(): Promise<void> {
-    // parallax.min.js tidak dipanggil main.js; dimuat belakangan saja.
-    await Promise.all(deferredScripts.map(loadScript));
+/**
+ * Selama stylesheet/script landing belum siap, CSS transition dimatikan
+ * (class `lp-no-transition`, aturannya inline di app.blade.php). Tanpa ini,
+ * saat stylesheet masuk ratusan elemen ber-`transition` ikut "beranimasi"
+ * (Lighthouse: "Menghindari animasi yang tidak digabungkan").
+ */
+const NO_TRANSITION_CLASS = 'lp-no-transition';
+if (typeof document !== 'undefined') {
+    document.documentElement.classList.add(NO_TRANSITION_CLASS);
+}
+
+function waitForStylesheets(): Promise<void> {
+    const links = Array.from(document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')).filter((l) => l.media !== 'print');
+    return Promise.all(
+        links.map((l) =>
+            l.sheet
+                ? Promise.resolve()
+                : new Promise<void>((resolve) => {
+                      l.addEventListener('load', () => resolve(), { once: true });
+                      l.addEventListener('error', () => resolve(), { once: true });
+                  }),
+        ),
+    ).then(() => undefined);
+}
+
+/**
+ * Transition baru berguna saat pengguna berinteraksi (hover, klik, scroll).
+ * Jadi diaktifkan saat: stylesheet siap DAN (interaksi pertama ATAU 10 dtk).
+ * Ini juga mencegah transisi `visibility` berantai saat animasi reveal GSAP
+ * di awal. Melepas class tidak memicu transisi apa pun (nilai tidak berubah).
+ */
+const INTERACTION_EVENTS = ['pointermove', 'pointerdown', 'touchstart', 'keydown', 'wheel', 'scroll'] as const;
+let stylesReady = false;
+let interacted = false;
+let transitionsEnabled = false;
+let transitionFallbackTimer: number | undefined;
+
+function tryEnableTransitions(): void {
+    if (transitionsEnabled || !stylesReady || !interacted) return;
+    transitionsEnabled = true;
+    // Dua frame: pastikan gaya akhir sudah ter-commit sebelum transition aktif.
+    requestAnimationFrame(() => requestAnimationFrame(() => document.documentElement.classList.remove(NO_TRANSITION_CLASS)));
+}
+
+function onFirstInteraction(): void {
+    INTERACTION_EVENTS.forEach((ev) => window.removeEventListener(ev, onFirstInteraction));
+    interacted = true;
+    tryEnableTransitions();
+}
+
+function markStylesReady(): void {
+    stylesReady = true;
+    tryEnableTransitions();
+}
+
+/**
+ * Bila app.css (Tailwind aplikasi) sengaja tidak dimuat di landing
+ * (atribut data-no-app-css dari app.blade.php), halaman lain yang dibuka lewat
+ * <Link> Inertia akan tampil tanpa gaya. Maka navigasi GET keluar landing
+ * dijadikan full page load: server merender halaman tujuan lengkap dengan app.css.
+ */
+let removeLeaveGuard: (() => void) | undefined;
+function installLeaveGuard(): void {
+    if (!document.documentElement.hasAttribute('data-no-app-css')) return;
+    removeLeaveGuard = router.on('before', (event) => {
+        const visit = event.detail.visit;
+        if (visit.method !== 'get') return;
+        const url = new URL(visit.url.toString(), window.location.href);
+        if (url.origin !== window.location.origin) return;
+        // Anchor di halaman yang sama (#fitur, dst.) tetap biasa.
+        if (url.pathname === window.location.pathname && url.search === window.location.search) return;
+        event.preventDefault();
+        window.location.assign(url.toString());
+    });
 }
 
 onMounted(() => {
+    installLeaveGuard();
     document.documentElement.classList.add('lp-landing');
     document.body.classList.add('lp-landing', 'fintech-saas');
+
+    INTERACTION_EVENTS.forEach((ev) => window.addEventListener(ev, onFirstInteraction, { passive: true }));
+    // Pengaman: tanpa interaksi pun transition aktif setelah 10 dtk
+    // (stylesheet dianggap siap juga, kalau-kalau event load tidak datang).
+    transitionFallbackTimer = window.setTimeout(() => {
+        stylesReady = true;
+        onFirstInteraction();
+    }, 10000);
 
     // Preloader & animasi ditangani oleh main.js (Sastik).
     // main.js menyembunyikan elemen animasi via gsap.set() lalu mengungkapnya
@@ -131,23 +220,14 @@ onMounted(() => {
     // SETELAH event load asli, handler tersebut tidak pernah dipanggil.
     // Setelah semua script inti termuat, dispatch synthetic load event untuk
     // memicu preloader() → xb_reveal_animation() → wowAnimation().
-    void loadScriptsOptimized().then(async () => {
+    void loadScriptsOptimized().then(() => {
         // Dispatch synthetic load (hanya jika load asli belum terjadi /
         // sudah melampui saat main.js termuat).
         if (document.readyState === 'complete') {
             window.dispatchEvent(new Event('load'));
         }
 
-        // Skrip parallax dimuat via idle callback — setelah load +
-        // main.js selesai berjalan, tidak memblokir FCP/LCP.
-        const loadDeferred = () => {
-            void loadDeferredScripts();
-        };
-        if ('requestIdleCallback' in window) {
-            (window as unknown as { requestIdleCallback: (cb: () => void) => number }).requestIdleCallback(loadDeferred, { timeout: 2000 });
-        } else {
-            window.setTimeout(loadDeferred, 500);
-        }
+        void waitForStylesheets().then(markStylesReady);
 
         // Fallback: jika preloader masih terlihat setelah 5s, sembunyikan manual
         const preloader = document.getElementById('preloader');
@@ -163,7 +243,10 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-    document.documentElement.classList.remove('lp-landing');
+    removeLeaveGuard?.();
+    window.clearTimeout(transitionFallbackTimer);
+    INTERACTION_EVENTS.forEach((ev) => window.removeEventListener(ev, onFirstInteraction));
+    document.documentElement.classList.remove('lp-landing', NO_TRANSITION_CLASS);
     document.body.classList.remove('lp-landing', 'fintech-saas');
     loadedScripts.forEach((s) => {
         if (s.parentNode) {
@@ -180,65 +263,34 @@ onUnmounted(() => {
             <!-- Preconnect gstatic (font file) — googleapis sudah di app.blade.php -->
             <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 
-            <!-- Preload CSS kritis untuk rendering cepat -->
-            <link rel="preload" as="style" :href="`${assetsBase}/css/bootstrap.min.css`" />
-            <link rel="preload" as="style" :href="`${assetsBase}/css/main.css`" />
+            <!-- Satu file CSS hasil bundle + purge + minify dari bootstrap.min.css,
+                 fontawesome-landing.css, main.css, landing-custom.css, animate.css
+                 (±748 KB -> lihat ukuran di output skrip). Setelah mengubah komponen
+                 landing atau CSS sumber, jalankan: node scripts/build-landing-css.mjs
+                 Ikon baru? jalankan dulu: python scripts/build-landing-icons.py -->
+            <link v-if="optimized" rel="stylesheet" :href="withVersion(`${assetsBase}/css/landing.min.css`)" />
+            <template v-else>
+                <link v-for="href in fallbackStylesheets" :key="href" rel="stylesheet" :href="href" />
+            </template>
 
-            <!-- Load CSS kritis secara blocking -->
-            <link rel="stylesheet" :href="`${assetsBase}/css/bootstrap.min.css`" />
-            <link rel="stylesheet" :href="`${assetsBase}/css/fontawesome.css`" />
-            <link rel="stylesheet" :href="`${assetsBase}/css/main.css`" />
-
-            <!-- Custom spacing overrides -->
-            <link rel="stylesheet" href="/css/landing-custom.css" />
-
-            <!-- Load CSS non-kritis secara async -->
-            <link rel="stylesheet" :href="`${assetsBase}/css/animate.css`" media="print" onload="this.media='all'" />
-            <link rel="stylesheet" :href="`${assetsBase}/css/swiper.min.css`" media="print" onload="this.media='all'" />
-            <link rel="stylesheet" :href="`${assetsBase}/css/odometer.css`" media="print" onload="this.media='all'" />
-            <link rel="stylesheet" :href="`${assetsBase}/css/nice-select.css`" media="print" onload="this.media='all'" />
-            <link rel="stylesheet" :href="`${assetsBase}/css/magnific-popup.css`" media="print" onload="this.media='all'" />
-            <link rel="stylesheet" :href="`${assetsBase}/css/jquery-ui.css`" media="print" onload="this.media='all'" />
-
-            <link rel="canonical" :href="canonicalUrl" />
-            <meta name="description" :content="pageDescription" />
-            <meta name="robots" content="index, follow" />
-
-            <meta property="og:type" content="website" />
-            <meta property="og:site_name" content="UMKM Kasir" />
-            <meta property="og:locale" content="id_ID" />
-            <meta property="og:title" :content="pageTitle" />
-            <meta property="og:description" :content="pageDescription" />
-            <meta property="og:url" :content="canonicalUrl" />
-            <meta property="og:image" :content="shareImageUrl" />
-            <meta property="og:image:type" :content="shareImageType" />
-            <meta
-                v-if="ogImageWidth && ogImageHeight"
-                property="og:image:width"
-                :content="String(ogImageWidth)"
+            <!-- Caveat hanya untuk teks coretan "Hemat 10% Tahunan" di pricing:
+                 dimuat non-blocking & di-subset ke karakter itu saja (text=). -->
+            <link
+                rel="stylesheet"
+                href="https://fonts.googleapis.com/css2?family=Caveat&text=Hemat%2010%25Tahunan&display=swap"
+                media="print"
+                onload="this.media='all'"
             />
-            <meta
-                v-if="ogImageWidth && ogImageHeight"
-                property="og:image:height"
-                :content="String(ogImageHeight)"
-            />
-            <meta
-                v-if="shareImageUrl.startsWith('https://')"
-                property="og:image:secure_url"
-                :content="shareImageUrl"
-            />
-            <meta property="og:image:alt" content="Logo UMKM Kasir — aplikasi kasir untuk UMKM" />
 
-            <meta name="twitter:card" content="summary_large_image" />
-            <meta name="twitter:title" :content="pageTitle" />
-            <meta name="twitter:description" :content="pageDescription" />
-            <meta name="twitter:image" :content="shareImageUrl" />
+            <!-- Meta SEO (description, canonical, Open Graph, Twitter, JSON-LD) dirender SERVER
+                 di app.blade.php via App\Support\LandingSeo — terbaca crawler tanpa JavaScript.
+                 Jangan diduplikasi di sini (sebelumnya setiap tag muncul 2x). -->
         </Head>
 
         <!-- backtotop -->
-        <div class="xb-backtotop" style="right: auto !important; left: 30px !important;">
-            <a href="#" class="scroll">
-                <i class="far fa-arrow-up"></i>
+        <div class="xb-backtotop" style="right: auto !important; left: 30px !important">
+            <a href="#" class="scroll" aria-label="Kembali ke atas">
+                <i class="far fa-arrow-up" aria-hidden="true"></i>
             </a>
         </div>
 
@@ -246,16 +298,16 @@ onUnmounted(() => {
         <div id="preloader" class="xb-loader">
             <div class="xb-loader-inner">
                 <div class="xb-loader-logo">
-                    <img :src="maskotUrl" alt="logo" width="3194" height="1037" />
+                    <img :src="maskotUrl" alt="" width="180" height="58" />
                 </div>
             </div>
         </div>
 
         <div class="body_wrap">
-            <div class="body-container m-auto mxw-1460">
+            <div class="body-container mxw-1460 m-auto">
                 <div class="xb-line-pattern">
-                    <img :src="`${assetsBase}/img/shape/line-pattern.png`" alt="" aria-hidden="true" width="64" height="1200">
-                    <img :src="`${assetsBase}/img/shape/line-pattern.png`" alt="" aria-hidden="true" width="64" height="1200">
+                    <img :src="`${assetsBase}/img/shape/line-pattern.png`" alt="" aria-hidden="true" width="64" height="1200" />
+                    <img :src="`${assetsBase}/img/shape/line-pattern.png`" alt="" aria-hidden="true" width="64" height="1200" />
                 </div>
                 <div class="body-inner" data-bg-color="#fff">
                     <LandingNav :maskot-url="maskotUrl" />

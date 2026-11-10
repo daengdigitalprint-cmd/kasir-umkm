@@ -26,6 +26,8 @@ final class ProductImportSchema
 
     public const COL_PRICE = 'harga_jual';
 
+    public const COL_WHOLESALE_PRICE = 'harga_grosir';
+
     public const COL_COST = 'harga_beli';
 
     public const COL_STOCK = 'stok';
@@ -46,6 +48,8 @@ final class ProductImportSchema
 
     public const COL_IS_ACTIVE = 'status_aktif';
 
+    public const COL_ALLOW_NEGATIVE_STOCK = 'izinkan_penjualan_stok_habis';
+
     public const COL_DESCRIPTION = 'deskripsi';
 
     public const COL_IMAGE_URL = 'url_gambar';
@@ -57,6 +61,14 @@ final class ProductImportSchema
     public const COL_PHARMACY_CLASS = 'kelas_penjualan_obat';
 
     public const COL_PHARMACY_REG_NO = 'no_registrasi_obat';
+
+    public const COL_MODIFIER_OPTIONS = 'opsi_modifier';
+
+    public const COL_SERVICE_DURATION = 'durasi_layanan_menit';
+
+    public const COL_BARBER_COMMISSION_MODE = 'mode_komisi_barber';
+
+    public const COL_BARBER_COMMISSION_VALUE = 'nilai_komisi_barber';
 
     /** Kolom informasi pada file ekspor; diabaikan saat impor. */
     public const EXPORT_INFO_COLUMNS = [
@@ -83,6 +95,8 @@ final class ProductImportSchema
         'satuan_jual' => self::COL_UNIT,
         'harga' => self::COL_PRICE,
         'harga_satuan' => self::COL_PRICE,
+        'harga_partai' => self::COL_WHOLESALE_PRICE,
+        'harga_reseller' => self::COL_WHOLESALE_PRICE,
         'harga_pokok' => self::COL_COST,
         'hpp' => self::COL_COST,
         'stok_awal' => self::COL_STOCK,
@@ -95,6 +109,10 @@ final class ProductImportSchema
         'tipe_produk' => self::COL_INVENTORY_TYPE,
         'aktif' => self::COL_IS_ACTIVE,
         'status' => self::COL_IS_ACTIVE,
+        'izinkan_penjualan_stok_habis' => self::COL_ALLOW_NEGATIVE_STOCK,
+        'penjualan_stok_habis' => self::COL_ALLOW_NEGATIVE_STOCK,
+        'izinkan_habis' => self::COL_ALLOW_NEGATIVE_STOCK,
+        'allow_negative' => self::COL_ALLOW_NEGATIVE_STOCK,
         'ed' => self::COL_EXPIRY_DATE,
         'expired' => self::COL_EXPIRY_DATE,
         'kadaluarsa' => self::COL_EXPIRY_DATE,
@@ -103,6 +121,11 @@ final class ProductImportSchema
         'kelas_obat' => self::COL_PHARMACY_CLASS,
         'no_registrasi' => self::COL_PHARMACY_REG_NO,
         'nomor_registrasi' => self::COL_PHARMACY_REG_NO,
+        'opsi_modifier_json' => self::COL_MODIFIER_OPTIONS,
+        'modifier' => self::COL_MODIFIER_OPTIONS,
+        'durasi_layanan' => self::COL_SERVICE_DURATION,
+        'komisi_barber_mode' => self::COL_BARBER_COMMISSION_MODE,
+        'komisi_barber_nilai' => self::COL_BARBER_COMMISSION_VALUE,
         'gambar' => self::COL_IMAGE_URL,
         'foto' => self::COL_IMAGE_URL,
         'image' => self::COL_IMAGE_URL,
@@ -165,6 +188,13 @@ final class ProductImportSchema
                 'width' => 15,
                 'guide' => 'Opsional, angka >= 0. Kosong = 0.',
                 'examples' => ['5000', '18000'],
+            ],
+            [
+                'key' => self::COL_WHOLESALE_PRICE,
+                'label' => 'Harga Grosir',
+                'width' => 15,
+                'guide' => 'Opsional, angka >= 0. Harga khusus pembelian jumlah banyak. Kosong = tidak ada harga grosir.',
+                'examples' => ['4500', ''],
             ],
             [
                 'key' => self::COL_COST,
@@ -237,6 +267,13 @@ final class ProductImportSchema
                 'examples' => ['ya', 'ya'],
             ],
             [
+                'key' => self::COL_ALLOW_NEGATIVE_STOCK,
+                'label' => 'Izinkan Penjualan Stok Habis',
+                'width' => 24,
+                'guide' => 'ya / tidak. Kosong = tidak. Produk tetap bisa dijual meskipun stok habis (stok menjadi negatif).',
+                'examples' => ['tidak', 'ya'],
+            ],
+            [
                 'key' => self::COL_DESCRIPTION,
                 'label' => 'Deskripsi',
                 'width' => 32,
@@ -283,6 +320,40 @@ final class ProductImportSchema
                 'width' => 22,
                 'guide' => 'Opsional, maksimal 128 karakter (contoh nomor izin edar BPOM).',
                 'examples' => ['DBL1234567890A1', ''],
+            ];
+        }
+
+        if (ModifierOptions::enabled($store)) {
+            $columns[] = [
+                'key' => self::COL_MODIFIER_OPTIONS,
+                'label' => 'Opsi Modifier (JSON)',
+                'width' => 40,
+                'guide' => 'Opsional, format JSON: [{"label":"Extra Keju","price":3000}]. Kosong = tidak ada opsi tambahan. Paling mudah diisi lewat hasil ekspor.',
+                'examples' => ['[{"label":"Extra Keju","price":3000}]', ''],
+            ];
+        }
+
+        if (BarbershopFeatures::enabled($store)) {
+            $columns[] = [
+                'key' => self::COL_SERVICE_DURATION,
+                'label' => 'Durasi Layanan (menit)',
+                'width' => 22,
+                'guide' => 'Opsional, 1 sampai 1440 menit. Dipakai untuk estimasi antrean layanan.',
+                'examples' => ['30', ''],
+            ];
+            $columns[] = [
+                'key' => self::COL_BARBER_COMMISSION_MODE,
+                'label' => 'Mode Komisi Barber',
+                'width' => 20,
+                'guide' => 'Opsional. Pilihan: percent (persen) atau fixed (nominal tetap). Kosong = ikut tarif global toko.',
+                'examples' => ['percent', ''],
+            ];
+            $columns[] = [
+                'key' => self::COL_BARBER_COMMISSION_VALUE,
+                'label' => 'Nilai Komisi Barber',
+                'width' => 20,
+                'guide' => 'Opsional, angka >= 0. Diisi bila Mode Komisi Barber terisi.',
+                'examples' => ['10', ''],
             ];
         }
 
@@ -516,7 +587,8 @@ final class ProductImportSchema
             'Kolom pilihan ya/tidak menerima: ya, tidak, y, n, true, false, 1, 0.',
             'Angka boleh ditulis 10000 atau 10.000. Gunakan koma untuk desimal, contoh 0,5.',
             'Bila ada satu baris yang tidak valid, seluruh proses impor dibatalkan sehingga data lama tetap utuh.',
-            'Produk bervarian dan produk paket tidak dapat diimpor melalui file ini; kelola melalui halaman Tambah/Edit Produk.',
+            'Produk bervarian dan produk paket boleh ikut di sheet ini, tetapi kolom Stok diabaikan: stok varian diambil dari sheet "Varian Produk" dan stok paket dihitung dari komponennya.',
+            'Varian, komponen menu, komponen paket, dan resep diimpor dari sheet tambahan pada file hasil "Ekspor + Komponen": "Varian Produk" dan "Komponen Produk".',
             'Urutan impor otomatis: bahan baku, kemasan, dan hasil produksi diimpor terlebih dahulu sebelum produk jual. Anda tidak perlu mengurutkan baris secara manual.',
             'Maksimal 2.000 baris data per file impor.',
         ];

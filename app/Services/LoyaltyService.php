@@ -187,6 +187,85 @@ class LoyaltyService
     }
 
     /**
+     * Cari voucher loyalitas milik toko berdasarkan kode (tanpa mengubah status).
+     * Mengembalikan redemption valid atau melempar RuntimeException bila tidak sah.
+     */
+    public function previewVoucher(Store $store, string $voucherCode, ?Customer $customer = null): LoyaltyRedemption
+    {
+        $code = strtoupper(trim($voucherCode));
+
+        $redemption = LoyaltyRedemption::query()
+            ->where('store_id', $store->id)
+            ->where('voucher_code', $code)
+            ->lockForUpdate()
+            ->first();
+
+        if (! $redemption) {
+            throw new RuntimeException('Kode voucher tidak ditemukan.');
+        }
+
+        if ($redemption->status === 'cancelled') {
+            throw new RuntimeException('Kode voucher telah dibatalkan.');
+        }
+
+        if ($redemption->used_at !== null) {
+            throw new RuntimeException('Kode voucher sudah pernah dipakai.');
+        }
+
+        if ($redemption->voucher_value === null || (float) $redemption->voucher_value <= 0) {
+            throw new RuntimeException('Voucher ini tidak memiliki nilai potongan harga.');
+        }
+
+        if ($customer && (int) $redemption->customer_id !== (int) $customer->id) {
+            throw new RuntimeException('Voucher bukan milik pelanggan yang dipilih.');
+        }
+
+        return $redemption;
+    }
+
+    /**
+     * Tandai voucher sudah dipakai pada sebuah transaksi (dalam lock, atomik dengan penjualan).
+     */
+    public function markVoucherUsed(Store $store, string $voucherCode, ?Customer $customer, Transaction $transaction): LoyaltyRedemption
+    {
+        return DB::transaction(function () use ($store, $voucherCode, $customer, $transaction) {
+            $redemption = $this->previewVoucher($store, $voucherCode, $customer);
+
+            $redemption->forceFill([
+                'used_at' => now(),
+                'used_transaction_id' => $transaction->id,
+                'status' => 'fulfilled',
+            ])->save();
+
+            if ($redemption->customer) {
+                $this->notify(
+                    $redemption->customer,
+                    'promo',
+                    'Voucher dipakai',
+                    "Voucher {$redemption->voucher_code} (".number_format((float) $redemption->voucher_value, 0, ',', '.').') telah digunakan pada transaksi #'.$transaction->id.'.',
+                );
+            }
+
+            return $redemption;
+        });
+    }
+
+    /**
+     * Kembalikan voucher yang dipakai pada transaksi (void) agar bisa digunakan lagi.
+     * Mengembalikan jumlah voucher yang dilepas.
+     */
+    public function releaseVouchersForTransaction(Transaction $transaction): int
+    {
+        return LoyaltyRedemption::query()
+            ->where('store_id', $transaction->store_id)
+            ->where('used_transaction_id', $transaction->id)
+            ->update([
+                'used_at' => null,
+                'used_transaction_id' => null,
+            ]);
+    }
+
+    /**
      * Penyesuaian manual oleh admin (klaim poin, koreksi). Delta bisa + atau -.
      */
     public function adjust(Customer $customer, int $delta, string $reason, ?int $createdBy = null): LoyaltyPointLedger
@@ -367,6 +446,147 @@ class LoyaltyService
         });
 
         return $count;
+    }
+
+    /**
+     * Berikan bonus ulang tahun (maksimal 1x per pelanggan per tahun) untuk satu toko.
+     * Mengembalikan jumlah pelanggan yang menerima bonus.
+     */
+    public function grantBirthdayBonusesForStore(Store $store): int
+    {
+        $bonus = LoyaltySettings::birthdayBonusPoints($store);
+        if ($bonus <= 0) {
+            return 0;
+        }
+
+        $year = now()->year;
+        $granted = 0;
+
+        Customer::query()
+            ->where('store_id', $store->id)
+            ->where('is_active', true)
+            ->whereNotNull('date_of_birth')
+            ->whereMonth('date_of_birth', now()->month)
+            ->whereDay('date_of_birth', now()->day)
+            ->orderBy('id')
+            ->chunkById(200, function ($customers) use ($bonus, $year, &$granted) {
+                foreach ($customers as $customer) {
+                    // Idempoten: hanya 1 bonus per tahun per pelanggan.
+                    $alreadyGranted = $customer->pointLedgers()
+                        ->where('type', 'bonus_birthday')
+                        ->whereYear('created_at', $year)
+                        ->exists();
+
+                    if ($alreadyGranted) {
+                        continue;
+                    }
+
+                    $this->earn(
+                        $customer,
+                        $bonus,
+                        'bonus_birthday',
+                        "Bonus ulang tahun {$year}",
+                    );
+                    $granted++;
+                }
+            });
+
+        return $granted;
+    }
+
+    /**
+     * Berikan bonus referral kepada pengundang saat pelanggan baru terdaftar lewat kode referral.
+     * Idempoten: referred_by hanya ditetapkan satu kali saat pendaftaran.
+     * Mengembalikan poin yang diberikan (0 bila tidak memenuhi syarat).
+     */
+    public function grantReferralBonus(Customer $referredCustomer): int
+    {
+        $bonus = LoyaltySettings::referralBonusPoints($referredCustomer->store);
+        if ($bonus <= 0 || ! $referredCustomer->referred_by) {
+            return 0;
+        }
+
+        $referrer = Customer::query()
+            ->where('store_id', $referredCustomer->store_id)
+            ->find($referredCustomer->referred_by);
+
+        if (! $referrer || ! $referrer->is_active) {
+            return 0;
+        }
+
+        $this->earn(
+            $referrer,
+            $bonus,
+            'bonus_referral',
+            "Bonus referral: {$referredCustomer->name}",
+        );
+
+        $this->notify(
+            $referrer,
+            'points_earned',
+            'Bonus referral',
+            "Anda mendapat {$bonus} poin karena mengundang {$referredCustomer->name}.",
+        );
+
+        return $bonus;
+    }
+
+    /**
+     * Batalkan poin yang diperoleh dari sebuah transaksi (void/hapus transaksi).
+     * Mengembalikan jumlah poin yang dibatalkan (0 bila tidak ada poin tersisa).
+     */
+    public function reverseEarnedPoints(Transaction $transaction, ?string $description = null, ?int $createdBy = null): int
+    {
+        if (! $transaction->customer_id) {
+            return 0;
+        }
+
+        return DB::transaction(function () use ($transaction, $description, $createdBy) {
+            $earnedLedger = LoyaltyPointLedger::query()
+                ->where('customer_id', $transaction->customer_id)
+                ->where('source_type', Transaction::class)
+                ->where('source_id', $transaction->id)
+                ->where('type', 'earn')
+                ->where('points_remaining', '>', 0)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $earnedLedger) {
+                return 0;
+            }
+
+            $pointsToReverse = (int) $earnedLedger->points_remaining;
+            $earnedLedger->forceFill(['points_remaining' => 0])->save();
+
+            /** @var Customer|null $customer */
+            $customer = Customer::query()->lockForUpdate()->find($transaction->customer_id);
+            if (! $customer) {
+                return 0;
+            }
+
+            $newBalance = max(0, $customer->points_balance - $pointsToReverse);
+            $newEarnedTotal = max(0, $customer->points_earned_total - $pointsToReverse);
+
+            $this->writeLedger([
+                'store_id' => $transaction->store_id,
+                'customer_id' => $customer->id,
+                'type' => 'adjust',
+                'points' => -$pointsToReverse,
+                'balance_after' => $newBalance,
+                'points_remaining' => 0,
+                'expires_at' => null,
+                'description' => $description ?? 'Pembatalan poin transaksi #'.$transaction->transaction_number,
+                'source' => $transaction,
+                'created_by' => $createdBy,
+            ]);
+
+            $customer->forceFill([
+                'points_balance' => $newBalance,
+                'points_earned_total' => $newEarnedTotal,
+            ])->save();
+
+            return $pointsToReverse;
+        });
     }
 
     /**

@@ -49,6 +49,9 @@ class RoleMenuPermissionSeeder extends Seeder
             'kitchen' => [
                 'dashboard', 'kitchen_queue', 'settings', 'attendance',
             ],
+            'barber' => [
+                'dashboard', 'queues', 'pos_transactions', 'attendance', 'settings',
+            ],
             'owner' => [
                 'dashboard', 'products', 'product_categories',
                 'recipes', 'productions', 'stock_transfers',

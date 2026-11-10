@@ -4,7 +4,7 @@ import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Button } from '@/components/ui/button';
 import { toastSuccess, toastError } from '@/lib/swal';
 import { ListOrdered, RefreshCw, ChevronRight, Clock, Package, AlertTriangle, CheckCircle2, Timer, ShoppingCart, Utensils, Hand } from 'lucide-vue-next';
-import { computed, onMounted, onUnmounted } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 
 interface Queue {
     id: number;
@@ -31,6 +31,8 @@ interface QueueEntry {
     priority: number;
     notes: string | null;
     items: Array<{ product_name: string; quantity: number }> | null;
+    barber_user_id: number | null;
+    barber_name: string | null;
     called_at: string | null;
     completed_at: string | null;
     created_at: string | null;
@@ -40,6 +42,8 @@ const props = defineProps<{
     queues: Queue[];
     entries: QueueEntry[];
     store: { id: number; name: string };
+    barbershopEnabled: boolean;
+    barbers: { id: number; name: string }[];
 }>();
 
 // --- Auto refresh (15 detik) ---
@@ -69,7 +73,7 @@ const stats = computed(() => {
     return [
         { label: 'Total Aktif', value: active, subtitle: 'pesanan berjalan', color: 'bg-violet-50 text-violet-600', iconBg: 'bg-violet-100' },
         { label: 'Antrian Baru', value: waiting.length, subtitle: 'menunggu dibuat', color: 'bg-amber-50 text-amber-600', iconBg: 'bg-amber-100' },
-        { label: 'Sedang Dibuat', value: serving.length, subtitle: 'sedang diproses', color: 'bg-blue-50 text-blue-600', iconBg: 'bg-blue-100' },
+        { label: props.barbershopEnabled ? 'Sedang Dilayani' : 'Sedang Dibuat', value: serving.length, subtitle: props.barbershopEnabled ? 'sedang dilayani' : 'sedang diproses', color: 'bg-blue-50 text-blue-600', iconBg: 'bg-blue-100' },
         { label: 'Siap Diserahkan', value: ready.length, subtitle: 'siap diambil', color: 'bg-emerald-50 text-emerald-600', iconBg: 'bg-emerald-100' },
         { label: 'Selesai Hari Ini', value: completed.length, subtitle: 'hari ini', color: 'bg-slate-50 text-slate-600', iconBg: 'bg-slate-100' },
         { label: 'Terlambat', value: overdue, subtitle: 'lebih dari 10 menit', color: 'bg-red-50 text-red-600', iconBg: 'bg-red-100' },
@@ -77,6 +81,27 @@ const stats = computed(() => {
 });
 
 const statIcons = [ShoppingCart, ListOrdered, Utensils, Hand, CheckCircle2, AlertTriangle];
+
+// --- Kanal teknisi (khusus mode barbershop) ---
+const activeChannel = ref<'all' | 'common' | number>('all');
+
+const channels = computed(() => {
+    if (!props.barbershopEnabled) return [];
+    return [
+        { key: 'all' as const, label: 'Semua' },
+        { key: 'common' as const, label: 'Umum' },
+        ...props.barbers.map((b) => ({ key: b.id as number | 'all' | 'common', label: b.name })),
+    ];
+});
+
+const matchesChannel = (entry: QueueEntry, key: 'all' | 'common' | number = activeChannel.value): boolean => {
+    if (key === 'all') return true;
+    if (key === 'common') return entry.barber_user_id === null;
+    return entry.barber_user_id === key;
+};
+
+const channelWaitingCount = (key: 'all' | 'common' | number): number =>
+    props.entries.filter((e) => e.status === 'waiting' && matchesChannel(e, key)).length;
 
 // --- Kanban columns ---
 const columns = computed(() => {
@@ -87,28 +112,28 @@ const columns = computed(() => {
             label: 'Antrian Baru',
             accent: 'border-t-amber-500',
             badge: 'bg-amber-100 text-amber-700',
-            entries: list.filter((e) => e.status === 'waiting'),
+            entries: list.filter((e) => e.status === 'waiting' && matchesChannel(e)),
         },
         {
             key: 'serving',
-            label: 'Sedang Dibuat',
+            label: props.barbershopEnabled ? 'Sedang Dilayani' : 'Sedang Dibuat',
             accent: 'border-t-blue-500',
             badge: 'bg-blue-100 text-blue-700',
-            entries: list.filter((e) => e.status === 'serving'),
+            entries: list.filter((e) => e.status === 'serving' && matchesChannel(e)),
         },
         {
             key: 'ready',
             label: 'Siap Diserahkan',
             accent: 'border-t-emerald-500',
             badge: 'bg-emerald-100 text-emerald-700',
-            entries: list.filter((e) => e.status === 'ready'),
+            entries: list.filter((e) => e.status === 'ready' && matchesChannel(e)),
         },
         {
             key: 'completed',
             label: 'Selesai',
             accent: 'border-t-slate-400',
             badge: 'bg-slate-100 text-slate-600',
-            entries: list.filter((e) => e.status === 'completed'),
+            entries: list.filter((e) => e.status === 'completed' && matchesChannel(e)),
         },
     ];
 });
@@ -154,6 +179,10 @@ const advanceStatus = async (entry: QueueEntry) => {
             const data = await res.json();
             toastSuccess(data.message || 'Status diperbarui', 1500);
             router.reload({ only: ['entries', 'queues'] });
+        } else if (res.status === 422) {
+            const data = await res.json().catch(() => null);
+            toastError(data?.message || 'Antrian sudah dipanggil pihak lain');
+            router.reload({ only: ['entries', 'queues'] });
         } else {
             toastError('Gagal memperbarui status');
         }
@@ -162,6 +191,21 @@ const advanceStatus = async (entry: QueueEntry) => {
     } finally {
         isUpdating = false;
     }
+};
+
+// --- Panggil berikutnya: antrian menunggu terlama pada kanal aktif ---
+const callNext = async () => {
+    const target = props.entries
+        .filter((e) => e.status === 'waiting' && matchesChannel(e))
+        .slice()
+        .sort((a, b) => new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime())[0];
+
+    if (!target) {
+        toastError('Tidak ada antrian menunggu pada kanal ini');
+        return;
+    }
+
+    await advanceStatus(target);
 };
 
 const nextStatusLabel = (status: string): string => {
@@ -213,6 +257,40 @@ const nextStatusLabel = (status: string): string => {
                         <p class="text-[10px] text-slate-400 truncate">{{ stat.subtitle }}</p>
                     </div>
                 </div>
+            </div>
+
+            <!-- Kanal Teknisi (mode barbershop) -->
+            <div v-if="barbershopEnabled" class="flex flex-wrap items-center gap-2 px-4 mt-3 shrink-0">
+                <button
+                    v-for="ch in channels"
+                    :key="String(ch.key)"
+                    type="button"
+                    @click="activeChannel = ch.key"
+                    :class="[
+                        'px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5',
+                        activeChannel === ch.key
+                            ? 'bg-violet-600 text-white shadow-md'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
+                    ]"
+                >
+                    {{ ch.label }}
+                    <span
+                        v-if="channelWaitingCount(ch.key) > 0"
+                        :class="['text-[10px] font-black px-1.5 py-0.5 rounded-full', activeChannel === ch.key ? 'bg-white/20' : 'bg-amber-100 text-amber-700']"
+                    >
+                        {{ channelWaitingCount(ch.key) }}
+                    </span>
+                </button>
+                <Button
+                    v-if="activeChannel !== 'all'"
+                    type="button"
+                    size="sm"
+                    class="gap-1.5 rounded-xl"
+                    @click="callNext"
+                >
+                    <Hand class="h-3.5 w-3.5" />
+                    Panggil Berikutnya
+                </Button>
             </div>
 
             <!-- Kanban Board -->
@@ -269,6 +347,25 @@ const nextStatusLabel = (status: string): string => {
                                         <p v-if="!entry.items || entry.items.length === 0" class="text-xs text-slate-400 italic">
                                             Tanpa item
                                         </p>
+                                    </div>
+
+                                    <!-- Teknisi & nomor kursi (mode barbershop) -->
+                                    <div
+                                        v-if="barbershopEnabled && (entry.barber_name || entry.table_number)"
+                                        class="mt-1.5 flex flex-wrap gap-1"
+                                    >
+                                        <span
+                                            v-if="entry.barber_name"
+                                            class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100"
+                                        >
+                                            {{ entry.barber_name }}
+                                        </span>
+                                        <span
+                                            v-if="entry.table_number"
+                                            class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500"
+                                        >
+                                            Kursi {{ entry.table_number }}
+                                        </span>
                                     </div>
                                 </div>
 

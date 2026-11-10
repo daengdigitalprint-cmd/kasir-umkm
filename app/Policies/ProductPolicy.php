@@ -59,9 +59,22 @@ class ProductPolicy
         return $this->canAccessProductStore($user, $product);
     }
 
+    /**
+     * Penghapusan hanya untuk produk milik toko yang SEDANG AKTIF.
+     *
+     * Admin grup usaha terdaftar sebagai anggota semua outlet, sehingga aturan
+     * keanggotaan biasa membuat produk cabang bisa ikut terhapus dari layar
+     * outlet lain. Melihat dan mengubah lintas outlet tetap diizinkan karena
+     * dapat dibatalkan; menghapus tidak.
+     */
     public function delete(User $user, Product $product): bool
     {
-        return $this->canAccessProductStore($user, $product);
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        return $user->store_id !== null
+            && (int) $user->store_id === (int) $product->store_id;
     }
 
     /**

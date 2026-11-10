@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Link, usePage } from '@inertiajs/vue3';
+import { Link, router, usePage } from '@inertiajs/vue3';
 import type { LucideIcon } from 'lucide-vue-next';
 import {
     Activity,
@@ -9,6 +9,8 @@ import {
     BarChart3,
     Building2,
     CalendarCheck,
+    CalendarClock,
+    CalendarOff,
     ChefHat,
     ClipboardCheck,
     ClipboardList,
@@ -31,13 +33,15 @@ import {
     Settings,
     Shirt,
     ShoppingCart,
+    SlidersHorizontal,
     Tag,
     Truck,
     Undo2,
+    UserRound,
     Users,
     Wallet,
 } from 'lucide-vue-next';
-import { computed } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 const emit = defineEmits(['close-mobile-menu']);
 const page = usePage();
@@ -51,7 +55,7 @@ type NavItem = {
     /** Key unik untuk hak akses dinamis dari role_menu_permissions. */
     menuKey?: string;
     /** Kelompok menu (header seksi) sesuai standar aplikasi kasir. */
-    section?: 'kasir' | 'produk_stok' | 'pembelian' | 'pelanggan_promo' | 'laporan_keuangan' | 'pengaturan';
+    section?: 'kasir' | 'produk_stok' | 'pembelian' | 'pelanggan_promo' | 'sdm' | 'laporan_keuangan' | 'pengaturan';
     /** Hanya tampil jika Modul Akuntansi diaktifkan di pengaturan toko. */
     accountingOnly?: boolean;
     /** Hanya tampil jika Modul Hutang Piutang diaktifkan di pengaturan toko. */
@@ -96,6 +100,14 @@ type NavItem = {
     attendanceOnly?: boolean;
     /** Hanya tampil jika add-on Absensi + Payroll sudah dibeli. */
     payrollOnly?: boolean;
+    /** Menu SDM untuk pengelola (admin/owner/back-office), selalu dicek walau role dikonfigurasi. */
+    hrAdminOnly?: boolean;
+    /** Menu absensi pribadi untuk karyawan non back-office (kasir dll). */
+    hrStaffOnly?: boolean;
+    /** Tambahan path yang membuat menu ini ditandai aktif. */
+    activePaths?: string[];
+    /** Path yang dikecualikan dari penanda aktif (mis. /payroll/settings milik Pengaturan SDM). */
+    excludePaths?: string[];
     /** Hanya tampil jika Modul Login Kasir (PIN) diaktifkan di pengaturan toko. */
     cashierPinOnly?: boolean;
     /** Disembunyikan untuk owner (menu operasional: POS, shift, dll). */
@@ -343,8 +355,52 @@ const navigationSource: NavItem[] = [
     { name: 'Biaya Usaha', href: '/expenses', icon: Wallet, menuKey: 'expenses', section: 'laporan_keuangan' },
     { name: 'Log Aktivitas', href: '/activity-logs', icon: FileText, menuKey: 'activity_logs', section: 'laporan_keuangan' },
     { name: 'KPI', href: '/kpi', icon: Activity, menuKey: 'kpi', section: 'laporan_keuangan', storeAdminOnly: true },
-    { name: 'Payroll', href: '/payroll', icon: Banknote, menuKey: 'payroll', section: 'laporan_keuangan', backofficeOnly: true, payrollOnly: true },
-    { name: 'Absensi', href: '/attendance', icon: CalendarCheck, menuKey: 'attendance', section: 'kasir', attendanceOnly: true },
+    // ── SDM & Gaji (HRIS) ──
+    // Karyawan non back-office cukup satu menu: absen, riwayat, pengajuan, slip gaji.
+    { name: 'Absensi', href: '/attendance', icon: CalendarCheck, menuKey: 'attendance', section: 'kasir', attendanceOnly: true, hrStaffOnly: true },
+    {
+        name: 'Kehadiran',
+        href: '/attendance/report',
+        icon: CalendarCheck,
+        menuKey: 'attendance',
+        section: 'sdm',
+        attendanceOnly: true,
+        hrAdminOnly: true,
+        activePaths: ['/attendance/history'],
+    },
+    { name: 'Karyawan', href: '/attendance/employees', icon: UserRound, menuKey: 'attendance', section: 'sdm', attendanceOnly: true, hrAdminOnly: true },
+    { name: 'Jadwal Kerja', href: '/attendance/schedules', icon: CalendarClock, menuKey: 'attendance', section: 'sdm', attendanceOnly: true, hrAdminOnly: true },
+    {
+        name: 'Pengajuan',
+        href: '/attendance/leaves',
+        icon: CalendarOff,
+        menuKey: 'attendance',
+        section: 'sdm',
+        attendanceOnly: true,
+        hrAdminOnly: true,
+        activePaths: ['/attendance/overtimes'],
+    },
+    {
+        name: 'Penggajian',
+        href: '/payroll',
+        icon: Banknote,
+        menuKey: 'payroll',
+        section: 'sdm',
+        payrollOnly: true,
+        hrAdminOnly: true,
+        excludePaths: ['/payroll/settings'],
+    },
+    {
+        name: 'Pengaturan SDM',
+        href: '/attendance/settings',
+        icon: SlidersHorizontal,
+        menuKey: 'attendance',
+        section: 'sdm',
+        payrollOnly: true,
+        hrAdminOnly: true,
+        storeAdminOnly: true,
+        activePaths: ['/payroll/settings'],
+    },
     // ── Pengaturan ──
     { name: 'Tambah Outlet/Gudang', href: '/stores/create', icon: Building2, menuKey: 'manage_stores', section: 'pengaturan', storeAdminOnly: true },
     { name: 'Distribusi Produk', href: '/manage-products', icon: Package, menuKey: 'manage_products', section: 'pengaturan', storeAdminOnly: true },
@@ -380,6 +436,7 @@ const navigationItems = computed((): ProcessedNavItem[] => {
     const fnb = Boolean((page.props as { fnb_enabled?: boolean }).fnb_enabled);
     const pharmacy = Boolean((page.props as { pharmacy_enabled?: boolean }).pharmacy_enabled);
     const laundry = Boolean((page.props as { laundry_enabled?: boolean }).laundry_enabled);
+    const barbershop = Boolean((page.props as { barbershop_enabled?: boolean }).barbershop_enabled);
     const recipesEnabled = Boolean((page.props as { recipes_enabled?: boolean }).recipes_enabled);
     const productionsEnabled = Boolean((page.props as { productions_enabled?: boolean }).productions_enabled);
     const kitchenQueueEnabled = Boolean((page.props as { kitchen_queue_enabled?: boolean }).kitchen_queue_enabled);
@@ -393,6 +450,8 @@ const navigationItems = computed((): ProcessedNavItem[] => {
     const pendingQueueCount = Number((page.props as { pending_queue_count?: number }).pending_queue_count ?? 0);
     const pendingTableOrderCount = Number((page.props as { pending_table_order_count?: number }).pending_table_order_count ?? 0);
     const pendingKitchenOrderCount = Number((page.props as { pending_kitchen_order_count?: number }).pending_kitchen_order_count ?? 0);
+    const pendingHr = (page.props as { pending_hr_requests?: { leave?: number; overtime?: number } }).pending_hr_requests;
+    const pendingHrCount = Number(pendingHr?.leave ?? 0) + Number(pendingHr?.overtime ?? 0);
     const locationType = String((page.props as { location_type?: string }).location_type ?? 'outlet');
     const isWarehouse = locationType === 'central_warehouse' || locationType === 'branch_warehouse';
     const currentRole = String(
@@ -431,6 +490,9 @@ const navigationItems = computed((): ProcessedNavItem[] => {
         if (item.queueModuleOnly && !queueModuleEnabled) return [];
         if (item.scanMejaOnly && !scanMejaEnabled) return [];
         if (item.attendanceOnly && !attendanceEnabled) return [];
+        // Menu SDM: pengelola melihat grup SDM & Gaji, karyawan biasa hanya "Absensi".
+        if (item.hrAdminOnly && !backoffice) return [];
+        if (item.hrStaffOnly && backoffice) return [];
         if (item.payrollOnly && !payrollEnabled) return [];
         if (item.cashierPinOnly && !cashierPinEnabled) return [];
         if (item.accountingOnly && !accountingEnabled) return [];
@@ -484,9 +546,19 @@ const navigationItems = computed((): ProcessedNavItem[] => {
             return [{ ...item, pendingCount: pendingQueueCount }];
         }
 
+        // Badge pengajuan cuti + lembur yang menunggu persetujuan
+        if (item.href === '/attendance/leaves' && pendingHrCount > 0) {
+            return [{ ...item, pendingCount: pendingHrCount }];
+        }
+
         // Badge pesanan meja pending (Scan Meja)
         if (item.menuKey === 'table_orders' && pendingTableOrderCount > 0) {
             return [{ ...item, pendingCount: pendingTableOrderCount }];
+        }
+
+        // Barbershop: sebutkan 'Layanan' pada menu Produk
+        if (item.menuKey === 'products' && barbershop) {
+            return [{ ...item, name: 'Produk & Layanan' }];
         }
 
         return [item];
@@ -499,6 +571,7 @@ const SECTION_META: { key: NonNullable<NavItem['section']>; label: string }[] = 
     { key: 'produk_stok', label: 'Produk & Stok' },
     { key: 'pembelian', label: 'Pembelian & Distribusi' },
     { key: 'pelanggan_promo', label: 'Pelanggan & Promo' },
+    { key: 'sdm', label: 'SDM & Gaji' },
     { key: 'laporan_keuangan', label: 'Laporan & Keuangan' },
     { key: 'pengaturan', label: 'Pengaturan' },
 ];
@@ -527,6 +600,16 @@ const renderItems = computed<NavRenderEntry[]>(() => {
 });
 
 const isCurrentRoute = (href: string) => {
+    const navItem = navigationSource.find((i) => i.href === href);
+    if (navItem?.excludePaths?.some((p) => page.url.startsWith(p))) {
+        return false;
+    }
+    if (navItem?.activePaths?.some((p) => page.url.startsWith(p))) {
+        return true;
+    }
+    if (href === '/attendance') {
+        return page.url === '/attendance' || page.url.startsWith('/attendance?') || page.url.startsWith('/attendance/my-') || page.url.startsWith('/attendance/history');
+    }
     if (href === '/reports') {
         return page.url.startsWith('/reports') || page.url.startsWith('/financial');
     }
@@ -550,6 +633,100 @@ const isCurrentRoute = (href: string) => {
     }
     return page.url.startsWith(href);
 };
+
+/** ── Penanda menu aktif (menempel langsung, tanpa animasi perpindahan) ── */
+const navRef = ref<HTMLElement | null>(null);
+const indRef = ref<HTMLElement | null>(null);
+const itemEls = new Map<string, Element>();
+
+const setItemRef = (key: string, el: unknown) => {
+    if (el) {
+        itemEls.set(key, el as Element);
+    } else {
+        itemEls.delete(key);
+    }
+};
+
+/** Menu yang baru diklik — penanda langsung pindah tanpa menunggu halaman berikutnya selesai dimuat. */
+const pendingKey = ref<string | null>(null);
+
+const activeKey = computed(() => {
+    if (pendingKey.value) {
+        return pendingKey.value;
+    }
+    const entry = renderItems.value.find((e) => e.kind === 'item' && !e.item.disabled && isCurrentRoute(e.item.href));
+    return entry ? entry.key : null;
+});
+
+let resizeObserver: ResizeObserver | null = null;
+let removeStartListener: (() => void) | null = null;
+let removeFinishListener: (() => void) | null = null;
+
+const pathOf = (url: string | URL) => {
+    try {
+        return new URL(url.toString(), window.location.origin).pathname.replace(/\/+$/, '') || '/';
+    } catch {
+        return '';
+    }
+};
+
+/** Posisi atas & bawah menu aktif relatif terhadap nav. */
+const measure = (): [number, number] | null => {
+    const el = activeKey.value ? itemEls.get(activeKey.value) : undefined;
+    const nav = navRef.value;
+    if (!el || !nav) {
+        return null;
+    }
+    const r = el.getBoundingClientRect();
+    const w = nav.getBoundingClientRect();
+    return [r.top - w.top, r.bottom - w.top];
+};
+
+/** Tempelkan indikator ke menu aktif tanpa animasi perpindahan. */
+const syncIndicator = () => {
+    const ind = indRef.value;
+    const t = measure();
+    if (!ind || !t) {
+        return;
+    }
+    const [top, bottom] = t;
+    ind.style.transform = `translateY(${top.toFixed(1)}px)`;
+    ind.style.height = `${Math.max(4, bottom - top).toFixed(1)}px`;
+};
+
+onMounted(async () => {
+    await nextTick();
+    syncIndicator();
+    window.addEventListener('resize', syncIndicator);
+    if (navRef.value && typeof ResizeObserver !== 'undefined') {
+        resizeObserver = new ResizeObserver(() => syncIndicator());
+        resizeObserver.observe(navRef.value);
+    }
+
+    removeStartListener = router.on('start', (event) => {
+        const path = pathOf(event.detail.visit.url);
+        const entry = renderItems.value.find((e) => e.kind === 'item' && !e.item.disabled && pathOf(e.item.href) === path);
+        if (entry && entry.key !== activeKey.value) {
+            pendingKey.value = entry.key;
+        }
+    });
+    // Kunjungan batal/gagal: kembalikan indikator ke menu halaman yang sedang tampil.
+    removeFinishListener = router.on('finish', () => {
+        pendingKey.value = null;
+    });
+});
+
+onBeforeUnmount(() => {
+    window.removeEventListener('resize', syncIndicator);
+    resizeObserver?.disconnect();
+    removeStartListener?.();
+    removeFinishListener?.();
+});
+
+watch([activeKey, renderItems], async () => {
+    await nextTick();
+    syncIndicator();
+});
 
 const subscription = computed(() => (page.props as any).subscription);
 const planLimits = computed(() => (page.props as { plan_limits?: { plan_slug?: string | null } | null }).plan_limits);
@@ -585,7 +762,13 @@ const subscriptionCardSoft = computed(() => {
 
 <template>
     <div class="flex h-full w-full flex-col">
-        <nav class="relative space-y-1">
+        <nav ref="navRef" class="relative space-y-1">
+            <!-- Penanda menu aktif: langsung menempel ke menu terpilih, tanpa animasi perpindahan -->
+            <div
+                ref="indRef"
+                class="pointer-events-none absolute inset-x-0 top-0 rounded-2xl bg-violet-600 shadow-md shadow-violet-200 transition-opacity duration-200"
+                :style="{ opacity: activeKey ? 1 : 0 }"
+            ></div>
             <template v-for="entry in renderItems" :key="entry.key">
                 <!-- Header seksi menu -->
                 <p v-if="entry.kind === 'section'" class="px-4 pt-6 pb-2 text-[10px] font-black tracking-[0.2em] text-slate-400 uppercase">
@@ -593,7 +776,7 @@ const subscriptionCardSoft = computed(() => {
                 </p>
 
                 <!-- Item menu -->
-                <div v-else class="group/menu relative">
+                <div v-else :ref="(el) => setItemRef(entry.key, el)" class="group/menu relative">
                     <component
                         :is="entry.item.disabled ? 'div' : isExternal(entry.item.href) ? 'a' : Link"
                         :href="entry.item.disabled ? undefined : entry.item.href"
@@ -607,10 +790,8 @@ const subscriptionCardSoft = computed(() => {
                                 'group relative flex h-12 w-full items-center overflow-hidden rounded-2xl px-4 transition-all duration-300',
                                 entry.item.disabled
                                     ? 'cursor-not-allowed opacity-50'
-                                    : entry.item.href === '/pos'
-                                      ? 'bg-violet-600 text-white shadow-md shadow-violet-200 hover:bg-violet-700'
-                                      : isCurrentRoute(entry.item.href)
-                                        ? 'bg-primary/10 text-primary'
+                                    : activeKey === entry.key
+                                        ? 'text-white'
                                         : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800',
                             ]"
                         >
@@ -619,13 +800,12 @@ const subscriptionCardSoft = computed(() => {
                                 :class="[
                                     'z-10 mr-4 size-5',
                                     entry.item.disabled ? 'text-slate-300' : 'transition-transform duration-300 group-hover:scale-110',
-                                    entry.item.href === '/pos'
+                                    !entry.item.disabled && activeKey === entry.key
                                         ? 'text-white'
                                         : entry.item.iconClass
                                           ? entry.item.iconClass
                                           : [
-                                                !entry.item.disabled && isCurrentRoute(entry.item.href) ? 'text-primary' : '',
-                                                !entry.item.disabled && !isCurrentRoute(entry.item.href)
+                                                !entry.item.disabled && activeKey !== entry.key
                                                     ? 'text-slate-400 group-hover:text-slate-800'
                                                     : '',
                                             ],
@@ -636,20 +816,21 @@ const subscriptionCardSoft = computed(() => {
                                     'z-10 text-sm font-bold tracking-tight',
                                     entry.item.disabled
                                         ? 'text-slate-400'
-                                        : entry.item.href === '/pos'
+                                        : activeKey === entry.key
                                           ? 'text-white'
                                           : entry.item.textClass
                                             ? entry.item.textClass
-                                            : isCurrentRoute(entry.item.href)
-                                              ? 'text-primary'
-                                              : 'text-slate-500 group-hover:text-slate-800',
+                                            : 'text-slate-500 group-hover:text-slate-800',
                                 ]"
                             >
                                 {{ entry.item.name }}
                             </span>
                             <span
                                 v-if="entry.item.href === '/pos'"
-                                class="z-10 ml-auto flex size-7 items-center justify-center rounded-full bg-gradient-to-br from-violet-500/90 to-transparent shadow-sm shadow-purple-900/20 transition-transform duration-300 group-hover:translate-x-0.5"
+                                :class="[
+                                    'z-10 ml-auto flex size-7 items-center justify-center rounded-full shadow-sm transition-transform duration-300 group-hover:translate-x-0.5',
+                                    activeKey === entry.key ? 'bg-white/20 shadow-purple-900/20' : 'bg-violet-600 shadow-violet-200',
+                                ]"
                             >
                                 <ArrowRight class="size-4 text-white" />
                             </span>
@@ -667,12 +848,6 @@ const subscriptionCardSoft = computed(() => {
                                 v-if="entry.item.disabled && entry.item.disabledReason?.includes('paket')"
                                 class="z-10 ml-auto size-4 text-amber-400"
                             />
-
-                            <!-- Active Indicator side border -->
-                            <div
-                                v-if="!entry.item.disabled && isCurrentRoute(entry.item.href)"
-                                class="absolute top-2 bottom-2 left-[-4px] z-20 w-2 rounded-r-full bg-primary shadow-[2px_0_8px_rgba(124,58,237,0.4)]"
-                            ></div>
                         </div>
                     </component>
 

@@ -57,7 +57,10 @@ interface TopProduct {
     id: number;
     name: string;
     total_sold: number;
-    price: number;
+    total_revenue: number;
+    total_profit: number;
+    has_hpp: boolean;
+    avg_price: number;
 }
 
 interface RecentTransaction {
@@ -124,6 +127,14 @@ interface Props {
         discount_by_type: Array<{ type: string; total: number }>;
     };
     new_customers_change_pct: number | null;
+    hppSummary: {
+        total_revenue: number;
+        total_cost: number;
+        total_gross_profit: number;
+        gross_margin_pct: number | null;
+        items_with_hpp: number;
+        items_total: number;
+    };
     topProducts: TopProduct[];
     topProductsChart: TopProductChartRow[];
     recentTransactions: RecentTransaction[];
@@ -389,6 +400,9 @@ const topProductsBarOptions = computed(() => ({
 const hasPaymentData = computed(() => props.paymentBreakdown.some((p) => p.total_amount > 0));
 const hasCategoryData = computed(() => props.categoryRevenue.length > 0);
 const hasTopBarData = computed(() => props.topProductsChart.length > 0);
+
+// Baris item tanpa snapshot HPP membuat laba kotor tampak lebih besar dari semestinya.
+const hppCoverageGap = computed(() => Math.max(0, props.hppSummary.items_total - props.hppSummary.items_with_hpp));
 </script>
 
 <template>
@@ -535,6 +549,55 @@ const hasTopBarData = computed(() => props.topProductsChart.length > 0);
             </Card>
         </div>
 
+        <!-- Laba kotor & margin -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+            <Card class="border-0 shadow-md border-slate-100">
+                <CardContent class="p-4 flex items-center gap-4">
+                    <div class="p-3 rounded-2xl bg-emerald-50">
+                        <TrendingUp class="h-6 w-6 text-emerald-600" />
+                    </div>
+                    <div class="min-w-0">
+                        <p class="text-xs font-medium text-slate-500">Laba kotor</p>
+                        <p class="text-xl font-black text-slate-900 tabular-nums">
+                            {{ formatCurrency(hppSummary.total_gross_profit) }}
+                        </p>
+                        <p class="text-[11px] text-slate-500 mt-0.5">Omzet dikurangi HPP</p>
+                    </div>
+                </CardContent>
+            </Card>
+            <Card class="border-0 shadow-md border-slate-100">
+                <CardContent class="p-4 flex items-center gap-4">
+                    <div class="p-3 rounded-2xl bg-violet-50">
+                        <Percent class="h-6 w-6 text-violet-600" />
+                    </div>
+                    <div class="min-w-0">
+                        <p class="text-xs font-medium text-slate-500">Margin kotor</p>
+                        <p class="text-xl font-black text-slate-900 tabular-nums">
+                            {{ hppSummary.gross_margin_pct === null ? '—' : hppSummary.gross_margin_pct + '%' }}
+                        </p>
+                        <p class="text-[11px] text-slate-500 mt-0.5">Laba kotor terhadap omzet</p>
+                    </div>
+                </CardContent>
+            </Card>
+            <Card class="border-0 shadow-md border-slate-100">
+                <CardContent class="p-4 flex items-center gap-4">
+                    <div class="p-3 rounded-2xl bg-rose-50">
+                        <DollarSign class="h-6 w-6 text-rose-600" />
+                    </div>
+                    <div class="min-w-0">
+                        <p class="text-xs font-medium text-slate-500">Total HPP</p>
+                        <p class="text-xl font-black text-slate-900 tabular-nums">
+                            {{ formatCurrency(hppSummary.total_cost) }}
+                        </p>
+                        <p v-if="hppCoverageGap > 0" class="text-[11px] text-amber-600 mt-0.5">
+                            {{ hppCoverageGap }} baris item belum punya data HPP
+                        </p>
+                        <p v-else class="text-[11px] text-slate-500 mt-0.5">Modal barang yang terjual</p>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
+
         <!-- Ringkasan diskon & pajak -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
             <Card class="border-0 shadow-md border-slate-100">
@@ -647,7 +710,9 @@ const hasTopBarData = computed(() => props.topProductsChart.length > 0);
                     <div class="flex items-center justify-between gap-2">
                         <div>
                             <CardTitle class="text-lg font-black">Produk terlaris</CardTitle>
-                            <CardDescription>10 SKU dengan unit terjual tertinggi</CardDescription>
+                            <CardDescription>
+                                {{ topProducts.length }} SKU terjual di periode ini — omzet dari nilai nota, bukan harga master
+                            </CardDescription>
                         </div>
                         <div class="p-2 bg-primary/10 rounded-2xl">
                             <Package class="h-5 w-5 text-primary" />
@@ -655,7 +720,7 @@ const hasTopBarData = computed(() => props.topProductsChart.length > 0);
                     </div>
                 </CardHeader>
                 <CardContent>
-                    <div class="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+                    <div class="space-y-2 max-h-[560px] overflow-y-auto pr-1">
                         <div
                             v-for="(product, index) in topProducts"
                             :key="product.id"
@@ -673,8 +738,13 @@ const hasTopBarData = computed(() => props.topProductsChart.length > 0);
                                 </div>
                             </div>
                             <div class="text-right shrink-0 pl-2">
-                                <p class="font-bold text-slate-900 tabular-nums">{{ formatCurrency(product.price * product.total_sold) }}</p>
-                                <p class="text-xs text-slate-500">{{ formatCurrency(product.price) }}/unit</p>
+                                <p class="font-bold text-slate-900 tabular-nums">{{ formatCurrency(product.total_revenue) }}</p>
+                                <p class="text-xs text-slate-500">
+                                    <span v-if="product.has_hpp" class="text-emerald-600 font-semibold">
+                                        laba {{ formatCurrency(product.total_profit) }}
+                                    </span>
+                                    <span v-else>{{ formatCurrency(product.avg_price) }}/unit</span>
+                                </p>
                             </div>
                         </div>
                     </div>

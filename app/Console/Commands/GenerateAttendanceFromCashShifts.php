@@ -12,7 +12,7 @@ class GenerateAttendanceFromCashShifts extends Command
 {
     protected $signature = 'attendance:from-cash-shifts
                             {--store= : ID toko tertentu (opsional)}
-                            {--date= : Tanggal shift (YYYY-MM-DD, default hari ini)}';
+                            {--date= : Tanggal shift (YYYY-MM-DD). Default: kemarin dan hari ini menurut zona waktu toko}';
 
     protected $description = 'Konversi shift kasir menjadi absensi harian (idempoten)';
 
@@ -23,15 +23,14 @@ class GenerateAttendanceFromCashShifts extends Command
 
     public function handle(): int
     {
-        $date = $this->option('date')
-            ? CarbonImmutable::parse($this->option('date'))
-            : CarbonImmutable::now();
+        $date = $this->option('date') ? CarbonImmutable::parse($this->option('date')) : null;
 
         $storeId = $this->option('store');
 
         $stores = $storeId
             ? Store::query()->whereKey($storeId)->get()
-            : Store::query()->get()->filter(fn (Store $store) => AttendanceSettings::enabled($store));
+            : Store::query()->get()->filter(fn (Store $store) => AttendanceSettings::enabled($store)
+                && AttendanceSettings::autoGenerateFromCashShift($store));
 
         if ($stores->isEmpty()) {
             $this->info('Tidak ada toko dengan modul absensi aktif.');
@@ -43,7 +42,13 @@ class GenerateAttendanceFromCashShifts extends Command
 
         foreach ($stores as $store) {
             try {
-                $processed = $this->attendance->generateFromCashShifts($store, $date);
+                // Tanpa --date: proses kemarin & hari ini (shift malam yang ditutup lewat tengah malam ikut tercatat).
+                $now = CarbonImmutable::now($store->timezone ?: 'UTC');
+                $dates = $date ? [$date] : [$now->subDay(), $now];
+                $processed = 0;
+                foreach ($dates as $day) {
+                    $processed += $this->attendance->generateFromCashShifts($store, $day);
+                }
                 $total += $processed;
                 $this->info("  ✓ {$store->name}: {$processed} absensi diproses.");
             } catch (\Throwable $e) {
@@ -52,7 +57,7 @@ class GenerateAttendanceFromCashShifts extends Command
         }
 
         $this->newLine();
-        $this->info("Selesai. Total {$total} absensi diproses untuk {$date->toDateString()}.");
+        $this->info("Selesai. Total {$total} absensi diproses.");
 
         return self::SUCCESS;
     }

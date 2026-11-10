@@ -1,0 +1,37 @@
+/* AUTO-GENERATED oleh scripts/build-landing-icons.py — jangan edit manual.
+ * Subset Font Awesome Pro 6.4.0 (Commercial License) untuk landing page. */
+@font-face{font-family:'Font Awesome 6 Pro';font-style:normal;font-weight:400;font-display:block;src:url("../fonts/landing/fa-regular-400.woff2") format("woff2")}
+@font-face{font-family:'Font Awesome 6 Pro';font-style:normal;font-weight:900;font-display:block;src:url("../fonts/landing/fa-solid-900.woff2") format("woff2")}
+@font-face{font-family:'Font Awesome 6 Brands';font-style:normal;font-weight:400;font-display:block;src:url("../fonts/landing/fa-brands-400.woff2") format("woff2")}
+:root{--fa-style-family-classic:'Font Awesome 6 Pro';--fa-style-family-brands:'Font Awesome 6 Brands';--fa-font-solid:normal 900 1em/1 'Font Awesome 6 Pro';--fa-font-regular:normal 400 1em/1 'Font Awesome 6 Pro';--fa-font-brands:normal 400 1em/1 'Font Awesome 6 Brands'}
+.fa{font-family:var(--fa-style-family,"Font Awesome 6 Pro");font-weight:var(--fa-style,900)}
+.fa,.fas,.fa-solid,.far,.fa-regular,.fab,.fa-brands{-moz-osx-font-smoothing:grayscale;-webkit-font-smoothing:antialiased;display:var(--fa-display,inline-block);font-style:normal;font-variant:normal;line-height:1;text-rendering:auto}
+.fas,.fa-solid,.far,.fa-regular{font-family:'Font Awesome 6 Pro'}
+.fab,.fa-brands{font-family:'Font Awesome 6 Brands';font-weight:400}
+.far,.fa-regular{font-weight:400}
+.fas,.fa-solid{font-weight:900}
+.fa-angle-left::before{content:"\f104"}
+.fa-apple::before{content:"\f179"}
+.fa-arrow-up::before{content:"\f062"}
+.fa-basket-shopping::before{content:"\f291"}
+.fa-circle-exclamation::before{content:"\f06a"}
+.fa-clock::before{content:"\f017"}
+.fa-envelope::before{content:"\f0e0"}
+.fa-facebook::before{content:"\f09a"}
+.fa-google-play::before{content:"\f3ab"}
+.fa-layer-group::before{content:"\f5fd"}
+.fa-linkedin::before{content:"\f08c"}
+.fa-location-dot::before{content:"\f3c5"}
+.fa-mug-saucer::before{content:"\f0f4"}
+.fa-paper-plane::before{content:"\f1d8"}
+.fa-phone::before{content:"\f095"}
+.fa-prescription-bottle-medical::before{content:"\f486"}
+.fa-quote-left::before{content:"\f10d"}
+.fa-scissors::before{content:"\f0c4"}
+.fa-screwdriver-wrench::before{content:"\f7d9"}
+.fa-square-youtube::before{content:"\f431"}
+.fa-star::before{content:"\f005"}
+.fa-store::before{content:"\f54e"}
+.fa-times::before{content:"\f00d"}
+.fa-triangle-exclamation::before{content:"\f071"}
+.fa-utensils::before{content:"\f2e7"}

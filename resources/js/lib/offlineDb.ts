@@ -21,6 +21,7 @@ export interface OfflineSaleItem {
     quantity: number;
     unit_price: number;
     subtotal: number;
+    line_discount?: number;
     modifiers?: { key: string }[];
     product_name: string;
     variant_name?: string | null;
@@ -34,11 +35,14 @@ export interface OfflineSale {
     items: OfflineSaleItem[];
     payment_method: string;
     amount_paid: number;
+    /** Rincian split tender (opsional); kosong = satu metode. */
+    payments?: { method: string; amount: number; reference: string | null }[];
     total_amount: number;
     discount_amount: number;
     customer_name: string | null;
     customer_type?: 'ecer' | 'grosir';
     discount_code: string | null;
+    loyalty_voucher_code?: string | null;
     order_type?: string;
     table_reference?: string | null;
     service_charge_percent?: number;

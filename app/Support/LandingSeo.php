@@ -6,15 +6,141 @@ final class LandingSeo
 {
     private const SITE_NAME = 'UMKM Kasir';
 
+    /** Judul & deskripsi beranda (juga dipakai Landing/Index.vue lewat props agar selalu sama). */
+    public const HOME_TITLE = 'Aplikasi Kasir Online Gratis untuk UMKM | UMKM Kasir';
+
+    public const HOME_DESCRIPTION = 'Aplikasi kasir (POS) online untuk UMKM: catat penjualan, kelola stok, cetak struk, shift kasir, dan laporan keuangan dalam satu aplikasi. Mulai gratis dengan paket Starter.';
+
     /**
      * URL maskot untuk UI (utama WebP + cache-bust jika ada).
      */
     public static function maskotAssetUrl(): string
     {
+        // Logo tampil ±150–180px; versi 360px WebP (15 KB) menggantikan PNG
+        // 3194px (260 KB). Dibuat oleh scripts/optimize-landing-images.py.
+        $small = public_path('logo-macca-sm.webp');
+        if (is_file($small)) {
+            return asset('logo-macca-sm.webp').'?v='.filemtime($small);
+        }
+
         $path = public_path('logo-macca.png');
         $url = asset('logo-macca.png');
 
         return is_file($path) ? $url.'?v='.filemtime($path) : $url;
+    }
+
+    /**
+     * File JS/CSS template landing (public/sastik-assets) yang dimuat Index.vue.
+     * Dipakai untuk versi cache-busting: begitu salah satu berubah saat deploy,
+     * browser mengambil ulang semuanya (mencegah main.js lama tercampur
+     * dengan Index.vue baru).
+     */
+    private const LANDING_ASSET_FILES = [
+        'sastik-assets/css/landing.min.css',
+        'sastik-assets/js/main.js',
+        'sastik-assets/js/plugin.js',
+        'sastik-assets/js/gsap-core.min.js',
+        'sastik-assets/js/lenis.js',
+        'sastik-assets/js/jquery.marquee.min.js',
+        'sastik-assets/js/bootstrap.bundle.min.js',
+        'sastik-assets/js/jquery-3.7.1.min.js',
+    ];
+
+    public static function landingAssetVersion(): string
+    {
+        $parts = [];
+        foreach (self::LANDING_ASSET_FILES as $file) {
+            $abs = public_path($file);
+            $parts[] = is_file($abs) ? $file.':'.filemtime($abs).':'.filesize($abs) : $file.':missing';
+        }
+
+        return substr(md5(implode('|', $parts)), 0, 10);
+    }
+
+    /**
+     * true jika aset landing teroptimasi tersedia di server:
+     *  - landing.min.css + font ikon subset (scripts/build-landing-css.mjs, build-landing-icons.py)
+     *  - gsap-core.min.js (GSAP core saja, tanpa ScrollTrigger/SplitText dari plugin.js)
+     * Jika belum ter-deploy, Index.vue kembali memuat CSS asli & plugin.js
+     * sehingga halaman tidak rusak (404 / gsap undefined).
+     */
+    public static function landingOptimized(): bool
+    {
+        foreach ([
+            'sastik-assets/css/landing.min.css',
+            'sastik-assets/fonts/landing/fa-solid-900.woff2',
+            'sastik-assets/fonts/landing/fa-regular-400.woff2',
+            'sastik-assets/fonts/landing/fa-brands-400.woff2',
+            'sastik-assets/js/gsap-core.min.js',
+        ] as $file) {
+            if (! is_file(public_path($file))) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Stylesheet render-blocking yang dimuat SERVER di <head> untuk halaman publik.
+     *
+     * Halaman-halaman ini memasang CSS lewat <Head> Inertia, yang baru berjalan
+     * SETELAH Vue merender — akibatnya header/footer sempat tampil tanpa gaya
+     * (±3 dtk di 4G). Dengan link di <head>, CSS sudah siap sebelum render.
+     * Urutan HARUS sama dengan urutan di <Head> masing-masing halaman (cascade);
+     * link yang sama di <Head> tetap ada (file identik hanya diunduh sekali).
+     *
+     * @return list<string>
+     */
+    public static function serverStylesheets(string $component): array
+    {
+        $sastik = '/sastik-assets/css/';
+
+        return match ($component) {
+            'Landing/Index' => self::landingOptimized()
+                ? ['/sastik-assets/css/landing.min.css?v='.self::landingAssetVersion()]
+                : [],
+            // Lihat <Head> di resources/js/pages/Landing/Panduan.vue
+            'Landing/Panduan' => [
+                'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,700,0..1,0&display=swap',
+                $sastik.'bootstrap.min.css',
+                $sastik.'fontawesome.css',
+                $sastik.'animate.css',
+                $sastik.'swiper.min.css',
+                $sastik.'odometer.css',
+                $sastik.'nice-select.css',
+                $sastik.'main.css',
+            ],
+            // Lihat <Head> di Privacy.vue / Terms.vue / RefundPolicy.vue (CSS lain di sana async).
+            'Landing/Privacy', 'Landing/Terms', 'Landing/RefundPolicy' => [
+                $sastik.'bootstrap.min.css',
+                $sastik.'fontawesome.css',
+                $sastik.'main.css',
+                '/css/landing-custom.css',
+            ],
+            default => [],
+        };
+    }
+
+    /** Lokasi HTML prerender landing (dibuat scripts/prerender-landing.mjs). */
+    public static function landingPrerenderPath(): string
+    {
+        return resource_path('prerender/landing.html');
+    }
+
+    /**
+     * HTML prerender landing untuk disisipkan ke <div id="app"> (crawler tanpa JS).
+     * null bila file belum ada/kosong -> blade memakai @inertia biasa.
+     */
+    public static function landingPrerenderHtml(): ?string
+    {
+        $path = self::landingPrerenderPath();
+        if (! is_file($path)) {
+            return null;
+        }
+        $html = trim((string) file_get_contents($path));
+
+        return $html !== '' ? $html : null;
     }
 
     /**
@@ -25,8 +151,10 @@ final class LandingSeo
     public static function openGraphImage(): array
     {
         $candidates = [
-            ['path' => public_path('logo.png'), 'asset' => 'logo.png', 'mime' => 'image/png'],
+            // Gambar pratinjau sosial 1200x630 (rasio standar og:image / twitter summary_large_image).
+            ['path' => public_path('og-share.jpg'), 'asset' => 'og-share.jpg', 'mime' => 'image/jpeg'],
             ['path' => public_path('og-share.png'), 'asset' => 'og-share.png', 'mime' => 'image/png'],
+            ['path' => public_path('logo.png'), 'asset' => 'logo.png', 'mime' => 'image/png'],
             ['path' => public_path('maskot.png'), 'asset' => 'maskot.png', 'mime' => 'image/png'],
             ['path' => public_path('maskot.jpg'), 'asset' => 'maskot.jpg', 'mime' => 'image/jpeg'],
             ['path' => public_path('maskot.jpeg'), 'asset' => 'maskot.jpeg', 'mime' => 'image/jpeg'],
@@ -111,8 +239,8 @@ final class LandingSeo
         ?int $ogImageWidth,
         ?int $ogImageHeight,
     ): array {
-        $title = self::SITE_NAME.' — Kasir Modern untuk Usaha Anda';
-        $description = 'Kasir modern untuk UMKM — kelola produk, stok, transaksi POS, shift kasir, dan laporan dalam satu aplikasi web.';
+        $title = self::HOME_TITLE;
+        $description = self::HOME_DESCRIPTION;
 
         return [
             'title' => $title,
@@ -194,7 +322,7 @@ final class LandingSeo
         return [
             '@context' => 'https://schema.org',
             '@graph' => [
-                self::organizationNode($orgId, $siteRoot, $ogImage),
+                self::organizationNode($orgId, $siteRoot, self::logoUrl()),
                 [
                     '@type' => 'WebSite',
                     '@id' => $websiteId,
@@ -217,12 +345,24 @@ final class LandingSeo
                     'inLanguage' => 'id-ID',
                     'provider' => ['@id' => $orgId],
                     'offers' => [
-                        '@type' => 'Offer',
-                        'price' => '0',
-                        'priceCurrency' => 'IDR',
-                        'url' => url('/register'),
-                        'availability' => 'https://schema.org/InStock',
-                        'description' => 'Coba gratis; paket berlangganan tersedia di dalam aplikasi.',
+                        [
+                            '@type' => 'Offer',
+                            'name' => 'Paket Starter',
+                            'price' => '0',
+                            'priceCurrency' => 'IDR',
+                            'url' => url('/register'),
+                            'availability' => 'https://schema.org/InStock',
+                            'description' => 'Gratis selamanya untuk coba dan toko kecil.',
+                        ],
+                        [
+                            '@type' => 'Offer',
+                            'name' => 'Paket GrowUp',
+                            'price' => '99000',
+                            'priceCurrency' => 'IDR',
+                            'url' => url('/register'),
+                            'availability' => 'https://schema.org/InStock',
+                            'description' => 'Langganan bulanan untuk operasional penuh, laporan mendalam, dan multi-outlet.',
+                        ],
                     ],
                 ],
                 self::faqPageNode($siteRoot),
@@ -253,7 +393,7 @@ final class LandingSeo
                 'name' => self::SITE_NAME,
                 'url' => $siteRoot,
             ],
-            'publisher' => self::organizationNode($siteRoot.'/#organization', $siteRoot, $ogImage),
+            'publisher' => self::organizationNode($siteRoot.'/#organization', $siteRoot, self::logoUrl()),
             'primaryImageOfPage' => [
                 '@type' => 'ImageObject',
                 'url' => $ogImage,
@@ -286,13 +426,21 @@ final class LandingSeo
                 'name' => self::SITE_NAME,
                 'url' => $siteRoot,
             ],
-            'publisher' => self::organizationNode($siteRoot.'/#organization', $siteRoot, $ogImage),
+            'publisher' => self::organizationNode($siteRoot.'/#organization', $siteRoot, self::logoUrl()),
         ];
     }
 
     /**
      * @return array<string, mixed>
      */
+    /** Logo persegi untuk data terstruktur Organization (Google: min. 112x112). */
+    private static function logoUrl(): string
+    {
+        $path = public_path('logo.png');
+
+        return asset('logo.png').(is_file($path) ? '?v='.filemtime($path) : '');
+    }
+
     private static function organizationNode(string $id, string $siteRoot, string $logoUrl): array
     {
         return [

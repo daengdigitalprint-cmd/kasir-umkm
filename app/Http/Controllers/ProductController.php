@@ -15,14 +15,18 @@ use App\Models\ProductVariant;
 use App\Models\StockMovement;
 use App\Models\Store;
 use App\Services\ProductImportService;
+use App\Support\BarbershopFeatures;
+use App\Support\BarbershopSampleServices;
 use App\Support\BaseUnit;
 use App\Support\BatchTracking;
 use App\Support\BusinessTypePresets;
 use App\Support\CacheKeys;
 use App\Support\InventoryType;
+use App\Support\ModifierOptions;
 use App\Support\PharmacyFeatures;
 use App\Support\ProductQuantity;
 use App\Support\StockAdjustmentApproval;
+use App\Support\StoreDefaultProductCategories;
 use App\Support\StorePlanLimits;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -233,6 +237,7 @@ class ProductController extends Controller
         try {
             $importer = new ProductsImport;
             $rows = $importer->rowsFrom($request->file('file'));
+            $variantRows = $importer->variantRowsFrom($request->file('file'));
             $componentRows = $importer->componentRowsFrom($request->file('file'));
         } catch (\Throwable $e) {
             report($e);
@@ -242,17 +247,36 @@ class ProductController extends Controller
             ]);
         }
 
+        $variantImported = 0;
         $componentImported = 0;
 
         try {
             $result = $service->import($store, $rows, auth()->id());
 
+            // Urutan penting: varian dulu (komponen menu bisa menunjuk varian),
+            // lalu komponen paket, komponen menu, dan resep produksi.
             if ($result['errors'] === []) {
-                $componentResult = $service->importSaleConsumptions($store, $componentRows, auth()->id());
-                $componentImported = $componentResult['imported'];
-                if ($componentResult['errors'] !== []) {
-                    $result['errors'] = $componentResult['errors'];
-                }
+                $variantResult = $service->importVariants($store, $variantRows, auth()->id());
+                $variantImported = $variantResult['imported'];
+                $result['errors'] = $variantResult['errors'];
+            }
+
+            if ($result['errors'] === []) {
+                $bundleResult = $service->importBundleItems($store, $componentRows, auth()->id());
+                $componentImported += $bundleResult['imported'];
+                $result['errors'] = $bundleResult['errors'];
+            }
+
+            if ($result['errors'] === []) {
+                $consumptionResult = $service->importSaleConsumptions($store, $componentRows, auth()->id());
+                $componentImported += $consumptionResult['imported'];
+                $result['errors'] = $consumptionResult['errors'];
+            }
+
+            if ($result['errors'] === []) {
+                $recipeResult = $service->importRecipes($store, $componentRows, auth()->id());
+                $componentImported += $recipeResult['imported'];
+                $result['errors'] = $recipeResult['errors'];
             }
         } catch (\Throwable $e) {
             report($e);
@@ -277,8 +301,11 @@ class ProductController extends Controller
         if ($result['updated'] > 0) {
             $parts[] = $result['updated'].' produk diperbarui';
         }
+        if ($variantImported > 0) {
+            $parts[] = $variantImported.' varian diimpor';
+        }
         if ($componentImported > 0) {
-            $parts[] = $componentImported.' komponen konsumsi diimpor';
+            $parts[] = $componentImported.' komponen diimpor';
         }
 
         return redirect()->route('products.index')
@@ -294,7 +321,6 @@ class ProductController extends Controller
             return redirect()->route('stores.create')
                 ->with('error', 'Anda perlu membuat toko terlebih dahulu.');
         }
-
         $bundleCatalogProducts = $this->bundleCatalogProductsForStore($store, null);
         $saleConsumptionCatalog = $this->saleConsumptionCatalogForStore($store, null);
 
@@ -312,9 +338,71 @@ class ProductController extends Controller
             'batchTrackingEnabled' => BatchTracking::enabled($store),
             'fnbModifierEnabled' => ($store->business_type ?? '') === 'fnb',
             'pharmacyFieldsEnabled' => PharmacyFeatures::enabled($store),
+            'barbershopEnabled' => BarbershopFeatures::enabled($store),
             'bundleCatalogProducts' => $bundleCatalogProducts,
             'saleConsumptionCatalog' => $saleConsumptionCatalog,
         ]);
+    }
+
+    /**
+     * Membuat produk layanan contoh untuk toko barbershop (idempotent per nama).
+     */
+    public function sampleServices(Request $request)
+    {
+        $user = auth()->user();
+        $store = $user->store;
+
+        if (! $store) {
+            return redirect()->route('stores.create')
+                ->with('error', 'Anda perlu membuat toko terlebih dahulu.');
+        }
+
+        if (! BarbershopFeatures::enabled($store)) {
+            return back()->with('error', 'Layanan contoh hanya tersedia untuk toko barbershop.');
+        }
+
+        StoreDefaultProductCategories::ensureForStore($store);
+
+        $categoryIds = $store->productCategories()
+            ->pluck('id', 'name');
+
+        $created = 0;
+        $skipped = 0;
+
+        foreach (BarbershopSampleServices::all() as $service) {
+            $exists = $store->products()
+                ->where('name', $service['name'])
+                ->exists();
+
+            if ($exists) {
+                $skipped++;
+
+                continue;
+            }
+
+            $store->products()->create([
+                'name' => $service['name'],
+                'category' => $service['category'],
+                'product_category_id' => $categoryIds[$service['category']] ?? null,
+                'price' => $service['price'],
+                'unit' => 'jasa',
+                'inventory_type' => InventoryType::normalize('sellable'),
+                'track_stock' => false,
+                'stock_quantity' => 0,
+                'min_stock_level' => 0,
+                'tax_rate' => 0,
+                'is_active' => true,
+                'service_duration_minutes' => $service['duration'],
+            ]);
+
+            $created++;
+        }
+
+        return back()->with('success', sprintf(
+            'Layanan contoh ditambahkan: %d baru, %d sudah ada sebelumnya.',
+            $created,
+            $skipped,
+        ));
     }
 
     public function store(Request $request)
@@ -377,6 +465,9 @@ class ProductController extends Controller
             'bundles_json' => 'nullable|string|max:65500',
             'sale_consumptions_json' => 'nullable|string|max:65500',
             'modifier_options_json' => 'nullable|string|max:65535',
+            'service_duration_minutes' => 'nullable|integer|min:1|max:1440',
+            'barber_commission_mode' => 'sometimes|nullable|string|in:percent,fixed',
+            'barber_commission_value' => 'sometimes|nullable|numeric|min:0|max:100000000',
         ], $this->pharmacyValidationRules($store)));
 
         $allowsDecimal = (bool) ($validated['allows_decimal'] ?? false);
@@ -476,6 +567,11 @@ class ProductController extends Controller
             'is_active' => true,
         ];
         $createPayload = array_merge($createPayload, $this->pharmacyFieldsForPayload($store, $validated));
+        if (BarbershopFeatures::enabled($store)) {
+            $createPayload['service_duration_minutes'] = $validated['service_duration_minutes'] ?? null;
+            $createPayload['barber_commission_mode'] = $validated['barber_commission_mode'] ?? null;
+            $createPayload['barber_commission_value'] = $validated['barber_commission_value'] ?? null;
+        }
         if (($store->business_type ?? '') === 'fnb') {
             $createPayload['modifier_options'] = $isBundle
                 ? []
@@ -630,6 +726,9 @@ class ProductController extends Controller
             'modifier_options' => $product->modifier_options ?? [],
             'pharmacy_sale_class' => $product->pharmacy_sale_class ?? 'otc',
             'pharmacy_registration_no' => $product->pharmacy_registration_no ?? '',
+            'service_duration_minutes' => $product->service_duration_minutes,
+            'barber_commission_mode' => $product->barber_commission_mode,
+            'barber_commission_value' => $product->barber_commission_value !== null ? (float) $product->barber_commission_value : null,
         ];
 
         \Log::debug('[PRODUCT_EDIT_RENDER] Data yang dikirim ke halaman edit', [
@@ -723,6 +822,7 @@ class ProductController extends Controller
             'batchTrackingEnabled' => BatchTracking::enabled($store),
             'fnbModifierEnabled' => ($store->business_type ?? '') === 'fnb',
             'pharmacyFieldsEnabled' => PharmacyFeatures::enabled($store),
+            'barbershopEnabled' => BarbershopFeatures::enabled($store),
             'batches' => $batches,
             'variants' => $variants,
             'bundleItems' => $bundleItemsPayload,
@@ -812,6 +912,9 @@ class ProductController extends Controller
             'bundles_json' => 'nullable|string|max:65500',
             'sale_consumptions_json' => 'nullable|string|max:65500',
             'modifier_options_json' => 'nullable|string|max:65535',
+            'service_duration_minutes' => 'nullable|integer|min:1|max:1440',
+            'barber_commission_mode' => 'sometimes|nullable|string|in:percent,fixed',
+            'barber_commission_value' => 'sometimes|nullable|numeric|min:0|max:100000000',
         ], $this->pharmacyValidationRules($product->store)));
 
         \Log::debug('[PRODUCT_UPDATE_VALIDATED] Hasil validasi:', [
@@ -930,6 +1033,12 @@ class ProductController extends Controller
         ];
         $dataToUpdate = array_merge($dataToUpdate, $this->pharmacyFieldsForPayload($product->store, $validated));
 
+        if (BarbershopFeatures::enabled($product->store)) {
+            $dataToUpdate['service_duration_minutes'] = $validated['service_duration_minutes'] ?? null;
+            $dataToUpdate['barber_commission_mode'] = $validated['barber_commission_mode'] ?? null;
+            $dataToUpdate['barber_commission_value'] = $validated['barber_commission_value'] ?? null;
+        }
+
         if (($product->store->business_type ?? '') === 'fnb') {
             $dataToUpdate['modifier_options'] = $isBundle
                 ? []
@@ -1029,6 +1138,17 @@ class ProductController extends Controller
 
         // Sync stok produk jual yang bergantung pada produk hasil produksi ini
         if ($freshProduct->isProductionOutput()) {
+            // Sisa batch produksi harus ikut digeser. Tanpa ini penjualan berikutnya
+            // menimpa stock_quantity dengan total sisa batch, sehingga koreksi hilang.
+            if ($freshProduct->track_stock && ! $freshProduct->unlimited_stock) {
+                DB::transaction(function () use ($freshProduct) {
+                    \App\Support\ProductionStockOperations::syncBatchesToStock(
+                        $freshProduct,
+                        (string) $freshProduct->stock_quantity,
+                    );
+                });
+            }
+
             $dependentConsumptions = \App\Models\ProductSaleConsumption::where('component_product_id', $freshProduct->id)->get();
 
             // Batch-load related models to avoid N+1
@@ -1151,13 +1271,32 @@ class ProductController extends Controller
             'ids.*' => 'required|integer|exists:products,id',
         ]);
 
+        $store = auth()->user()->store;
+
+        if (! $store) {
+            return response()->json(['deleted' => 0, 'errors' => ['Tidak ada toko aktif.']], 422);
+        }
+
         $deleted = 0;
         $errors = [];
 
+        // Dibatasi ke toko yang sedang aktif: tanpa ini, id dari outlet lain yang
+        // ikut terkirim akan menghapus produk di katalog outlet tersebut.
+        $products = Product::query()
+            ->where('store_id', $store->id)
+            ->whereIn('id', $validated['ids'])
+            ->get()
+            ->keyBy('id');
+
         foreach ($validated['ids'] as $id) {
-            $product = Product::find($id);
+            $product = $products->get($id);
             if (! $product) {
-                $errors[] = "Produk ID {$id} tidak ditemukan.";
+                $errors[] = "Produk ID {$id} tidak ditemukan di toko ini.";
+
+                continue;
+            }
+            if (auth()->user()->cannot('delete', $product)) {
+                $errors[] = "Produk «{$product->name}» tidak dapat dihapus dari toko ini.";
 
                 continue;
             }
@@ -1225,54 +1364,7 @@ class ProductController extends Controller
             ]);
         }
 
-        $normalized = [];
-        $usedKeys = [];
-
-        foreach ($decoded as $row) {
-            if (! is_array($row)) {
-                continue;
-            }
-            $label = isset($row['label']) ? trim((string) $row['label']) : '';
-            if ($label === '') {
-                continue;
-            }
-
-            $key = isset($row['key']) ? trim((string) $row['key']) : '';
-            if ($key === '') {
-                $base = Str::slug($label, '_');
-                if ($base === '') {
-                    $base = 'opt';
-                }
-                $key = $base;
-                $n = 1;
-                while (in_array($key, $usedKeys, true)) {
-                    $key = $base.'_'.$n;
-                    $n++;
-                }
-            } else {
-                $key = Str::slug($key, '_');
-                if ($key === '') {
-                    $key = 'opt';
-                }
-                if (in_array($key, $usedKeys, true)) {
-                    $n = 1;
-                    $base = $key;
-                    while (in_array($key, $usedKeys, true)) {
-                        $key = $base.'_'.$n;
-                        $n++;
-                    }
-                }
-            }
-
-            $usedKeys[] = $key;
-            $normalized[] = [
-                'key' => mb_substr($key, 0, 64),
-                'label' => mb_substr($label, 0, 120),
-                'price' => round(max(0, (float) ($row['price'] ?? 0)), 2),
-            ];
-        }
-
-        return $normalized === [] ? null : $normalized;
+        return ModifierOptions::normalize($decoded);
     }
 
     /**

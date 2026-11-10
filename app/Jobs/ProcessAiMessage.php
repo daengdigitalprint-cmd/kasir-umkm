@@ -78,6 +78,7 @@ class ProcessAiMessage implements ShouldQueue
             $aiService->registerTool(new \App\Tools\Reports\ProfitReportTool);
             $aiService->registerTool(new \App\Tools\Reports\BranchComparisonTool);
             $aiService->registerTool(new \App\Tools\Reports\TransactionAnomalyTool);
+            $aiService->registerTool(new \App\Tools\Reports\BarberCommissionTool);
         }
     }
 }

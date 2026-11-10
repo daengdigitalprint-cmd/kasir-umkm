@@ -17,7 +17,7 @@ const props = defineProps<{
         overtime_rate_first_hour: number;
         overtime_rate_next_hour: number;
         overtime_rate_holiday: number;
-        BPJS_enabled: boolean;
+        bpjs_enabled: boolean;
         bpjs_health_employee: number;
         bpjs_health_employer: number;
         bpjs_jht_employee: number;
@@ -26,6 +26,9 @@ const props = defineProps<{
         bpjs_jp_employer: number;
         bpjs_jkk: number;
         bpjs_jkm: number;
+        bpjs_health_wage_cap: number;
+        bpjs_jp_wage_cap: number;
+        absence_deduction_enabled: boolean;
         pph21_enabled: boolean;
     };
 }>();
@@ -48,6 +51,9 @@ const form = useForm({
     bpjs_jp_employer: String(props.settings.bpjs_jp_employer),
     bpjs_jkk: String(props.settings.bpjs_jkk),
     bpjs_jkm: String(props.settings.bpjs_jkm),
+    bpjs_health_wage_cap: String(Math.round(props.settings.bpjs_health_wage_cap)),
+    bpjs_jp_wage_cap: String(Math.round(props.settings.bpjs_jp_wage_cap)),
+    absence_deduction_enabled: props.settings.absence_deduction_enabled,
     pph21_enabled: props.settings.pph21_enabled,
 });
 
@@ -84,9 +90,9 @@ const tabs = [
 </script>
 
 <template>
-    <Head title="Pengaturan Payroll" />
+    <Head title="Pengaturan SDM" />
 
-    <AdminLayout title="Pengaturan Payroll">
+    <AdminLayout title="Pengaturan SDM · Penggajian">
         <div class="space-y-6 pb-8">
             <PayrollNav />
 
@@ -178,6 +184,23 @@ const tabs = [
                         </div>
                     </div>
 
+                    <!-- Potongan alpa -->
+                    <div class="space-y-2 rounded-xl border border-slate-200 p-4">
+                        <div class="flex items-center gap-3">
+                            <input
+                                v-model="form.absence_deduction_enabled"
+                                type="checkbox"
+                                id="absence-deduction"
+                                class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <Label for="absence-deduction" class="font-medium">Potong gaji untuk hari alpa & cuti tanpa gaji</Label>
+                        </div>
+                        <p class="text-xs text-slate-500">
+                            Upah sehari = total komponen gaji tetap ÷ 21 (jadwal 5 hari kerja) atau ÷ 25 (6 hari kerja).
+                            Potongan tidak melebihi gaji tetap periode itu.
+                        </p>
+                    </div>
+
                     <Button type="button" class="rounded-xl" :disabled="form.processing" @click="submit">
                         <Save class="h-4 w-4 mr-1" /> Simpan Pengaturan
                     </Button>
@@ -220,8 +243,10 @@ const tabs = [
                             <div class="text-sm text-blue-800">
                                 <p class="font-medium">Catatan:</p>
                                 <p class="mt-1">
-                                    Saat ini sistem menggunakan tarif <strong>Jam Pertama</strong> untuk semua jam lembur.
-                                    Implementasi tarif bertingkat (jam pertama vs berikutnya) akan ditambahkan di Fase C.
+                                    Lembur dihitung per hari: jam pertama memakai tarif <strong>Jam Pertama</strong>, jam ke-2 dst
+                                    memakai tarif <strong>Jam Berikutnya</strong>. Lembur pada tanggal yang terdaftar sebagai
+                                    hari libur di Pengaturan Absensi memakai tarif <strong>Hari Libur</strong> untuk semua jam.
+                                    Upah per jam = 1/173 × total komponen gaji tetap.
                                 </p>
                             </div>
                         </div>
@@ -297,6 +322,36 @@ const tabs = [
                                     <Input v-model="form.bpjs_jp_employer" type="number" step="0.01" min="0" max="100" />
                                 </div>
                             </div>
+                        </div>
+
+                        <!-- Batas upah -->
+                        <div class="space-y-3">
+                            <h4 class="font-medium text-slate-700">Batas Upah Iuran</h4>
+                            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                <div class="space-y-1">
+                                    <Label>Batas upah BPJS Kesehatan (Rp)</Label>
+                                    <Input
+                                        :model-value="formatAmount(form.bpjs_health_wage_cap)"
+                                        inputmode="numeric"
+                                        @input="onAmountInput('bpjs_health_wage_cap', $event)"
+                                        @blur="onAmountBlur('bpjs_health_wage_cap', $event)"
+                                    />
+                                    <p class="text-xs text-slate-500">Saat ini Rp 12.000.000 (Perpres 64/2020).</p>
+                                    <p v-if="form.errors.bpjs_health_wage_cap" class="text-sm text-red-600">{{ form.errors.bpjs_health_wage_cap }}</p>
+                                </div>
+                                <div class="space-y-1">
+                                    <Label>Batas upah Jaminan Pensiun (Rp)</Label>
+                                    <Input
+                                        :model-value="formatAmount(form.bpjs_jp_wage_cap)"
+                                        inputmode="numeric"
+                                        @input="onAmountInput('bpjs_jp_wage_cap', $event)"
+                                        @blur="onAmountBlur('bpjs_jp_wage_cap', $event)"
+                                    />
+                                    <p class="text-xs text-slate-500">Diumumkan BPJS Ketenagakerjaan tiap Maret — perbarui setiap tahun.</p>
+                                    <p v-if="form.errors.bpjs_jp_wage_cap" class="text-sm text-red-600">{{ form.errors.bpjs_jp_wage_cap }}</p>
+                                </div>
+                            </div>
+                            <p class="text-xs text-slate-500">JHT, JKK, dan JKM dihitung dari seluruh upah tetap tanpa batas.</p>
                         </div>
 
                         <!-- JKK & JKM -->

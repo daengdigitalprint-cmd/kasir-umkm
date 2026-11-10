@@ -2,6 +2,13 @@
 
 use Illuminate\Support\Facades\Broadcast;
 
+$broadcaster = (string) config('broadcasting.default');
+$connection = (array) config("broadcasting.connections.{$broadcaster}", []);
+
+if (in_array($broadcaster, ['reverb', 'pusher'], true) && empty($connection['secret'])) {
+    return;
+}
+
 Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
     return (int) $user->id === (int) $id;
 });

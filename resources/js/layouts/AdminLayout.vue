@@ -12,7 +12,7 @@ import { resolveProfileImageSrc } from '@/lib/profileAvatar';
 import { toastWarning } from '@/lib/swal';
 import { Head, usePage, router } from '@inertiajs/vue3';
 import { BarChart3, Bell, CalendarCheck, Crown, History, Home, Menu, Package, Settings, ShoppingCart, Store, Users, X, PanelLeft, Shirt, ReceiptText, Clock, ArrowRightLeft } from 'lucide-vue-next';
-import { computed, ref, onMounted, onUnmounted } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
 interface AccessibleStoreRow {
     id: number;
@@ -33,6 +33,7 @@ const props = withDefaults(defineProps<Props>(), {
 });
 const page = usePage();
 
+const aiChatEnabled = computed(() => Boolean((page.props as { ai_chat_enabled?: boolean }).ai_chat_enabled));
 const authUser = computed(() => page.props.auth?.user);
 const pendingTableOrderCount = computed(() => Number((page.props as { pending_table_order_count?: number }).pending_table_order_count ?? 0));
 
@@ -149,21 +150,23 @@ function aiCsrfHeaders(): Record<string, string> {
 }
 
 async function refreshAiAlerts(): Promise<void> {
-    if (!activeUserId.value) return;
+    if (!aiChatEnabled.value || !activeUserId.value) return;
     try {
         const res = await fetch('/ai/alerts', {
             headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest', ...aiCsrfHeaders() },
         });
         if (!res.ok) return;
         const data = (await res.json()) as { alerts?: AiAlertItem[] };
-        aiAlerts.value = data.alerts ?? [];
+        if (aiChatEnabled.value) {
+            aiAlerts.value = data.alerts ?? [];
+        }
     } catch (e) {
         console.debug('Gagal memuat peringatan AI:', e);
     }
 }
 
 async function markAiAlertRead(alert: AiAlertItem): Promise<void> {
-    if (alert.is_read) return;
+    if (!aiChatEnabled.value || alert.is_read) return;
     try {
         const res = await fetch(`/ai/alerts/${alert.id}/read`, {
             method: 'POST',
@@ -179,13 +182,13 @@ async function markAiAlertRead(alert: AiAlertItem): Promise<void> {
 
 const setupAiAlertEcho = () => {
     const echo = (typeof window !== 'undefined' && window.Echo) || null;
-    if (!echo || !activeUserId.value) return;
+    if (!aiChatEnabled.value || !echo || !activeUserId.value) return;
 
     const channelName = `App.Models.User.${activeUserId.value}`;
     const channel = echo.private(channelName);
 
     channel.listen('.ai.alert.created', (payload: { title?: string; message?: string }) => {
-        if (!payload) return;
+        if (!aiChatEnabled.value || !payload) return;
         void refreshAiAlerts();
         const head = payload.title || 'Peringatan AI';
         const detail = payload.message ? ` — ${payload.message}` : '';
@@ -201,13 +204,31 @@ const setupAiAlertEcho = () => {
     };
 };
 
+watch(aiChatEnabled, (isEnabled) => {
+    if (!isEnabled) {
+        aiAlerts.value = [];
+        if (aiAlertUnsubscribe) {
+            aiAlertUnsubscribe();
+            aiAlertUnsubscribe = null;
+        }
+        return;
+    }
+
+    void refreshAiAlerts();
+    setupAiAlertEcho();
+});
+
 onMounted(() => {
     checkOrientation();
     window.addEventListener('resize', checkOrientation);
     window.addEventListener('orientationchange', checkOrientation);
     pendingOrderPollId = setInterval(refreshPendingOrders, 10000);
-    void refreshAiAlerts();
-    setupAiAlertEcho();
+    if (aiChatEnabled.value) {
+        void refreshAiAlerts();
+        setupAiAlertEcho();
+    } else {
+        aiAlerts.value = [];
+    }
 });
 
 onUnmounted(() => {
@@ -311,7 +332,7 @@ const isCurrentRoute = (href: string) => {
                             <span class="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-600 px-1 text-[10px] font-bold leading-5 text-white">{{ pendingTableOrderCount > 99 ? '99+' : pendingTableOrderCount }}</span>
                             <span class="sr-only">{{ pendingTableOrderCount }} pesanan masuk</span>
                         </Button>
-                        <DropdownMenu>
+                        <DropdownMenu v-if="aiChatEnabled">
                             <DropdownMenuTrigger as-child>
                                 <Button
                                     variant="ghost"
@@ -516,7 +537,7 @@ const isCurrentRoute = (href: string) => {
                             </div>
                             <div class="flex items-center gap-6">
                                 <ConnectionStatus :store-id="activeStoreId" :cashier-id="activeUserId" />
-                                <DropdownMenu>
+                                <DropdownMenu v-if="aiChatEnabled">
                                     <DropdownMenuTrigger as-child>
                                         <Button
                                             variant="ghost"

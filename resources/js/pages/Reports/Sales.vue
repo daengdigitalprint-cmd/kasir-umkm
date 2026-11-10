@@ -26,6 +26,20 @@ interface TransactionItem {
     gross_profit_snapshot?: number | null;
 }
 
+interface BarberOption {
+    id: number;
+    name: string;
+}
+
+interface BarberRow {
+    barber_id: number;
+    barber_name: string;
+    transaction_count: number;
+    gross_revenue: number;
+    commission_amount: number;
+    average_per_visit: number;
+}
+
 interface Transaction {
     id: number;
     transaction_number: string;
@@ -37,6 +51,7 @@ interface Transaction {
     is_void?: boolean;
     void_reason?: string | null;
     customer?: Customer | null;
+    barber?: { id: number; name: string } | null;
     items?: TransactionItem[];
 }
 
@@ -69,11 +84,19 @@ const props = withDefaults(
             commission_amount: number;
             net_revenue: number;
         }>;
+        barbershopEnabled?: boolean;
+        barbers?: BarberOption[];
+        barberUserId?: number | null;
+        barberBreakdown?: BarberRow[];
         readonly?: boolean;
     }>(),
     {
         hppSummary: () => ({ total_revenue: 0, total_cost: 0, total_gross_profit: 0, items_with_hpp: 0 }),
         channelBreakdown: () => [],
+        barbershopEnabled: false,
+        barbers: () => [],
+        barberUserId: null,
+        barberBreakdown: () => [],
         readonly: false,
     },
 );
@@ -81,6 +104,7 @@ const props = withDefaults(
 const filterStart = ref(props.dateRange.start_date);
 const filterEnd = ref(props.dateRange.end_date);
 const saleClass = ref(props.saleClass || '');
+const filterBarber = ref<string>(props.barberUserId ? String(props.barberUserId) : '');
 
 watch(
     () => props.dateRange,
@@ -90,11 +114,22 @@ watch(
     },
 );
 
+watch(
+    () => props.barberUserId,
+    (v) => {
+        filterBarber.value = v ? String(v) : '';
+    },
+);
+
 const applyFilter = () => {
     const url = props.readonly ? '/pos/transactions' : '/reports/sales';
-    const params = props.readonly
-        ? { date_from: filterStart.value, date_to: filterEnd.value }
-        : { start_date: filterStart.value, end_date: filterEnd.value, ...(saleClass.value ? { sale_class: saleClass.value } : {}) };
+    if (props.readonly) {
+        router.get(url, { date_from: filterStart.value, date_to: filterEnd.value }, { preserveState: true, preserveScroll: true });
+        return;
+    }
+    const params: Record<string, string> = { start_date: filterStart.value, end_date: filterEnd.value };
+    if (saleClass.value) params.sale_class = saleClass.value;
+    if (props.barbershopEnabled && filterBarber.value) params.barber_user_id = filterBarber.value;
     router.get(url, params, { preserveState: true, preserveScroll: true });
 };
 
@@ -186,7 +221,8 @@ async function submitVoid() {
 
     voidSaving.value = true;
     try {
-        const res = await fetch(`/transactions/${voidForm.id}/void`, {
+        const voidUrl = props.readonly ? `/pos/transactions/${voidForm.id}/void` : `/transactions/${voidForm.id}/void`;
+        const res = await fetch(voidUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -329,7 +365,7 @@ async function saveEditTransaction() {
 
         <div v-if="!readonly" class="flex items-start justify-between gap-3">
             <ReportTabs active-tab="penjualan" />
-            <ReportExportButton report="penjualan" :params="{ start_date: filterStart, end_date: filterEnd }" />
+            <ReportExportButton report="penjualan" :params="{ start_date: filterStart, end_date: filterEnd, ...(props.barbershopEnabled && filterBarber ? { barber_user_id: filterBarber } : {}) }" />
         </div>
 
 
@@ -345,8 +381,50 @@ async function saveEditTransaction() {
                         <Input v-model="filterEnd" type="date" class="max-w-xs" />
                     </div>
                     <select v-if="!readonly && props.pharmacyEnabled" v-model="saleClass" class="h-10 rounded-xl border px-3 text-sm"><option value="">Semua penjualan</option><option value="prescription">Penjualan resep</option><option value="non_prescription">Non-resep</option></select>
+                    <select v-if="!readonly && props.barbershopEnabled" v-model="filterBarber" class="h-10 rounded-xl border px-3 text-sm"><option value="">Semua teknisi</option><option v-for="b in (props.barbers ?? [])" :key="b.id" :value="String(b.id)">{{ b.name }}</option></select>
                     <Button type="button" class="rounded-xl" @click="applyFilter">Terapkan</Button>
                 </div>
+            </CardContent>
+        </Card>
+
+        <Card v-if="!readonly && props.barbershopEnabled && (props.barberBreakdown ?? []).length > 0" class="border-0 shadow-md mb-6">
+            <CardHeader>
+                <CardTitle class="flex items-center gap-2">
+                    <Store class="h-5 w-5 text-slate-600" />
+                    Ringkasan per Teknisi
+                </CardTitle>
+                <CardDescription>Jumlah transaksi, omzet kotor, komisi, dan rata-rata per kunjungan per teknisi di periode ini</CardDescription>
+            </CardHeader>
+            <CardContent class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b text-left text-slate-500">
+                            <th class="pb-3 pr-4 font-medium">Teknisi</th>
+                            <th class="pb-3 pr-4 text-right font-medium">Transaksi</th>
+                            <th class="pb-3 pr-4 text-right font-medium">Omzet Kotor</th>
+                            <th class="pb-3 pr-4 text-right font-medium">Komisi</th>
+                            <th class="pb-3 text-right font-medium">Rata-rata/kunjungan</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="b in (props.barberBreakdown ?? [])" :key="b.barber_id" class="border-b last:border-0">
+                            <td class="py-2.5 pr-4 font-medium text-slate-800">{{ b.barber_name }}</td>
+                            <td class="py-2.5 pr-4 text-right">{{ b.transaction_count }}</td>
+                            <td class="py-2.5 pr-4 text-right">Rp {{ formatCurrency(b.gross_revenue) }}</td>
+                            <td class="py-2.5 pr-4 text-right text-slate-600">Rp {{ formatCurrency(b.commission_amount) }}</td>
+                            <td class="py-2.5 text-right">Rp {{ formatCurrency(b.average_per_visit) }}</td>
+                        </tr>
+                    </tbody>
+                    <tfoot>
+                        <tr class="border-t-2 border-slate-200 font-semibold text-slate-700">
+                            <td class="pt-3 pr-4">Total</td>
+                            <td class="pt-3 pr-4 text-right">{{ (props.barberBreakdown ?? []).reduce((s: number, r: BarberRow) => s + r.transaction_count, 0) }}</td>
+                            <td class="pt-3 pr-4 text-right">Rp {{ formatCurrency((props.barberBreakdown ?? []).reduce((s: number, r: BarberRow) => s + r.gross_revenue, 0)) }}</td>
+                            <td class="pt-3 pr-4 text-right">Rp {{ formatCurrency((props.barberBreakdown ?? []).reduce((s: number, r: BarberRow) => s + r.commission_amount, 0)) }}</td>
+                            <td class="pt-3"></td>
+                        </tr>
+                    </tfoot>
+                </table>
             </CardContent>
         </Card>
 
@@ -435,11 +513,12 @@ async function saveEditTransaction() {
                         <tr class="border-b text-left text-slate-500">
                             <th class="pb-3 pr-4 font-medium">No.</th>
                             <th class="pb-3 pr-4 font-medium">Waktu</th>
+                            <th v-if="props.barbershopEnabled && !readonly" class="pb-3 pr-4 font-medium">Teknisi</th>
                             <th class="pb-3 pr-4 font-medium">Pelanggan</th>
                             <th class="pb-3 pr-4 font-medium">Bayar</th>
                             <th class="pb-3 pr-4 font-medium text-right">Total</th>
                             <th v-if="!readonly" class="pb-3 pr-4 font-medium text-right">Laba Kotor</th>
-                            <th v-if="!readonly" class="pb-3 font-medium text-center">Aksi</th>
+                            <th class="pb-3 font-medium text-center">Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -451,6 +530,7 @@ async function saveEditTransaction() {
                                 <span v-if="t.is_void" class="ml-1 inline-flex items-center rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-700">VOID</span>
                             </td>
                             <td class="py-3 pr-4 whitespace-nowrap">{{ formatDate(t.created_at) }}</td>
+                            <td v-if="props.barbershopEnabled && !readonly" class="py-3 pr-4">{{ t.barber?.name ?? '—' }}</td>
                             <td class="py-3 pr-4">{{ t.customer?.name ?? '—' }}</td>
                             <td class="py-3 pr-4">{{ paymentLabel(t.payment_method) }}</td>
                             <td class="py-3 pr-4 text-right font-semibold">Rp {{ formatCurrency(t.total_amount) }}</td>
@@ -492,9 +572,22 @@ async function saveEditTransaction() {
                                     <span v-else class="text-xs text-slate-400" :title="t.void_reason || ''">Dibatalkan</span>
                                 </div>
                             </td>
+                            <td v-else class="py-3 text-center">
+                                <Button
+                                    v-if="!t.is_void"
+                                    variant="outline"
+                                    size="sm"
+                                    class="h-7 gap-1 rounded-lg border-amber-200 px-2 text-amber-600 hover:border-amber-300 hover:bg-amber-50"
+                                    @click="openVoidModal(t)"
+                                    title="Batalkan (void) transaksi"
+                                >
+                                    <Ban class="h-3 w-3" /> Void
+                                </Button>
+                                <span v-else class="text-xs text-slate-400" :title="t.void_reason || ''">Dibatalkan</span>
+                            </td>
                         </tr>
                         <tr v-if="!transactions.data?.length">
-                            <td :colspan="readonly ? 5 : 7" class="py-10 text-center text-slate-500">Tidak ada transaksi di periode ini.</td>
+                            <td :colspan="readonly ? 6 : 7" class="py-10 text-center text-slate-500">Tidak ada transaksi di periode ini.</td>
                         </tr>
                     </tbody>
                 </table>

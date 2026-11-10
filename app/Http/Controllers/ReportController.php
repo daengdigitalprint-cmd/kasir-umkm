@@ -15,6 +15,7 @@ use App\Models\User;
 use App\Support\Accounting\AccountingFeatures;
 use App\Support\Accounting\ChartOfAccountsBootstrap;
 use App\Support\Accounting\JournalPoster;
+use App\Support\BarbershopFeatures;
 use App\Support\BatchTracking;
 use App\Support\PharmacyFeatures;
 use App\Support\StoreLocationType;
@@ -147,19 +148,41 @@ class ReportController extends Controller
 
         $averageOrderValue = $totalTransactions > 0 ? $totalSales / $totalTransactions : 0;
 
-        // Top products — multi-outlet
-        $topProducts = \App\Models\Product::query()
-            ->whereIn('store_id', $storeIds)
-            ->withSum(['transactionItems as total_sold' => function ($query) use ($storeIds, $startDate, $endDate) {
-                $query->whereHas('transaction', function ($q) use ($storeIds, $startDate, $endDate) {
-                    $q->whereIn('store_id', $storeIds)
-                        ->whereBetween('created_at', [$startDate, $endDate.' 23:59:59'])
-                        ->where('status', 'completed');
-                });
-            }], 'quantity')
+        // Top products — dihitung dari baris transaksi, bukan harga master produk.
+        // Harga master bisa berubah atau salah input, sedangkan total_price adalah
+        // nilai yang benar-benar tercatat di nota.
+        $topProducts = DB::table('transaction_items')
+            ->join('transactions', 'transaction_items.transaction_id', '=', 'transactions.id')
+            ->join('products', 'transaction_items.product_id', '=', 'products.id')
+            ->whereIn('transactions.store_id', $storeIds)
+            ->whereBetween('transactions.created_at', [$startDate, $endDate.' 23:59:59'])
+            ->where('transactions.status', 'completed')
+            ->groupBy('products.id', 'products.name')
+            ->selectRaw('
+                products.id as id,
+                products.name as name,
+                COALESCE(SUM(transaction_items.quantity), 0) as total_sold,
+                COALESCE(SUM(transaction_items.total_price), 0) as total_revenue,
+                COALESCE(SUM(transaction_items.gross_profit_snapshot), 0) as total_profit,
+                COALESCE(SUM(CASE WHEN transaction_items.total_cost_snapshot IS NOT NULL THEN 1 ELSE 0 END), 0) as items_with_hpp
+            ')
             ->orderByDesc('total_sold')
-            ->limit(10)
-            ->get();
+            ->get()
+            ->map(function ($row) {
+                $sold = (float) $row->total_sold;
+                $revenue = round((float) $row->total_revenue, 2);
+
+                return [
+                    'id' => (int) $row->id,
+                    'name' => $row->name,
+                    'total_sold' => $sold,
+                    'total_revenue' => $revenue,
+                    'total_profit' => round((float) $row->total_profit, 2),
+                    'has_hpp' => (int) $row->items_with_hpp > 0,
+                    'avg_price' => $sold > 0 ? round($revenue / $sold, 2) : 0.0,
+                ];
+            })
+            ->values();
 
         // Recent transactions — multi-outlet
         $recentTransactions = Transaction::whereIn('store_id', $storeIds)
@@ -315,15 +338,11 @@ class ReportController extends Controller
             ])
             ->all();
 
-        $topProductsForChart = $topProducts->take(8)->map(function ($p) {
-            $sold = (float) ($p->total_sold ?? 0);
-
-            return [
-                'name' => $p->name,
-                'total_sold' => $sold,
-                'revenue' => round((float) $p->price * $sold, 2),
-            ];
-        })->values()->all();
+        $topProductsForChart = $topProducts->take(8)->map(fn ($p) => [
+            'name' => $p['name'],
+            'total_sold' => $p['total_sold'],
+            'revenue' => $p['total_revenue'],
+        ])->values()->all();
 
         // Customer statistics
         $totalCustomers = \App\Models\Customer::whereIn('store_id', $storeIds)->count();
@@ -338,6 +357,26 @@ class ReportController extends Controller
         $newCustomersChangePct = $prevNewCustomers > 0
             ? round((($newCustomers - $prevNewCustomers) / $prevNewCustomers) * 100, 1)
             : null;
+
+        // Laba kotor periode ini dari snapshot HPP per baris item.
+        $hppSummary = \App\Models\TransactionItem::query()
+            ->whereHas('transaction', function ($q) use ($storeIds, $startDate, $endDate) {
+                $q->whereIn('store_id', $storeIds)
+                    ->whereBetween('created_at', [$startDate, $endDate.' 23:59:59'])
+                    ->where('status', 'completed');
+            })
+            ->selectRaw('
+                COALESCE(SUM(total_price), 0) as total_revenue,
+                COALESCE(SUM(total_cost_snapshot), 0) as total_cost,
+                COALESCE(SUM(gross_profit_snapshot), 0) as total_gross_profit,
+                COALESCE(SUM(CASE WHEN total_cost_snapshot IS NOT NULL THEN 1 ELSE 0 END), 0) as items_with_hpp,
+                COUNT(*) as items_total
+            ')
+            ->first();
+
+        $hppRevenue = (float) $hppSummary->total_revenue;
+        $hppGrossProfit = (float) $hppSummary->total_gross_profit;
+        $grossMarginPct = $hppRevenue > 0 ? round(($hppGrossProfit / $hppRevenue) * 100, 1) : null;
 
         return Inertia::render('Reports/Index', [
             'store' => [
@@ -373,6 +412,14 @@ class ReportController extends Controller
                 'discount_by_type' => $discountByType,
             ],
             'new_customers_change_pct' => $newCustomersChangePct,
+            'hppSummary' => [
+                'total_revenue' => round($hppRevenue, 2),
+                'total_cost' => round((float) $hppSummary->total_cost, 2),
+                'total_gross_profit' => round($hppGrossProfit, 2),
+                'gross_margin_pct' => $grossMarginPct,
+                'items_with_hpp' => (int) $hppSummary->items_with_hpp,
+                'items_total' => (int) $hppSummary->items_total,
+            ],
             'topProducts' => $topProducts,
             'topProductsChart' => $topProductsForChart,
             'recentTransactions' => $recentTransactions,
@@ -405,23 +452,36 @@ class ReportController extends Controller
         $endDate = $dateRange['end_date'];
 
         $saleClass = $request->get('sale_class');
+        $barbershopEnabled = BarbershopFeatures::enabled($store);
+        $barberUserId = $barbershopEnabled ? ($request->integer('barber_user_id') ?: null) : null;
+
+        // Validasi barber milik toko aktif (abaikan bila tidak valid).
+        if ($barberUserId && $barbershopEnabled) {
+            $isValidBarber = User::barbersForStore($store)->pluck('id')->contains($barberUserId);
+            if (! $isValidBarber) {
+                $barberUserId = null;
+            }
+        }
+
         $transactions = Transaction::whereIn('store_id', $storeIds)
-            ->with(['customer', 'store', 'items.product', 'items.allocations'])
+            ->with(['customer', 'store', 'items.product', 'items.allocations', 'barber:id,name'])
             ->whereBetween('created_at', [$startDate, $endDate.' 23:59:59'])
             ->where('status', 'completed')
             ->when($saleClass === 'prescription', fn ($q) => $q->whereJsonContains('payment_details->has_prescription_lines', true))
             ->when($saleClass === 'non_prescription', fn ($q) => $q->where(function ($q) {
                 $q->whereNull('payment_details')->orWhereJsonDoesntContain('payment_details->has_prescription_lines', true);
             }))
+            ->when($barberUserId, fn ($q) => $q->where('barber_user_id', $barberUserId))
             ->latest()
             ->paginate(20);
 
         // Summary HPP dari snapshot per item
         $hppSummary = \App\Models\TransactionItem::query()
-            ->whereHas('transaction', function ($q) use ($storeIds, $startDate, $endDate) {
+            ->whereHas('transaction', function ($q) use ($storeIds, $startDate, $endDate, $barberUserId) {
                 $q->whereIn('store_id', $storeIds)
                     ->whereBetween('created_at', [$startDate, $endDate.' 23:59:59'])
-                    ->where('status', 'completed');
+                    ->where('status', 'completed')
+                    ->when($barberUserId, fn ($qq) => $qq->where('barber_user_id', $barberUserId));
             })
             ->selectRaw('
                 COALESCE(SUM(total_price), 0) as total_revenue,
@@ -435,6 +495,35 @@ class ReportController extends Controller
             ->active()
             ->orderBy('name')
             ->get(['id', 'name']);
+
+        // Breakdown per teknisi (barbershop saja).
+        $barberBreakdown = [];
+        $barbers = [];
+        if ($barbershopEnabled) {
+            $barbers = User::barbersForStore($store)->map(fn (User $u) => ['id' => $u->id, 'name' => $u->name])->all();
+
+            $barberRows = Transaction::whereIn('store_id', $storeIds)
+                ->whereBetween('created_at', [$startDate, $endDate.' 23:59:59'])
+                ->where('status', 'completed')
+                ->whereNotNull('barber_user_id')
+                ->selectRaw('barber_user_id, COUNT(*) as tx_count, COALESCE(SUM(total_amount), 0) as gross, COALESCE(SUM(barber_commission_amount), 0) as commission')
+                ->groupBy('barber_user_id')
+                ->with('barber:id,name')
+                ->get();
+
+            $barberBreakdown = $barberRows->map(function ($row) {
+                $gross = (float) $row->gross;
+
+                return [
+                    'barber_id' => (int) $row->barber_user_id,
+                    'barber_name' => $row->barber?->name ?? 'Teknisi (nonaktif)',
+                    'transaction_count' => (int) $row->tx_count,
+                    'gross_revenue' => round($gross, 2),
+                    'commission_amount' => round((float) $row->commission, 2),
+                    'average_per_visit' => (int) $row->tx_count > 0 ? round($gross / (int) $row->tx_count, 2) : 0,
+                ];
+            })->sortByDesc('gross_revenue')->values()->all();
+        }
 
         // Breakdown per sales channel (online vs offline + komisi aggregator).
         $salesChannelRows = Transaction::whereIn('store_id', $storeIds)
@@ -486,6 +575,87 @@ class ReportController extends Controller
                 'items_with_hpp' => $hppSummary->items_with_hpp,
             ],
             'channelBreakdown' => $channelBreakdown,
+            'barbershopEnabled' => $barbershopEnabled,
+            'barbers' => $barbers,
+            'barberUserId' => $barberUserId,
+            'barberBreakdown' => $barberBreakdown,
+        ]);
+    }
+
+    /**
+     * Laporan komisi teknisi — khusus toko barbershop.
+     * Komisi terpisah dari komisi aggregator (kolom barber_commission_*).
+     */
+    public function barberCommissions(Request $request)
+    {
+        $user = auth()->user();
+        $store = $user->store;
+
+        if (! $store) {
+            return redirect()->route('stores.create')
+                ->with('error', 'Anda perlu membuat toko terlebih dahulu.');
+        }
+
+        if (! BarbershopFeatures::enabled($store)) {
+            abort(404);
+        }
+
+        $storeIds = $this->resolveStoreIds($user, $request);
+        $dateRange = $this->validateDateRange($request);
+        $startDate = $dateRange['start_date'];
+        $endDate = $dateRange['end_date'];
+
+        $commissionRows = Transaction::whereIn('store_id', $storeIds)
+            ->whereBetween('created_at', [$startDate, $endDate.' 23:59:59'])
+            ->where('status', 'completed')
+            ->whereNotNull('barber_user_id')
+            ->selectRaw('
+                barber_user_id,
+                COUNT(*) as tx_count,
+                COALESCE(SUM(total_amount), 0) as gross,
+                COALESCE(SUM(barber_commission_amount), 0) as commission
+            ')
+            ->groupBy('barber_user_id')
+            ->with('barber')
+            ->get();
+
+        $rows = $commissionRows->map(fn ($row) => [
+            'barber_id' => $row->barber_user_id,
+            'barber_name' => $row->barber?->name ?? 'Teknisi (nonaktif)',
+            'transaction_count' => (int) $row->tx_count,
+            'gross_revenue' => round((float) $row->gross, 2),
+            'commission_amount' => round((float) $row->commission, 2),
+        ])->sortByDesc('commission_amount')->values();
+
+        $transactions = Transaction::whereIn('store_id', $storeIds)
+            ->whereBetween('created_at', [$startDate, $endDate.' 23:59:59'])
+            ->where('status', 'completed')
+            ->whereNotNull('barber_user_id')
+            ->with('barber')
+            ->latest()
+            ->paginate(15);
+
+        return Inertia::render('Reports/Commissions', [
+            'store' => [
+                'id' => $store->id,
+                'name' => $store->name,
+                'currency' => $store->currency,
+            ],
+            'accessibleStores' => $this->accessibleStoresData($user),
+            'selectedStoreId' => count($storeIds) === 1 ? $storeIds[0] : null,
+            'isOwner' => $user->isOwner(),
+            'dateRange' => [
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+            ],
+            'summary' => [
+                'total_commission' => round($rows->sum('commission_amount'), 2),
+                'transaction_count' => (int) $rows->sum('transaction_count'),
+                'gross_revenue' => round($rows->sum('gross_revenue'), 2),
+                'barber_count' => $rows->count(),
+            ],
+            'rows' => $rows->all(),
+            'transactions' => $transactions,
         ]);
     }
 
@@ -826,6 +996,9 @@ class ReportController extends Controller
                 COALESCE(SUM(stock_quantity), 0) as total_qty,
                 COALESCE(SUM(stock_quantity * COALESCE(average_cost, 0)), 0) as total_value
             ')
+            // toBase(): ambil sebagai baris query, bukan model Product — aksesor
+            // Product::getTotalValueAttribute() menimpa alias total_value (selalu 0).
+            ->toBase()
             ->first();
 
         // Tampilkan filter berdasarkan inventory_type yang ada di toko
@@ -970,9 +1143,8 @@ class ReportController extends Controller
             ? 0.0
             : (float) Transaction::query()
                 ->whereIn('cash_shift_id', $summaryShiftIds)
-                ->where('payment_method', 'cash')
                 ->where('status', 'completed')
-                ->sum('total_amount');
+                ->sum('cash_amount');
 
         $shiftsClosed = (clone $base)->count();
         $shiftsWithDiff = (clone $base)
@@ -998,7 +1170,7 @@ class ReportController extends Controller
             : User::query()->whereIn('id', $cashierIds)->orderBy('name')->get(['id', 'name']);
 
         $paginator = (clone $base)
-            ->with(['user:id,name'])
+            ->with(['user:id,name', 'employee:id,name'])
             ->withCount(['transactions' => fn ($q) => $q->where('status', 'completed')])
             ->orderByDesc('closed_at')
             ->paginate(25)
@@ -1007,16 +1179,18 @@ class ReportController extends Controller
         $paginator->getCollection()->transform(function (CashShift $shift) {
             $cashSales = (float) Transaction::query()
                 ->where('cash_shift_id', $shift->id)
-                ->where('payment_method', 'cash')
                 ->where('status', 'completed')
-                ->sum('total_amount');
+                ->sum('cash_amount');
+
+            // Nama kasir: prioritaskan employee (PIN mode), fallback ke user
+            $cashierName = $shift->employee?->name ?? $shift->user?->name ?? '—';
 
             return [
                 'id' => $shift->id,
                 'shift_number' => $shift->shift_number,
-                'cashier_name' => $shift->user?->name ?? '—',
-                'opened_at' => $shift->opened_at?->toIso8601String(),
-                'closed_at' => $shift->closed_at?->toIso8601String(),
+                'cashier_name' => $cashierName,
+                'opened_at' => $shift->opened_at?->toIso8601ZuluString(),
+                'closed_at' => $shift->closed_at?->toIso8601ZuluString(),
                 'opening_cash' => (float) $shift->opening_cash,
                 'expected_cash' => $shift->expected_cash !== null ? (float) $shift->expected_cash : null,
                 'closing_cash_counted' => $shift->closing_cash_counted !== null ? (float) $shift->closing_cash_counted : null,
@@ -1078,9 +1252,8 @@ class ReportController extends Controller
             ? 0.0
             : (float) Transaction::query()
                 ->whereIn('cash_shift_id', $summaryShiftIds)
-                ->where('payment_method', 'cash')
                 ->where('status', 'completed')
-                ->sum('total_amount');
+                ->sum('cash_amount');
 
         $shiftsClosed = (clone $base)->count();
         $shiftsWithDiff = (clone $base)
@@ -1106,9 +1279,8 @@ class ReportController extends Controller
         if ($summaryShiftIds->isNotEmpty()) {
             $cashByShift = Transaction::query()
                 ->whereIn('cash_shift_id', $summaryShiftIds)
-                ->where('payment_method', 'cash')
                 ->where('status', 'completed')
-                ->selectRaw('cash_shift_id, SUM(total_amount) as cash_total')
+                ->selectRaw('cash_shift_id, SUM(cash_amount) as cash_total')
                 ->groupBy('cash_shift_id')
                 ->get()
                 ->keyBy('cash_shift_id')

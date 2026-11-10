@@ -3,11 +3,13 @@
 namespace App\Exports;
 
 use App\Exports\Sheets\ProductComponentsSheet;
+use App\Exports\Sheets\ProductVariantsSheet;
 use App\Models\Store;
 use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 
 /**
- * Ekspor produk PLUS sheet komponen (recipe & product sale consumption).
+ * Ekspor produk PLUS sheet varian dan sheet komponen
+ * (resep produksi, komponen menu, dan komponen produk paket).
  */
 class ProductsWithComponentsExport implements WithMultipleSheets
 {
@@ -22,6 +24,7 @@ class ProductsWithComponentsExport implements WithMultipleSheets
     {
         return [
             new ProductsExport($this->store),
+            new ProductVariantsSheet($this->store),
             new ProductComponentsSheet($this->store),
         ];
     }

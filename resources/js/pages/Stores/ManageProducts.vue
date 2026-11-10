@@ -15,7 +15,7 @@ function getCsrfToken(): string {
 interface SourceInfo {
     id: number;
     name: string;
-    type: 'central_warehouse' | 'admin_store';
+    type: 'central_warehouse' | 'primary_outlet' | 'admin_store';
     raw_material_count: number;
     sellable_count: number;
     total_count: number;
@@ -32,6 +32,7 @@ interface CopyResult {
     outlet_name: string;
     copied: number;
     skipped: number;
+    components: number;
     errors: string[];
 }
 
@@ -50,6 +51,7 @@ const copyResult = ref<{
     success: boolean;
     total_copied: number;
     total_skipped: number;
+    total_components: number;
     outlet_count: number;
     results: CopyResult[];
     errors: string[];
@@ -76,13 +78,13 @@ const copyTypeOptions = [
     {
         value: 'sellable',
         label: 'Salin Produk Jual',
-        description: 'Menyalin produk yang dijual di POS & hasil produksi (sellable, production_output). Untuk outlet siap jual.',
+        description: 'Menyalin produk yang dijual di POS & hasil produksi (sellable, production_output) beserta komponen menunya. Pastikan bahan baku sudah ada di outlet tujuan.',
         icon: Package,
     },
     {
         value: 'all',
         label: 'Salin Semua',
-        description: 'Menyalin seluruh produk aktif dari sumber (bahan baku + produk jual). Paling lengkap.',
+        description: 'Menyalin seluruh produk aktif dari sumber (bahan baku + produk jual) lengkap dengan varian, komponen menu, dan resep. Paling lengkap.',
         icon: Package,
     },
 ];
@@ -109,6 +111,7 @@ const toggleOutlet = (id: number) => {
 
 const fmtSourceType = (t: string) => {
     if (t === 'central_warehouse') return 'Gudang Pusat';
+    if (t === 'primary_outlet') return 'Outlet Utama';
     if (t === 'admin_store') return 'Toko Admin';
     return t;
 };
@@ -123,7 +126,7 @@ const copyToSelected = async () => {
 
     if (!(await confirmDialog(
         `${typeName} dari ${srcName} ke ${count} outlet?`,
-        `Produk yang sudah ada (berdasarkan SKU) akan dilewat.`,
+        `Varian, komponen paket, komponen menu, dan resep ikut disalin. Produk yang sudah ada (berdasarkan SKU) dilewat, tapi komponennya tetap diisi bila masih kosong.`,
         { confirmText: 'Salin Sekarang', icon: 'question' },
     ))) return;
 
@@ -152,6 +155,7 @@ const copyToSelected = async () => {
                 success: false,
                 total_copied: 0,
                 total_skipped: 0,
+                total_components: 0,
                 outlet_count: 0,
                 results: [],
                 errors: [response?.error || 'Terjadi kesalahan saat menyalin produk.'],
@@ -165,6 +169,7 @@ const copyToSelected = async () => {
             success: false,
             total_copied: 0,
             total_skipped: 0,
+            total_components: 0,
             outlet_count: 0,
             results: [],
             errors: [err?.message || 'Terjadi kesalahan saat menyalin produk.'],
@@ -379,6 +384,7 @@ watch(copyType, () => { copyResult.value = null; });
                         <CardDescription class="text-xs">
                             {{ copyResult.total_copied }} disalin
                             {{ copyResult.total_skipped > 0 ? `, ${copyResult.total_skipped} dilewat` : '' }}
+                            {{ copyResult.total_components > 0 ? `, ${copyResult.total_components} produk dengan komponen` : '' }}
                             ke {{ copyResult.outlet_count }} outlet
                         </CardDescription>
                     </div>
@@ -400,6 +406,7 @@ watch(copyType, () => { copyResult.value = null; });
                         <p class="text-[11px] text-gray-500">
                             {{ r.copied }} disalin
                             {{ r.skipped > 0 ? `, ${r.skipped} dilewat (SKU sudah ada)` : '' }}
+                            {{ r.components > 0 ? `, ${r.components} produk dapat komponen/varian` : '' }}
                         </p>
                         <p v-for="(err, i) in r.errors" :key="i" class="text-[11px] text-red-600 mt-1">
                             {{ err }}

@@ -243,9 +243,11 @@ class CashTransactionController extends Controller
             && (! $category || $category === 'pos_cash');
 
         if ($includePos) {
+            // Daftar penerimaan tunai dari POS: transaksi yang punya porsi tunai,
+            // termasuk transaksi split tender yang sebagian dibayar non-tunai.
             $posQuery = Transaction::query()
                 ->where('store_id', $storeId)
-                ->where('payment_method', 'cash')
+                ->where('cash_amount', '>', 0)
                 ->where('status', 'completed')
                 ->whereDate('created_at', '>=', $startDate)
                 ->whereDate('created_at', '<=', $endDate)
@@ -306,7 +308,8 @@ class CashTransactionController extends Controller
             'type_label' => 'Uang Masuk',
             'category' => 'pos_cash',
             'category_label' => 'Penjualan Tunai (POS)',
-            'amount' => (string) $sale->total_amount,
+            // Porsi tunainya saja: transaksi split tender hanya menyetor sebagian ke laci.
+            'amount' => (string) $sale->cash_amount,
             'party_name' => $sale->customer?->name,
             'notes' => 'Penjualan #'.($sale->transaction_number ?? $sale->id),
             'recorded_by' => $sale->user?->name,
@@ -328,9 +331,8 @@ class CashTransactionController extends Controller
     {
         $salesCash = (float) Transaction::query()
             ->where('cash_shift_id', $openShift->id)
-            ->where('payment_method', 'cash')
             ->where('status', 'completed')
-            ->sum('total_amount');
+            ->sum('cash_amount');
 
         $cashIn = (float) CashTransaction::query()
             ->where('cash_shift_id', $openShift->id)

@@ -48,6 +48,7 @@ class Attendance extends Model
         'status',
         'source',
         'cash_shift_id',
+        'leave_request_id',
         'late_minutes',
         'early_leave_minutes',
         'hours_worked',

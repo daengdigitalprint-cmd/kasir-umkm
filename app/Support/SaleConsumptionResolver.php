@@ -268,8 +268,9 @@ final class SaleConsumptionResolver
             $remaining = '0';
         }
 
-        // Sinkronkan stok produk dari total batch
+        // Sinkronkan stok produk dari total batch di toko ini
         $synced = (string) ProductionBatch::where('product_id', $component->id)
+            ->where('store_id', $store->id)
             ->where('status', ProductionBatch::STATUS_COMPLETED)
             ->sum('output_quantity_remaining');
 

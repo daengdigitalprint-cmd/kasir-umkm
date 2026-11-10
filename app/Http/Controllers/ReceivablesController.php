@@ -22,7 +22,7 @@ class ReceivablesController extends Controller
      */
     public function index(Request $request)
     {
-        $user  = auth()->user();
+        $user = auth()->user();
         $store = $user->store;
 
         if (! $store) {
@@ -31,7 +31,7 @@ class ReceivablesController extends Controller
 
         $filter = $request->input('status', 'outstanding'); // outstanding | all
         $search = trim((string) $request->input('search', ''));
-        $now    = now();
+        $now = now();
 
         $query = Transaction::where('store_id', $store->id)
             ->where('status', 'completed')
@@ -43,14 +43,14 @@ class ReceivablesController extends Controller
             // Semua pelanggan yang pernah berutang (masih aktif atau sudah lunas).
             $query->where(function ($q) {
                 $q->whereIn('payment_status', ['partial', 'unpaid'])
-                  ->orWhereNotNull('debt_due_at');
+                    ->orWhereNotNull('debt_due_at');
             });
         }
 
         if ($search !== '') {
             $query->whereHas('customer', function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('phone', 'like', "%{$search}%");
+                    ->orWhere('phone', 'like', "%{$search}%");
             });
         }
 
@@ -75,14 +75,14 @@ class ReceivablesController extends Controller
 
             return [
                 'customer' => $customer ? [
-                    'id'    => $customer->id,
-                    'name'  => $customer->name,
+                    'id' => $customer->id,
+                    'name' => $customer->name,
                     'phone' => $customer->phone,
                 ] : null,
                 'outstanding_total' => round((float) $row->outstanding_total, 2),
                 'transaction_count' => (int) $row->transaction_count,
-                'earliest_due_at'   => $row->earliest_due_at ? Carbon::parse($row->earliest_due_at)->toDateString() : null,
-                'overdue_count'     => (int) $row->overdue_count,
+                'earliest_due_at' => $row->earliest_due_at ? Carbon::parse($row->earliest_due_at)->toDateString() : null,
+                'overdue_count' => (int) $row->overdue_count,
             ];
         });
 
@@ -102,12 +102,12 @@ class ReceivablesController extends Controller
             ->count();
 
         return Inertia::render('Receivables/Index', [
-            'customers'        => $rows,
-            'filter'           => $filter,
-            'search'           => $search,
+            'customers' => $rows,
+            'filter' => $filter,
+            'search' => $search,
             'outstandingTotal' => round((float) $outstandingTotal, 2),
-            'overdueCount'     => $overdueCount,
-            'store'            => ['id' => $store->id, 'name' => $store->name, 'currency' => $store->currency ?? 'IDR'],
+            'overdueCount' => $overdueCount,
+            'store' => ['id' => $store->id, 'name' => $store->name, 'currency' => $store->currency ?? 'IDR'],
         ]);
     }
 
@@ -116,7 +116,7 @@ class ReceivablesController extends Controller
      */
     public function showCustomer(Request $request, string $customer)
     {
-        $user  = auth()->user();
+        $user = auth()->user();
         $store = $user->store;
 
         if (! $store) {
@@ -131,7 +131,7 @@ class ReceivablesController extends Controller
             ->where('status', 'completed')
             ->where(function ($q) {
                 $q->whereIn('payment_status', ['partial', 'unpaid'])
-                  ->orWhereNotNull('debt_due_at');
+                    ->orWhereNotNull('debt_due_at');
             })
             ->orderBy('created_at', 'desc')
             ->get();
@@ -139,11 +139,11 @@ class ReceivablesController extends Controller
         $active = $transactions->whereIn('payment_status', ['partial', 'unpaid']);
 
         $summary = [
-            'total_debt'       => round($transactions->sum(fn ($t) => (float) $t->total_amount), 2),
-            'total_paid'       => round($transactions->sum(fn ($t) => (float) $t->amount_paid), 2),
-            'outstanding_total'=> round($active->sum(fn ($t) => (float) $t->total_amount - (float) $t->amount_paid), 2),
-            'active_count'     => $active->count(),
-            'overdue_count'    => $active->filter(fn ($t) => $t->debt_due_at && $t->debt_due_at->isPast())->count(),
+            'total_debt' => round($transactions->sum(fn ($t) => (float) $t->total_amount), 2),
+            'total_paid' => round($transactions->sum(fn ($t) => (float) $t->amount_paid), 2),
+            'outstanding_total' => round($active->sum(fn ($t) => (float) $t->total_amount - (float) $t->amount_paid), 2),
+            'active_count' => $active->count(),
+            'overdue_count' => $active->filter(fn ($t) => $t->debt_due_at && $t->debt_due_at->isPast())->count(),
         ];
 
         $payments = ReceivablePayment::where('store_id', $store->id)
@@ -153,39 +153,39 @@ class ReceivablesController extends Controller
             ->paginate(20, ['*'], 'payments_page')
             ->withQueryString()
             ->through(fn ($p) => [
-                'id'                 => $p->id,
-                'amount'             => (float) $p->amount,
-                'payment_method'     => $p->payment_method,
-                'received_at'        => $p->received_at->toDateTimeString(),
-                'reference_number'   => $p->reference_number,
-                'notes'              => $p->notes,
-                'user_name'          => $p->user?->name,
+                'id' => $p->id,
+                'amount' => (float) $p->amount,
+                'payment_method' => $p->payment_method,
+                'received_at' => $p->received_at->toDateTimeString(),
+                'reference_number' => $p->reference_number,
+                'notes' => $p->notes,
+                'user_name' => $p->user?->name,
                 'transaction_number' => $p->transaction?->transaction_number,
-                'transaction_id'     => $p->transaction_id,
+                'transaction_id' => $p->transaction_id,
             ]);
 
         return Inertia::render('Receivables/CustomerDetail', [
             'customer' => [
-                'id'      => $customer->id,
-                'name'    => $customer->name,
-                'phone'   => $customer->phone,
-                'email'   => $customer->email,
+                'id' => $customer->id,
+                'name' => $customer->name,
+                'phone' => $customer->phone,
+                'email' => $customer->email,
                 'address' => $customer->address,
             ],
             'summary' => $summary,
             'transactions' => $transactions->map(fn ($t) => [
-                'id'                => $t->id,
-                'transaction_number'=> $t->transaction_number,
-                'total_amount'      => (float) $t->total_amount,
-                'amount_paid'       => (float) $t->amount_paid,
-                'outstanding'       => round((float) $t->total_amount - (float) $t->amount_paid, 2),
-                'payment_status'    => $t->payment_status,
-                'debt_due_at'       => $t->debt_due_at?->toDateString(),
-                'created_at'        => $t->created_at->toDateTimeString(),
-                'is_overdue'        => $t->debt_due_at && $t->debt_due_at->isPast() && $t->payment_status !== 'paid',
+                'id' => $t->id,
+                'transaction_number' => $t->transaction_number,
+                'total_amount' => (float) $t->total_amount,
+                'amount_paid' => (float) $t->amount_paid,
+                'outstanding' => round((float) $t->total_amount - (float) $t->amount_paid, 2),
+                'payment_status' => $t->payment_status,
+                'debt_due_at' => $t->debt_due_at?->toDateString(),
+                'created_at' => $t->created_at->toDateTimeString(),
+                'is_overdue' => $t->debt_due_at && $t->debt_due_at->isPast() && $t->payment_status !== 'paid',
             ])->values(),
             'payments' => $payments,
-            'store'    => ['id' => $store->id, 'name' => $store->name, 'currency' => $store->currency ?? 'IDR'],
+            'store' => ['id' => $store->id, 'name' => $store->name, 'currency' => $store->currency ?? 'IDR'],
         ]);
     }
 
@@ -194,7 +194,7 @@ class ReceivablesController extends Controller
      */
     public function show(string $id)
     {
-        $user  = auth()->user();
+        $user = auth()->user();
         $store = $user->store;
 
         if (! $store) {
@@ -214,37 +214,37 @@ class ReceivablesController extends Controller
 
         return Inertia::render('Receivables/Show', [
             'transaction' => [
-                'id'                => $transaction->id,
-                'transaction_number'=> $transaction->transaction_number,
-                'total_amount'      => (float) $transaction->total_amount,
-                'amount_paid'       => (float) $transaction->amount_paid,
-                'outstanding'       => round((float) $transaction->total_amount - (float) $transaction->amount_paid, 2),
-                'payment_status'    => $transaction->payment_status,
-                'payment_method'    => $transaction->payment_method,
-                'debt_due_at'       => $transaction->debt_due_at?->toDateString(),
-                'created_at'        => $transaction->created_at->toDateTimeString(),
-                'is_overdue'        => $transaction->debt_due_at && $transaction->debt_due_at->isPast() && $transaction->payment_status !== 'paid',
+                'id' => $transaction->id,
+                'transaction_number' => $transaction->transaction_number,
+                'total_amount' => (float) $transaction->total_amount,
+                'amount_paid' => (float) $transaction->amount_paid,
+                'outstanding' => round((float) $transaction->total_amount - (float) $transaction->amount_paid, 2),
+                'payment_status' => $transaction->payment_status,
+                'payment_method' => $transaction->payment_method,
+                'debt_due_at' => $transaction->debt_due_at?->toDateString(),
+                'created_at' => $transaction->created_at->toDateTimeString(),
+                'is_overdue' => $transaction->debt_due_at && $transaction->debt_due_at->isPast() && $transaction->payment_status !== 'paid',
                 'customer' => $transaction->customer ? [
-                    'id'      => $transaction->customer->id,
-                    'name'    => $transaction->customer->name,
-                    'phone'   => $transaction->customer->phone,
-                    'email'   => $transaction->customer->email,
+                    'id' => $transaction->customer->id,
+                    'name' => $transaction->customer->name,
+                    'phone' => $transaction->customer->phone,
+                    'email' => $transaction->customer->email,
                     'address' => $transaction->customer->address,
                 ] : null,
                 'items' => $transaction->items->map(fn ($i) => [
                     'product_name' => $i->product_name,
-                    'quantity'     => $i->quantity,
-                    'unit_price'   => (float) $i->unit_price,
-                    'subtotal'     => (float) $i->total_price,
+                    'quantity' => $i->quantity,
+                    'unit_price' => (float) $i->unit_price,
+                    'subtotal' => (float) $i->total_price,
                 ])->values(),
                 'payments' => $transaction->receivablePayments->map(fn ($p) => [
-                    'id'               => $p->id,
-                    'amount'           => (float) $p->amount,
-                    'payment_method'   => $p->payment_method,
-                    'received_at'      => $p->received_at->toDateTimeString(),
+                    'id' => $p->id,
+                    'amount' => (float) $p->amount,
+                    'payment_method' => $p->payment_method,
+                    'received_at' => $p->received_at->toDateTimeString(),
                     'reference_number' => $p->reference_number,
-                    'notes'            => $p->notes,
-                    'user_name'        => $p->user?->name,
+                    'notes' => $p->notes,
+                    'user_name' => $p->user?->name,
                 ])->values(),
             ],
             'store' => ['id' => $store->id, 'name' => $store->name, 'currency' => $store->currency ?? 'IDR'],

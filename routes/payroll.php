@@ -34,5 +34,9 @@ Route::middleware(['auth', 'verified', 'store.active', 'payroll.enabled'])
 
         Route::get('/{period}', [PayrollController::class, 'show'])->name('show');
         Route::post('/{period}/run', [PayrollController::class, 'run'])->name('run');
+        Route::post('/{period}/approve', [PayrollController::class, 'approve'])->name('approve');
+        Route::post('/{period}/reopen', [PayrollController::class, 'reopen'])->name('reopen');
+        Route::post('/{period}/pay', [PayrollController::class, 'pay'])->name('pay');
+        Route::get('/{period}/runs/{run}/slip', [PayrollController::class, 'payslip'])->name('payslip');
         Route::delete('/{period}', [PayrollController::class, 'destroy'])->name('destroy');
     });

@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::table('transactions', function (Blueprint $table) {
             $table->timestamp('debt_due_at')->nullable()->after('payment_status');
-            
+
             // Tambahkan index untuk pencarian daftar dan aging piutang
             $table->index(['store_id', 'customer_id', 'payment_status'], 'idx_trx_receivables');
             $table->index(['store_id', 'payment_status', 'debt_due_at'], 'idx_trx_aging');

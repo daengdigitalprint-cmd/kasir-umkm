@@ -10,7 +10,7 @@ return new class extends Migration
         // Menu piutang hanya untuk admin dan manager (backofficeOnly)
         foreach (['admin', 'manager'] as $role) {
             RoleMenuPermission::firstOrCreate([
-                'role'     => $role,
+                'role' => $role,
                 'menu_key' => 'receivables',
             ]);
         }

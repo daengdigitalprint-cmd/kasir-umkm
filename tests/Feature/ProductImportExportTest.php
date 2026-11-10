@@ -86,6 +86,26 @@ function importRows(Store $store, array $rowsOfValues): array
     return $rows;
 }
 
+/** Header sheet "Komponen Produk" sesuai ekspor produk + komponen. */
+function componentSheetHeader(): array
+{
+    return [
+        'Tipe Komponen', 'ID Produk', 'Nama Produk', 'SKU Produk', 'SKU Varian Produk', 'Nama Varian Produk',
+        'ID Komponen', 'Nama Komponen', 'SKU Komponen', 'SKU Varian Komponen', 'Nama Varian Komponen',
+        'Kuantitas', 'Satuan Dasar', 'Urutan', 'Kode Resep',
+    ];
+}
+
+/** Header sheet "Varian Produk" sesuai ekspor produk + komponen. */
+function variantSheetHeader(): array
+{
+    return [
+        'ID Produk', 'Nama Produk', 'SKU Produk', 'Nama Varian', 'SKU Varian', 'Barcode Varian',
+        'Harga', 'Harga Grosir', 'Harga Beli', 'Stok', 'Stok Minimum',
+        'Izinkan Penjualan Stok Habis', 'Status Aktif', 'Urutan',
+    ];
+}
+
 /** Tulis baris impor menjadi file .xlsx sementara. */
 function writeImportFile(array $rows): string
 {
@@ -418,6 +438,323 @@ test('impor komponen konsumsi memulihkan komponen produk', function () {
     expect((float) $cons->quantity)->toBe(2.0);
 });
 
+test('impor resep produksi memulihkan resep beserta bahannya', function () {
+    [$store, $admin] = makeImportOrg('KOMP2');
+
+    $hasil = makeImportProduct($store, [
+        'name' => 'Adonan Roti',
+        'sku' => 'HSL-001',
+        'inventory_type' => InventoryType::PRODUCTION_OUTPUT,
+    ]);
+
+    $tepung = makeImportProduct($store, [
+        'name' => 'Tepung',
+        'sku' => 'BAK-010',
+        'inventory_type' => InventoryType::RAW_MATERIAL,
+        'base_unit' => BaseUnit::GRAM,
+    ]);
+
+    $rows = [
+        componentSheetHeader(),
+        ['recipe', $hasil->id, 'Adonan Roti', 'HSL-001', null, null, $tepung->id, 'Tepung', 'BAK-010', null, null, '500', 'gram', 0, 'RSP-01'],
+    ];
+
+    $result = app(ProductImportService::class)->importRecipes($store, $rows, $admin->id);
+
+    expect($result['errors'])->toBe([])
+        ->and($result['imported'])->toBe(1);
+
+    $recipe = \App\Models\Recipe::query()->where('store_id', $store->id)->first();
+
+    expect($recipe)->not->toBeNull()
+        ->and($recipe->product_id)->toBe($hasil->id)
+        ->and($recipe->code)->toBe('RSP-01')
+        ->and($recipe->ingredients()->count())->toBe(1)
+        ->and((float) $recipe->ingredients()->first()->quantity)->toBe(500.0);
+});
+
+test('impor komponen paket memulihkan isi produk paket', function () {
+    [$store, $admin] = makeImportOrg('KOMP3');
+
+    $paket = makeImportProduct($store, ['name' => 'Paket Hemat', 'sku' => 'PKT-010']);
+    $isi = makeImportProduct($store, ['name' => 'Air Mineral', 'sku' => 'MIN-010']);
+
+    $rows = [
+        componentSheetHeader(),
+        ['bundle', $paket->id, 'Paket Hemat', 'PKT-010', null, null, $isi->id, 'Air Mineral', 'MIN-010', null, null, '2', 'pcs', 0, null],
+    ];
+
+    $result = app(ProductImportService::class)->importBundleItems($store, $rows, $admin->id);
+
+    expect($result['errors'])->toBe([])
+        ->and($result['imported'])->toBe(1)
+        ->and($paket->fresh()->is_bundle)->toBeTrue();
+
+    $item = \App\Models\ProductBundleItem::query()->where('bundle_product_id', $paket->id)->first();
+
+    expect($item)->not->toBeNull()
+        ->and($item->component_product_id)->toBe($isi->id)
+        ->and((float) $item->quantity)->toBe(2.0);
+});
+
+test('impor varian membuat varian dan menandai produk bervarian', function () {
+    [$store, $admin] = makeImportOrg('VRN1');
+
+    $product = makeImportProduct($store, ['name' => 'Kopi', 'sku' => 'KOP-001']);
+
+    $rows = [
+        variantSheetHeader(),
+        [$product->id, 'Kopi', 'KOP-001', 'Large', 'KOP-001-L', null, '22000', null, '9000', '4', '1', 'tidak', 'ya', 1],
+    ];
+
+    $result = app(ProductImportService::class)->importVariants($store, $rows, $admin->id);
+
+    expect($result['errors'])->toBe([])
+        ->and($result['imported'])->toBe(1)
+        ->and($product->fresh()->has_variants)->toBeTrue();
+
+    $variant = \App\Models\ProductVariant::query()->where('product_id', $product->id)->first();
+
+    expect($variant)->not->toBeNull()
+        ->and($variant->name)->toBe('Large')
+        ->and($variant->sku)->toBe('KOP-001-L')
+        ->and((float) $variant->price)->toBe(22000.0)
+        ->and((float) $variant->stock_quantity)->toBe(4.0)
+        ->and($variant->store_id)->toBe($store->id);
+});
+
+test('impor varian memperbarui varian yang sudah ada tanpa menggandakan', function () {
+    [$store, $admin] = makeImportOrg('VRN2');
+
+    $product = makeImportProduct($store, ['name' => 'Kopi', 'sku' => 'KOP-002', 'has_variants' => true]);
+    $variant = \App\Models\ProductVariant::query()->create([
+        'store_id' => $store->id,
+        'product_id' => $product->id,
+        'name' => 'Large',
+        'sku' => 'KOP-002-L',
+        'price' => 20000,
+        'stock_quantity' => 1,
+    ]);
+
+    $rows = [
+        variantSheetHeader(),
+        [$product->id, 'Kopi', 'KOP-002', 'Large', 'KOP-002-L', null, '25000', null, null, '6', '2', 'tidak', 'ya', 0],
+    ];
+
+    $result = app(ProductImportService::class)->importVariants($store, $rows, $admin->id);
+
+    expect($result['errors'])->toBe([])
+        ->and(\App\Models\ProductVariant::query()->where('product_id', $product->id)->count())->toBe(1)
+        ->and((float) $variant->fresh()->price)->toBe(25000.0)
+        ->and((float) $variant->fresh()->stock_quantity)->toBe(6.0);
+});
+
+test('file ekspor plus komponen dapat diimpor utuh ke toko lain', function () {
+    [$sourceStore, $sourceAdmin] = makeImportOrg('RT1', ['business_type' => 'fnb']);
+    [$targetStore] = makeImportOrg('RT2', ['business_type' => 'fnb']);
+
+    // Bahan baku, menu dengan komponen & opsi modifier, menu bervarian,
+    // hasil produksi dengan resep, dan produk paket.
+    $gula = makeImportProduct($sourceStore, [
+        'name' => 'Gula',
+        'sku' => 'BHN-GULA',
+        'inventory_type' => InventoryType::RAW_MATERIAL,
+        'base_unit' => BaseUnit::GRAM,
+        'stock_quantity' => 1000,
+    ]);
+
+    $menu = makeImportProduct($sourceStore, [
+        'name' => 'Kopi Susu',
+        'sku' => 'MNU-KOPSU',
+        'price' => 18000,
+        'wholesale_price' => 16000,
+        'track_stock' => false,
+        'modifier_options' => [['key' => 'extra_shot', 'label' => 'Extra Shot', 'price' => 5000.0]],
+    ]);
+
+    $menuVarian = makeImportProduct($sourceStore, [
+        'name' => 'Teh',
+        'sku' => 'MNU-TEH',
+        'price' => 8000,
+        'has_variants' => true,
+    ]);
+
+    $varianLarge = \App\Models\ProductVariant::query()->create([
+        'store_id' => $sourceStore->id,
+        'product_id' => $menuVarian->id,
+        'name' => 'Large',
+        'sku' => 'MNU-TEH-L',
+        'price' => 12000,
+        'stock_quantity' => 3,
+        'sort_order' => 1,
+    ]);
+
+    $adonan = makeImportProduct($sourceStore, [
+        'name' => 'Adonan',
+        'sku' => 'HSL-ADONAN',
+        'inventory_type' => InventoryType::PRODUCTION_OUTPUT,
+    ]);
+
+    $paket = makeImportProduct($sourceStore, [
+        'name' => 'Paket Berdua',
+        'sku' => 'PKT-BERDUA',
+        'price' => 30000,
+        'is_bundle' => true,
+    ]);
+
+    ProductSaleConsumption::query()->create([
+        'store_id' => $sourceStore->id,
+        'product_id' => $menu->id,
+        'component_product_id' => $gula->id,
+        'quantity' => 15,
+        'base_unit' => BaseUnit::GRAM,
+    ]);
+
+    ProductSaleConsumption::query()->create([
+        'store_id' => $sourceStore->id,
+        'product_id' => $menuVarian->id,
+        'product_variant_id' => $varianLarge->id,
+        'component_product_id' => $gula->id,
+        'quantity' => 25,
+        'base_unit' => BaseUnit::GRAM,
+    ]);
+
+    $recipe = \App\Models\Recipe::query()->create([
+        'store_id' => $sourceStore->id,
+        'name' => 'Resep Adonan',
+        'code' => 'RSP-ADONAN',
+        'product_id' => $adonan->id,
+        'output_quantity' => 1,
+        'output_unit' => BaseUnit::PIECE,
+    ]);
+    \App\Models\RecipeIngredient::query()->create([
+        'recipe_id' => $recipe->id,
+        'product_id' => $gula->id,
+        'quantity' => 200,
+        'base_unit' => BaseUnit::GRAM,
+    ]);
+
+    \App\Models\ProductBundleItem::query()->create([
+        'bundle_product_id' => $paket->id,
+        'component_product_id' => $menu->id,
+        'quantity' => 2,
+        'sort_order' => 0,
+    ]);
+
+    // Ekspor dari toko sumber.
+    $path = downloadToFile(
+        $this->actingAs($sourceAdmin)->get('/products/export/with-components')->assertOk(),
+        'roundtrip',
+    );
+
+    $upload = new UploadedFile($path, 'ekspor.xlsx', null, null, true);
+    $importer = new \App\Imports\ProductsImport;
+    $service = app(ProductImportService::class);
+
+    // Impor ke toko tujuan dengan urutan yang sama seperti ProductController::importStore.
+    $productResult = $service->import($targetStore, $importer->rowsFrom($upload));
+    $variantResult = $service->importVariants($targetStore, $importer->variantRowsFrom($upload));
+    $componentRows = $importer->componentRowsFrom($upload);
+    $bundleResult = $service->importBundleItems($targetStore, $componentRows);
+    $consumptionResult = $service->importSaleConsumptions($targetStore, $componentRows);
+    $recipeResult = $service->importRecipes($targetStore, $componentRows);
+
+    expect($productResult['errors'])->toBe([])
+        ->and($variantResult['errors'])->toBe([])
+        ->and($bundleResult['errors'])->toBe([])
+        ->and($consumptionResult['errors'])->toBe([])
+        ->and($recipeResult['errors'])->toBe([])
+        ->and($productResult['created'])->toBe(5);
+
+    $targetMenu = $targetStore->products()->where('sku', 'MNU-KOPSU')->firstOrFail();
+    $targetGula = $targetStore->products()->where('sku', 'BHN-GULA')->firstOrFail();
+    $targetTeh = $targetStore->products()->where('sku', 'MNU-TEH')->firstOrFail();
+    $targetPaket = $targetStore->products()->where('sku', 'PKT-BERDUA')->firstOrFail();
+    $targetAdonan = $targetStore->products()->where('sku', 'HSL-ADONAN')->firstOrFail();
+
+    // Pengaturan produk ikut tersalin.
+    expect((float) $targetMenu->wholesale_price)->toBe(16000.0)
+        ->and($targetMenu->track_stock)->toBeFalse()
+        ->and($targetMenu->modifier_options)->toHaveCount(1)
+        ->and($targetMenu->modifier_options[0]['key'])->toBe('extra_shot')
+        ->and($targetMenu->modifier_options[0]['label'])->toBe('Extra Shot')
+        ->and((float) $targetMenu->modifier_options[0]['price'])->toBe(5000.0);
+
+    // Komponen menu, termasuk yang menunjuk varian.
+    $menuComponent = $targetMenu->saleConsumptions()->firstOrFail();
+    expect((float) $menuComponent->quantity)->toBe(15.0)
+        ->and($menuComponent->component_product_id)->toBe($targetGula->id);
+
+    $targetVarian = $targetTeh->variants()->where('sku', 'MNU-TEH-L')->firstOrFail();
+    $varianComponent = $targetTeh->saleConsumptions()->whereNotNull('product_variant_id')->firstOrFail();
+    expect($targetTeh->has_variants)->toBeTrue()
+        ->and((float) $targetVarian->price)->toBe(12000.0)
+        ->and($varianComponent->product_variant_id)->toBe($targetVarian->id)
+        ->and((float) $varianComponent->quantity)->toBe(25.0);
+
+    // Komponen paket.
+    $targetBundleItem = \App\Models\ProductBundleItem::query()->where('bundle_product_id', $targetPaket->id)->firstOrFail();
+    expect($targetPaket->fresh()->is_bundle)->toBeTrue()
+        ->and($targetBundleItem->component_product_id)->toBe($targetMenu->id)
+        ->and((float) $targetBundleItem->quantity)->toBe(2.0);
+
+    // Resep produksi.
+    $targetRecipe = \App\Models\Recipe::query()->where('store_id', $targetStore->id)->firstOrFail();
+    expect($targetRecipe->product_id)->toBe($targetAdonan->id)
+        ->and($targetRecipe->ingredients()->count())->toBe(1)
+        ->and($targetRecipe->ingredients()->first()->product_id)->toBe($targetGula->id)
+        ->and((float) $targetRecipe->ingredients()->first()->quantity)->toBe(200.0);
+
+    @unlink($path);
+});
+
+test('ekspor plus komponen memuat sheet produk varian dan komponen', function () {
+    [$store, $admin] = makeImportOrg('EXP2');
+
+    $menu = makeImportProduct($store, ['name' => 'Es Kopi', 'sku' => 'MNU-001']);
+    $bahan = makeImportProduct($store, [
+        'name' => 'Gula',
+        'sku' => 'BHN-001',
+        'inventory_type' => InventoryType::RAW_MATERIAL,
+        'base_unit' => BaseUnit::GRAM,
+    ]);
+
+    \App\Models\ProductVariant::query()->create([
+        'store_id' => $store->id,
+        'product_id' => $menu->id,
+        'name' => 'Large',
+        'sku' => 'MNU-001-L',
+        'price' => 20000,
+    ]);
+    $menu->update(['has_variants' => true]);
+
+    ProductSaleConsumption::query()->create([
+        'store_id' => $store->id,
+        'product_id' => $menu->id,
+        'component_product_id' => $bahan->id,
+        'quantity' => 15,
+        'base_unit' => BaseUnit::GRAM,
+    ]);
+
+    $response = $this->actingAs($admin)->get('/products/export/with-components');
+    $response->assertOk();
+
+    $path = downloadToFile($response, 'expkomp');
+    $sheets = \Maatwebsite\Excel\Facades\Excel::toArray(new \App\Imports\ProductsImport, $path);
+
+    expect(count($sheets))->toBe(3);
+
+    $variantHeader = array_map(fn ($c) => (string) $c, $sheets[1][0]);
+    $componentHeader = array_map(fn ($c) => (string) $c, $sheets[2][0]);
+
+    expect($variantHeader)->toContain('Nama Varian')
+        ->and($componentHeader)->toContain('SKU Varian Komponen')
+        ->and(count($sheets[1]))->toBe(2)
+        ->and(count($sheets[2]))->toBe(2);
+
+    @unlink($path);
+});
+
 test('impor menolak nilai bukan angka dan angka negatif', function () {
     [$store, $admin] = makeImportOrg('VAL3');
 
@@ -506,29 +843,36 @@ test('impor menolak tipe inventori dan nilai boolean yang tidak dikenal', functi
     expect($store->products()->count())->toBe(0);
 });
 
-test('impor menolak produk bervarian dan produk paket', function () {
+test('impor memperbarui produk bervarian dan produk paket tanpa mengubah stoknya', function () {
     [$store, $admin] = makeImportOrg('VAL7');
-    makeImportProduct($store, ['sku' => 'VAR-1', 'name' => 'Produk Varian', 'has_variants' => true]);
-    makeImportProduct($store, ['sku' => 'PKT-1', 'name' => 'Produk Paket', 'is_bundle' => true]);
+    $variantProduct = makeImportProduct($store, ['sku' => 'VAR-1', 'name' => 'Produk Varian', 'has_variants' => true, 'stock_quantity' => 10]);
+    $bundleProduct = makeImportProduct($store, ['sku' => 'PKT-1', 'name' => 'Produk Paket', 'is_bundle' => true, 'stock_quantity' => 7]);
 
     $rows = importRows($store, [
         [
             ProductImportSchema::COL_NAME => 'Produk Varian',
             ProductImportSchema::COL_SKU => 'VAR-1',
             ProductImportSchema::COL_PRICE => '9000',
+            ProductImportSchema::COL_STOCK => '999',
         ],
         [
             ProductImportSchema::COL_NAME => 'Produk Paket',
             ProductImportSchema::COL_SKU => 'PKT-1',
             ProductImportSchema::COL_PRICE => '9000',
+            ProductImportSchema::COL_STOCK => '999',
         ],
     ]);
 
     $result = app(ProductImportService::class)->import($store, $rows, $admin->id);
 
-    $joined = implode(' | ', $result['errors']);
-    expect($joined)->toContain('memiliki varian');
-    expect($joined)->toContain('produk paket');
+    expect($result['errors'])->toBe([]);
+    expect($result['updated'])->toBe(2);
+
+    // Harga ikut diperbarui, tetapi stok varian/paket tidak boleh tertimpa dari sheet produk.
+    expect((float) $variantProduct->fresh()->price)->toBe(9000.0)
+        ->and((float) $variantProduct->fresh()->stock_quantity)->toBe(10.0)
+        ->and((float) $bundleProduct->fresh()->price)->toBe(9000.0)
+        ->and((float) $bundleProduct->fresh()->stock_quantity)->toBe(7.0);
 });
 
 test('impor menolak file tanpa kolom nama produk', function () {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import AttendanceNav from '@/components/AttendanceNav.vue';
 import { ref } from 'vue';
-import { MapPin, Save, BadgeCheck, AlertCircle } from 'lucide-vue-next';
+import { MapPin, Save, BadgeCheck, AlertCircle, CalendarOff, Plus, Trash2 } from 'lucide-vue-next';
 
 const props = defineProps<{
     settings: {
@@ -28,7 +28,26 @@ const props = defineProps<{
         expires_at: string | null;
     };
     store: { id: number; name: string };
+    holidays: { id: number; date: string; name: string }[];
 }>();
+
+const holidayForm = useForm({ date: '', name: '' });
+
+const addHoliday = () => {
+    holidayForm.post('/attendance/holidays', {
+        preserveScroll: true,
+        onSuccess: () => holidayForm.reset(),
+    });
+};
+
+const removeHoliday = (id: number) => {
+    if (confirm('Hapus hari libur ini?')) {
+        router.delete(`/attendance/holidays/${id}`, { preserveScroll: true });
+    }
+};
+
+const formatDate = (date: string) =>
+    new Date(`${date}T00:00:00`).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 
 const form = useForm({
     latitude: props.settings.latitude ?? '',
@@ -68,9 +87,9 @@ const submit = () => form.post('/attendance/settings', { preserveScroll: true })
 </script>
 
 <template>
-    <Head title="Pengaturan Absensi" />
+    <Head title="Pengaturan SDM" />
 
-    <AdminLayout title="Pengaturan Absensi">
+    <AdminLayout title="Pengaturan SDM · Absensi">
         <div class="space-y-6 pb-8">
             <AttendanceNav />
 
@@ -181,6 +200,43 @@ const submit = () => form.post('/attendance/settings', { preserveScroll: true })
             <Button type="button" class="w-full rounded-xl" :disabled="form.processing" @click="submit">
                 <Save class="h-4 w-4 mr-1" /> Simpan Pengaturan
             </Button>
+
+            <Card v-if="package.is_purchased && settings.enabled" class="rounded-2xl border-slate-200 shadow-sm">
+                <CardHeader>
+                    <CardTitle class="flex items-center gap-2"><CalendarOff class="h-5 w-5" /> Hari Libur</CardTitle>
+                    <CardDescription>
+                        Libur nasional, cuti bersama, atau libur toko. Pada tanggal ini karyawan tidak ditandai alpa,
+                        dan lembur dibayar dengan tarif hari libur.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent class="space-y-4">
+                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-[180px_1fr_auto] sm:items-start">
+                        <div class="space-y-1">
+                            <Input v-model="holidayForm.date" type="date" />
+                            <p v-if="holidayForm.errors.date" class="text-sm text-red-600">{{ holidayForm.errors.date }}</p>
+                        </div>
+                        <div class="space-y-1">
+                            <Input v-model="holidayForm.name" placeholder="Mis. Hari Raya Idul Fitri" />
+                            <p v-if="holidayForm.errors.name" class="text-sm text-red-600">{{ holidayForm.errors.name }}</p>
+                        </div>
+                        <Button type="button" class="rounded-xl" :disabled="holidayForm.processing" @click="addHoliday">
+                            <Plus class="h-4 w-4 mr-1" /> Tambah
+                        </Button>
+                    </div>
+                    <ul class="divide-y divide-slate-100 rounded-xl border border-slate-200">
+                        <li v-for="holiday in holidays" :key="holiday.id" class="flex items-center justify-between px-3 py-2 text-sm">
+                            <span>
+                                <span class="font-medium text-slate-700">{{ formatDate(holiday.date) }}</span>
+                                <span class="text-slate-500"> — {{ holiday.name }}</span>
+                            </span>
+                            <button type="button" class="text-slate-400 hover:text-red-600" @click="removeHoliday(holiday.id)">
+                                <Trash2 class="h-4 w-4" />
+                            </button>
+                        </li>
+                        <li v-if="!holidays.length" class="px-3 py-4 text-center text-sm text-slate-400">Belum ada hari libur.</li>
+                    </ul>
+                </CardContent>
+            </Card>
         </div>
     </AdminLayout>
 </template>

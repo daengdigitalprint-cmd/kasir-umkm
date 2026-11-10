@@ -109,7 +109,10 @@ const dayLabel = (schedule: Schedule) =>
             <Card class="rounded-2xl border-slate-200 shadow-sm">
                 <CardHeader>
                     <CardTitle>{{ form.id ? 'Edit Jadwal' : 'Tambah Jadwal' }}</CardTitle>
-                    <CardDescription>Atur hari kerja, jam masuk, dan jam pulang per karyawan.</CardDescription>
+                    <CardDescription>
+                        Jadwal dipakai untuk menentukan telat, alpa, dan lembur. Contoh: Sen–Sab, 08:00–16:00, istirahat 60 menit.
+                        Shift malam (mis. 22:00–06:00) juga bisa.
+                    </CardDescription>
                 </CardHeader>
                 <CardContent class="space-y-4">
                     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">

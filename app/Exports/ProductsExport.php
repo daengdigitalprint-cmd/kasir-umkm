@@ -6,6 +6,7 @@ use App\Models\Product;
 use App\Models\Store;
 use App\Support\BaseUnit;
 use App\Support\InventoryType;
+use App\Support\ModifierOptions;
 use App\Support\ProductImportSchema;
 use Illuminate\Database\Eloquent\Builder;
 use Maatwebsite\Excel\Concerns\FromQuery;
@@ -57,6 +58,7 @@ class ProductsExport implements FromQuery, WithColumnWidths, WithHeadings, WithM
             ProductImportSchema::COL_BRAND => $product->brand,
             ProductImportSchema::COL_UNIT => $product->unit,
             ProductImportSchema::COL_PRICE => (float) $product->price,
+            ProductImportSchema::COL_WHOLESALE_PRICE => $product->wholesale_price !== null ? (float) $product->wholesale_price : null,
             ProductImportSchema::COL_COST => $product->cost_price !== null ? (float) $product->cost_price : null,
             ProductImportSchema::COL_STOCK => (float) $product->stock_quantity,
             ProductImportSchema::COL_MIN_STOCK => (float) $product->min_stock_level,
@@ -67,12 +69,19 @@ class ProductsExport implements FromQuery, WithColumnWidths, WithHeadings, WithM
             ProductImportSchema::COL_UNLIMITED_STOCK => ProductImportSchema::booleanLabel($product->unlimited_stock),
             ProductImportSchema::COL_ALLOWS_DECIMAL => ProductImportSchema::booleanLabel($product->allows_decimal),
             ProductImportSchema::COL_IS_ACTIVE => ProductImportSchema::booleanLabel($product->is_active),
+            ProductImportSchema::COL_ALLOW_NEGATIVE_STOCK => ProductImportSchema::booleanLabel($product->allow_negative_stock),
             ProductImportSchema::COL_DESCRIPTION => $product->description,
             ProductImportSchema::COL_IMAGE_URL => $product->image_url,
             ProductImportSchema::COL_BATCH_CODE => null,
             ProductImportSchema::COL_EXPIRY_DATE => null,
             ProductImportSchema::COL_PHARMACY_CLASS => $product->pharmacy_sale_class,
             ProductImportSchema::COL_PHARMACY_REG_NO => $product->pharmacy_registration_no,
+            ProductImportSchema::COL_MODIFIER_OPTIONS => ModifierOptions::toJson($product->modifier_options),
+            ProductImportSchema::COL_SERVICE_DURATION => $product->service_duration_minutes,
+            ProductImportSchema::COL_BARBER_COMMISSION_MODE => $product->barber_commission_mode,
+            ProductImportSchema::COL_BARBER_COMMISSION_VALUE => $product->barber_commission_value !== null
+                ? (float) $product->barber_commission_value
+                : null,
         ];
 
         $row = [];

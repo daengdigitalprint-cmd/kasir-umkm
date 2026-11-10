@@ -1,14 +1,17 @@
-import '../css/app.css';
+// app.css (Tailwind) TIDAK di-import di sini: dimuat sebagai entry Vite terpisah
+// lewat @vite di app.blade.php, supaya landing (Landing/Index) bisa melewatinya.
+// Landing memakai subset-nya yang sudah digabung ke landing.min.css
+// (scripts/build-landing-css.mjs).
 import 'sweetalert2/dist/sweetalert2.min.css';
 
 import '@/types/pwa-window';
-import Swal from 'sweetalert2';
 import { createInertiaApp, router } from '@inertiajs/vue3';
+import Echo from 'laravel-echo';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
+import Pusher from 'pusher-js';
+import Swal from 'sweetalert2';
 import type { DefineComponent } from 'vue';
 import { createApp, h, type App as VueApp } from 'vue';
-import Echo from 'laravel-echo';
-import Pusher from 'pusher-js';
 import { initializeTheme } from './composables/useAppearance';
 import { processInertiaFlash, type InertiaFlash } from './lib/swal';
 
@@ -39,9 +42,7 @@ if (typeof window !== 'undefined') {
 
             const isLocalEnvHost = envHost === '' || envHost === 'localhost' || envHost === '127.0.0.1';
 
-            const scheme = envScheme
-                ? envScheme
-                : (window.location.protocol === 'https:' ? 'https' : 'http');
+            const scheme = envScheme ? envScheme : window.location.protocol === 'https:' ? 'https' : 'http';
 
             const host = isLocalEnvHost ? window.location.hostname : envHost;
 
@@ -139,7 +140,8 @@ function installErrorBoundary(app: VueApp) {
 
         const panel = document.createElement('div');
         panel.id = 'app-recovery-panel';
-        panel.style.cssText = 'position:fixed;inset:0;z-index:99998;display:flex;align-items:center;justify-content:center;padding:24px;background:#f8fafc;color:#0f172a;font-family:system-ui,sans-serif;text-align:center';
+        panel.style.cssText =
+            'position:fixed;inset:0;z-index:99998;display:flex;align-items:center;justify-content:center;padding:24px;background:#f8fafc;color:#0f172a;font-family:system-ui,sans-serif;text-align:center';
         panel.innerHTML = `<div style="max-width:420px"><h1 style="font-size:20px;font-weight:700;margin:0 0 8px">Aplikasi perlu dipulihkan</h1><p style="margin:0 0 20px;color:#475569">${message}</p><button id="app-recovery-action" type="button" style="border:0;border-radius:8px;background:#0891b2;color:white;padding:10px 18px;font-weight:600">Coba lagi</button></div>`;
         document.body.appendChild(panel);
         document.getElementById('app-recovery-action')?.addEventListener('click', () => {
@@ -190,36 +192,38 @@ function installErrorBoundary(app: VueApp) {
 }
 
 createInertiaApp({
-    title: (title) => (title ? `${title} - ${appName}` : appName),
-    resolve: (name) =>
-            resolvePageComponent(`./pages/${name}.vue`, import.meta.glob<DefineComponent>('./pages/**/*.vue')),
+    // Judul yang sudah memuat merek ("… | UMKM Kasir") tidak diberi akhiran APP_NAME lagi
+    // (sebelumnya jadi "… UMKM Kasir - kasirumkm"; judul halaman lain tidak berubah).
+    title: (title) => (!title ? appName : title.includes('UMKM Kasir') ? title : `${title} - ${appName}`),
+    resolve: (name) => resolvePageComponent(`./pages/${name}.vue`, import.meta.glob<DefineComponent>('./pages/**/*.vue')),
     setup({ el, App, props, plugin }) {
         const app = createApp({ render: () => h(App, props) });
         app.use(plugin);
 
-        const initial = (props as { initialPage?: { props?: { flash?: InertiaFlash } } }).initialPage?.props
-            ?.flash;
+        const initial = (props as { initialPage?: { props?: { flash?: InertiaFlash } } }).initialPage?.props?.flash;
         processInertiaFlash(initial ?? null);
 
         router.on('success', (event) => {
-            const page = (event as CustomEvent<{ page: { props: { flash?: InertiaFlash } } }>).detail
-                ?.page;
+            const page = (event as CustomEvent<{ page: { props: { flash?: InertiaFlash } } }>).detail?.page;
             processInertiaFlash(page?.props?.flash ?? null);
         });
 
         // ─── Tangani 419 (session expired) & 503 (server idle) ────
         router.on('error', (event) => {
             const detail = (event as CustomEvent<{ statusCode?: number }>).detail ?? event;
-            const status = (detail as { statusCode?: number; response?: { status?: number } }).statusCode
-                ?? (detail as { response?: { status?: number } }).response?.status;
+            const status =
+                (detail as { statusCode?: number; response?: { status?: number } }).statusCode ??
+                (detail as { response?: { status?: number } }).response?.status;
 
             if (status === 419) {
                 window.location.reload();
             } else if (status === 503 && !document.getElementById('app-recovery-panel')) {
                 const panel = document.createElement('div');
                 panel.id = 'app-recovery-panel';
-                panel.style.cssText = 'position:fixed;inset:0;z-index:99998;display:flex;align-items:center;justify-content:center;padding:24px;background:#f8fafc;color:#0f172a;font-family:system-ui,sans-serif;text-align:center';
-                panel.innerHTML = '<div style="max-width:420px"><h1 style="font-size:20px;font-weight:700;margin:0 0 8px">Server sedang bangun</h1><p style="margin:0 0 20px;color:#475569">Server mungkin sedang dalam mode idle. Menyambungkan kembali...</p></div>';
+                panel.style.cssText =
+                    'position:fixed;inset:0;z-index:99998;display:flex;align-items:center;justify-content:center;padding:24px;background:#f8fafc;color:#0f172a;font-family:system-ui,sans-serif;text-align:center';
+                panel.innerHTML =
+                    '<div style="max-width:420px"><h1 style="font-size:20px;font-weight:700;margin:0 0 8px">Server sedang bangun</h1><p style="margin:0 0 20px;color:#475569">Server mungkin sedang dalam mode idle. Menyambungkan kembali...</p></div>';
                 document.body.appendChild(panel);
                 setTimeout(() => window.location.reload(), 5000);
             }

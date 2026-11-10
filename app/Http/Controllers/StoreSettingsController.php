@@ -54,6 +54,7 @@ class StoreSettingsController extends Controller
             'attach_organization_name' => 'nullable|string|max:255',
             'attach_organization_id' => 'nullable|integer|exists:organizations,id',
             'pos_show_barcode' => 'sometimes|boolean',
+            'ai_chat_enabled' => 'sometimes|boolean',
             'recipes_enabled' => 'sometimes|boolean',
             'productions_enabled' => 'sometimes|boolean',
             'kitchen_queue_enabled' => 'sometimes|boolean',
@@ -67,6 +68,8 @@ class StoreSettingsController extends Controller
             'online_commission_gofood' => 'sometimes|numeric|min:0|max:100',
             'online_commission_grabfood' => 'sometimes|numeric|min:0|max:100',
             'online_commission_shopeefood' => 'sometimes|numeric|min:0|max:100',
+            'barber_commission_mode' => 'sometimes|string|in:percent,fixed',
+            'barber_commission_value' => 'sometimes|numeric|min:0|max:100000000',
             'queue_module_enabled' => 'sometimes|boolean',
             'wholesale_enabled' => 'sometimes|boolean',
             'attendance_enabled' => 'sometimes|boolean',
@@ -75,6 +78,7 @@ class StoreSettingsController extends Controller
             'accounting_enabled' => 'sometimes|boolean',
             'max_backdate_days' => 'sometimes|integer|min:0|max:30',
             'receivables_enabled' => 'sometimes|boolean',
+            'product_discount_enabled' => 'sometimes|boolean',
             'scan_meja_payment_methods' => 'sometimes|array',
             'scan_meja_payment_methods.*.type' => 'required|string|in:cash,qris,bank_transfer',
             'scan_meja_payment_methods.*.label' => 'required|string|max:100',
@@ -91,6 +95,13 @@ class StoreSettingsController extends Controller
         if (array_key_exists('pos_show_barcode', $validated)) {
             $settings['pos_show_barcode'] = (bool) $validated['pos_show_barcode'];
             unset($validated['pos_show_barcode']);
+        }
+
+        if (array_key_exists('ai_chat_enabled', $validated)) {
+            $settings['ai_chat_enabled'] = (bool) $validated['ai_chat_enabled'];
+            unset($validated['ai_chat_enabled']);
+        } elseif (! isset($settings['ai_chat_enabled'])) {
+            $settings['ai_chat_enabled'] = true;
         }
 
         // Fitur resep & produksi: default berdasarkan business_type
@@ -190,6 +201,19 @@ class StoreSettingsController extends Controller
             }
         }
 
+        // Komisi teknisi barbershop: tarif global per toko (khusus business_type barbershop).
+        // Terpisah dari komisi aggregator online — nilai bersifat informatif, bukan pembayaran.
+        $effectiveType = $validated['business_type'] ?? $store->business_type;
+        if (($effectiveType ?? '') === 'barbershop' && array_key_exists('barber_commission_mode', $validated)) {
+            $settings['barber_commission'] = array_merge($settings['barber_commission'] ?? [], [
+                'mode' => in_array($validated['barber_commission_mode'], ['percent', 'fixed'], true)
+                    ? $validated['barber_commission_mode']
+                    : 'percent',
+                'value' => max(0, (float) ($validated['barber_commission_value'] ?? 0)),
+            ]);
+        }
+        unset($validated['barber_commission_mode'], $validated['barber_commission_value']);
+
         // Modul antrian: default off semua tipe bisnis
         if (array_key_exists('queue_module_enabled', $validated)) {
             $settings['queue_module_enabled'] = (bool) $validated['queue_module_enabled'];
@@ -249,6 +273,14 @@ class StoreSettingsController extends Controller
             unset($validated['receivables_enabled']);
         } elseif (! isset($settings['receivables_enabled'])) {
             $settings['receivables_enabled'] = true;
+        }
+
+        // Modul Diskon per Produk (diskon per baris di POS): default nonaktif
+        if (array_key_exists('product_discount_enabled', $validated)) {
+            $settings['product_discount_enabled'] = (bool) $validated['product_discount_enabled'];
+            unset($validated['product_discount_enabled']);
+        } elseif (! isset($settings['product_discount_enabled'])) {
+            $settings['product_discount_enabled'] = false;
         }
 
         // Metode Pembayaran Scan Meja

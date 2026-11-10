@@ -74,9 +74,8 @@ class CashShiftController extends Controller
         if ($shiftIds->isNotEmpty()) {
             $rows = Transaction::query()
                 ->whereIn('cash_shift_id', $shiftIds)
-                ->where('payment_method', 'cash')
                 ->where('status', 'completed')
-                ->select('cash_shift_id', \Illuminate\Support\Facades\DB::raw('SUM(total_amount) as total'))
+                ->select('cash_shift_id', \Illuminate\Support\Facades\DB::raw('SUM(cash_amount) as total'))
                 ->groupBy('cash_shift_id')
                 ->get()
                 ->pluck('total', 'cash_shift_id');
@@ -140,8 +139,8 @@ class CashShiftController extends Controller
                 'id' => $shift->id,
                 'shift_number' => $shift->shift_number,
                 'user_name' => $shift->employee?->name ?? $shift->user?->name ?? null,
-                'opened_at' => $shift->opened_at?->toIso8601String(),
-                'closed_at' => $shift->closed_at?->toIso8601String(),
+                'opened_at' => $shift->opened_at?->toIso8601ZuluString(),
+                'closed_at' => $shift->closed_at?->toIso8601ZuluString(),
                 'opening_cash' => (float) $shift->opening_cash,
                 'expected_cash' => $expected,
                 'closing_cash_counted' => $shift->closing_cash_counted !== null ? (float) $shift->closing_cash_counted : null,
@@ -157,9 +156,8 @@ class CashShiftController extends Controller
         if ($openShift) {
             $salesCashOpen = (float) Transaction::query()
                 ->where('cash_shift_id', $openShift->id)
-                ->where('payment_method', 'cash')
                 ->where('status', 'completed')
-                ->sum('total_amount');
+                ->sum('cash_amount');
 
             $cashInOpen = (float) \App\Models\CashTransaction::query()
                 ->where('cash_shift_id', $openShift->id)
@@ -176,7 +174,7 @@ class CashShiftController extends Controller
             $openShiftPayload = [
                 'id' => $openShift->id,
                 'shift_number' => $openShift->shift_number,
-                'opened_at' => $openShift->opened_at?->toIso8601String(),
+                'opened_at' => $openShift->opened_at?->toIso8601ZuluString(),
                 'opening_cash' => (float) $openShift->opening_cash,
                 'expected_cash' => $expectedOpen,
             ];
@@ -198,16 +196,16 @@ class CashShiftController extends Controller
                     $openShiftPayload = [
                         'id' => $blocker->id,
                         'shift_number' => $blocker->shift_number,
-                        'opened_at' => $blocker->opened_at?->toIso8601String(),
+                        'opened_at' => $blocker->opened_at?->toIso8601ZuluString(),
                         'opening_cash' => (float) $blocker->opening_cash,
                         // Hitung expected_cash untuk shift blocker agar admin bisa melihat nominalnya saat mau tutup
-                        'expected_cash' => (float) $blocker->opening_cash + (float) Transaction::query()->where('cash_shift_id', $blocker->id)->where('payment_method', 'cash')->where('status', 'completed')->sum('total_amount') + (float) \App\Models\CashTransaction::query()->where('cash_shift_id', $blocker->id)->where('type', 'in')->sum('amount') - (float) \App\Models\CashTransaction::query()->where('cash_shift_id', $blocker->id)->where('type', 'out')->sum('amount'),
+                        'expected_cash' => (float) $blocker->opening_cash + (float) Transaction::query()->where('cash_shift_id', $blocker->id)->where('status', 'completed')->sum('cash_amount') + (float) \App\Models\CashTransaction::query()->where('cash_shift_id', $blocker->id)->where('type', 'in')->sum('amount') - (float) \App\Models\CashTransaction::query()->where('cash_shift_id', $blocker->id)->where('type', 'out')->sum('amount'),
                     ];
                 } else {
                     $activeShiftByOther = [
                         'shift_number' => $blocker->shift_number,
                         'user_name' => $blocker->user?->name ?? 'Kasir lain',
-                        'opened_at' => $blocker->opened_at?->toIso8601String(),
+                        'opened_at' => $blocker->opened_at?->toIso8601ZuluString(),
                     ];
                 }
             }
@@ -273,7 +271,7 @@ class CashShiftController extends Controller
                 ->with('shift_blocked', [
                     'shift_number' => $blocker->shift_number,
                     'user_name' => $blockerName,
-                    'opened_at' => $blocker->opened_at?->toIso8601String(),
+                    'opened_at' => $blocker->opened_at?->toIso8601ZuluString(),
                     'store_name' => $store->name,
                 ]);
         }
@@ -286,6 +284,7 @@ class CashShiftController extends Controller
             'store_id' => $store->id,
             'user_id' => $user->id,
             'opening_cash' => $validated['opening_cash'],
+            'opened_at' => now(),
         ];
 
         // Set employee_id jika PIN mode aktif
@@ -357,6 +356,13 @@ class CashShiftController extends Controller
             );
         }
 
+        if ($cashShift->opened_at && now()->lt($cashShift->opened_at)) {
+            return $this->jsonRedirect(
+                $request,
+                redirect()->route('cash-shifts.index')->with('error', 'Waktu sistem tidak valid: penutupan shift tidak boleh sebelum waktu pembukaan.')
+            );
+        }
+
         $validated = $request->validate([
             'closing_cash_counted' => ['required', 'numeric', 'min:0'],
             'closing_notes' => ['nullable', 'string', 'max:2000'],
@@ -364,9 +370,8 @@ class CashShiftController extends Controller
 
         $salesCash = (float) Transaction::query()
             ->where('cash_shift_id', $cashShift->id)
-            ->where('payment_method', 'cash')
             ->where('status', 'completed')
-            ->sum('total_amount');
+            ->sum('cash_amount');
 
         $cashIn = (float) \App\Models\CashTransaction::query()
             ->where('cash_shift_id', $cashShift->id)
@@ -421,7 +426,7 @@ class CashShiftController extends Controller
         return $this->jsonRedirect($request, $response, [
             'cash_shift' => [
                 'id' => $cashShift->id,
-                'closed_at' => $cashShift->fresh()->closed_at?->toIso8601String(),
+                'closed_at' => $cashShift->fresh()->closed_at?->toIso8601ZuluString(),
             ],
         ]);
     }

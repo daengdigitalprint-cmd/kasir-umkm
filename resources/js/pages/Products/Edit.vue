@@ -62,6 +62,9 @@ interface Props {
         modifier_options?: Array<{ key: string; label: string; price: number }>;
         pharmacy_sale_class?: string | null;
         pharmacy_registration_no?: string | null;
+        service_duration_minutes?: number | null;
+        barber_commission_mode?: string | null;
+        barber_commission_value?: number | null;
     };
     store: {
         id: number;
@@ -79,6 +82,7 @@ interface Props {
     }>;
     fnbModifierEnabled?: boolean;
     pharmacyFieldsEnabled?: boolean;
+    barbershopEnabled?: boolean;
     bundleItems?: Array<{
         component_product_id: number;
         component_product_variant_id: number | null;
@@ -133,6 +137,7 @@ const props = withDefaults(defineProps<Props>(), {
     batches: () => [],
     fnbModifierEnabled: false,
     pharmacyFieldsEnabled: false,
+    barbershopEnabled: false,
     bundleItems: () => [],
     bundleCatalogProducts: () => [],
     saleConsumptionCatalog: () => [],
@@ -268,6 +273,9 @@ const form = useForm({
     sale_consumptions_json: '',
     pharmacy_sale_class: (product.pharmacy_sale_class as 'otc' | 'limited' | 'prescription') || 'otc',
     pharmacy_registration_no: product.pharmacy_registration_no ?? '',
+    service_duration_minutes: product.service_duration_minutes ?? null,
+    barber_commission_mode: product.barber_commission_mode ?? '',
+    barber_commission_value: product.barber_commission_value ?? null,
 });
 
 interface ModifierOptionRow {
@@ -892,6 +900,15 @@ const submit = () => {
         images: form.images || [],
         pharmacy_sale_class: form.pharmacy_sale_class || 'otc',
         pharmacy_registration_no: form.pharmacy_registration_no ?? '',
+        service_duration_minutes:
+            form.service_duration_minutes === null || (form.service_duration_minutes as unknown) === ''
+                ? null
+                : Number(form.service_duration_minutes),
+        barber_commission_mode: form.barber_commission_mode || null,
+        barber_commission_value:
+            form.barber_commission_value === null || (form.barber_commission_value as unknown) === ''
+                ? null
+                : Number(form.barber_commission_value),
     };
 
     console.log('[EDIT_SUBMIT_NORMALIZED] Data setelah normalisasi:', {
@@ -962,6 +979,15 @@ const submit = () => {
         formData.append('is_active', normalizedData.is_active ? '1' : '0');
         formData.append('pharmacy_sale_class', String(normalizedData.pharmacy_sale_class || 'otc'));
         formData.append('pharmacy_registration_no', normalizedData.pharmacy_registration_no || '');
+        formData.append(
+            'service_duration_minutes',
+            normalizedData.service_duration_minutes === null ? '' : String(normalizedData.service_duration_minutes),
+        );
+        formData.append('barber_commission_mode', normalizedData.barber_commission_mode || '');
+        formData.append(
+            'barber_commission_value',
+            normalizedData.barber_commission_value === null ? '' : String(normalizedData.barber_commission_value),
+        );
         if (form.variants_json) {
             formData.append('variants_json', form.variants_json);
         }
@@ -1471,6 +1497,63 @@ const submit = () => {
                         </div>
 
                         <div class="space-y-4">
+                            <div v-if="barbershopEnabled" class="space-y-2">
+                                <Label for="service_duration_minutes">Durasi Layanan (menit)</Label>
+                                <Input
+                                    id="service_duration_minutes"
+                                    v-model.number="form.service_duration_minutes"
+                                    type="number"
+                                    min="1"
+                                    max="1440"
+                                    step="1"
+                                    placeholder="45"
+                                />
+                                <p class="text-xs text-muted-foreground">
+                                    Kosongkan jika layanan ini tidak berdurasi tetap.
+                                </p>
+                                <div v-if="form.errors.service_duration_minutes" class="text-sm text-red-600">
+                                    {{ form.errors.service_duration_minutes }}
+                                </div>
+                            </div>
+
+                            <div v-if="barbershopEnabled" class="grid grid-cols-2 gap-3 rounded-xl border border-violet-200 bg-violet-50/60 p-3.5">
+                                <div class="space-y-2">
+                                    <Label for="barber_commission_mode">Tarif Komisi Teknisi</Label>
+                                    <select
+                                        id="barber_commission_mode"
+                                        v-model="form.barber_commission_mode"
+                                        class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                    >
+                                        <option value="">Ikuti tarif global toko</option>
+                                        <option value="percent">Persen (%)</option>
+                                        <option value="fixed">Tarif tetap (Rp)</option>
+                                    </select>
+                                </div>
+                                <div v-if="form.barber_commission_mode" class="space-y-2">
+                                    <Label for="barber_commission_value">
+                                        {{ form.barber_commission_mode === 'fixed' ? 'Tarif per item (Rp)' : 'Persentase (%)' }}
+                                    </Label>
+                                    <Input
+                                        id="barber_commission_value"
+                                        v-model.number="form.barber_commission_value"
+                                        type="number"
+                                        min="0"
+                                        :max="form.barber_commission_mode === 'fixed' ? 100000000 : 100"
+                                        :step="form.barber_commission_mode === 'fixed' ? 1000 : 0.5"
+                                        placeholder="0"
+                                    />
+                                </div>
+                                <p class="col-span-2 text-xs text-muted-foreground">
+                                    Override komisi untuk layanan ini; kosongkan untuk mengikuti tarif global toko.
+                                </p>
+                                <div v-if="form.errors.barber_commission_mode" class="col-span-2 text-sm text-red-600">
+                                    {{ form.errors.barber_commission_mode }}
+                                </div>
+                                <div v-if="form.errors.barber_commission_value" class="col-span-2 text-sm text-red-600">
+                                    {{ form.errors.barber_commission_value }}
+                                </div>
+                            </div>
+
                             <div class="flex items-center space-x-2">
                                 <input
                                     type="checkbox"
@@ -1479,7 +1562,6 @@ const submit = () => {
                                     @change="(e) => {
                                         if (!e.target.checked) {
                                             form.unlimited_stock = false;
-                                            form.allow_negative_stock = false;
                                         }
                                     }"
                                     class="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
@@ -1509,7 +1591,7 @@ const submit = () => {
                                 Produk akan selalu tersedia tanpa batasan stok
                             </p>
 
-                            <div v-if="form.track_stock" class="flex items-center space-x-2">
+                            <div class="flex items-center space-x-2">
                                 <input
                                     type="checkbox"
                                     id="allow_negative_stock"
@@ -1521,7 +1603,7 @@ const submit = () => {
                                     Izinkan Penjualan Stok Habis
                                 </Label>
                             </div>
-                            <p v-if="form.track_stock" class="text-xs text-muted-foreground ml-7 -mt-2" :class="{ 'opacity-50': form.unlimited_stock }">
+                            <p class="text-xs text-muted-foreground ml-7 -mt-2" :class="{ 'opacity-50': form.unlimited_stock }">
                                 Produk tetap bisa dijual meskipun stok habis. Stok akan menjadi negatif.
                             </p>
 

@@ -227,7 +227,7 @@ class AiAuditorController extends Controller
         $completed = $transactions->where('status', 'completed');
 
         $totalSales = (float) $completed->sum('total_amount');
-        $cashSales = (float) $completed->where('payment_method', 'cash')->sum('total_amount');
+        $cashSales = (float) $completed->sum('cash_amount');
         $voided = $transactions->filter(fn ($t) => (bool) $t->is_void);
 
         $totalCost = 0.0;

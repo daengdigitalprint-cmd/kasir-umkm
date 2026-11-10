@@ -46,14 +46,16 @@ const statusBadge = (status: string) =>
     }[status] ?? { label: status, class: 'bg-slate-100 text-slate-600', icon: Clock });
 
 const leaveTypes = [
-    'Cuti Tahunan',
-    'Cuti Sakit',
-    'Cuti Melahirkan',
-    'Cuti Menikah',
-    'Cuti Duka',
-    'Izin Khusus',
-    'Lainnya',
+    { value: 'annual', label: 'Cuti tahunan' },
+    { value: 'sick', label: 'Sakit' },
+    { value: 'maternity', label: 'Cuti melahirkan' },
+    { value: 'marriage', label: 'Cuti menikah' },
+    { value: 'bereavement', label: 'Cuti duka' },
+    { value: 'unpaid', label: 'Tanpa gaji' },
+    { value: 'other', label: 'Lainnya' },
 ];
+
+const typeLabel = (value: string) => leaveTypes.find((t) => t.value === value)?.label ?? value;
 
 const formatRange = (start: string, end: string) => {
     const s = new Date(start + 'T00:00:00');
@@ -87,7 +89,7 @@ const formatRange = (start: string, end: string) => {
                                 required
                             >
                                 <option value="" disabled>Pilih jenis cuti</option>
-                                <option v-for="t in leaveTypes" :key="t" :value="t">{{ t }}</option>
+                                <option v-for="t in leaveTypes" :key="t.value" :value="t.value">{{ t.label }}</option>
                             </select>
                         </div>
                         <div class="grid gap-2">
@@ -137,7 +139,7 @@ const formatRange = (start: string, end: string) => {
                             </thead>
                             <tbody class="divide-y divide-slate-100">
                                 <tr v-for="l in leaves" :key="l.id" class="hover:bg-slate-50/60 transition-colors">
-                                    <td class="whitespace-nowrap px-4 py-3 font-medium text-slate-800">{{ l.type }}</td>
+                                    <td class="whitespace-nowrap px-4 py-3 font-medium text-slate-800">{{ typeLabel(l.type) }}</td>
                                     <td class="whitespace-nowrap px-4 py-3 text-slate-600">{{ formatRange(l.start_date, l.end_date) }}</td>
                                     <td class="px-4 py-3 text-slate-600 max-w-[200px] truncate">{{ l.reason ?? '—' }}</td>
                                     <td class="whitespace-nowrap px-4 py-3">
@@ -167,7 +169,7 @@ const formatRange = (start: string, end: string) => {
                             class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
                         >
                             <div class="mb-2 flex items-center justify-between">
-                                <span class="text-sm font-semibold text-slate-800">{{ l.type }}</span>
+                                <span class="text-sm font-semibold text-slate-800">{{ typeLabel(l.type) }}</span>
                                 <Badge :class="[statusBadge(l.status).class, 'rounded-lg text-xs font-semibold']">
                                     {{ statusBadge(l.status).label }}
                                 </Badge>

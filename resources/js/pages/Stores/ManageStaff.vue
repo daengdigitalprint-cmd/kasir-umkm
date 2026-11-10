@@ -9,7 +9,7 @@ import { ref, watch, computed } from 'vue';
 import { confirmDialog, toastSuccess, toastError } from '@/lib/swal';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 
-type StoreRole = 'admin' | 'manager' | 'cashier' | 'warehouse';
+type StoreRole = 'admin' | 'manager' | 'cashier' | 'kitchen' | 'warehouse' | 'owner' | 'barber';
 
 interface TeamMember {
     id: number;
@@ -85,7 +85,7 @@ async function saveRole(memberId: number) {
 }
 
 function roleLabel(role: string): string {
-    const map: Record<string, string> = { admin: 'Admin', manager: 'Manajer', cashier: 'Kasir', warehouse: 'Admin gudang', owner: 'Pemilik (Owner)' };
+    const map: Record<string, string> = { admin: 'Admin', manager: 'Manajer', cashier: 'Kasir', kitchen: 'Dapur', warehouse: 'Admin gudang', owner: 'Pemilik (Owner)', barber: 'Barber' };
     return map[role] ?? role;
 }
 
@@ -345,6 +345,7 @@ watch(activeTab, (tab) => {
                                         <option value="cashier">Kasir</option>
                                         <option value="kitchen">Dapur</option>
                                         <option value="warehouse">Admin gudang</option>
+                                        <option value="barber">Barber</option>
                                         <option value="owner" v-if="canShowOwnerOption">Pemilik (Owner)</option>
                                     </select>
                                     <p v-if="createForm.errors.role" class="text-xs text-red-600">{{ createForm.errors.role }}</p>
@@ -382,6 +383,7 @@ watch(activeTab, (tab) => {
                                     <option value="cashier">Kasir</option>
                                     <option value="kitchen">Dapur</option>
                                     <option value="warehouse">Admin gudang</option>
+                                    <option value="barber">Barber</option>
                                     <option value="owner" v-if="canShowOwnerOption">Pemilik (Owner)</option>
                                 </select>
                                 <Button
@@ -449,6 +451,7 @@ watch(activeTab, (tab) => {
                             <option value="cashier">Kasir</option>
                             <option value="kitchen">Dapur</option>
                             <option value="warehouse">Admin gudang</option>
+                            <option value="barber">Barber</option>
                             <option value="owner" v-if="canShowOwnerOption">Pemilik (Owner)</option>
                         </select>
                         <p v-if="editForm.errors.role" class="text-xs text-red-600">{{ editForm.errors.role }}</p>
@@ -495,7 +498,7 @@ watch(activeTab, (tab) => {
                     <div class="flex flex-wrap items-center gap-2 mb-4">
                         <span class="text-xs font-bold text-slate-500">Pilih Peran:</span>
                         <button
-                            v-for="r in ['admin', 'manager', 'cashier', 'kitchen', 'warehouse', 'owner']"
+                            v-for="r in ['admin', 'manager', 'cashier', 'kitchen', 'warehouse', 'owner', 'barber']"
                             :key="r"
                             type="button"
                             @click="selectedPermRole = r"

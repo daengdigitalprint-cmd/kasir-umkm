@@ -15,6 +15,8 @@ const props = defineProps<{
     cashiers: Cashier[];
     storeName: string;
     dismissible?: boolean;
+    /** Halaman tujuan setelah PIN benar (default: POS). Contoh: '/attendance'. */
+    redirectTo?: string;
 }>();
 
 const emit = defineEmits<{
@@ -85,6 +87,7 @@ function submitPin() {
     const form = useForm({
         employee_id: selectedCashier.value.id,
         pin: pin.value,
+        ...(props.redirectTo ? { redirect_to: props.redirectTo } : {}),
     });
 
     form.post('/cashier-pin/login', {

@@ -5,6 +5,7 @@ namespace App\Modules\Payroll\Http\Controllers;
 use App\Modules\Attendance\Models\Employee;
 use App\Modules\Payroll\Models\SalaryComponent;
 use App\Modules\Payroll\Services\TaxService;
+use App\Services\ActivityLogger;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -35,6 +36,7 @@ class PayrollSalaryController extends AdminPayrollController
                         'id' => $c->id,
                         'name' => $c->name,
                         'type' => $c->type,
+                        'is_fixed' => (bool) $c->is_fixed,
                         'amount' => (float) $c->amount,
                         'sort_order' => $c->sort_order,
                     ]),
@@ -61,18 +63,28 @@ class PayrollSalaryController extends AdminPayrollController
             ],
             'name' => 'required|string|max:100',
             'type' => 'required|in:earning,deduction',
+            'is_fixed' => 'sometimes|boolean',
             'amount' => 'required|numeric|min:0',
             'sort_order' => 'nullable|integer|min:0|max:255',
         ]);
 
-        SalaryComponent::create([
+        $component = SalaryComponent::create([
             'store_id' => $store->id,
             'employee_id' => $validated['employee_id'],
             'name' => $validated['name'],
             'type' => $validated['type'],
+            // Potongan tidak relevan dengan status tetap; default tetap.
+            'is_fixed' => $validated['type'] === 'deduction' ? true : (bool) ($validated['is_fixed'] ?? true),
             'amount' => $validated['amount'],
             'sort_order' => $validated['sort_order'] ?? 0,
         ]);
+
+        $component->load('employee:id,name');
+        ActivityLogger::log($store, 'salary_component.created',
+            "Menambah komponen gaji {$component->name} untuk {$component->employee?->name}: ".number_format((float) $component->amount, 0, ',', '.'),
+            $component,
+            ['employee_id' => $component->employee_id, 'type' => $component->type, 'amount' => (float) $component->amount, 'is_fixed' => (bool) $component->is_fixed],
+        );
 
         return back()->with('success', 'Komponen gaji ditambahkan.');
     }
@@ -86,16 +98,31 @@ class PayrollSalaryController extends AdminPayrollController
         $validated = $request->validate([
             'name' => 'required|string|max:100',
             'type' => 'required|in:earning,deduction',
+            'is_fixed' => 'sometimes|boolean',
             'amount' => 'required|numeric|min:0',
             'sort_order' => 'nullable|integer|min:0|max:255',
         ]);
 
+        $before = $component->only(['name', 'type', 'is_fixed', 'amount', 'sort_order']);
+
         $component->update([
             'name' => $validated['name'],
             'type' => $validated['type'],
+            // Potongan tidak relevan dengan status tetap; default tetap.
+            'is_fixed' => $validated['type'] === 'deduction' ? true : (bool) ($validated['is_fixed'] ?? true),
             'amount' => $validated['amount'],
             'sort_order' => $validated['sort_order'] ?? 0,
         ]);
+
+        $changes = array_diff_key($component->getChanges(), array_flip(['updated_at']));
+        if ($changes !== []) {
+            $component->load('employee:id,name');
+            ActivityLogger::log($store, 'salary_component.updated',
+                "Mengubah komponen gaji {$component->name} untuk {$component->employee?->name}",
+                $component,
+                ['before' => array_intersect_key($before, $changes), 'after' => $changes],
+            );
+        }
 
         return back()->with('success', 'Komponen gaji diperbarui.');
     }
@@ -105,6 +132,13 @@ class PayrollSalaryController extends AdminPayrollController
         $store = $this->currentStore();
         $this->authorizeAdmin();
         $this->ensureOwned($component, $store);
+
+        $component->load('employee:id,name');
+        ActivityLogger::log($store, 'salary_component.deleted',
+            "Menghapus komponen gaji {$component->name} untuk {$component->employee?->name}",
+            $component,
+            ['employee_id' => $component->employee_id, 'type' => $component->type, 'amount' => (float) $component->amount],
+        );
 
         $component->delete();
 
@@ -122,9 +156,18 @@ class PayrollSalaryController extends AdminPayrollController
             'tax_status' => 'required|string|in:TK/0,TK/1,TK/2,TK/3,K/0,K/1,K/2,K/3',
         ]);
 
+        $before = $employee->tax_status;
         $employee->update([
             'tax_status' => $validated['tax_status'],
         ]);
+
+        if ($before !== $employee->tax_status) {
+            ActivityLogger::log($store, 'employee.tax_status_changed',
+                "Mengubah status PTKP {$employee->name}: ".($before ?: '-')." → {$employee->tax_status}",
+                $employee,
+                ['before' => $before, 'after' => $employee->tax_status],
+            );
+        }
 
         return back()->with('success', 'Status pajak karyawan diperbarui.');
     }

@@ -21,33 +21,33 @@ beforeEach(function () {
 
 function makeGatingStore(bool $accountingEnabled = false): array
 {
- // Paket starter: modul shift kasir tidak aktif sehingga POS tidak butuh shift terbuka.
- $plan = \App\Models\SubscriptionPlan::query()->firstOrCreate(
- ['slug' => 'starter'],
- [
- 'name' => 'Paket Starter',
- 'price' => 0,
- 'billing_cycle' => 'monthly',
- 'is_active' => true,
- ]
- );
+    // Paket starter: modul shift kasir tidak aktif sehingga POS tidak butuh shift terbuka.
+    $plan = \App\Models\SubscriptionPlan::query()->firstOrCreate(
+        ['slug' => 'starter'],
+        [
+            'name' => 'Paket Starter',
+            'price' => 0,
+            'billing_cycle' => 'monthly',
+            'is_active' => true,
+        ]
+    );
 
- $store = Store::query()->create([
- 'name' => 'Toko Gating',
- 'slug' => 'gating-'.uniqid(),
- 'is_active' => true,
- 'is_subscription_active' => true,
- 'subscription_plan_id' => $plan->id,
- 'subscription_end' => now()->addDay(),
- 'settings' => ['accounting_enabled' => $accountingEnabled],
- ]);
+    $store = Store::query()->create([
+        'name' => 'Toko Gating',
+        'slug' => 'gating-'.uniqid(),
+        'is_active' => true,
+        'is_subscription_active' => true,
+        'subscription_plan_id' => $plan->id,
+        'subscription_end' => now()->addDay(),
+        'settings' => ['accounting_enabled' => $accountingEnabled],
+    ]);
 
- $user = User::factory()->create([
- 'store_id' => $store->id,
- 'role' => 'admin',
- 'email_verified_at' => now(),
- ]);
- $user->stores()->attach($store->id, ['role' => 'admin']);
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+    $user->stores()->attach($store->id, ['role' => 'admin']);
 
     $product = Product::query()->create([
         'store_id' => $store->id,
@@ -264,7 +264,7 @@ it('pembelian dengan modul on: jurnal dibuat', function () {
     ]);
 
     // Posting ulang harus no-op (tidak duplikat) karena sudah ada jurnal referensinya.
-    $purchaseFresh = new \App\Models\Purchase();
+    $purchaseFresh = new \App\Models\Purchase;
     $purchaseFresh->setRawAttributes(array_merge($purchase->getAttributes(), [
         'id' => $purchase->id,
         'store_id' => $store->id,
@@ -449,6 +449,7 @@ function makeOwnerUser(Store $store): User
         'email_verified_at' => now(),
     ]);
     $owner->stores()->attach($store->id, ['role' => 'owner']);
+
     return $owner;
 }
 

@@ -18,7 +18,7 @@ return new class extends Migration
             $table->foreignId('customer_id')->constrained()->cascadeOnDelete();
             $table->foreignId('user_id')->constrained();
             $table->foreignId('cash_shift_id')->nullable()->constrained()->nullOnDelete();
-            
+
             $table->decimal('amount', 15, 2);
             $table->string('payment_method'); // cash, card, ewallet, transfer, other
             $table->timestamp('received_at');
@@ -27,7 +27,7 @@ return new class extends Migration
             $table->text('notes')->nullable();
             $table->string('idempotency_key')->nullable();
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
-            
+
             $table->timestamps();
 
             // Indeks untuk pencarian dan constraint

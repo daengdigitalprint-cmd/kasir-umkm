@@ -8,9 +8,9 @@ use App\Models\LoyaltyReward;
 use App\Models\Store;
 use App\Services\LoyaltyService;
 use App\Support\LoyaltySettings;
-use App\Support\StorePlanLimits;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use RuntimeException;
 
@@ -21,17 +21,7 @@ class LoyaltyController extends Controller
     /** Panel admin: ringkasan program loyalitas. */
     public function index()
     {
-        $store = auth()->user()->store;
-
-        if (! $store) {
-            return redirect()->route('stores.create')
-                ->with('error', 'Anda perlu membuat toko terlebih dahulu.');
-        }
-
-        if (! StorePlanLimits::allowsAdvancedRetailFeatures($store)) {
-            return redirect()->route('dashboard')
-                ->with('warning', 'Paket Starter tidak mencakup Program Loyalitas. Upgrade ke paket GrowUp di halaman langganan.');
-        }
+        $store = $this->currentStore();
 
         $totalCirculating = (int) $store->customers()->sum('points_balance');
         $totalEarned = (int) $store->customers()->sum('points_earned_total');
@@ -144,6 +134,43 @@ class LoyaltyController extends Controller
         return back()->with('success', 'Hadiah dihapus.');
     }
 
+    /** Aktif/nonaktifkan hadiah tanpa mengirim ulang seluruh field. */
+    public function toggleReward(LoyaltyReward $reward)
+    {
+        $this->authorizeReward($reward);
+
+        $reward->update(['is_active' => ! $reward->is_active]);
+
+        return back()->with('success', $reward->is_active ? 'Hadiah diaktifkan.' : 'Hadiah dinonaktifkan.');
+    }
+
+    /** Validasi kode voucher loyalitas dari POS (tanpa mengubah status). */
+    public function previewVoucher(Request $request)
+    {
+        $store = $this->currentStore();
+
+        $validated = $request->validate([
+            'code' => 'required|string|max:40',
+        ]);
+
+        try {
+            $redemption = $this->loyalty->previewVoucher($store, $validated['code']);
+        } catch (RuntimeException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'voucher' => [
+                'code' => $redemption->voucher_code,
+                'value' => (float) $redemption->voucher_value,
+                'reward_name' => $redemption->reward_name,
+                'customer_id' => $redemption->customer_id,
+                'customer_name' => $redemption->customer?->name,
+            ],
+        ]);
+    }
+
     /** Proses penukaran hadiah untuk seorang pelanggan (dilakukan staf). */
     public function redeem(Request $request)
     {
@@ -206,9 +233,10 @@ class LoyaltyController extends Controller
             'body' => 'required|string|max:1000',
         ]);
 
-        $count = $this->loyalty->broadcastPromo($store, $validated['title'], $validated['body']);
+        // Kirim asinkron agar request admin tidak menunggu ratusan/ribuan insert notifikasi.
+        \App\Jobs\BroadcastLoyaltyPromo::dispatch($store->id, $validated['title'], $validated['body']);
 
-        return back()->with('success', "Promo dikirim ke {$count} pelanggan.");
+        return back()->with('success', 'Promo sedang dikirim ke seluruh pelanggan.');
     }
 
     /** Inbox notifikasi loyalitas in-app untuk staf toko. */
@@ -253,14 +281,11 @@ class LoyaltyController extends Controller
 
     private function currentStore(): Store
     {
+        // Gerbang plan & toko sudah ditangani middleware plan.advanced + store.active.
         $store = auth()->user()->store;
 
         if (! $store) {
             abort(404);
-        }
-
-        if (! StorePlanLimits::allowsAdvancedRetailFeatures($store)) {
-            abort(403, 'Paket Starter tidak mencakup Program Loyalitas. Upgrade ke paket GrowUp di halaman langganan.');
         }
 
         return $store;
@@ -272,10 +297,6 @@ class LoyaltyController extends Controller
 
         if ($store === null || (int) $reward->store_id !== (int) $store->id) {
             abort(403);
-        }
-
-        if (! StorePlanLimits::allowsAdvancedRetailFeatures($store)) {
-            abort(403, 'Paket Starter tidak mencakup Program Loyalitas. Upgrade ke paket GrowUp di halaman langganan.');
         }
     }
 
@@ -295,7 +316,9 @@ class LoyaltyController extends Controller
         ]);
 
         if ($validated['type'] === 'voucher' && empty($validated['voucher_value'])) {
-            abort(422, 'Nilai voucher wajib diisi untuk hadiah tipe voucher.');
+            throw ValidationException::withMessages([
+                'voucher_value' => 'Nilai voucher wajib diisi untuk hadiah tipe voucher.',
+            ]);
         }
 
         $validated['is_active'] = $request->boolean('is_active', true);

@@ -18,6 +18,7 @@ import {
     ChevronRight,
     AlertTriangle,
     Database,
+    Upload,
 } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { confirmDelete, toastSuccess, toastError } from '@/lib/swal';
@@ -37,7 +38,7 @@ interface BackupHistoryItem {
     filepath: string;
     file_size: number;
     status: 'pending' | 'completed' | 'failed';
-    trigger_type: 'manual' | 'scheduled' | 'restore';
+    trigger_type: 'manual' | 'scheduled' | 'restore' | 'upload';
     duration_ms: number | null;
     records_count: number;
     records_summary: Record<string, number> | null;
@@ -80,9 +81,40 @@ const deletingId = ref<number | null>(null);
 // Download state
 const downloadingId = ref<number | null>(null);
 
+// Upload state
+const uploadInput = ref<HTMLInputElement | null>(null);
+const isUploading = ref(false);
+
 // CSRF helper
 function getCsrf(): string {
     return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
+}
+
+function jsonHeaders(withBody = true): Record<string, string> {
+    return {
+        Accept: 'application/json',
+        'X-CSRF-TOKEN': getCsrf(),
+        'X-Requested-With': 'XMLHttpRequest',
+        ...(withBody ? { 'Content-Type': 'application/json' } : {}),
+    };
+}
+
+// Server kadang membalas halaman HTML (sesi habis, timeout, error server) — jangan di-parse sebagai JSON.
+async function readJson(res: Response): Promise<any> {
+    if ((res.headers.get('content-type') ?? '').includes('application/json')) {
+        return res.json();
+    }
+
+    const messages: Record<number, string> = {
+        401: 'Sesi login Anda sudah berakhir. Silakan login ulang.',
+        403: 'Anda tidak punya akses untuk tindakan ini.',
+        413: 'File terlalu besar untuk diterima server.',
+        419: 'Sesi halaman sudah kedaluwarsa. Muat ulang halaman (F5) lalu coba lagi.',
+        502: 'Server tidak merespons. Coba lagi beberapa saat lagi.',
+        504: 'Server terlalu lama memproses (timeout). Coba lagi, atau hubungi admin server untuk menaikkan batas waktu.',
+    };
+
+    throw new Error(messages[res.status] ?? `Server mengembalikan error (HTTP ${res.status}). Coba muat ulang halaman.`);
 }
 
 function formatBytes(bytes: number): string {
@@ -110,11 +142,16 @@ function formatDuration(ms: number | null): string {
 }
 
 function triggerLabel(type: string): string {
-    return { manual: 'Manual', scheduled: 'Otomatis', restore: 'Pemulihan' }[type] ?? type;
+    return { manual: 'Manual', scheduled: 'Otomatis', restore: 'Pemulihan', upload: 'Unggahan' }[type] ?? type;
 }
 
 function triggerColor(type: string): string {
-    return { manual: 'bg-blue-100 text-blue-800', scheduled: 'bg-purple-100 text-purple-800', restore: 'bg-amber-100 text-amber-800' }[type] ?? 'bg-slate-100 text-slate-800';
+    return {
+        manual: 'bg-blue-100 text-blue-800',
+        scheduled: 'bg-purple-100 text-purple-800',
+        restore: 'bg-amber-100 text-amber-800',
+        upload: 'bg-teal-100 text-teal-800',
+    }[type] ?? 'bg-slate-100 text-slate-800';
 }
 
 function statusIcon(status: string) {
@@ -139,8 +176,8 @@ async function fetchHistory(page = 1) {
         if (filterStatus.value) params.set('status', filterStatus.value);
         if (filterTrigger.value) params.set('trigger_type', filterTrigger.value);
 
-        const res = await fetch(`/settings/backup/history?${params}`);
-        const json: HistoryResponse = await res.json();
+        const res = await fetch(`/settings/backup/history?${params}`, { headers: jsonHeaders(false) });
+        const json: HistoryResponse = await readJson(res);
 
         if (json.success) {
             history.value = json.data;
@@ -159,9 +196,9 @@ async function createBackup() {
     try {
         const res = await fetch('/settings/backup/create', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': getCsrf() },
+            headers: jsonHeaders(),
         });
-        const json = await res.json();
+        const json = await readJson(res);
         if (json.success) {
             fetchHistory(1);
         } else {
@@ -180,12 +217,12 @@ async function downloadBackup(item: BackupHistoryItem) {
     try {
         const res = await fetch('/settings/backup/download', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': getCsrf() },
+            headers: jsonHeaders(),
             body: JSON.stringify({ backup_id: item.id }),
         });
 
         if (!res.ok) {
-            const err = await res.json();
+            const err = await readJson(res);
             throw new Error(err.message || 'Gagal mengunduh');
         }
 
@@ -205,6 +242,45 @@ async function downloadBackup(item: BackupHistoryItem) {
     }
 }
 
+// Upload backup dari file eksternal, lalu langsung tawarkan restore
+async function uploadBackup(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.json')) {
+        toastError('File backup harus berformat .json');
+        return;
+    }
+
+    isUploading.value = true;
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const res = await fetch('/settings/backup/upload', {
+            method: 'POST',
+            headers: jsonHeaders(false),
+            body: formData,
+        });
+        const json = await readJson(res);
+
+        if (res.ok && json.success) {
+            toastSuccess('File backup berhasil diunggah');
+            await fetchHistory(1);
+            openRestoreDialog(json.data);
+        } else {
+            const firstError = json.errors ? Object.values(json.errors as Record<string, string[]>)[0]?.[0] : null;
+            toastError(firstError || json.message || 'Gagal mengunggah backup');
+        }
+    } catch (e) {
+        toastError('Gagal mengunggah: ' + (e instanceof Error ? e.message : 'Unknown error'));
+    } finally {
+        isUploading.value = false;
+    }
+}
+
 // Delete backup
 async function deleteBackup(item: BackupHistoryItem) {
     const ok = await confirmDelete(
@@ -217,16 +293,16 @@ async function deleteBackup(item: BackupHistoryItem) {
     try {
         const res = await fetch(`/settings/backup/${item.id}`, {
             method: 'DELETE',
-            headers: { 'X-CSRF-TOKEN': getCsrf() },
+            headers: jsonHeaders(false),
         });
-        const json = await res.json();
+        const json = await readJson(res);
         if (json.success) {
             fetchHistory(currentPage.value);
         } else {
-            toastError(json.message || 'Gagal mengunduh');
+            toastError(json.message || 'Gagal menghapus backup');
         }
     } catch (e) {
-        toastError('Gagal mengunduh: ' + (e instanceof Error ? e.message : 'Unknown error'));
+        toastError('Gagal menghapus: ' + (e instanceof Error ? e.message : 'Unknown error'));
     } finally {
         deletingId.value = null;
     }
@@ -256,10 +332,10 @@ async function confirmRestore() {
     try {
         const res = await fetch('/settings/backup/restore', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': getCsrf() },
+            headers: jsonHeaders(),
             body: JSON.stringify({ backup_id: restoreTarget.value.id }),
         });
-        const json = await res.json();
+        const json = await readJson(res);
 
         if (json.success) {
             restoreLog.value = json.log;
@@ -315,6 +391,35 @@ onMounted(() => fetchHistory());
                 </div>
             </div>
 
+            <!-- Unggah Backup dari File -->
+            <div class="rounded-lg border border-slate-200 bg-white p-6">
+                <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                        <h3 class="text-lg font-semibold text-slate-900">Unggah File Backup</h3>
+                        <p class="mt-1 text-sm text-slate-600">
+                            Unggah file backup (.json) yang pernah Anda unduh, lalu pulihkan data toko dari file tersebut.
+                        </p>
+                    </div>
+                    <input
+                        ref="uploadInput"
+                        type="file"
+                        accept=".json,application/json"
+                        class="hidden"
+                        @change="uploadBackup"
+                    />
+                    <Button
+                        variant="outline"
+                        :disabled="isUploading"
+                        @click="uploadInput?.click()"
+                        class="flex shrink-0 items-center gap-2"
+                    >
+                        <RefreshCw v-if="isUploading" class="h-4 w-4 animate-spin" />
+                        <Upload v-else class="h-4 w-4" />
+                        {{ isUploading ? 'Mengunggah...' : 'Pilih File Backup' }}
+                    </Button>
+                </div>
+            </div>
+
             <!-- Riwayat Pencadangan -->
             <div class="rounded-lg border border-slate-200 bg-white p-6">
                 <div class="mb-4 flex items-center gap-2">
@@ -351,6 +456,7 @@ onMounted(() => fetchHistory());
                         <option value="manual">Manual</option>
                         <option value="scheduled">Otomatis</option>
                         <option value="restore">Pemulihan</option>
+                        <option value="upload">Unggahan</option>
                     </select>
                     <Button variant="outline" size="sm" @click="applyFilter" class="flex items-center gap-1">
                         <Search class="h-3.5 w-3.5" />

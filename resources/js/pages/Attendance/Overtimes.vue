@@ -62,13 +62,16 @@ const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('id-ID', { day
 <template>
     <Head title="Lembur" />
 
-    <AdminLayout title="Lembur Karyawan">
+    <AdminLayout title="Pengajuan Lembur">
         <div class="space-y-6 pb-8">
             <AttendanceNav />
 
             <Card class="rounded-2xl border-slate-200 shadow-sm">
                 <CardHeader>
-                    <CardTitle>Ajukan Lembur</CardTitle>
+                    <CardTitle>Catat Lembur Karyawan</CardTitle>
+                    <CardDescription>
+                        Hanya lembur yang <b>disetujui</b> yang dibayar saat gaji dihitung. Tarifnya diatur di Pengaturan Gaji › Lembur.
+                    </CardDescription>
                 </CardHeader>
                 <CardContent class="space-y-4">
                     <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">

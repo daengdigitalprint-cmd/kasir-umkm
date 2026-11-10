@@ -257,17 +257,29 @@ class ReportExportController extends Controller
     }
 
     /* =========================================================
-     |  2. Penjualan
+     |  2. Penjualan (termasuk dimensi teknisi untuk barbershop)
      * ========================================================= */
     private function buildPenjualan(User $user, Store $store, Request $request): array
     {
         $storeIds = $this->resolveStoreIds($user, $request);
         [$start, $end] = $this->period($request);
 
-        $tx = Transaction::whereIn('store_id', $storeIds)
-            ->with(['customer:id,name', 'store:id,name'])
+        $barbershopEnabled = \App\Support\BarbershopFeatures::enabled($store);
+        $barberUserId = $barbershopEnabled ? ($request->integer('barber_user_id') ?: null) : null;
+        if ($barberUserId && $barbershopEnabled) {
+            $isValid = \App\Models\User::barbersForStore($store)->pluck('id')->contains($barberUserId);
+            if (! $isValid) {
+                $barberUserId = null;
+            }
+        }
+
+        $txQuery = Transaction::whereIn('store_id', $storeIds)
             ->whereBetween('created_at', [$start, $end.' 23:59:59'])
             ->where('status', 'completed')
+            ->when($barberUserId, fn ($q) => $q->where('barber_user_id', $barberUserId));
+
+        $tx = (clone $txQuery)
+            ->with(['customer:id,name', 'store:id,name', 'barber:id,name'])
             ->latest()
             ->get();
 
@@ -276,13 +288,87 @@ class ReportExportController extends Controller
             ->whereIn('transactions.store_id', $storeIds)
             ->whereBetween('transactions.created_at', [$start, $end.' 23:59:59'])
             ->where('transactions.status', 'completed')
+            ->when($barberUserId, fn ($q) => $q->where('transactions.barber_user_id', $barberUserId))
             ->selectRaw('COALESCE(SUM(total_price),0) rev, COALESCE(SUM(total_cost_snapshot),0) cost, COALESCE(SUM(gross_profit_snapshot),0) gp')
             ->first();
 
+        $meta = $this->periodMeta($start, $end);
+        $barberBreakdownSection = null;
+        if ($barbershopEnabled) {
+            if ($barberUserId) {
+                $barberName = $tx->first()?->barber?->name ?? (User::find($barberUserId)?->name) ?? 'Teknisi #'.$barberUserId;
+                $meta[] = ['label' => 'Teknisi', 'value' => $barberName];
+            }
+
+            // Ringkasan per teknisi selalu untuk seluruh periode (tidak ikut filter barber) — untuk rekonsiliasi.
+            $barberBase = Transaction::whereIn('store_id', $storeIds)
+                ->whereBetween('created_at', [$start, $end.' 23:59:59'])
+                ->where('status', 'completed')
+                ->whereNotNull('barber_user_id');
+
+            $barberRows = $barberBase
+                ->selectRaw('barber_user_id, COUNT(*) as tx_count, COALESCE(SUM(total_amount), 0) as gross, COALESCE(SUM(barber_commission_amount), 0) as commission')
+                ->groupBy('barber_user_id')
+                ->with('barber:id,name')
+                ->get();
+
+            $mapped = $barberRows->map(function ($row) {
+                $gross = (float) $row->gross;
+
+                return [
+                    'barber_id' => (int) $row->barber_user_id,
+                    'barber_name' => $row->barber?->name ?? 'Teknisi (nonaktif)',
+                    'transaction_count' => (int) $row->tx_count,
+                    'gross_revenue' => round($gross, 2),
+                    'commission_amount' => round((float) $row->commission, 2),
+                    'average_per_visit' => (int) $row->tx_count > 0 ? round($gross / (int) $row->tx_count, 2) : 0,
+                ];
+            })->sortByDesc('gross_revenue')->values();
+
+            if ($mapped->isNotEmpty()) {
+                $barberBreakdownSection = [
+                    'type' => 'table', 'title' => 'Ringkasan per Teknisi',
+                    'headings' => ['Teknisi', 'Transaksi', 'Omzet Kotor', 'Komisi', 'Rata-rata/kunjungan'],
+                    'aligns' => ['left', 'right', 'right', 'right', 'right'],
+                    'rows' => $mapped->map(fn ($r) => [
+                        $r['barber_name'], number_format($r['transaction_count'], 0, ',', '.'), $this->rp($r['gross_revenue']), $this->rp($r['commission_amount']), $this->rp($r['average_per_visit']),
+                    ])->all(),
+                    'footer' => ['Total', number_format($mapped->sum('transaction_count'), 0, ',', '.'), $this->rp($mapped->sum('gross_revenue')), $this->rp($mapped->sum('commission_amount')), ''],
+                ];
+            }
+        }
+
+        $txHeadings = ['No', 'Nomor', 'Tanggal', 'Pelanggan', 'Metode', 'Total'];
+        $txAligns = ['center', 'left', 'left', 'left', 'left', 'right'];
+        if ($barbershopEnabled) {
+            array_splice($txHeadings, 4, 0, ['Teknisi']);
+            array_splice($txAligns, 4, 0, ['left']);
+        }
+
+        $txRows = $tx->values()->map(function ($t, $i) use ($barbershopEnabled) {
+            $base = [
+                $i + 1,
+                $t->transaction_number,
+                Carbon::parse($t->created_at)->format('d/m/Y H:i'),
+                $t->customer?->name ?? 'Pelanggan umum',
+            ];
+            if ($barbershopEnabled) {
+                $base[] = $t->barber?->name ?? '—';
+            }
+            $base[] = $this->paymentLabel($t->payment_method ?? 'cash');
+            $base[] = $this->rp($t->total_amount);
+
+            return $base;
+        })->all();
+
+        $txFooter = $barbershopEnabled
+            ? ['', '', '', '', '', 'Total', $this->rp($tx->sum('total_amount'))]
+            : ['', '', '', '', 'Total', $this->rp($tx->sum('total_amount'))];
+
         return [
             'title' => 'Laporan Penjualan',
-            'meta' => $this->periodMeta($start, $end),
-            'sections' => [
+            'meta' => $meta,
+            'sections' => array_values(array_filter([
                 [
                     'type' => 'keyvalue', 'title' => 'Ringkasan Laba Kotor',
                     'rows' => [
@@ -291,21 +377,15 @@ class ReportExportController extends Controller
                         ['label' => 'Laba Kotor', 'value' => $this->rp($hpp->gp), 'strong' => true],
                     ],
                 ],
+                $barberBreakdownSection,
                 [
                     'type' => 'table', 'title' => 'Daftar Transaksi',
-                    'headings' => ['No', 'Nomor', 'Tanggal', 'Pelanggan', 'Metode', 'Total'],
-                    'aligns' => ['center', 'left', 'left', 'left', 'left', 'right'],
-                    'rows' => $tx->values()->map(fn ($t, $i) => [
-                        $i + 1,
-                        $t->transaction_number,
-                        Carbon::parse($t->created_at)->format('d/m/Y H:i'),
-                        $t->customer?->name ?? 'Pelanggan umum',
-                        $this->paymentLabel($t->payment_method ?? 'cash'),
-                        $this->rp($t->total_amount),
-                    ])->all(),
-                    'footer' => ['', '', '', '', 'Total', $this->rp($tx->sum('total_amount'))],
+                    'headings' => $txHeadings,
+                    'aligns' => $txAligns,
+                    'rows' => $txRows,
+                    'footer' => $txFooter,
                 ],
-            ],
+            ])),
         ];
     }
 
@@ -596,8 +676,8 @@ class ReportExportController extends Controller
             ->get();
 
         $cashByShift = Transaction::whereIn('cash_shift_id', $shifts->pluck('id'))
-            ->where('payment_method', 'cash')->where('status', 'completed')
-            ->selectRaw('cash_shift_id, SUM(total_amount) total')
+            ->where('status', 'completed')
+            ->selectRaw('cash_shift_id, SUM(cash_amount) total')
             ->groupBy('cash_shift_id')->pluck('total', 'cash_shift_id');
 
         return [
@@ -703,7 +783,7 @@ class ReportExportController extends Controller
                 'type' => 'table', 'title' => 'ASET — '.$group['label'],
                 'headings' => ['Kode', 'Akun', 'Saldo'], 'aligns' => ['left', 'left', 'right'],
                 'rows' => array_map(fn ($row) => [$row[0], $row[1], $this->rp($row[2])], $group['rows']),
-                'footer' => ['','Total '.$group['label'], $this->rp($group['subtotal'])],
+                'footer' => ['', 'Total '.$group['label'], $this->rp($group['subtotal'])],
             ];
         }
         $sections[] = [
@@ -716,7 +796,7 @@ class ReportExportController extends Controller
                 'type' => 'table', 'title' => 'LIABILITAS — '.$group['label'],
                 'headings' => ['Kode', 'Akun', 'Saldo'], 'aligns' => ['left', 'left', 'right'],
                 'rows' => array_map(fn ($row) => [$row[0], $row[1], $this->rp($row[2])], $group['rows']),
-                'footer' => ['','Total '.$group['label'], $this->rp($group['subtotal'])],
+                'footer' => ['', 'Total '.$group['label'], $this->rp($group['subtotal'])],
             ];
         }
         $sections[] = [
@@ -1069,7 +1149,7 @@ class ReportExportController extends Controller
 
         $txByShift = Transaction::whereIn('cash_shift_id', $shiftIds)
             ->where('status', 'completed')
-            ->selectRaw('cash_shift_id, payment_method, COUNT(*) as count, SUM(total_amount) as total')
+            ->selectRaw('cash_shift_id, payment_method, COUNT(*) as count, SUM(total_amount) as total, SUM(cash_amount) as cash_total')
             ->groupBy('cash_shift_id', 'payment_method')
             ->get()
             ->groupBy('cash_shift_id');
@@ -1092,8 +1172,8 @@ class ReportExportController extends Controller
         foreach ($shifts as $shift) {
             $openingCash = (float) $shift->opening_cash;
             $salesData = $txByShift[$shift->id] ?? collect();
-            $salesCash = (float) $salesData->where('payment_method', 'cash')->sum('total');
-            $salesNonCash = (float) $salesData->where('payment_method', '!=', 'cash')->sum('total');
+            $salesCash = (float) $salesData->sum('cash_total');
+            $salesNonCash = (float) $salesData->sum('total') - $salesCash;
             $txCount = (int) $salesData->sum('count');
             $cashIn = (float) ($cashInByShift[$shift->id] ?? 0);
             $cashOut = (float) ($cashOutByShift[$shift->id] ?? 0);

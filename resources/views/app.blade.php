@@ -1,5 +1,19 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}"  @class(['dark' => ($appearance ?? 'system') == 'dark'])>
+@php
+    $isLandingIndex = isset($page) && is_array($page) && ($page['component'] ?? '') === 'Landing/Index';
+    // Landing memakai subset Tailwind yang sudah digabung ke landing.min.css, jadi
+    // app.css (±250 KB) tidak perlu dimuat — hanya jika aset teroptimasi sudah ter-deploy.
+    $skipAppCss = $isLandingIndex && \App\Support\LandingSeo::landingOptimized();
+    // HTML prerender landing (scripts/prerender-landing.mjs) untuk crawler tanpa JavaScript.
+    $landingPrerender = $isLandingIndex ? \App\Support\LandingSeo::landingPrerenderHtml() : null;
+    $serverStylesheets = isset($page) && is_array($page) ? \App\Support\LandingSeo::serverStylesheets((string) ($page['component'] ?? '')) : [];
+@endphp
+{{-- lp-no-transition: di landing, CSS transition dimatikan sampai stylesheet & script selesai dimuat (dilepas di Landing/Index.vue) --}}
+{{-- data-no-app-css: dibaca Landing/Index.vue -> navigasi keluar landing dibuat full page load agar app.css termuat --}}
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}"  @class([
+    'dark' => ($appearance ?? 'system') == 'dark',
+    'lp-no-transition' => $isLandingIndex,
+])@if ($skipAppCss) data-no-app-css @endif>
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -35,7 +49,8 @@
         {{-- Favicon: urutan favicon.png → logo.png → favicon.ico → favicon.svg (Linux VPS case-sensitive: nama file harus tepat) --}}
         @php
             $faviconPublic = null;
-            foreach (['favicon.png', 'logo.png', 'favicon.ico', 'favicon.svg'] as $faviconName) {
+            // favicon-32.png (1,7 KB) didahulukan: favicon.png/logo.png adalah logo 512px ±253 KB.
+            foreach (['favicon-32.png', 'favicon.png', 'logo.png', 'favicon.ico', 'favicon.svg'] as $faviconName) {
                 $abs = public_path($faviconName);
                 if ($abs !== false && is_file($abs)) {
                     $faviconPublic = $faviconName;
@@ -60,15 +75,18 @@
 
         {{-- PWA / layar beranda: ikon install pakai logo.png jika ada --}}
         @php
-            $pwaLogoPath = public_path('logo.png');
+            // apple-touch-icon-180.png (±10 KB) dibuat oleh scripts/optimize-landing-images.py;
+            // fallback ke logo.png (512px, ±253 KB) bila belum ter-deploy.
+            $pwaLogoName = is_file(public_path('apple-touch-icon-180.png')) ? 'apple-touch-icon-180.png' : 'logo.png';
+            $pwaLogoPath = public_path($pwaLogoName);
             $pwaLogoOk = $pwaLogoPath !== false && is_file($pwaLogoPath);
             $pwaLogoV = $pwaLogoOk ? '?v=' . filemtime($pwaLogoPath) : '';
         @endphp
         @if ($pwaLogoOk)
-            <link rel="apple-touch-icon" href="/logo.png{{ $pwaLogoV }}">
-            <link rel="apple-touch-icon" sizes="152x152" href="/logo.png{{ $pwaLogoV }}">
-            <link rel="apple-touch-icon" sizes="180x180" href="/logo.png{{ $pwaLogoV }}">
-            <link rel="apple-touch-icon" sizes="167x167" href="/logo.png{{ $pwaLogoV }}">
+            <link rel="apple-touch-icon" href="/{{ $pwaLogoName }}{{ $pwaLogoV }}">
+            <link rel="apple-touch-icon" sizes="152x152" href="/{{ $pwaLogoName }}{{ $pwaLogoV }}">
+            <link rel="apple-touch-icon" sizes="180x180" href="/{{ $pwaLogoName }}{{ $pwaLogoV }}">
+            <link rel="apple-touch-icon" sizes="167x167" href="/{{ $pwaLogoName }}{{ $pwaLogoV }}">
         @else
             <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
             <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152x152.png">
@@ -126,6 +144,15 @@
                 font-weight: 500;
                 line-height: 28px;
                 color: #05111A;
+            }
+
+            /* Stylesheet landing disisipkan setelah render pertama; tanpa ini
+               ratusan elemen ber-`transition` "beranimasi" dari gaya awal ke
+               gaya akhir (Lighthouse: animasi yang tidak digabungkan). */
+            html.lp-no-transition *,
+            html.lp-no-transition *::before,
+            html.lp-no-transition *::after {
+                transition: none !important;
             }
 
             /* Hide content until fonts and styles are ready */
@@ -240,7 +267,17 @@
         </style>
 
         {{-- Production assets - use built assets directly --}}
-        @vite(['resources/js/app.ts'])
+        @vite($skipAppCss ? ['resources/js/app.ts'] : ['resources/css/app.css', 'resources/js/app.ts'])
+        @foreach ($serverStylesheets as $href)
+            {{-- CSS halaman publik dimuat server (render-blocking, paling awal) agar halaman TIDAK pernah
+                 tampil tanpa gaya. Sebelumnya CSS baru dipasang <Head> Inertia setelah Vue render, sehingga
+                 sesaat logo/header/footer tampil berantakan. Daftar: LandingSeo::serverStylesheets(). --}}
+            <link rel="stylesheet" href="{{ $href }}">
+        @endforeach
+        @if ($landingPrerender !== null)
+            {{-- Tanpa JavaScript, preloader (#lp-preloader & #preloader, normalnya disembunyikan script) jangan menutupi konten. --}}
+            <noscript><style>#preloader, #lp-preloader { display: none !important; }</style></noscript>
+        @endif
         @inertiaHead
     </head>
     <body class="font-sans antialiased">
@@ -266,7 +303,13 @@
             })();
         </script>
         
-        @inertia
+        @if ($landingPrerender !== null)
+            {{-- Sama seperti output @inertia, tetapi berisi HTML prerender landing untuk crawler.
+                 Vue (createApp().mount) mengganti isinya saat JavaScript jalan. --}}
+            <div id="app" data-page="{{ json_encode($page) }}">{!! $landingPrerender !!}</div>
+        @else
+            @inertia
+        @endif
 
         {{-- PWA Service Worker Registration --}}
         <script>

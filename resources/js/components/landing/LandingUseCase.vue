@@ -1,5 +1,4 @@
 <script setup lang="ts">
-
 // Dipertahankan agar caller (Landing/Index.vue) tetap bisa mengirim
 // `assets-base` tanpa error — tidak dipakai di template.
 defineProps<{
@@ -59,14 +58,16 @@ const useCases: UseCase[] = [
 <template>
     <!-- usecase start -->
     <section class="usecase pt-125 pb-130">
-        <div class="container mxw-1330">
+        <div class="mxw-1330 container">
             <div class="fs-usecase-wrapper plr-20">
-                <div class="sec-title text-center mb-65">
-                    <h2 class="title wow fadeInUp" data-wow-delay="0ms" data-wow-duration="600ms">
-                        Untuk Berbagai Jenis Usaha
-                    </h2>
-                    <p class="xb-item--content mt-15 wow fadeInUp" data-wow-delay="100ms" data-wow-duration="600ms"
-                        style="max-width: 600px; margin-left: auto; margin-right: auto;">
+                <div class="sec-title mb-65 text-center">
+                    <h2 class="title wow fadeInUp" data-wow-delay="0ms" data-wow-duration="600ms">Untuk Berbagai Jenis Usaha</h2>
+                    <p
+                        class="xb-item--content wow fadeInUp mt-15"
+                        data-wow-delay="100ms"
+                        data-wow-duration="600ms"
+                        style="max-width: 600px; margin-left: auto; margin-right: auto"
+                    >
                         Solusi Kasir yang Fleksibel untuk Semua Lini UMKM
                     </p>
                 </div>

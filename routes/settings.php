@@ -50,6 +50,9 @@ Route::middleware('auth')->group(function () {
         ->name('backup.create');
     Route::post('settings/backup/download', [BackupController::class, 'download'])
         ->name('backup.download');
+    Route::post('settings/backup/upload', [BackupController::class, 'upload'])
+        ->middleware('role.store_admin')
+        ->name('backup.upload');
     Route::post('settings/backup/restore', [BackupController::class, 'restore'])
         ->middleware('role.store_admin')
         ->name('backup.restore');

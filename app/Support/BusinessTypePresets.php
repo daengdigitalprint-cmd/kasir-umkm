@@ -14,6 +14,7 @@ class BusinessTypePresets
         'bakery' => 'Roti / Kue / Bakery',
         'pharmacy' => 'Apotek / Kesehatan',
         'laundry' => 'Laundry / Cuci',
+        'barbershop' => 'Barbershop / Salon',
     ];
 
     /**
@@ -41,6 +42,10 @@ class BusinessTypePresets
             'laundry' => [
                 'categories' => ['Cuci Kiloan', 'Cuci Satuan', 'Setrika', 'Cuci Sepatu', 'Cuci Karpet & Gorden', 'Dry Clean', 'Lainnya'],
                 'units' => ['kg', 'pcs', 'pasang', 'set', 'meter'],
+            ],
+            'barbershop' => [
+                'categories' => ['Layanan Potong', 'Prewash & Styling', 'Perawatan Rambut', 'Paket', 'Produk Retail', 'Lainnya'],
+                'units' => ['jasa', 'paket', 'pcs', 'botol'],
             ],
             default => [
                 'categories' => ['Umum', 'Lainnya'],

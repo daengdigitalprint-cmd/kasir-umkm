@@ -9,6 +9,7 @@ use App\Models\Organization;
 use App\Support\Accounting\AccountingFeatures;
 use App\Support\BusinessTypePresets;
 use App\Support\FnBFeatures;
+use App\Support\ProductDiscountFeatures;
 use App\Support\StockAdjustmentApproval;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
@@ -105,6 +106,7 @@ class ProfileController extends Controller
                 'batch_expiry_email_enabled' => (bool) ($store->settings['batch_expiry_email_enabled'] ?? false),
                 'default_service_charge_percent' => (float) ($store->settings['default_service_charge_percent'] ?? 0),
                 'pos_show_barcode' => (bool) ($store->settings['pos_show_barcode'] ?? false),
+                'ai_chat_enabled' => (bool) ($store->settings['ai_chat_enabled'] ?? true),
                 'recipes_enabled' => (bool) ($store->settings['recipes_enabled']
                     ?? StoreSettingsController::featureDefaultsForType($store->business_type ?? 'general')['recipes_enabled']),
                 'productions_enabled' => (bool) ($store->settings['productions_enabled']
@@ -121,6 +123,8 @@ class ProfileController extends Controller
                 'online_commission_gofood' => (float) ($store->settings['online_commission_gofood'] ?? 20),
                 'online_commission_grabfood' => (float) ($store->settings['online_commission_grabfood'] ?? 20),
                 'online_commission_shopeefood' => (float) ($store->settings['online_commission_shopeefood'] ?? 15),
+                'barber_commission_mode' => (string) ($store->settings['barber_commission']['mode'] ?? 'percent'),
+                'barber_commission_value' => (float) ($store->settings['barber_commission']['value'] ?? 0),
                 'attendance_enabled' => (bool) ($store->settings['attendance']['enabled'] ?? false),
                 'wholesale_enabled' => (bool) ($store->settings['wholesale_enabled'] ?? false),
                 'cup_label_enabled' => (bool) ($store->settings['cup_label_enabled'] ?? false),
@@ -128,6 +132,7 @@ class ProfileController extends Controller
                 'accounting_enabled' => AccountingFeatures::enabled($store),
                 'max_backdate_days' => (int) ($store->settings['max_backdate_days'] ?? 7),
                 'receivables_enabled' => (bool) ($store->settings['receivables_enabled'] ?? true),
+                'product_discount_enabled' => ProductDiscountFeatures::enabled($store),
                 'scan_meja_payment_methods' => $store->settings['scan_meja_payment_methods'] ?? [
                     ['type' => 'cash', 'label' => 'Tunai', 'active' => true, 'instructions' => 'Bayar langsung di kasir'],
                     ['type' => 'qris', 'label' => 'QRIS', 'active' => true, 'image' => null],

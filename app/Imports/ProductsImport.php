@@ -65,6 +65,27 @@ class ProductsImport implements ToArray
      */
     public function componentRowsFrom(UploadedFile $file): array
     {
+        return $this->sheetWithHeader($file, 'tipe_komponen');
+    }
+
+    /**
+     * Baris mentah sheet varian (hasil ekspor "with-components"), termasuk header pada indeks 0.
+     * Sheet dikenali dari kolom "Nama Varian".
+     *
+     * @return list<list<mixed>>
+     */
+    public function variantRowsFrom(UploadedFile $file): array
+    {
+        return $this->sheetWithHeader($file, 'nama_varian');
+    }
+
+    /**
+     * Sheet pertama yang memiliki kolom header tertentu.
+     *
+     * @return list<list<mixed>>
+     */
+    private function sheetWithHeader(UploadedFile $file, string $headerKey): array
+    {
         $sheets = $this->toArray($file);
 
         foreach ($sheets as $rows) {
@@ -76,7 +97,7 @@ class ProductsImport implements ToArray
             $header = is_array($rows[0]) ? $rows[0] : [];
 
             foreach ($header as $cell) {
-                if (ProductImportSchema::normalizeHeader($cell) === 'tipe_komponen') {
+                if (ProductImportSchema::normalizeHeader($cell) === $headerKey) {
                     return array_map(
                         static fn ($row) => is_array($row) ? array_values($row) : [],
                         $rows,

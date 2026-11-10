@@ -320,3 +320,74 @@ it('menghitung nilai selisih memakai hpp yang dibekukan saat sesi dibuka', funct
     // Nilai selisih memakai HPP 5000 yang dibekukan di baris.
     expect((float) $doc->lines()->first()->variance_value)->toBe(-10000.0);
 });
+
+it('menghapus permanen sesi opname yang sudah dibatalkan', function () {
+    [$store, $user] = makeOpnameStore();
+    $product = makeOpnameProduct($store, ['stock_quantity' => 50]);
+
+    $doc = openOpnameSession($user, $store, [$product]);
+    $doc->update([
+        'status' => StockAdjustment::STATUS_CANCELLED,
+        'cancelled_by' => $user->id,
+        'cancelled_at' => now(),
+        'cancellation_reason' => 'Salah buka sesi',
+    ]);
+
+    $lineId = $doc->lines()->first()->id;
+
+    $this->actingAs($user)
+        ->delete(route('stock-opnames.destroy', $doc))
+        ->assertRedirect(route('stock-opnames.index'));
+
+    expect(StockAdjustment::find($doc->id))->toBeNull();
+    expect(StockAdjustmentLine::find($lineId))->toBeNull();
+    // Stok produk tidak berubah oleh penghapusan.
+    expect((int) $product->fresh()->stock_quantity)->toBe(50);
+});
+
+it('menolak menghapus sesi yang belum dibatalkan', function () {
+    [$store, $user] = makeOpnameStore();
+    $product = makeOpnameProduct($store);
+
+    $doc = openOpnameSession($user, $store, [$product]);
+
+    $this->actingAs($user)
+        ->delete(route('stock-opnames.destroy', $doc))
+        ->assertSessionHasErrors('delete');
+
+    expect(StockAdjustment::find($doc->id))->not->toBeNull();
+});
+
+it('menolak menghapus sesi milik toko lain', function () {
+    [$store, $user] = makeOpnameStore();
+    $product = makeOpnameProduct($store);
+    $doc = openOpnameSession($user, $store, [$product]);
+    $doc->update(['status' => StockAdjustment::STATUS_CANCELLED, 'cancelled_at' => now()]);
+
+    [$otherStore, $otherUser] = makeOpnameStore();
+
+    $this->actingAs($otherUser)
+        ->delete(route('stock-opnames.destroy', $doc))
+        ->assertForbidden();
+
+    expect(StockAdjustment::find($doc->id))->not->toBeNull();
+});
+
+it('menolak menghapus sesi opname oleh role warehouse', function () {
+    [$store, $user] = makeOpnameStore();
+    $product = makeOpnameProduct($store);
+    $doc = openOpnameSession($user, $store, [$product]);
+    $doc->update(['status' => StockAdjustment::STATUS_CANCELLED, 'cancelled_at' => now()]);
+
+    $warehouse = User::factory()->create([
+        'store_id' => $store->id,
+        'role' => 'warehouse',
+        'email_verified_at' => now(),
+    ]);
+
+    $this->actingAs($warehouse)
+        ->delete(route('stock-opnames.destroy', $doc))
+        ->assertForbidden();
+
+    expect(StockAdjustment::find($doc->id))->not->toBeNull();
+});

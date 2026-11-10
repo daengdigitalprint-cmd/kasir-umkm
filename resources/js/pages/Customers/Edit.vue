@@ -15,6 +15,7 @@ interface Customer {
     phone: string | null;
     address: string | null;
     customer_type?: string;
+    date_of_birth?: string | null;
 }
 
 interface Props {
@@ -37,6 +38,8 @@ const form = useForm({
     phone: props.customer.phone ?? '',
     address: props.customer.address ?? '',
     customer_type: props.customer.customer_type ?? 'ecer',
+    // date cast ter-serialize ISO 8601 — input type=date butuh YYYY-MM-DD.
+    date_of_birth: props.customer.date_of_birth?.slice(0, 10) ?? '',
 });
 
 const submit = () => {
@@ -116,6 +119,19 @@ const submit = () => {
                             </select>
                             <p class="text-xs text-muted-foreground">Pelanggan grosir memakai harga grosir produk (bila diisi).</p>
                             <p v-if="form.errors.customer_type" class="text-xs text-red-600">{{ form.errors.customer_type }}</p>
+                        </div>
+
+                        <!-- Tanggal Lahir -->
+                        <div class="space-y-1.5">
+                            <Label for="date_of_birth">Tanggal Lahir</Label>
+                            <Input
+                                id="date_of_birth"
+                                v-model="form.date_of_birth"
+                                type="date"
+                                :class="{ 'border-red-400': form.errors.date_of_birth }"
+                            />
+                            <p class="text-xs text-muted-foreground">Dipakai untuk bonus poin ulang tahun.</p>
+                            <p v-if="form.errors.date_of_birth" class="text-xs text-red-600">{{ form.errors.date_of_birth }}</p>
                         </div>
 
                         <!-- Alamat -->

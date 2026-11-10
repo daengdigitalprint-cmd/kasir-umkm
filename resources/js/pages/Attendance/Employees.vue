@@ -17,6 +17,11 @@ interface Employee {
     user_name: string | null;
     user_email: string | null;
     is_active: boolean;
+    joined_at: string | null;
+    resigned_at: string | null;
+    device_name: string | null;
+    photo_url: string | null;
+    device_bound_at: string | null;
 }
 
 interface User {
@@ -36,6 +41,8 @@ const form = useForm({
     position: '',
     user_id: '',
     is_active: true,
+    joined_at: '',
+    resigned_at: '',
 });
 
 const reset = () => {
@@ -64,6 +71,14 @@ const edit = (employee: Employee) => {
     form.position = employee.position ?? '';
     form.user_id = employee.user_id ? String(employee.user_id) : '';
     form.is_active = employee.is_active;
+    form.joined_at = employee.joined_at ?? '';
+    form.resigned_at = employee.resigned_at ?? '';
+};
+
+const resetDevice = (employee: Employee) => {
+    if (confirm(`Lepas HP "${employee.device_name}" milik ${employee.name}? HP berikutnya yang dipakai absen akan terdaftar otomatis.`)) {
+        router.post(`/attendance/employees/${employee.id}/reset-device`, {}, { preserveScroll: true });
+    }
 };
 
 const remove = (id: number) => {
@@ -83,7 +98,10 @@ const remove = (id: number) => {
             <Card class="rounded-2xl border-slate-200 shadow-sm">
                 <CardHeader>
                     <CardTitle>{{ form.id ? 'Edit Karyawan' : 'Tambah Karyawan' }}</CardTitle>
-                    <CardDescription>Kelola data karyawan untuk absensi, jadwal, cuti, dan lembur.</CardDescription>
+                    <CardDescription>
+                        Karyawan yang dihubungkan ke akun login bisa absen dan melihat slip gajinya sendiri dari HP. Tanpa akun,
+                        absennya dicatat admin. Karyawan yang sudah berhenti cukup dinonaktifkan dan diisi tanggal keluarnya.
+                    </CardDescription>
                 </CardHeader>
                 <CardContent class="space-y-4">
                     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -106,6 +124,21 @@ const remove = (id: number) => {
                                 </option>
                             </select>
                             <p v-if="form.errors.user_id" class="text-sm text-red-600">{{ form.errors.user_id }}</p>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="space-y-1">
+                                <Label>Tanggal masuk</Label>
+                                <Input v-model="form.joined_at" type="date" />
+                                <p v-if="form.errors.joined_at" class="text-sm text-red-600">{{ form.errors.joined_at }}</p>
+                            </div>
+                            <div class="space-y-1">
+                                <Label>Tanggal keluar</Label>
+                                <Input v-model="form.resigned_at" type="date" />
+                                <p v-if="form.errors.resigned_at" class="text-sm text-red-600">{{ form.errors.resigned_at }}</p>
+                            </div>
+                            <p class="col-span-2 text-xs text-slate-500">
+                                Untuk gaji prorata bila masuk/keluar di tengah periode. Karyawan yang keluar tetap mendapat slip di periode terakhirnya.
+                            </p>
                         </div>
                     </div>
 
@@ -134,15 +167,42 @@ const remove = (id: number) => {
                                 <th class="py-2 pr-3">Nama</th>
                                 <th class="py-2 pr-3">Jabatan</th>
                                 <th class="py-2 pr-3">Akun</th>
+                                <th class="py-2 pr-3" title="HP yang terdaftar di aplikasi Absensi Android">HP absensi</th>
                                 <th class="py-2 pr-3">Status</th>
                                 <th class="py-2"></th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr v-for="employee in employees" :key="employee.id" class="border-b border-slate-100">
-                                <td class="py-2 pr-3">{{ employee.name }}</td>
+                                <td class="py-2 pr-3">
+                                    <span class="inline-flex items-center gap-2">
+                                        <img
+                                            v-if="employee.photo_url"
+                                            :src="employee.photo_url"
+                                            alt=""
+                                            class="h-8 w-8 rounded-full object-cover ring-1 ring-slate-200"
+                                            loading="lazy"
+                                        />
+                                        <span
+                                            v-else
+                                            class="grid h-8 w-8 place-items-center rounded-full bg-indigo-50 text-xs font-bold text-indigo-600"
+                                        >
+                                            {{ employee.name.slice(0, 1).toUpperCase() }}
+                                        </span>
+                                        {{ employee.name }}
+                                    </span>
+                                </td>
                                 <td class="py-2 pr-3">{{ employee.position ?? '—' }}</td>
                                 <td class="py-2 pr-3">{{ employee.user_email ?? '—' }}</td>
+                                <td class="py-2 pr-3">
+                                    <span v-if="employee.device_name" class="inline-flex items-center gap-2">
+                                        <span class="text-slate-700">{{ employee.device_name }}</span>
+                                        <button type="button" class="text-xs font-medium text-indigo-600 hover:underline" @click="resetDevice(employee)">
+                                            Lepas HP
+                                        </button>
+                                    </span>
+                                    <span v-else class="text-slate-300">—</span>
+                                </td>
                                 <td class="py-2 pr-3">
                                     <span :class="employee.is_active ? 'text-emerald-600' : 'text-slate-400'">
                                         {{ employee.is_active ? 'Aktif' : 'Nonaktif' }}
@@ -158,7 +218,7 @@ const remove = (id: number) => {
                                 </td>
                             </tr>
                             <tr v-if="!employees.length">
-                                <td colspan="5" class="py-6 text-center text-slate-400">Belum ada karyawan.</td>
+                                <td colspan="6" class="py-6 text-center text-slate-400">Belum ada karyawan.</td>
                             </tr>
                         </tbody>
                     </table>

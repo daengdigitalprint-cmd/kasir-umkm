@@ -33,6 +33,9 @@ const props = defineProps<{
 const leaveTypes = [
     { value: 'annual', label: 'Cuti tahunan' },
     { value: 'sick', label: 'Sakit' },
+    { value: 'maternity', label: 'Cuti melahirkan' },
+    { value: 'marriage', label: 'Cuti menikah' },
+    { value: 'bereavement', label: 'Cuti duka' },
     { value: 'unpaid', label: 'Tanpa gaji' },
     { value: 'other', label: 'Lainnya' },
 ];
@@ -71,13 +74,17 @@ const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('id-ID', { day
 <template>
     <Head title="Cuti" />
 
-    <AdminLayout title="Cuti Karyawan">
+    <AdminLayout title="Pengajuan Cuti">
         <div class="space-y-6 pb-8">
             <AttendanceNav />
 
             <Card class="rounded-2xl border-slate-200 shadow-sm">
                 <CardHeader>
-                    <CardTitle>Ajukan Cuti</CardTitle>
+                    <CardTitle>Catat Cuti Karyawan</CardTitle>
+                    <CardDescription>
+                        Cuti yang disetujui otomatis tercatat di absensi, jadi karyawan tidak dianggap alpa. Jenis <b>Tanpa gaji</b>
+                        memotong gaji bila potongan alpa diaktifkan di Pengaturan Gaji.
+                    </CardDescription>
                 </CardHeader>
                 <CardContent class="space-y-4">
                     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">

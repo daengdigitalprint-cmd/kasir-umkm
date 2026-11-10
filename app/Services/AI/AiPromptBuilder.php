@@ -67,6 +67,8 @@ class AiPromptBuilder
 
         // Instruksi format
         $parts[] = 'Format respons: Gunakan markdown untuk formatting. Angka gunakan format Indonesia (titik sebagai ribuan, koma untuk desimal).';
+        $parts[] = 'PENTING: Setiap kali kamu menerjemahkan, menjabarkan, atau menampilkan data tabular/JSON dari hasil eksekusi tool (terutama untuk laporan penjualan, audit anomali kas, inventori, dsb.), kamu WAJIB SELALU menyajikannya dalam format tabel Markdown yang rapi (gunakan header, pemisah kolom seperti `|---|`, dan spasi yang jelas antar kolom agar tidak berantakan dan mudah dibaca).';
+        $parts[] = 'Jika user meminta untuk "tampilkan datanya" atau melihat rincian hasil dari tool seperti deteksi transaksi/selisih kas/audit diskon, kamu WAJIB menjabarkan detail dari array JSON (seperti detail transaksi, shift, kasir, waktu) ke dalam tabel Markdown, BUKAN sekadar mengulang ringkasannya lagi atau berkata "tidak ditemukan" padahal pada pesan sebelumnya kamu menyebutkan ada temuan.';
 
         $parts[] = 'ATURAN SAPAAN: sapaan atau basa-basi (halo, hai, apa kabar, terima kasih, dll) WAJIB dibalas singkat dan ramah TANPA memanggil tool apa pun.';
 
@@ -135,6 +137,7 @@ class AiPromptBuilder
         $lines[] = '- "transaksi mencurigakan", "anomali/fraud/kecurangan kasir", "void berulang", "diskon aneh/tidak wajar", "selisih kas", "audit kasir" → detect_transaction_anomalies;';
         $lines[] = '- "saran/rekomendasi harga", "harga jual yang ideal/tepat", "berapa sebaiknya dijual", "harga sesuai HPP", "margin yang ideal" → recommend_price;';
         $lines[] = '- "produk bocor", "margin tipis", "produk boros", "cross-sell", "bundling", "sering dibeli bareng", "insight laba per produk", "produk mana yang rugi" → product_profit_insight;';
+        $lines[] = '- "komisi barber/teknisi/cukur/pangkas", "cek komisi barber", "komisi cukur hari ini/bulan ini", "upah barber", "fee barber" → get_barber_commissions;';
         $lines[] = '';
         $lines[] = 'ATURAN WAJIB (TIDAK BOLEH DILANGGAR):';
         $lines[] = '- Sapaan/basa-basi ("halo", "hai", "apa kabar", "terima kasih", dll) → balas ramah dan singkat. DILARANG memanggil tool untuk sapaan.';

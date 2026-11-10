@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, router, useForm } from '@inertiajs/vue3';
+import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,6 +34,7 @@ import {
     CheckSquare,
     Square,
     Check,
+    Sparkles,
 } from 'lucide-vue-next';
 import { ref, computed, watch } from 'vue';
 import { confirmDelete, alertInfo, alertSuccess } from '@/lib/swal';
@@ -321,6 +322,19 @@ function submitImport() {
         },
     });
 }
+
+const page = usePage();
+const barbershopEnabled = computed(
+    () => Boolean((page.props as { barbershop_enabled?: boolean }).barbershop_enabled),
+);
+
+const sampleServicesForm = useForm({});
+
+function addSampleServices() {
+    sampleServicesForm.post('/products/sample-services', {
+        preserveScroll: true,
+    });
+}
 </script>
 
 <template>
@@ -328,6 +342,17 @@ function submitImport() {
     <AdminLayout title="Manajemen Produk">
         <template #header-actions>
             <div class="flex items-center gap-2">
+                <Button
+                    v-if="barbershopEnabled"
+                    variant="outline"
+                    class="inline-flex items-center gap-2"
+                    :disabled="sampleServicesForm.processing"
+                    @click="addSampleServices"
+                >
+                    <Loader2 v-if="sampleServicesForm.processing" class="h-4 w-4 animate-spin" />
+                    <Sparkles v-else class="h-4 w-4" />
+                    Tambah Layanan Contoh
+                </Button>
                 <Button as="a" href="/products/create" class="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-white">
                     <Plus class="h-4 w-4" />
                     Tambah Produk
@@ -722,6 +747,7 @@ function submitImport() {
                         <h2 id="import-dialog-title" class="text-lg font-bold text-gray-900">Impor Produk</h2>
                         <p class="text-xs lg:text-sm text-gray-500 mt-1">
                             Unggah file Excel/CSV untuk menambah produk baru dan memperbarui produk yang sudah ada.
+                            File hasil "Ekspor + Komponen" juga memulihkan varian, komponen menu, komponen paket, dan resep.
                         </p>
                     </div>
                     <button

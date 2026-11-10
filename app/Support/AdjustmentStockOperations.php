@@ -10,7 +10,6 @@ use App\Models\StockAdjustmentLine;
 use App\Models\StockMovement;
 use App\Models\Store;
 use App\Models\User;
-use App\Support\InventoryCosting;
 
 /**
  * Mutasi stok untuk dokumen koreksi (penyesuaian & stock opname).
@@ -156,10 +155,13 @@ final class AdjustmentStockOperations
         string $notes,
         StockAdjustment $document,
     ): void {
-        $useBatch = $variant === null && BatchTracking::enabled($store);
+        $useProductionBatch = $variant === null && InventoryType::isProductionOutput($product);
+        $useBatch = $variant === null && ! $useProductionBatch && BatchTracking::enabled($store);
 
         if ($variant !== null) {
             $balanceAfter = self::mutateVariant($product, $variant, $delta);
+        } elseif ($useProductionBatch) {
+            $balanceAfter = self::mutateProductionBatch($product, $delta);
         } elseif ($useBatch) {
             $balanceAfter = self::mutateBatch($product, $delta, $document, $line);
         } else {
@@ -200,6 +202,28 @@ final class AdjustmentStockOperations
         self::assertNotNegative($target, $product->name, $current, $delta);
 
         $product->update(['stock_quantity' => $target]);
+
+        return (string) $product->fresh()->stock_quantity;
+    }
+
+    /**
+     * Koreksi pada produk hasil produksi.
+     *
+     * Stok produk dan sisa batch produksi digeser bersamaan; kalau hanya stok
+     * produk yang diubah, penjualan berikutnya akan menimpanya kembali dengan
+     * total sisa batch sehingga koreksi ini hilang.
+     *
+     * @throws \RuntimeException
+     */
+    private static function mutateProductionBatch(Product $product, string $delta): string
+    {
+        $current = bcadd((string) $product->stock_quantity, '0', ProductQuantity::SCALE);
+        $target = bcadd($current, $delta, ProductQuantity::SCALE);
+
+        self::assertNotNegative($target, $product->name, $current, $delta);
+
+        $product->update(['stock_quantity' => $target]);
+        ProductionStockOperations::syncBatchesToStock($product, $target);
 
         return (string) $product->fresh()->stock_quantity;
     }

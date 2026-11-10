@@ -144,21 +144,58 @@ class SuperAdminController extends Controller
 
     public function extendSubscription(Request $request, Store $store)
     {
-        $request->validate([
+        $validated = $request->validate([
             'days' => 'required|integer|min:1|max:365',
             'notes' => 'nullable|string|max:500',
         ]);
 
-        DB::transaction(function () use ($store, $request) {
-            $store->extendSubscription($request->days);
+        DB::transaction(function () use ($store, $validated) {
+            $store->extendSubscription($validated['days']);
 
-            if ($request->notes) {
-                $store->subscription_notes = $request->notes;
+            if (! empty($validated['notes'])) {
+                $store->subscription_notes = $validated['notes'];
                 $store->save();
             }
         });
 
-        return redirect()->back()->with('success', "Masa aktif toko {$store->name} berhasil diperpanjang {$request->days} hari.");
+        return response()->json([
+            'success' => true,
+            'message' => "Masa aktif toko {$store->name} berhasil diperpanjang {$validated['days']} hari.",
+            'store' => [
+                'id' => $store->id,
+                'subscription_end' => $store->subscription_end?->toISOString(),
+                'subscription_days' => $store->subscription_days,
+                'is_subscription_active' => $store->is_subscription_active,
+            ],
+        ]);
+    }
+
+    public function reduceSubscription(Request $request, Store $store)
+    {
+        $validated = $request->validate([
+            'days' => 'required|integer|min:1|max:365',
+            'notes' => 'nullable|string|max:500',
+        ]);
+
+        DB::transaction(function () use ($store, $validated) {
+            $store->reduceSubscription($validated['days']);
+
+            if (! empty($validated['notes'])) {
+                $store->subscription_notes = $validated['notes'];
+                $store->save();
+            }
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => "Masa aktif toko {$store->name} berhasil dikurangi {$validated['days']} hari.",
+            'store' => [
+                'id' => $store->id,
+                'subscription_end' => $store->subscription_end?->toISOString(),
+                'subscription_days' => $store->subscription_days,
+                'is_subscription_active' => $store->is_subscription_active,
+            ],
+        ]);
     }
 
     public function toggleStoreStatus(Store $store)
