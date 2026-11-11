@@ -201,14 +201,14 @@ class HandleInertiaRequests extends Middleware
                 ? QueueEntry::where('store_id', $activeStore->id)
                     ->whereNull('transaction_id')
                     ->where('status', 'waiting')
-                    ->whereDate('created_at', today())
+                    ->whereBetween('created_at', [today(), today()->endOfDay()])
                     ->count()
                 : 0,
             'pending_kitchen_order_count' => $activeStore && ($activeStore->settings['kitchen_queue_enabled'] ?? false)
                 ? QueueEntry::where('store_id', $activeStore->id)
                     ->whereNotNull('transaction_id')
                     ->where('status', 'waiting')
-                    ->whereDate('created_at', today())
+                    ->whereBetween('created_at', [today(), today()->endOfDay()])
                     ->count()
                 : 0,
             'pending_table_order_count' => $activeStore && ($activeStore->settings['scan_meja_enabled'] ?? false)

@@ -115,7 +115,7 @@ class AccountingPeriodGuard
         return AccountingPeriod::query()
             ->where('store_id', $store->id)
             ->where('status', AccountingPeriod::STATUS_OPEN)
-            ->whereDate('end_date', '<', now()->startOfMonth()->toDateString())
+            ->where('end_date', '<', now()->startOfMonth()->toDateString())
             ->orderBy('end_date')
             ->get();
     }

@@ -44,8 +44,8 @@ class StockReportController extends Controller
         $documents = StockAdjustment::query()
             ->where('store_id', $store->id)
             ->where('status', StockAdjustment::STATUS_POSTED)
-            ->whereDate('posted_at', '>=', $from)
-            ->whereDate('posted_at', '<=', $to)
+            ->where('posted_at', '>=', \Illuminate\Support\Carbon::parse($from)->startOfDay())
+            ->where('posted_at', '<=', \Illuminate\Support\Carbon::parse($to)->endOfDay())
             ->when(! empty($validated['reason_code']), fn ($q) => $q->where('reason_code', $validated['reason_code']))
             ->when(! empty($validated['type']), fn ($q) => $q->where('type', $validated['type']));
 
@@ -127,7 +127,7 @@ class StockReportController extends Controller
         $to = $validated['date_to'] ?? now()->toDateString();
         $movements = StockMovement::query()->where('store_id', $store->id)
             ->where('type', StockMovement::TYPE_DAMAGE)
-            ->whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to)
+            ->where('created_at', '>=', \Illuminate\Support\Carbon::parse($from)->startOfDay())->where('created_at', '<=', \Illuminate\Support\Carbon::parse($to)->endOfDay())
             ->with(['product:id,name,sku,unit', 'user:id,name'])
             ->latest()->paginate(25)->withQueryString();
 
@@ -174,7 +174,7 @@ class StockReportController extends Controller
             $previous = StockMovement::query()
                 ->where('store_id', $store->id)
                 ->where('product_id', $product->id)
-                ->whereDate('created_at', '<', $from)
+                ->where('created_at', '<', \Illuminate\Support\Carbon::parse($from)->startOfDay())
                 ->orderByDesc('created_at')
                 ->orderByDesc('id')
                 ->first();
@@ -184,8 +184,8 @@ class StockReportController extends Controller
             $movements = StockMovement::query()
                 ->where('store_id', $store->id)
                 ->where('product_id', $product->id)
-                ->whereDate('created_at', '>=', $from)
-                ->whereDate('created_at', '<=', $to)
+                ->where('created_at', '>=', \Illuminate\Support\Carbon::parse($from)->startOfDay())
+                ->where('created_at', '<=', \Illuminate\Support\Carbon::parse($to)->endOfDay())
                 ->with(['user:id,name', 'productVariant:id,name'])
                 ->orderBy('created_at')
                 ->orderBy('id')

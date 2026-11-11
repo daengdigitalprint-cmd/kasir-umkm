@@ -44,7 +44,7 @@ class QueueController extends Controller
             'serving_count' => $q->serving_count ?? $q->entries()->where('status', 'serving')->count(),
             'completed_today_count' => $q->completed_today_count ?? $q->entries()
                 ->where('status', 'completed')
-                ->whereDate('completed_at', today())
+                ->whereBetween('completed_at', [today(), today()->endOfDay()])
                 ->count(),
         ];
     }
@@ -100,7 +100,7 @@ class QueueController extends Controller
         $queues = $store->queues()
             ->withCount(['entries', 'entries as waiting_count' => fn ($q) => $q->where('status', 'waiting'),
                 'entries as serving_count' => fn ($q) => $q->where('status', 'serving'),
-                'entries as completed_today_count' => fn ($q) => $q->where('status', 'completed')->whereDate('completed_at', today()),
+                'entries as completed_today_count' => fn ($q) => $q->where('status', 'completed')->whereBetween('completed_at', [today(), today()->endOfDay()]),
             ])
             ->orderBy('name')
             ->get()
@@ -110,7 +110,7 @@ class QueueController extends Controller
             ->with(['queue:id,name,code', 'barber:id,name'])
             ->whereNull('transaction_id')
             ->where('status', '!=', 'cancelled')
-            ->whereDate('created_at', today())
+            ->whereBetween('created_at', [today(), today()->endOfDay()])
             ->orderByDesc('created_at')
             ->limit(100)
             ->get()

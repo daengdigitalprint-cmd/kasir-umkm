@@ -497,8 +497,8 @@ class ReportExportController extends Controller
 
         $documents = StockAdjustment::where('store_id', $store->id)
             ->where('status', StockAdjustment::STATUS_POSTED)
-            ->whereDate('posted_at', '>=', $start)
-            ->whereDate('posted_at', '<=', $end);
+            ->where('posted_at', '>=', \Illuminate\Support\Carbon::parse($start)->startOfDay())
+            ->where('posted_at', '<=', \Illuminate\Support\Carbon::parse($end)->endOfDay());
 
         $documentIds = (clone $documents)->pluck('id');
 
@@ -564,14 +564,14 @@ class ReportExportController extends Controller
         if ($product) {
             $prev = StockMovement::where('store_id', $store->id)
                 ->where('product_id', $product->id)
-                ->whereDate('created_at', '<', $start)
+                ->where('created_at', '<', \Illuminate\Support\Carbon::parse($start)->startOfDay())
                 ->orderByDesc('created_at')->orderByDesc('id')->first();
             $opening = $prev ? (float) $prev->balance_after : 0.0;
 
             $movements = StockMovement::where('store_id', $store->id)
                 ->where('product_id', $product->id)
-                ->whereDate('created_at', '>=', $start)
-                ->whereDate('created_at', '<=', $end)
+                ->where('created_at', '>=', \Illuminate\Support\Carbon::parse($start)->startOfDay())
+                ->where('created_at', '<=', \Illuminate\Support\Carbon::parse($end)->endOfDay())
                 ->orderBy('created_at')->orderBy('id')
                 ->get();
         }
@@ -723,7 +723,7 @@ class ReportExportController extends Controller
             ->join('journal_entries as je', 'jl.journal_entry_id', '=', 'je.id')
             ->join('chart_of_accounts as coa', 'jl.chart_of_account_id', '=', 'coa.id')
             ->where('je.store_id', $store->id)
-            ->whereDate('je.entry_date', '<=', $asOf)
+            ->where('je.entry_date', '<=', \Illuminate\Support\Carbon::parse($asOf)->endOfDay())
             ->selectRaw('coa.code, coa.name, coa.type, coa.balance_sheet_group, SUM(jl.debit) dr, SUM(jl.credit) cr')
             ->groupBy('coa.code', 'coa.name', 'coa.type', 'coa.balance_sheet_group')
             ->orderBy('coa.code')->get();
@@ -1140,8 +1140,8 @@ class ReportExportController extends Controller
 
         $shifts = \App\Models\CashShift::where('store_id', $store->id)
             ->whereNotNull('closed_at')
-            ->whereDate('closed_at', '>=', $start)
-            ->whereDate('closed_at', '<=', $end)
+            ->where('closed_at', '>=', \Illuminate\Support\Carbon::parse($start)->startOfDay())
+            ->where('closed_at', '<=', \Illuminate\Support\Carbon::parse($end)->endOfDay())
             ->with('user:id,name')
             ->get();
 

@@ -386,6 +386,7 @@ class StoreAccessController extends Controller
                 'menu_key' => $menuKey,
             ]);
         }
+        RoleMenuPermission::flushMenuCache();
 
         return back()->with('success', 'Hak akses menu untuk role '.$role.' berhasil diperbarui.');
     }

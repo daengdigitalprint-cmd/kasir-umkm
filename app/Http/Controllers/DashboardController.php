@@ -33,33 +33,33 @@ class DashboardController extends Controller
 
         // ─── Core stats ───────────────────────────────────────────
         $todaySales = $store->transactions()
-            ->whereDate('created_at', today())
+            ->whereBetween('created_at', [today(), today()->endOfDay()])
             ->where('status', 'completed')
             ->sum('total_amount');
 
         $yesterdaySales = $store->transactions()
-            ->whereDate('created_at', today()->subDay())
+            ->whereBetween('created_at', [today()->subDay(), today()->subDay()->endOfDay()])
             ->where('status', 'completed')
             ->sum('total_amount');
 
         $lastMonthOmset = $store->transactions()
             ->where('status', 'completed')
-            ->whereBetween('created_at', [now()->startOfMonth()->subMonth(), now()->endOfMonth()->subMonth()])
+            ->whereBetween('created_at', [now()->startOfMonth()->subMonth(), now()->subMonthNoOverflow()->endOfMonth()])
             ->sum('total_amount');
 
         $todayTransactions = $store->transactions()
-            ->whereDate('created_at', today())
+            ->whereBetween('created_at', [today(), today()->endOfDay()])
             ->where('status', 'completed')
             ->count();
 
         $yesterdayTransactions = $store->transactions()
-            ->whereDate('created_at', today()->subDay())
+            ->whereBetween('created_at', [today()->subDay(), today()->subDay()->endOfDay()])
             ->where('status', 'completed')
             ->count();
 
         $recentTransactions = $store->transactions()
             ->with('customer')
-            ->whereDate('created_at', today())
+            ->whereBetween('created_at', [today(), today()->endOfDay()])
             ->where('status', 'completed')
             ->latest()
             ->limit(5)
@@ -96,7 +96,7 @@ class DashboardController extends Controller
 
         // ─── Pending kitchen orders ───────────────────────────────
         $pendingKitchenOrderCount = $store->queueEntries()
-            ->whereDate('created_at', today())
+            ->whereBetween('created_at', [today(), today()->endOfDay()])
             ->whereIn('status', ['waiting', 'serving'])
             ->count();
 

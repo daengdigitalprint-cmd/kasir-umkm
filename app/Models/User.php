@@ -224,7 +224,7 @@ class User extends Authenticatable
     public function allowedMenus(): array
     {
         if ($this->isSuperAdmin()) {
-            return RoleMenuPermission::distinct()->pluck('menu_key')->all();
+            return RoleMenuPermission::allMenuKeys();
         }
 
         // Gunakan role dari store yang sedang aktif jika ada
@@ -240,7 +240,38 @@ class User extends Authenticatable
      * Jika user punya store aktif (store_id), ambil role dari pivot table.
      * Jika tidak, gunakan role global dari kolom users.role.
      */
+    /**
+     * Cache role per store_id selama umur instance (satu request).
+     * Method ini dipanggil belasan kali per request (isAdmin, isCashier, abilities, menu),
+     * tanpa memo setiap panggilan = 1 query ke pivot store_user.
+     *
+     * @var array<string, string>
+     */
+    private array $activeRoleMemo = [];
+
+    /** Kosongkan memo role (panggil setelah pivot role/store aktif diubah di request yang sama). */
+    public function forgetActiveRoleMemo(): static
+    {
+        $this->activeRoleMemo = [];
+
+        return $this;
+    }
+
+    public function refresh()
+    {
+        $this->activeRoleMemo = [];
+
+        return parent::refresh();
+    }
+
     public function getRoleForActiveStore(): string
+    {
+        $memoKey = (string) ($this->store_id ?? '-').'|'.($this->role ?? '');
+
+        return $this->activeRoleMemo[$memoKey] ??= $this->resolveRoleForActiveStore();
+    }
+
+    private function resolveRoleForActiveStore(): string
     {
         $storeQuery = $this->stores();
         if ($this->store_id) {

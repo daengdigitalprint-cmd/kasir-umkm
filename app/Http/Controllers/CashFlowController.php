@@ -26,8 +26,8 @@ class CashFlowController extends Controller
         // Ambil semua shift yang sudah ditutup dalam periode
         $shifts = CashShift::where('store_id', $store->id)
             ->whereNotNull('closed_at')
-            ->whereDate('closed_at', '>=', $startDate)
-            ->whereDate('closed_at', '<=', $endDate)
+            ->where('closed_at', '>=', \Illuminate\Support\Carbon::parse($startDate)->startOfDay())
+            ->where('closed_at', '<=', \Illuminate\Support\Carbon::parse($endDate)->endOfDay())
             ->with(['user:id,name'])
             ->orderByDesc('closed_at')
             ->get();

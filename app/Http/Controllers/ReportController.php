@@ -1623,7 +1623,7 @@ class ReportController extends Controller
             ->join('journal_entries as je', 'jl.journal_entry_id', '=', 'je.id')
             ->join('chart_of_accounts as coa', 'jl.chart_of_account_id', '=', 'coa.id')
             ->whereIn('je.store_id', $storeIds)
-            ->whereDate('je.entry_date', '<=', $endDate)
+            ->where('je.entry_date', '<=', \Illuminate\Support\Carbon::parse($endDate)->endOfDay())
             ->selectRaw('coa.code, coa.name, coa.type,
                 SUM(CASE WHEN je.entry_date < ? THEN jl.debit ELSE 0 END) as opening_debit,
                 SUM(CASE WHEN je.entry_date < ? THEN jl.credit ELSE 0 END) as opening_credit,
@@ -1912,7 +1912,7 @@ class ReportController extends Controller
             ->join('journal_entries as je', 'jl.journal_entry_id', '=', 'je.id')
             ->join('chart_of_accounts as coa', 'jl.chart_of_account_id', '=', 'coa.id')
             ->whereIn('je.store_id', $storeIds)
-            ->whereDate('je.entry_date', '<=', $asOf)
+            ->where('je.entry_date', '<=', \Illuminate\Support\Carbon::parse($asOf)->endOfDay())
             ->selectRaw('coa.code, coa.name, coa.type, coa.balance_sheet_group, SUM(jl.debit) as dr, SUM(jl.credit) as cr')
             ->groupBy('coa.code', 'coa.name', 'coa.type', 'coa.balance_sheet_group')
             ->orderBy('coa.code')
@@ -2095,7 +2095,7 @@ class ReportController extends Controller
             ->join('journal_entries as je', 'jl.journal_entry_id', '=', 'je.id')
             ->join('chart_of_accounts as coa', 'jl.chart_of_account_id', '=', 'coa.id')
             ->where('je.store_id', $store->id)
-            ->whereDate('je.entry_date', '<=', $asOf)
+            ->where('je.entry_date', '<=', \Illuminate\Support\Carbon::parse($asOf)->endOfDay())
             ->whereIn('coa.code', $codes)
             ->selectRaw('coa.code, coa.type, SUM(jl.debit) as dr, SUM(jl.credit) as cr')
             ->groupBy('coa.code', 'coa.type')
@@ -2181,7 +2181,7 @@ class ReportController extends Controller
             ->join('journal_entries as je', 'jl.journal_entry_id', '=', 'je.id')
             ->join('chart_of_accounts as coa', 'jl.chart_of_account_id', '=', 'coa.id')
             ->whereIn('je.store_id', $storeIds)
-            ->whereDate('je.entry_date', '<=', $asOf)
+            ->where('je.entry_date', '<=', \Illuminate\Support\Carbon::parse($asOf)->endOfDay())
             ->whereIn('coa.code', $codes)
             ->selectRaw('coa.code, coa.type, SUM(jl.debit) as dr, SUM(jl.credit) as cr')
             ->groupBy('coa.code', 'coa.type')
@@ -2309,7 +2309,7 @@ class ReportController extends Controller
             ->join('journal_entries as je', 'jl.journal_entry_id', '=', 'je.id')
             ->join('chart_of_accounts as coa', 'jl.chart_of_account_id', '=', 'coa.id')
             ->whereIn('je.store_id', $storeIds)
-            ->whereDate('je.entry_date', '<', $startDate)
+            ->where('je.entry_date', '<', \Illuminate\Support\Carbon::parse($startDate)->startOfDay())
             ->whereIn('coa.code', $equityCodes)
             ->selectRaw('coa.code, SUM(jl.debit) as dr, SUM(jl.credit) as cr')
             ->groupBy('coa.code')
@@ -2333,8 +2333,8 @@ class ReportController extends Controller
             ->join('journal_entries as je', 'jl.journal_entry_id', '=', 'je.id')
             ->join('chart_of_accounts as coa', 'jl.chart_of_account_id', '=', 'coa.id')
             ->whereIn('je.store_id', $storeIds)
-            ->whereDate('je.entry_date', '>=', $startDate)
-            ->whereDate('je.entry_date', '<=', $endDate)
+            ->where('je.entry_date', '>=', \Illuminate\Support\Carbon::parse($startDate)->startOfDay())
+            ->where('je.entry_date', '<=', \Illuminate\Support\Carbon::parse($endDate)->endOfDay())
             ->where('coa.code', ChartOfAccountsBootstrap::CODE_MODAL)
             ->selectRaw('SUM(jl.debit) as dr, SUM(jl.credit) as cr')
             ->first();
@@ -2362,8 +2362,8 @@ class ReportController extends Controller
                 ->join('journal_entries as je', 'jl.journal_entry_id', '=', 'je.id')
                 ->join('chart_of_accounts as coa', 'jl.chart_of_account_id', '=', 'coa.id')
                 ->whereIn('je.store_id', $storeIds)
-                ->whereDate('je.entry_date', '>=', $startDate)
-                ->whereDate('je.entry_date', '<=', $endDate)
+                ->where('je.entry_date', '>=', \Illuminate\Support\Carbon::parse($startDate)->startOfDay())
+                ->where('je.entry_date', '<=', \Illuminate\Support\Carbon::parse($endDate)->endOfDay())
                 ->where('coa.type', $type)
                 ->selectRaw('SUM(jl.debit) as dr, SUM(jl.credit) as cr')
                 ->first();
@@ -2452,8 +2452,8 @@ class ReportController extends Controller
             ->join('journal_entries as je', 'jl.journal_entry_id', '=', 'je.id')
             ->join('chart_of_accounts as coa', 'jl.chart_of_account_id', '=', 'coa.id')
             ->whereIn('je.store_id', $storeIds)
-            ->whereDate('je.entry_date', '>=', $startDate)
-            ->whereDate('je.entry_date', '<=', $endDate)
+            ->where('je.entry_date', '>=', \Illuminate\Support\Carbon::parse($startDate)->startOfDay())
+            ->where('je.entry_date', '<=', \Illuminate\Support\Carbon::parse($endDate)->endOfDay())
             ->select('jl.journal_entry_id', 'jl.debit', 'jl.credit', 'coa.code', 'coa.type', 'coa.balance_sheet_group')
             ->get()
             ->groupBy('journal_entry_id');
@@ -2540,8 +2540,8 @@ class ReportController extends Controller
         $closed = AccountingPeriod::query()
             ->where('store_id', $store->id)
             ->where('status', AccountingPeriod::STATUS_CLOSED)
-            ->whereDate('start_date', '<=', $periodEnd)
-            ->whereDate('end_date', '>=', $periodEnd)
+            ->where('start_date', '<=', \Illuminate\Support\Carbon::parse($periodEnd)->endOfDay())
+            ->where('end_date', '>=', \Illuminate\Support\Carbon::parse($periodEnd)->startOfDay())
             ->exists();
 
         if ($closed) {
@@ -2560,7 +2560,7 @@ class ReportController extends Controller
         $record = FinancialReportStatus::query()
             ->where('store_id', $store->id)
             ->where('report_type', $reportType)
-            ->whereDate('period_end', $periodEnd)
+            ->whereBetween('period_end', [\Illuminate\Support\Carbon::parse($periodEnd)->startOfDay(), \Illuminate\Support\Carbon::parse($periodEnd)->endOfDay()])
             ->first();
 
         if ($record && $record->status === FinancialReportStatus::STATUS_FINAL) {
@@ -2611,8 +2611,8 @@ class ReportController extends Controller
         $closed = AccountingPeriod::query()
             ->where('store_id', $store->id)
             ->where('status', AccountingPeriod::STATUS_CLOSED)
-            ->whereDate('start_date', '<=', $validated['period_end'])
-            ->whereDate('end_date', '>=', $validated['period_end'])
+            ->where('start_date', '<=', \Illuminate\Support\Carbon::parse($validated['period_end'])->endOfDay())
+            ->where('end_date', '>=', \Illuminate\Support\Carbon::parse($validated['period_end'])->startOfDay())
             ->exists();
 
         if ($closed) {
@@ -2623,7 +2623,7 @@ class ReportController extends Controller
             $existing = FinancialReportStatus::query()
                 ->where('store_id', $store->id)
                 ->where('report_type', $validated['report_type'])
-                ->whereDate('period_end', $validated['period_end'])
+                ->whereBetween('period_end', [\Illuminate\Support\Carbon::parse($validated['period_end'])->startOfDay(), \Illuminate\Support\Carbon::parse($validated['period_end'])->endOfDay()])
                 ->first();
 
             FinancialReportStatus::query()->updateOrCreate(
@@ -2646,7 +2646,7 @@ class ReportController extends Controller
             FinancialReportStatus::query()
                 ->where('store_id', $store->id)
                 ->where('report_type', $validated['report_type'])
-                ->whereDate('period_end', $validated['period_end'])
+                ->whereBetween('period_end', [\Illuminate\Support\Carbon::parse($validated['period_end'])->startOfDay(), \Illuminate\Support\Carbon::parse($validated['period_end'])->endOfDay()])
                 ->delete();
         }
 
@@ -2676,7 +2676,7 @@ class ReportController extends Controller
         FinancialReportStatus::query()
             ->where('store_id', $store->id)
             ->where('report_type', $validated['report_type'])
-            ->whereDate('period_end', $validated['period_end'])
+            ->whereBetween('period_end', [\Illuminate\Support\Carbon::parse($validated['period_end'])->startOfDay(), \Illuminate\Support\Carbon::parse($validated['period_end'])->endOfDay()])
             ->update(['reviewed_by' => $validated['reviewed_by'] ?: null]);
 
         return back()->with('success', 'Pemeriksa laporan diperbarui.');
@@ -2705,8 +2705,8 @@ class ReportController extends Controller
             ->where('store_id', $store->id)
             ->where('report_type', $reportType)
             ->whereNotNull('report_number')
-            ->whereDate('period_end', '>=', $start)
-            ->whereDate('period_end', '<=', $end)
+            ->where('period_end', '>=', \Illuminate\Support\Carbon::parse($start)->startOfDay())
+            ->where('period_end', '<=', \Illuminate\Support\Carbon::parse($end)->endOfDay())
             ->count();
 
         return sprintf('%s-%s-%04d', $code, $month, $count + 1);

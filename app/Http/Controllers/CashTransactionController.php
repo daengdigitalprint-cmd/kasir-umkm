@@ -249,8 +249,8 @@ class CashTransactionController extends Controller
                 ->where('store_id', $storeId)
                 ->where('cash_amount', '>', 0)
                 ->where('status', 'completed')
-                ->whereDate('created_at', '>=', $startDate)
-                ->whereDate('created_at', '<=', $endDate)
+                ->where('created_at', '>=', \Illuminate\Support\Carbon::parse($startDate)->startOfDay())
+                ->where('created_at', '<=', \Illuminate\Support\Carbon::parse($endDate)->endOfDay())
                 ->with(['user:id,name', 'customer:id,name', 'cashShift:id,shift_number']);
 
             if ($userId) {
@@ -267,8 +267,8 @@ class CashTransactionController extends Controller
         if ($includeManual) {
             $manualQuery = CashTransaction::query()
                 ->where('store_id', $storeId)
-                ->whereDate('created_at', '>=', $startDate)
-                ->whereDate('created_at', '<=', $endDate)
+                ->where('created_at', '>=', \Illuminate\Support\Carbon::parse($startDate)->startOfDay())
+                ->where('created_at', '<=', \Illuminate\Support\Carbon::parse($endDate)->endOfDay())
                 ->with(['user:id,name', 'cashShift:id,shift_number']);
 
             if (in_array($type, [CashTransaction::TYPE_IN, CashTransaction::TYPE_OUT], true)) {
