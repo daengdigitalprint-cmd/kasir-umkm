@@ -395,7 +395,7 @@ class GenerateAiProactiveAlerts extends Command
             ->where('is_active', true);
 
         $viaPivot = User::query()
-            ->whereHas('stores', fn ($q) => $q->where('stores.id', $store->id)->wherePivotIn('role', self::RECIPIENT_ROLES));
+            ->whereHas('stores', fn ($q) => $q->where('stores.id', $store->id)->whereIn('store_user.role', self::RECIPIENT_ROLES));
 
         return User::query()
             ->where(function ($q) use ($direct, $viaPivot) {
