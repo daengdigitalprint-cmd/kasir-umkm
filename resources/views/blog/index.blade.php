@@ -43,16 +43,16 @@
 
     <style>
         .chipbar { display: flex; gap: 9px; flex-wrap: wrap; margin: 22px 0 0; }
-        .chipbar a { border: 1px solid var(--line); background: #fff; color: #334155; font-size: 13.5px; font-weight: 600; padding: 8px 17px; border-radius: 999px; transition: all .2s ease; }
+        .chipbar a { border: 1px solid var(--line); background: #fff; color: #3b3a4a; font-size: 13.5px; font-weight: 600; padding: 8px 17px; border-radius: 999px; transition: background .2s ease, border-color .2s ease, color .2s ease; }
         .chipbar a.on { background: var(--primary); border-color: var(--primary); color: #fff; }
         .chipbar a:hover { border-color: var(--primary); color: var(--primary); }
         .chipbar a.on:hover { color: #fff; }
 
         .pagination { display: flex; gap: 7px; justify-content: center; margin-top: 40px; flex-wrap: wrap; }
-        .pagination a, .pagination span { min-width: 42px; text-align: center; padding: 10px 15px; border-radius: 14px; border: 1px solid var(--line); background: #fff; font-size: 14px; font-weight: 600; color: var(--ink); }
+        .pagination a, .pagination span { min-width: 42px; text-align: center; padding: 10px 15px; border-radius: 12px; border: 1px solid var(--line); background: #fff; font-size: 14px; font-weight: 600; color: var(--ink); }
         .pagination a:hover { border-color: var(--primary); color: var(--primary); }
         .pagination .active { background: var(--primary); color: #fff; border-color: var(--primary); }
-        .pagination .disabled { color: #cbd5e1; }
+        .pagination .disabled { color: #bdb8d0; }
 
         .feature-card { grid-column: 1 / -1; }
         @media (min-width: 700px) { .feature-card a.card-link { padding: 32px; } .feature-card h2 { font-size: 24px; } }
@@ -81,8 +81,10 @@
         <div class="layout">
             <main>
                 @if ($articles->isEmpty())
-                    <div style="background:#fff;border:1px solid var(--line);border-radius:24px;text-align:center;padding:72px 24px;">
-                        <p style="font-size:34px;margin:0 0 10px;" aria-hidden="true">📝</p>
+                    <div style="background:#fff;border:1px solid var(--line);border-radius:20px;text-align:center;padding:72px 24px;">
+                        <span style="display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:16px;background:var(--primary-soft);color:var(--primary);margin-bottom:14px;">
+                            @include('blog.partials.icon', ['name' => 'book', 'class' => 'ic-xl'])
+                        </span>
                         <h2 style="font-size:20px;margin:0 0 8px;">Belum ada artikel di sini</h2>
                         <p style="color:var(--muted);margin:0 0 20px;">Artikel baru akan segera hadir. Sementara itu, coba aplikasinya dulu.</p>
                         <a class="btn btn-primary" href="{{ url('/register') }}">Coba Gratis</a>

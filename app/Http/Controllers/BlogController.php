@@ -54,7 +54,8 @@ class BlogController extends Controller
             $article->increment('views');
         }
 
-        $related = $article->related(3);
+        // Lebih banyak dari 3 karena ditampilkan sebagai carousel yang bisa digeser.
+        $related = $article->related(8);
 
         [$contentHtml, $toc] = $this->injectHeadingAnchors((string) $article->content_html);
 
