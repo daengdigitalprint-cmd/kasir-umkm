@@ -22,12 +22,36 @@ class ArticleGeneratorService
 
     protected string $modelId = '';
 
+    /**
+     * Plafon token keluaran per pilihan panjang artikel.
+     *
+     * Seluruh artikel dikirim balik di dalam satu string JSON, jadi anggaran
+     * token harus jauh di atas jumlah kata: Bahasa Indonesia memakai ~1,5–2
+     * token per kata, ditambah ongkos escaping JSON, FAQ, dan kolom meta.
+     * Plafon yang kesempitan membuat respons terpotong (finish_reason
+     * "length") sehingga JSON-nya rusak dan gagal di-parse.
+     */
+    private const TOKEN_BUDGET = [
+        'short' => 8000,    // 800–1200 kata
+        'medium' => 12000,  // 1200–1800 kata
+        'long' => 16000,    // 1800–2500 kata
+    ];
+
+    /** Anggaran untuk saran topik — keluarannya jauh lebih ringkas. */
+    private const TOKEN_BUDGET_TOPICS = 3000;
+
     public function __construct()
     {
         $this->provider = $this->resolveProvider();
     }
 
-    protected function resolveProvider(): AiProviderInterface
+    /** Anggaran token untuk pilihan panjang tertentu. */
+    private static function tokenBudget(?string $length): int
+    {
+        return self::TOKEN_BUDGET[$length ?? 'medium'] ?? self::TOKEN_BUDGET['medium'];
+    }
+
+    protected function resolveProvider(int $maxTokens = 8000): AiProviderInterface
     {
         // Artikel butuh output panjang & waktu lebih lama dari chat biasa.
         config(['ai.timeout' => 300]);
@@ -44,7 +68,7 @@ class ArticleGeneratorService
                 'base_url' => $config->base_url,
                 'model_id' => $config->model_id,
                 'api_key' => $config->api_key,
-                'max_tokens' => max((int) $config->max_tokens, 8000),
+                'max_tokens' => max((int) $config->max_tokens, $maxTokens),
                 'temperature' => 0.7,
                 'supports_function_calling' => false,
             ]);
@@ -56,7 +80,7 @@ class ArticleGeneratorService
         $providerName = config('ai.default_provider', 'openai');
         $providerConfig = (array) config("ai.providers.{$providerName}", config('ai.providers.openai'));
 
-        $providerConfig['max_tokens'] = max((int) ($providerConfig['max_tokens'] ?? 0), 8000);
+        $providerConfig['max_tokens'] = max((int) ($providerConfig['max_tokens'] ?? 0), $maxTokens);
         $providerConfig['temperature'] = 0.7;
         $providerConfig['supports_function_calling'] = false;
 
@@ -85,10 +109,22 @@ class ArticleGeneratorService
             ['role' => 'user', 'content' => $this->articleUserPrompt($input)],
         ];
 
+        // Artikel makin panjang, makin besar anggaran token yang dibutuhkan.
+        $this->provider = $this->resolveProvider(self::tokenBudget($input['length'] ?? null));
+
         $response = $this->provider->chat($messages);
 
         if (! $response->isSuccess()) {
             throw new \RuntimeException($response->error ?? 'AI tidak merespons.');
+        }
+
+        // Respons terpotong = JSON pasti rusak. Sebutkan penyebab sebenarnya,
+        // supaya admin tidak mengira modelnya yang bermasalah.
+        if ($response->finishReason === 'length') {
+            throw new \RuntimeException(
+                'Jawaban AI terpotong karena melebihi batas panjang, sehingga artikel tidak bisa dibaca utuh. '
+                .'Coba pilih panjang artikel yang lebih pendek, atau naikkan Max Tokens di pengaturan AI.'
+            );
         }
 
         $data = $this->parseJson((string) $response->getContent());
@@ -157,6 +193,9 @@ Setiap ide harus memakai salah satu strategi: pillar, cluster, howto, listicle, 
 Balas HANYA dengan JSON array valid tanpa teks lain, format:
 [{"title": "...", "strategy": "howto", "keyword": "kata kunci utama", "reason": "alasan singkat kenapa topik ini menarik trafik"}]
 PROMPT;
+
+        // Saran topik keluarannya ringkas, jadi anggarannya kecil.
+        $this->provider = $this->resolveProvider(self::TOKEN_BUDGET_TOPICS);
 
         $response = $this->provider->chat([
             ['role' => 'user', 'content' => $prompt],
