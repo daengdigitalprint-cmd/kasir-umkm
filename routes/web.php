@@ -48,10 +48,38 @@ Route::get('/sitemap.xml', function () {
         ],
     ];
 
+    // Blog: indeks + semua artikel terbit (lastmod dari updated_at).
+    $articles = \App\Models\Article::query()
+        ->published()
+        ->orderByDesc('published_at')
+        ->get(['slug', 'updated_at', 'is_pillar']);
+
+    if ($articles->isNotEmpty()) {
+        $urls[] = [
+            'loc' => url('/blog'),
+            'changefreq' => 'daily',
+            'priority' => '0.8',
+            'lastmod' => $articles->max('updated_at')?->format('Y-m-d'),
+        ];
+
+        foreach ($articles as $article) {
+            $urls[] = array_filter([
+                'loc' => url('/blog/'.$article->slug),
+                'changefreq' => 'monthly',
+                'priority' => $article->is_pillar ? '0.8' : '0.6',
+                'lastmod' => $article->updated_at?->format('Y-m-d'),
+            ]);
+        }
+    }
+
     return response()
         ->view('seo.sitemap', ['urls' => $urls])
         ->header('Content-Type', 'application/xml; charset=UTF-8');
 })->name('sitemap');
+
+// ── Blog publik (SEO) — Blade murni agar crawler dapat HTML lengkap ──
+Route::get('/blog', [App\Http\Controllers\BlogController::class, 'index'])->name('blog.index');
+Route::get('/blog/{slug}', [App\Http\Controllers\BlogController::class, 'show'])->name('blog.show');
 
 Route::get('/', function () {
     if (auth()->check()) {
@@ -666,6 +694,18 @@ Route::prefix('superadmin')->name('superadmin.')->middleware(['auth', 'superadmi
     // AI Auditor (read-only analysis, khusus Super Admin)
     Route::get('/ai-auditor', [App\Http\Controllers\AiAuditorController::class, 'index'])->name('ai-auditor.index');
     Route::post('/ai-auditor/analyze', [App\Http\Controllers\AiAuditorController::class, 'analyze'])->name('ai-auditor.analyze');
+
+    // Artikel SEO (blog) + generate AI
+    Route::get('/articles', [App\Http\Controllers\SuperAdmin\ArticleController::class, 'index'])->name('articles.index');
+    Route::get('/articles/create', [App\Http\Controllers\SuperAdmin\ArticleController::class, 'create'])->name('articles.create');
+    Route::post('/articles', [App\Http\Controllers\SuperAdmin\ArticleController::class, 'store'])->name('articles.store');
+    Route::get('/articles/{article}/edit', [App\Http\Controllers\SuperAdmin\ArticleController::class, 'edit'])->name('articles.edit');
+    Route::put('/articles/{article}', [App\Http\Controllers\SuperAdmin\ArticleController::class, 'update'])->name('articles.update');
+    Route::delete('/articles/{article}', [App\Http\Controllers\SuperAdmin\ArticleController::class, 'destroy'])->name('articles.destroy');
+    Route::post('/articles/{article}/status', [App\Http\Controllers\SuperAdmin\ArticleController::class, 'updateStatus'])->name('articles.status');
+    Route::post('/articles/generate', [App\Http\Controllers\SuperAdmin\ArticleController::class, 'generate'])->name('articles.generate');
+    Route::post('/articles/suggest-topics', [App\Http\Controllers\SuperAdmin\ArticleController::class, 'suggestTopics'])->name('articles.suggest-topics');
+    Route::get('/articles/generations/{generation}', [App\Http\Controllers\SuperAdmin\ArticleController::class, 'generationStatus'])->name('articles.generation-status');
 
     // Pengaturan AI (provider & API key) dari halaman Super Admin
     Route::get('/ai-settings', [App\Http\Controllers\AiSettingController::class, 'index'])->name('ai-settings.index');
