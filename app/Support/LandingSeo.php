@@ -4,10 +4,10 @@ namespace App\Support;
 
 final class LandingSeo
 {
-    private const SITE_NAME = 'UMKM Kasir';
+    private const SITE_NAME = 'Kasir UMKM by MaccaPOS';
 
     /** Judul & deskripsi beranda (juga dipakai Landing/Index.vue lewat props agar selalu sama). */
-    public const HOME_TITLE = 'Aplikasi Kasir Online Gratis untuk UMKM | UMKM Kasir';
+    public const HOME_TITLE = 'Aplikasi Kasir Online Gratis untuk UMKM | Kasir UMKM by MaccaPOS';
 
     public const HOME_DESCRIPTION = 'Aplikasi kasir (POS) online untuk UMKM: catat penjualan, kelola stok, cetak struk, shift kasir, dan laporan keuangan dalam satu aplikasi. Mulai gratis dengan paket Starter.';
 
@@ -266,7 +266,7 @@ final class LandingSeo
         ?int $ogImageHeight,
     ): array {
         $title = 'Panduan pengguna — '.self::SITE_NAME;
-        $description = 'Panduan fitur UMKM Kasir: POS, stok, laporan, langganan, peran pengguna, dan multi-outlet.';
+        $description = 'Panduan fitur Kasir UMKM by MaccaPOS: POS, stok, laporan, langganan, peran pengguna, dan multi-outlet.';
 
         return [
             'title' => $title,
@@ -292,7 +292,7 @@ final class LandingSeo
         ?int $ogImageHeight,
     ): array {
         $title = 'Kebijakan Privasi — '.self::SITE_NAME;
-        $description = 'Kebijakan privasi UMKM Kasir: data yang dikumpulkan, penggunaan, keamanan, dan hak pengguna.';
+        $description = 'Kebijakan privasi Kasir UMKM by MaccaPOS: data yang dikumpulkan, penggunaan, keamanan, dan hak pengguna.';
 
         return [
             'title' => $title,
@@ -489,12 +489,12 @@ final class LandingSeo
     {
         return [
             [
-                'question' => 'Apakah UMKM Kasir benar-benar gratis?',
+                'question' => 'Apakah Kasir UMKM by MaccaPOS benar-benar gratis?',
                 'answer' => 'Ya. Paket Starter gratis selamanya tanpa batas masa aktif, cocok untuk toko kecil dengan hingga 30 produk. Saat usaha berkembang, Anda bisa naik ke paket GrowUp seharga Rp99 ribu per bulan.',
             ],
             [
                 'question' => 'Bisa dipakai di HP Android, tablet, atau laptop?',
-                'answer' => 'Bisa. UMKM Kasir berjalan di browser HP, tablet, maupun laptop, dan tersedia juga aplikasi Android di Google Play. Data tersinkron otomatis di semua perangkat.',
+                'answer' => 'Bisa. Kasir UMKM by MaccaPOS berjalan di browser HP, tablet, maupun laptop, dan tersedia juga aplikasi Android di Google Play. Data tersinkron otomatis di semua perangkat.',
             ],
             [
                 'question' => 'Metode pembayaran apa saja yang bisa dicatat?',

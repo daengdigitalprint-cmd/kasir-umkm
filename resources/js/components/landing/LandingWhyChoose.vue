@@ -46,14 +46,14 @@ function toggle(id: string): void {
                 <div class="row g-4 align-items-center">
                     <div class="col-lg-6">
                         <div class="gt-choose-us-image appear_left">
-                            <img src="/user-pos-1024x781.png" alt="UMKM Kasir di perangkat Anda" loading="lazy" decoding="async" />
+                            <img src="/user-pos-1024x781.png" alt="Kasir UMKM by MaccaPOS di perangkat Anda" loading="lazy" decoding="async" />
                         </div>
                     </div>
                     <div class="col-lg-6">
                         <div class="gt-choose-us-content">
                             <div class="gt-section-title style-3 mb-0">
-                                <h6 class="tt-capitalize wow fadeInUp text-white">Mengapa UMKM Kasir</h6>
-                                <h2 class="char-animation text-white">Berhenti pakai catatan manual. Beralih ke UMKM Kasir.</h2>
+                                <h6 class="tt-capitalize wow fadeInUp text-white">Mengapa Kasir UMKM by MaccaPOS</h6>
+                                <h2 class="char-animation text-white">Berhenti pakai catatan manual. Beralih ke Kasir UMKM by MaccaPOS.</h2>
                             </div>
                             <div class="faq-items ms-0 mt-0">
                                 <div class="accordion" id="umkmKasirFaq">

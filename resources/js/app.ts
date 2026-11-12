@@ -78,7 +78,8 @@ if (typeof window !== 'undefined') {
     }
 }
 
-const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+/** Nama merek untuk judul tab (APP_NAME di .env sengaja tidak diubah: dipakai prefix cookie/cache). */
+const appName = 'Kasir UMKM by MaccaPOS';
 
 if (typeof window !== 'undefined') {
     window.addEventListener('beforeinstallprompt', (e) => {
@@ -192,9 +193,9 @@ function installErrorBoundary(app: VueApp) {
 }
 
 createInertiaApp({
-    // Judul yang sudah memuat merek ("… | UMKM Kasir") tidak diberi akhiran APP_NAME lagi
-    // (sebelumnya jadi "… UMKM Kasir - kasirumkm"; judul halaman lain tidak berubah).
-    title: (title) => (!title ? appName : title.includes('UMKM Kasir') ? title : `${title} - ${appName}`),
+    // Judul yang sudah memuat merek ("… | Kasir UMKM by MaccaPOS") tidak diberi akhiran APP_NAME lagi
+    // (sebelumnya jadi "… Kasir UMKM by MaccaPOS - kasirumkm"; judul halaman lain tidak berubah).
+    title: (title) => (!title ? appName : title.includes('Kasir UMKM by MaccaPOS') ? title : `${title} - ${appName}`),
     resolve: (name) => resolvePageComponent(`./pages/${name}.vue`, import.meta.glob<DefineComponent>('./pages/**/*.vue')),
     setup({ el, App, props, plugin }) {
         const app = createApp({ render: () => h(App, props) });

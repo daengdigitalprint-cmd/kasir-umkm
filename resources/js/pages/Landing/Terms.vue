@@ -13,9 +13,9 @@ const props = defineProps<{
     ogImageHeight?: number | null;
 }>();
 
-const pageTitle = 'Syarat & Ketentuan — UMKM Kasir';
+const pageTitle = 'Syarat & Ketentuan — Kasir UMKM by MaccaPOS';
 const pageDescription =
-    'Syarat dan ketentuan penggunaan layanan UMKM Kasir — aturan penggunaan aplikasi kasir untuk UMKM.';
+    'Syarat dan ketentuan penggunaan layanan Kasir UMKM by MaccaPOS — aturan penggunaan aplikasi kasir untuk UMKM.';
 
 const maskotUrl = props.maskotUrl ?? '/logo-macca.png';
 const canonicalUrl = props.canonicalUrl ?? '';
@@ -134,7 +134,7 @@ onUnmounted(() => {
             <meta name="robots" content="index, follow" />
 
             <meta property="og:type" content="website" />
-            <meta property="og:site_name" content="UMKM Kasir" />
+            <meta property="og:site_name" content="Kasir UMKM by MaccaPOS" />
             <meta property="og:locale" content="id_ID" />
             <meta property="og:title" :content="pageTitle" />
             <meta property="og:description" :content="pageDescription" />
@@ -144,7 +144,7 @@ onUnmounted(() => {
             <meta v-if="ogImageWidth && ogImageHeight" property="og:image:width" :content="String(ogImageWidth)" />
             <meta v-if="ogImageWidth && ogImageHeight" property="og:image:height" :content="String(ogImageHeight)" />
             <meta v-if="shareImageUrl.startsWith('https://')" property="og:image:secure_url" :content="shareImageUrl" />
-            <meta property="og:image:alt" content="Logo UMKM Kasir — aplikasi kasir untuk UMKM" />
+            <meta property="og:image:alt" content="Logo Kasir UMKM by MaccaPOS — aplikasi kasir untuk UMKM" />
 
             <meta name="twitter:card" content="summary_large_image" />
             <meta name="twitter:title" :content="pageTitle" />
@@ -165,13 +165,13 @@ onUnmounted(() => {
                             <h1 class="char-animation lp-panduan-hero-title">
                                 Syarat & Ketentuan
                                 <br />
-                                UMKM Kasir
+                                Kasir UMKM by MaccaPOS
                             </h1>
                             <p class="wow fadeInUp" data-wow-delay=".3s">
                                 Terakhir diperbarui: <strong>{{ lastUpdated }}</strong>
                             </p>
                             <p class="wow fadeInUp" data-wow-delay=".4s" style="max-width: 700px; margin: 0 auto;">
-                                Syarat dan ketentuan ini berlaku untuk penggunaan seluruh layanan UMKM Kasir.
+                                Syarat dan ketentuan ini berlaku untuk penggunaan seluruh layanan Kasir UMKM by MaccaPOS.
                                 Dengan mengakses atau menggunakan layanan kami, Anda menyetujui ketentuan yang berlaku.
                             </p>
                             <div class="lp-panduan-hero-cta wow fadeInUp" data-wow-delay=".5s">
@@ -216,12 +216,12 @@ onUnmounted(() => {
                                         <span class="lp-panduan-card-num">01</span>
                                         <h2 class="lp-panduan-card-title">Penerimaan Ketentuan</h2>
                                         <p class="lp-panduan-card-intro">
-                                            Dengan mengakses atau menggunakan layanan UMKM Kasir ("layanan"), Anda menyetujui
+                                            Dengan mengakses atau menggunakan layanan Kasir UMKM by MaccaPOS ("layanan"), Anda menyetujui
                                             untuk terikat oleh Syarat dan Ketentuan ini. Jika Anda tidak menyetujui ketentuan ini,
                                             mohon untuk tidak menggunakan layanan kami.
                                         </p>
                                         <ul class="lp-panduan-bullets">
-                                            <li><i class="fa-solid fa-circle-check"></i><span>Ketentuan ini merupakan perjanjian antara Anda dan UMKM Kasir.</span></li>
+                                            <li><i class="fa-solid fa-circle-check"></i><span>Ketentuan ini merupakan perjanjian antara Anda dan Kasir UMKM by MaccaPOS.</span></li>
                                             <li><i class="fa-solid fa-circle-check"></i><span>Penggunaan layanan tunduk pada hukum Negara Kesatuan Republik Indonesia.</span></li>
                                             <li><i class="fa-solid fa-circle-check"></i><span>Kami dapat memperbarui ketentuan ini sewaktu-waktu dengan pemberitahuan yang wajar.</span></li>
                                         </ul>
@@ -231,7 +231,7 @@ onUnmounted(() => {
                                         <span class="lp-panduan-card-num">02</span>
                                         <h2 class="lp-panduan-card-title">Deskripsi Layanan</h2>
                                         <p class="lp-panduan-card-intro">
-                                            UMKM Kasir adalah platform aplikasi kasir berbasis web yang dirancang untuk membantu
+                                            Kasir UMKM by MaccaPOS adalah platform aplikasi kasir berbasis web yang dirancang untuk membantu
                                             usaha kecil dan menengah dalam mengelola penjualan, inventaris, dan laporan keuangan.
                                         </p>
                                         <ul class="lp-panduan-bullets">
@@ -300,7 +300,7 @@ onUnmounted(() => {
                                         <h2 class="lp-panduan-card-title">Hak Kekayaan Intelektual</h2>
                                         <p class="lp-panduan-card-intro">
                                             Seluruh konten, kode sumber, desain, logo, dan materi lainnya dalam layanan ini adalah
-                                            milik UMKM Kasir atau pemberi lisensinya dan dilindungi oleh hukum hak cipta Indonesia dan internasional.
+                                            milik Kasir UMKM by MaccaPOS atau pemberi lisensinya dan dilindungi oleh hukum hak cipta Indonesia dan internasional.
                                         </p>
                                         <ul class="lp-panduan-bullets">
                                             <li><i class="fa-solid fa-circle-check"></i><span>Anda tidak memiliki hak atas kekayaan intelektual kami kecuali diberikan lisensi secara eksplisit.</span></li>
@@ -313,7 +313,7 @@ onUnmounted(() => {
                                         <span class="lp-panduan-card-num">08</span>
                                         <h2 class="lp-panduan-card-title">Pembatasan Tanggung Jawab</h2>
                                         <p class="lp-panduan-card-intro">
-                                            Sejauh diizinkan oleh hukum yang berlaku, UMKM Kasir tidak bertanggung jawab atas:
+                                            Sejauh diizinkan oleh hukum yang berlaku, Kasir UMKM by MaccaPOS tidak bertanggung jawab atas:
                                         </p>
                                         <ul class="lp-panduan-bullets">
                                             <li><i class="fa-solid fa-circle-check"></i><span>Kerugian tidak langsung, insidental, atau konsekuensial yang timbul dari penggunaan layanan.</span></li>
@@ -345,7 +345,7 @@ onUnmounted(() => {
                                             Ketentuan ini tunduk pada dan ditafsirkan sesuai hukum Negara Kesatuan Republik Indonesia.
                                             Setiap sengketa yang timbul dari ketentuan ini akan diselesaikan melalui musyawarah
                                             untuk mufakat. Jika tidak tercapai kesepakatan, sengketa akan diselesaikan di pengadilan
-                                            yang berwenang di wilayah yurisdksi UMKM Kasir.
+                                            yang berwenang di wilayah yurisdksi Kasir UMKM by MaccaPOS.
                                         </p>
                                     </article>
 

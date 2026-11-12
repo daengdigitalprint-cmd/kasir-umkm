@@ -10,7 +10,7 @@ const maskotUrl = computed(() => props.maskotUrl ?? '/logo-macca.png');
 
 const waPhoneDigits = '6285242766676';
 const waPrefillMessage =
-    'Halo, saya baru mengunjungi situs UMKM Kasir dan ingin bertanya tentang paket atau demo singkat. Mohon arahannya, terima kasih.';
+    'Halo, saya baru mengunjungi situs Kasir UMKM by MaccaPOS dan ingin bertanya tentang paket atau demo singkat. Mohon arahannya, terima kasih.';
 
 const waChatUrl = computed(() => `https://wa.me/${waPhoneDigits}?text=${encodeURIComponent(waPrefillMessage)}`);
 
@@ -26,7 +26,7 @@ const waPanelOpen = ref(false);
                     <div class="header__wrap border-btm ul_li_between pos-rel">
                         <div class="xb-header-logo">
                             <Link href="/" class="logo d-flex align-items-center">
-                                <img :src="maskotUrl" alt="logo UMKM Kasir" width="148" height="48" style="height: 48px; width: auto" />
+                                <img :src="maskotUrl" alt="logo Kasir UMKM by MaccaPOS" width="148" height="48" style="height: 48px; width: auto" />
                             </Link>
                         </div>
                         <div class="main-menu__wrap navbar navbar-expand-lg p-0">
@@ -76,7 +76,7 @@ const waPanelOpen = ref(false);
                             <div class="xb-menu-close xb-hide-xl xb-close"></div>
                             <div class="xb-logo-mobile xb-hide-xl">
                                 <Link href="/" class="logo d-flex align-items-center">
-                                    <img :src="maskotUrl" alt="logo UMKM Kasir" width="148" height="48" style="height: 48px; width: auto" />
+                                    <img :src="maskotUrl" alt="logo Kasir UMKM by MaccaPOS" width="148" height="48" style="height: 48px; width: auto" />
                                 </Link>
                             </div>
                             <nav class="xb-header-nav">

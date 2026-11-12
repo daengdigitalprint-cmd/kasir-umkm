@@ -107,7 +107,7 @@ const column3: Testimonial[] = [
             <div class="gradient-box2"></div>
             <div class="gt-section-title style-4 text-center">
                 <h6 class="wow fadeInUp tt-capitalize">Cerita Pelanggan Kami</h6>
-                <h2 class="char-animation">Apa kata mereka tentang UMKM Kasir</h2>
+                <h2 class="char-animation">Apa kata mereka tentang Kasir UMKM by MaccaPOS</h2>
             </div>
             <div class="row height-fixed fix justify-content-between lp-testimonial-row">
                 <div class="col-xl-4 col-md-6">

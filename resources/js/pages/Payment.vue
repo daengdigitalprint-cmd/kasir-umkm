@@ -1,5 +1,5 @@
 <template>
-    <Head title="Pembayaran - UMKM Kasir" />
+    <Head title="Pembayaran - Kasir UMKM by MaccaPOS" />
 
     <div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
         <!-- Header -->

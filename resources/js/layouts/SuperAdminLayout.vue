@@ -89,7 +89,7 @@ const activeLabel = computed(() => {
                 </div>
                 <div class="min-w-0">
                     <p class="text-sm leading-tight font-bold text-slate-900">Super Admin</p>
-                    <p class="truncate text-xs text-slate-500">Panel pengelola UMKM Kasir</p>
+                    <p class="truncate text-xs text-slate-500">Panel pengelola Kasir UMKM by MaccaPOS</p>
                 </div>
             </div>
 

@@ -32,7 +32,7 @@
         @endphp
 
         {{-- PWA Meta Tags --}}
-        <meta name="application-name" content="UMKM Kasir">
+        <meta name="application-name" content="Kasir UMKM by MaccaPOS">
         <meta name="apple-mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-status-bar-style" content="default">
         <meta name="apple-mobile-web-app-title" content="Kasir UMKM">
@@ -172,7 +172,7 @@
         <meta name="robots" content="index, follow">
 
         <meta property="og:type" content="{{ $landingServerSeo['og_type'] }}">
-        <meta property="og:site_name" content="UMKM Kasir">
+        <meta property="og:site_name" content="Kasir UMKM by MaccaPOS">
         <meta property="og:locale" content="id_ID">
         <meta property="og:title" content="{{ $landingServerSeo['title'] }}">
         <meta property="og:description" content="{{ $landingServerSeo['description'] }}">
@@ -186,7 +186,7 @@
         @if(\Illuminate\Support\Str::startsWith($landingServerSeo['og_image'], 'https://'))
         <meta property="og:image:secure_url" content="{{ $landingServerSeo['og_image'] }}">
         @endif
-        <meta property="og:image:alt" content="Logo UMKM Kasir — aplikasi kasir untuk UMKM">
+        <meta property="og:image:alt" content="Logo Kasir UMKM by MaccaPOS — aplikasi kasir untuk UMKM">
 
         <meta name="twitter:card" content="summary_large_image">
         <meta name="twitter:title" content="{{ $landingServerSeo['title'] }}">

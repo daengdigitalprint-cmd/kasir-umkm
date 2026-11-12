@@ -24,9 +24,9 @@ const props = defineProps<{
     ogImageHeight?: number | null;
 }>();
 
-const pageTitle = 'Panduan pengguna — UMKM Kasir';
+const pageTitle = 'Panduan pengguna — Kasir UMKM by MaccaPOS';
 const pageDescription =
-    'Panduan fitur UMKM Kasir: POS, stok, laporan, langganan, peran pengguna, dan multi-outlet.';
+    'Panduan fitur Kasir UMKM by MaccaPOS: POS, stok, laporan, langganan, peran pengguna, dan multi-outlet.';
 
 const maskotUrl = props.maskotUrl ?? '/logo-macca.png';
 const canonicalUrl = props.canonicalUrl ?? '';
@@ -110,7 +110,7 @@ const sections: Section[] = [
         id: 'pengantar',
         title: 'Pengantar',
         intro:
-            'UMKM Kasir adalah aplikasi kasir berbasis web untuk satu atau banyak outlet dalam satu grup usaha. Panduan ini merangkum fitur sesuai menu dan alur di aplikasi (POS, inventori, laporan, langganan, dan pengaturan).',
+            'Kasir UMKM by MaccaPOS adalah aplikasi kasir berbasis web untuk satu atau banyak outlet dalam satu grup usaha. Panduan ini merangkum fitur sesuai menu dan alur di aplikasi (POS, inventori, laporan, langganan, dan pengaturan).',
         bullets: [
             'Anda perlu akun terdaftar, toko aktif, dan email terverifikasi untuk memakai fitur di dalam aplikasi.',
             'Beberapa menu disembunyikan menurut peran pengguna (kasir, gudang, manajer/backoffice, admin toko).',
@@ -412,7 +412,7 @@ onUnmounted(() => {
             <meta name="robots" content="index, follow" />
 
             <meta property="og:type" content="article" />
-            <meta property="og:site_name" content="UMKM Kasir" />
+            <meta property="og:site_name" content="Kasir UMKM by MaccaPOS" />
             <meta property="og:locale" content="id_ID" />
             <meta property="og:title" :content="pageTitle" />
             <meta property="og:description" :content="pageDescription" />
@@ -434,7 +434,7 @@ onUnmounted(() => {
                 property="og:image:secure_url"
                 :content="shareImageUrl"
             />
-            <meta property="og:image:alt" content="Logo UMKM Kasir — panduan pengguna" />
+            <meta property="og:image:alt" content="Logo Kasir UMKM by MaccaPOS — panduan pengguna" />
 
             <meta name="twitter:card" content="summary_large_image" />
             <meta name="twitter:title" :content="pageTitle" />
@@ -456,7 +456,7 @@ onUnmounted(() => {
                             <h1 class="char-animation lp-panduan-hero-title">
                                 Panduan pengguna
                                 <br />
-                                UMKM Kasir
+                                Kasir UMKM by MaccaPOS
                             </h1>
                             <p class="wow fadeInUp" data-wow-delay=".3s">
                                 Dokumentasi ringkas modul di dalam aplikasi — POS, inventori, laporan, langganan,

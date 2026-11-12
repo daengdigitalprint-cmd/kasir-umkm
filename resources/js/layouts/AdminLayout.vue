@@ -301,10 +301,10 @@ const isCurrentRoute = (href: string) => {
 </script>
 
 <template>
-    <Head :title="title + ' - UMKM Kasir'">
+    <Head :title="title + ' - Kasir UMKM by MaccaPOS'">
         <meta
             name="description"
-            content="UMKM Kasir — aplikasi kasir untuk UMKM: POS, produk & stok, laporan, dan pengaturan toko dalam satu panel."
+            content="Kasir UMKM by MaccaPOS — aplikasi kasir untuk UMKM: POS, produk & stok, laporan, dan pengaturan toko dalam satu panel."
         />
     </Head>
 

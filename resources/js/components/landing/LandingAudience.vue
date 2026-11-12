@@ -35,7 +35,7 @@ const assetsBase = computed(() => props.assetsBase ?? '/sastik-assets');
                                         src="/Pencatatan.webp"
                                         srcset="/Pencatatan-800.webp 800w, /Pencatatan.webp 1682w"
                                         sizes="(max-width: 767px) 100vw, 791px"
-                                        alt="Tampilan pencatatan transaksi otomatis di UMKM Kasir"
+                                        alt="Tampilan pencatatan transaksi otomatis di Kasir UMKM by MaccaPOS"
                                         loading="lazy"
                                         decoding="async"
                                     />
@@ -303,7 +303,7 @@ const assetsBase = computed(() => props.assetsBase ?? '/sastik-assets');
                                         width="354"
                                         height="560"
                                         src="/struk-id.webp"
-                                        alt="Contoh struk transaksi yang dicetak dari UMKM Kasir"
+                                        alt="Contoh struk transaksi yang dicetak dari Kasir UMKM by MaccaPOS"
                                         loading="lazy"
                                         decoding="async"
                                     />
@@ -412,7 +412,7 @@ const assetsBase = computed(() => props.assetsBase ?? '/sastik-assets');
                                     width="671"
                                     height="1000"
                                     src="/Multi-Cabang-sm.webp"
-                                    alt="Kelola banyak cabang dan pengguna dalam satu akun UMKM Kasir"
+                                    alt="Kelola banyak cabang dan pengguna dalam satu akun Kasir UMKM by MaccaPOS"
                                     loading="lazy"
                                     decoding="async"
                                     style="max-width: 80%; height: auto; margin: 0 auto; display: block"
@@ -447,7 +447,7 @@ const assetsBase = computed(() => props.assetsBase ?? '/sastik-assets');
                                     width="307"
                                     height="474"
                                     src="/mockup-akses.webp"
-                                    alt="UMKM Kasir dapat diakses dari ponsel, tablet, dan komputer"
+                                    alt="Kasir UMKM by MaccaPOS dapat diakses dari ponsel, tablet, dan komputer"
                                     loading="lazy"
                                     decoding="async"
                                     style="max-width: 70%; height: auto; display: block; margin-left: auto"
@@ -519,7 +519,7 @@ const assetsBase = computed(() => props.assetsBase ?? '/sastik-assets');
         <div class="mxw-1330 container">
             <div class="fs-process-wrapper plr-20">
                 <div class="sec-title mb-65 text-center">
-                    <h2 class="title wow fadeInUp" data-wow-delay="0ms" data-wow-duration="600ms">Cara Kerja UMKM Kasir</h2>
+                    <h2 class="title wow fadeInUp" data-wow-delay="0ms" data-wow-duration="600ms">Cara Kerja Kasir UMKM by MaccaPOS</h2>
                 </div>
                 <div class="fs-process-wrap">
                     <div class="row mt-none-30">

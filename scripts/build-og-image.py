@@ -60,8 +60,8 @@ def main():
 
     # Label merek
     brand_f = font('seguisb.ttf', 30)
-    d.rounded_rectangle((x, 78, x + 20 + d.textlength('UMKM Kasir', font=brand_f) + 20, 128), radius=25, fill=(255, 255, 255))
-    d.text((x + 20, 84), 'UMKM Kasir', font=brand_f, fill=BOTTOM)
+    d.rounded_rectangle((x, 78, x + 20 + d.textlength('Kasir UMKM by MaccaPOS', font=brand_f) + 20, 128), radius=25, fill=(255, 255, 255))
+    d.text((x + 20, 84), 'Kasir UMKM by MaccaPOS', font=brand_f, fill=BOTTOM)
 
     # Judul
     title_f = font('segoeuib.ttf', 60)

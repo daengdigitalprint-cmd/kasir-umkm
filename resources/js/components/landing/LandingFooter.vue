@@ -63,7 +63,7 @@ const navLinks: { label: string; href: string }[] = [
                                                 href="https://play.google.com/store/apps/details?id=com.kasirumkm.idea&pli=1"
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                aria-label="Unduh UMKM Kasir di Google Play"
+                                                aria-label="Unduh Kasir UMKM by MaccaPOS di Google Play"
                                                 ><i class="fa-brands fa-google-play" aria-hidden="true"></i
                                             ></a>
                                         </li>
@@ -124,7 +124,7 @@ const navLinks: { label: string; href: string }[] = [
                             />
                         </svg>
                     </span>
-                    <a class="xb-overlay" href="https://wa.me/6285242766676" target="_blank" rel="noopener noreferrer" aria-label="Chat UMKM Kasir lewat WhatsApp"></a>
+                    <a class="xb-overlay" href="https://wa.me/6285242766676" target="_blank" rel="noopener noreferrer" aria-label="Chat Kasir UMKM by MaccaPOS lewat WhatsApp"></a>
                 </div>
                 <div class="xb-social-media-item fs-social-media-item ul_li_between">
                     <div class="xb-item--holder ul_li">
@@ -141,7 +141,7 @@ const navLinks: { label: string; href: string }[] = [
                             />
                         </svg>
                     </span>
-                    <a class="xb-overlay" href="https://play.google.com/store/apps/details?id=com.kasirumkm.idea" target="_blank" rel="noopener noreferrer" aria-label="Unduh UMKM Kasir di Google Play"></a>
+                    <a class="xb-overlay" href="https://play.google.com/store/apps/details?id=com.kasirumkm.idea" target="_blank" rel="noopener noreferrer" aria-label="Unduh Kasir UMKM by MaccaPOS di Google Play"></a>
                 </div>
                 <div class="xb-social-media-item fs-social-media-item ul_li_between">
                     <div class="xb-item--holder ul_li">
@@ -158,7 +158,7 @@ const navLinks: { label: string; href: string }[] = [
                             />
                         </svg>
                     </span>
-                    <a class="xb-overlay" href="mailto:info@umkmkasir.id" aria-label="Kirim email ke UMKM Kasir"></a>
+                    <a class="xb-overlay" href="mailto:info@umkmkasir.id" aria-label="Kirim email ke Kasir UMKM by MaccaPOS"></a>
                 </div>
                 <div class="xb-social-media-item fs-social-media-item ul_li_between">
                     <div class="xb-item--holder ul_li">
@@ -175,11 +175,11 @@ const navLinks: { label: string; href: string }[] = [
                             />
                         </svg>
                     </span>
-                    <a class="xb-overlay" href="/panduan" aria-label="Baca panduan penggunaan UMKM Kasir"></a>
+                    <a class="xb-overlay" href="/panduan" aria-label="Baca panduan penggunaan Kasir UMKM by MaccaPOS"></a>
                 </div>
             </div>
             <div class="xb-footer_bottom fs-footer_bottom ul_li_between">
-                <p>Hak cipta &copy; 2026 <Link href="/">UMKM Kasir</Link>. Semua hak dilindungi.</p>
+                <p>Hak cipta &copy; 2026 <Link href="/">Kasir UMKM by MaccaPOS</Link>. Semua hak dilindungi.</p>
                 <p>
                     <Link href="/terms">Syarat &amp; Ketentuan</Link> &middot; <Link href="/privacy">Kebijakan Privasi</Link> &middot;
                     <Link href="/refund">Kebijakan Refund</Link> &middot;

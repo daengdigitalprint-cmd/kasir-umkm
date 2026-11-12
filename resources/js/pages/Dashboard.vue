@@ -613,7 +613,7 @@ const daysUntilExpiry = (dateString: string) => {
                             class="h-32 w-auto object-contain drop-shadow-[0_12px_24px_rgba(8,145,178,0.18)] md:h-40"
                         />
                     </div>
-                    <h2 class="mb-4 text-3xl font-bold text-gray-900">Selamat Datang di UMKM Kasir</h2>
+                    <h2 class="mb-4 text-3xl font-bold text-gray-900">Selamat Datang di Kasir UMKM by MaccaPOS</h2>
                     <p class="mb-8 text-lg text-gray-600">Mulai perjalanan digitalisasi toko Anda dengan sistem kasir modern yang mudah digunakan.</p>
                     <Button
                         as="a"
@@ -699,7 +699,7 @@ const daysUntilExpiry = (dateString: string) => {
                             class="relative z-10 flex flex-col-reverse items-center gap-2 px-4 py-3 sm:flex-row sm:justify-between sm:gap-3 md:px-5 md:py-4"
                         >
                             <div class="flex max-w-xl min-w-0 flex-1 flex-col justify-center text-center sm:text-left">
-                                <p class="mb-0.5 text-[10px] font-black tracking-[0.16em] text-violet-700 uppercase sm:text-[11px]">UMKM Kasir</p>
+                                <p class="mb-0.5 text-[10px] font-black tracking-[0.16em] text-violet-700 uppercase sm:text-[11px]">Kasir UMKM by MaccaPOS</p>
                                 <h3
                                     class="bg-gradient-to-r from-violet-800 via-purple-800 to-fuchsia-700 bg-clip-text font-display text-lg leading-[1.2] font-black text-transparent sm:text-xl md:text-2xl"
                                 >

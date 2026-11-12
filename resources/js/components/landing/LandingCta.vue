@@ -16,7 +16,7 @@ const assetsBase = computed(() => props.assetsBase ?? '/sastik-assets');
             <div class="fs-story-wrpper o-hidden pos-rel">
                 <div class="fs-story-top plr-20 ul_li_between mb-65">
                     <div class="sec-title">
-                        <h2 class="title wow fadeInUp" data-wow-delay="0ms" data-wow-duration="600ms">Hasil Nyata dengan UMKM Kasir</h2>
+                        <h2 class="title wow fadeInUp" data-wow-delay="0ms" data-wow-duration="600ms">Hasil Nyata dengan Kasir UMKM by MaccaPOS</h2>
                     </div>
                     <div class="fs-slider-btn">
                         <div class="swiper-button-prev">
@@ -41,7 +41,7 @@ const assetsBase = computed(() => props.assetsBase ?? '/sastik-assets');
                                 </div>
                                 <div class="xb-item--holder">
                                     <h2 class="xb-item--title border-effect-2">
-                                        <Link href="/panduan">Warung Berkah meningkatkan efisiensi dengan UMKM Kasir.</Link>
+                                        <Link href="/panduan">Warung Berkah meningkatkan efisiensi dengan Kasir UMKM by MaccaPOS.</Link>
                                     </h2>
                                     <Link class="xb-item--btn" href="/panduan">
                                         Baca kisah Warung Berkah
@@ -65,7 +65,7 @@ const assetsBase = computed(() => props.assetsBase ?? '/sastik-assets');
                                 </div>
                                 <div class="xb-item--holder">
                                     <h2 class="xb-item--title border-effect-2">
-                                        <Link href="/panduan">Toko Sembako Pak Budi beralih ke UMKM Kasir untuk otomatisasi stok.</Link>
+                                        <Link href="/panduan">Toko Sembako Pak Budi beralih ke Kasir UMKM by MaccaPOS untuk otomatisasi stok.</Link>
                                     </h2>
                                     <Link class="xb-item--btn" href="/panduan">
                                         Baca kisah Pak Budi
@@ -89,7 +89,7 @@ const assetsBase = computed(() => props.assetsBase ?? '/sastik-assets');
                                 </div>
                                 <div class="xb-item--holder">
                                     <h2 class="xb-item--title border-effect-2">
-                                        <Link href="/panduan">Kafe Makmur mengurangi tugas manual 60% dengan UMKM Kasir.</Link>
+                                        <Link href="/panduan">Kafe Makmur mengurangi tugas manual 60% dengan Kasir UMKM by MaccaPOS.</Link>
                                     </h2>
                                     <Link class="xb-item--btn" href="/panduan">
                                         Baca kisah Kafe Makmur
@@ -113,7 +113,7 @@ const assetsBase = computed(() => props.assetsBase ?? '/sastik-assets');
                                 </div>
                                 <div class="xb-item--holder">
                                     <h2 class="xb-item--title border-effect-2">
-                                        <Link href="/panduan">Apotek Sehat meningkatkan akurasi laporan dengan UMKM Kasir.</Link>
+                                        <Link href="/panduan">Apotek Sehat meningkatkan akurasi laporan dengan Kasir UMKM by MaccaPOS.</Link>
                                     </h2>
                                     <Link class="xb-item--btn" href="/panduan">
                                         Baca kisah Apotek Sehat
@@ -137,7 +137,7 @@ const assetsBase = computed(() => props.assetsBase ?? '/sastik-assets');
                                 </div>
                                 <div class="xb-item--holder">
                                     <h2 class="xb-item--title border-effect-2">
-                                        <Link href="/panduan">Bisnis berkembang memusatkan penjualan dan stok dengan UMKM Kasir</Link>
+                                        <Link href="/panduan">Bisnis berkembang memusatkan penjualan dan stok dengan Kasir UMKM by MaccaPOS</Link>
                                     </h2>
                                     <Link class="xb-item--btn" href="/panduan">
                                         Baca kisah mereka

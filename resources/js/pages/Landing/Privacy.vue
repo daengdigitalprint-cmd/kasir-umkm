@@ -13,9 +13,9 @@ const props = defineProps<{
     ogImageHeight?: number | null;
 }>();
 
-const pageTitle = 'Kebijakan Privasi — UMKM Kasir';
+const pageTitle = 'Kebijakan Privasi — Kasir UMKM by MaccaPOS';
 const pageDescription =
-    'Kebijakan privasi UMKM Kasir — bagaimana kami mengumpulkan, menggunakan, dan melindungi data pribadi Anda sesuai standar Google Play dan peraturan perlindungan data Indonesia.';
+    'Kebijakan privasi Kasir UMKM by MaccaPOS — bagaimana kami mengumpulkan, menggunakan, dan melindungi data pribadi Anda sesuai standar Google Play dan peraturan perlindungan data Indonesia.';
 
 const maskotUrl = props.maskotUrl ?? '/logo-macca.png';
 const canonicalUrl = props.canonicalUrl ?? '';
@@ -144,7 +144,7 @@ onUnmounted(() => {
             <meta name="robots" content="index, follow" />
 
             <meta property="og:type" content="website" />
-            <meta property="og:site_name" content="UMKM Kasir" />
+            <meta property="og:site_name" content="Kasir UMKM by MaccaPOS" />
             <meta property="og:locale" content="id_ID" />
             <meta property="og:title" :content="pageTitle" />
             <meta property="og:description" :content="pageDescription" />
@@ -166,7 +166,7 @@ onUnmounted(() => {
                 property="og:image:secure_url"
                 :content="shareImageUrl"
             />
-            <meta property="og:image:alt" content="Logo UMKM Kasir — aplikasi kasir untuk UMKM" />
+            <meta property="og:image:alt" content="Logo Kasir UMKM by MaccaPOS — aplikasi kasir untuk UMKM" />
 
             <meta name="twitter:card" content="summary_large_image" />
             <meta name="twitter:title" :content="pageTitle" />
@@ -188,7 +188,7 @@ onUnmounted(() => {
                             <h1 class="char-animation lp-panduan-hero-title">
                                 Kebijakan Privasi
                                 <br />
-                                UMKM Kasir
+                                Kasir UMKM by MaccaPOS
                             </h1>
                             <p class="wow fadeInUp" data-wow-delay=".3s">
                                 Terakhir diperbarui: <strong>{{ lastUpdated }}</strong>
@@ -196,7 +196,7 @@ onUnmounted(() => {
                             <p class="wow fadeInUp" data-wow-delay=".4s" style="max-width: 700px; margin: 0 auto;">
                                 Kami menghormati privasi Anda. Kebijakan ini menjelaskan bagaimana kami mengumpulkan,
                                 menggunakan, menyimpan, dan melindungi data pribadi Anda saat menggunakan aplikasi
-                                UMKM Kasir, sesuai dengan Undang-Undang Perlindungan Data Pribadi Indonesia (UU PDP)
+                                Kasir UMKM by MaccaPOS, sesuai dengan Undang-Undang Perlindungan Data Pribadi Indonesia (UU PDP)
                                 dan standar Google Play.
                             </p>
                             <div class="lp-panduan-hero-cta wow fadeInUp" data-wow-delay=".5s">
@@ -260,18 +260,18 @@ onUnmounted(() => {
                                         <span class="lp-panduan-card-num">01</span>
                                         <h2 class="lp-panduan-card-title">Pendahuluan</h2>
                                         <p class="lp-panduan-card-intro">
-                                            Selamat datang di UMKM Kasir ("kami", "kita", atau "aplikasi"). Kebijakan Privasi
+                                            Selamat datang di Kasir UMKM by MaccaPOS ("kami", "kita", atau "aplikasi"). Kebijakan Privasi
                                             ini dirancang untuk membantu Anda memahami bagaimana kami mengelola informasi
                                             pribadi yang dikumpulkan dari pengguna aplikasi kasir berbasis web ini.
                                         </p>
                                         <ul class="lp-panduan-bullets">
                                             <li>
                                                 <i class="fa-solid fa-circle-check"></i>
-                                                <span>UMKM Kasir adalah aplikasi kasir web yang dikembangkan oleh RisenAI.</span>
+                                                <span>Kasir UMKM by MaccaPOS adalah aplikasi kasir web yang dikembangkan oleh RisenAI.</span>
                                             </li>
                                             <li>
                                                 <i class="fa-solid fa-circle-check"></i>
-                                                <span>Dengan menggunakan UMKM Kasir, Anda menyetujui praktik pengumpulan dan penggunaan informasi yang dijelaskan dalam kebijakan ini.</span>
+                                                <span>Dengan menggunakan Kasir UMKM by MaccaPOS, Anda menyetujui praktik pengumpulan dan penggunaan informasi yang dijelaskan dalam kebijakan ini.</span>
                                             </li>
                                             <li>
                                                 <i class="fa-solid fa-circle-check"></i>
@@ -430,7 +430,7 @@ onUnmounted(() => {
                                         <span class="lp-panduan-card-num">10</span>
                                         <h2 class="lp-panduan-card-title">Privasi Anak</h2>
                                         <p class="lp-panduan-card-intro">
-                                            UMKM Kasir tidak ditujukan untuk anak-anak di bawah usia 18 tahun. Kami tidak
+                                            Kasir UMKM by MaccaPOS tidak ditujukan untuk anak-anak di bawah usia 18 tahun. Kami tidak
                                             dengan sengaja mengumpulkan data pribadi dari anak-anak. Jika kami mengetahui
                                             hal tersebut terjadi, data akan segera dihapus. Jika Anda orang tua/wali dan
                                             yakin anak Anda telah memberikan data, hubungi kami segera.

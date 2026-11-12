@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * Strip berjalan berisi jenis usaha yang dilayani UMKM Kasir.
+ * Strip berjalan berisi jenis usaha yang dilayani Kasir UMKM by MaccaPOS.
  * (Sebelumnya berisi logo brand bawaan template — logo perusahaan lain,
- * bukan pengguna UMKM Kasir — sehingga diganti teks.)
+ * bukan pengguna Kasir UMKM by MaccaPOS — sehingga diganti teks.)
  */
 const businessTypes = [
     'Warung Makan',

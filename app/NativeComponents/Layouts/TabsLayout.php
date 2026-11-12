@@ -28,7 +28,7 @@ class TabsLayout extends NativeLayout
         $title = $screen->navTitle();
 
         if ($title === '') {
-            $title = 'UMKM Kasir';
+            $title = 'Kasir UMKM by MaccaPOS';
         }
 
         return NavBar::make()

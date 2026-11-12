@@ -251,7 +251,7 @@ const getStatusVariant = (status: string): "default" | "secondary" | "destructiv
 </script>
 
 <template>
-    <Head title="Invoice - UMKM Kasir" />
+    <Head title="Invoice - Kasir UMKM by MaccaPOS" />
 
     <div class="min-h-screen bg-gray-50">
         <!-- Header -->

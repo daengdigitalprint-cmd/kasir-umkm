@@ -93,7 +93,7 @@ function dismissBanner() {
                     <h4
                         class="mb-1 font-display text-[11px] leading-none font-extrabold tracking-[0.2em] text-[#7C3AED] uppercase"
                     >
-                        UMKM Kasir
+                        Kasir UMKM by MaccaPOS
                     </h4>
                     <p class="text-[10px] leading-tight font-medium text-lp-muted">
                         Pasang di layar utama Anda.

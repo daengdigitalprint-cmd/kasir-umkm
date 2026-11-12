@@ -99,7 +99,7 @@
     @endif
 
     <div class="foot">
-        Dicetak {{ now($store->timezone ?: 'UTC')->format('d/m/Y H:i') }} · Dokumen ini dibuat otomatis oleh UMKM Kasir dan bersifat rahasia.
+        Dicetak {{ now($store->timezone ?: 'UTC')->format('d/m/Y H:i') }} · Dokumen ini dibuat otomatis oleh Kasir UMKM by MaccaPOS dan bersifat rahasia.
     </div>
 </body>
 </html>

@@ -116,7 +116,7 @@ const tabs = computed<DashboardTab[]>(() => [
                                 :src="tab.src"
                                 :srcset="`${tab.src800} 800w, ${tab.src} ${tab.srcWidth}w`"
                                 sizes="(max-width: 991px) 100vw, 851px"
-                                :alt="`Tampilan fitur ${tab.label} di aplikasi kasir UMKM Kasir`"
+                                :alt="`Tampilan fitur ${tab.label} di Kasir UMKM by MaccaPOS`"
                                 :fetchpriority="tab.active ? 'high' : undefined"
                                 :loading="tab.active ? undefined : 'lazy'"
                                 decoding="async"
@@ -278,9 +278,9 @@ const tabs = computed<DashboardTab[]>(() => [
                     </div>
                     <div class="col-lg-6 mt-30">
                         <div class="fs-solution-item wow fadeInUp" data-wow-delay="150ms" data-wow-duration="600ms">
-                            <h3 class="xb-title lp-fs-h2">Solusi dengan UMKM Kasir</h3>
+                            <h3 class="xb-title lp-fs-h2">Solusi dengan Kasir UMKM by MaccaPOS</h3>
                             <p class="xb-content">
-                                UMKM Kasir mencatat setiap transaksi, mengurangi stok otomatis, dan menyusun laporan penjualan untuk Anda, semua dalam satu aplikasi.
+                                Kasir UMKM by MaccaPOS mencatat setiap transaksi, mengurangi stok otomatis, dan menyusun laporan penjualan untuk Anda, semua dalam satu aplikasi.
                             </p>
                             <div class="fs-solution-chart_box fa-chart-two">
                                 <div class="xb-item--holder">

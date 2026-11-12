@@ -556,7 +556,7 @@ const hasPendingPayment = computed(() => latestPayment?.status === 'pending');
                                 >
                                     <img
                                         src="/maskot.webp"
-                                        alt="Maskot UMKM Kasir"
+                                        alt="Maskot Kasir UMKM by MaccaPOS"
                                         width="120"
                                         height="120"
                                         class="h-24 w-24 object-contain"

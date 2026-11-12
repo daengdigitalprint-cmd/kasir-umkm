@@ -38,7 +38,7 @@ const filter = (status: string) => router.get('/table-orders', { status }, { pre
 const { isConnected: isPrinterConnected, isPrinting: isPrinterPrinting, initialize: initializePrinter, printEscPosBytes } = usePrinter();
 const printKot = async (order: Order) => {
     const lines = buildKotPlainLines({
-        storeName: 'KasirUMKM',
+        storeName: 'Kasir UMKM by MaccaPOS',
         transactionNumber: order.transaction_number,
         tableReference: order.table_reference,
         items: order.items.map((item) => ({ product_name: item.product_name, quantity: item.quantity })),

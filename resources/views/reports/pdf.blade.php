@@ -216,7 +216,7 @@
     @endif
 
     <div class="footer">
-        <p>Laporan ini dibuat secara otomatis oleh sistem UMKM Kasir</p>
+        <p>Laporan ini dibuat secara otomatis oleh sistem Kasir UMKM by MaccaPOS</p>
         <p>© {{ date('Y') }} {{ $store->name }}. Semua hak dilindungi.</p>
     </div>
 </body>

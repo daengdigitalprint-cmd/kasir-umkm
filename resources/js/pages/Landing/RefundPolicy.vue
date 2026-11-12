@@ -13,9 +13,9 @@ const props = defineProps<{
     ogImageHeight?: number | null;
 }>();
 
-const pageTitle = 'Kebijakan Refund — UMKM Kasir';
+const pageTitle = 'Kebijakan Refund — Kasir UMKM by MaccaPOS';
 const pageDescription =
-    'Kebijakan pengembalian dana (refund) UMKM Ketentuan pengembalian dana untuk langganan UMKM Kasir.';
+    'Kebijakan pengembalian dana (refund) UMKM Ketentuan pengembalian dana untuk langganan Kasir UMKM by MaccaPOS.';
 
 const maskotUrl = props.maskotUrl ?? '/logo-macca.png';
 const canonicalUrl = props.canonicalUrl ?? '';
@@ -130,7 +130,7 @@ onUnmounted(() => {
             <meta name="robots" content="index, follow" />
 
             <meta property="og:type" content="website" />
-            <meta property="og:site_name" content="UMKM Kasir" />
+            <meta property="og:site_name" content="Kasir UMKM by MaccaPOS" />
             <meta property="og:locale" content="id_ID" />
             <meta property="og:title" :content="pageTitle" />
             <meta property="og:description" :content="pageDescription" />
@@ -140,7 +140,7 @@ onUnmounted(() => {
             <meta v-if="ogImageWidth && ogImageHeight" property="og:image:width" :content="String(ogImageWidth)" />
             <meta v-if="ogImageWidth && ogImageHeight" property="og:image:height" :content="String(ogImageHeight)" />
             <meta v-if="shareImageUrl.startsWith('https://')" property="og:image:secure_url" :content="shareImageUrl" />
-            <meta property="og:image:alt" content="Logo UMKM Kasir — aplikasi kasir untuk UMKM" />
+            <meta property="og:image:alt" content="Logo Kasir UMKM by MaccaPOS — aplikasi kasir untuk UMKM" />
 
             <meta name="twitter:card" content="summary_large_image" />
             <meta name="twitter:title" :content="pageTitle" />
@@ -161,14 +161,14 @@ onUnmounted(() => {
                             <h1 class="char-animation lp-panduan-hero-title">
                                 Kebijakan Refund
                                 <br />
-                                UMKM Kasir
+                                Kasir UMKM by MaccaPOS
                             </h1>
                             <p class="wow fadeInUp" data-wow-delay=".3s">
                                 Terakhir diperbarui: <strong>{{ lastUpdated }}</strong>
                             </p>
                             <p class="wow fadeInUp" data-wow-delay=".4s" style="max-width: 700px; margin: 0 auto;">
                                 Kebijakan ini menjelaskan ketentuan dan prosedur pengembalian dana untuk layanan
-                                langganan UMKM Kasir.
+                                langganan Kasir UMKM by MaccaPOS.
                             </p>
                             <div class="lp-panduan-hero-cta wow fadeInUp" data-wow-delay=".5s">
                                 <Link href="/register" class="gt-theme-btn style-3 bg-theme">Buat akun</Link>
@@ -213,12 +213,12 @@ onUnmounted(() => {
                                         <h2 class="lp-panduan-card-title">Ketentuan Umum</h2>
                                         <p class="lp-panduan-card-intro">
                                             Kebijakan refund ini berlaku untuk semua pengguna yang telah melakukan pembayaran
-                                            langganan pada layanan UMKM Kasir, baik paket Starter, Pro, maupun paket lainnya.
+                                            langganan pada layanan Kasir UMKM by MaccaPOS, baik paket Starter, Pro, maupun paket lainnya.
                                         </p>
                                         <ul class="lp-panduan-bullets">
                                             <li><i class="fa-solid fa-circle-check"></i><span>Pengembalian dana hanya berlaku untuk pembayaran langganan yang belum digunakan atau belum aktif.</span></li>
                                             <li><i class="fa-solid fa-circle-check"></i><span>Permintaan refund harus diajukan dalam waktu 7 (tujuh) hari kalender sejak pembayaran dikonfirmasi.</span></li>
-                                            <li><i class="fa-solid fa-circle-check"></i><span>UMKM Kasir berhak menolak permintaan refund yang tidak memenuhi syarat yang ditetapkan.</span></li>
+                                            <li><i class="fa-solid fa-circle-check"></i><span>Kasir UMKM by MaccaPOS berhak menolak permintaan refund yang tidak memenuhi syarat yang ditetapkan.</span></li>
                                         </ul>
                                     </article>
 
@@ -269,7 +269,7 @@ onUnmounted(() => {
                                             <li><i class="fa-solid fa-circle-check"></i><span>Add-on atau fitur tambahan yang sudah diaktifkan.</span></li>
                                         </ul>
                                         <p class="lp-panduan-footnote">
-                                            Dalam kasus khusus di luar daftar di atas, keputusan akhir berada di tangan UMKM Kasir
+                                            Dalam kasus khusus di luar daftar di atas, keputusan akhir berada di tangan Kasir UMKM by MaccaPOS
                                             setelah meninjau seluruh informasi yang relevan.
                                         </p>
                                     </article>
@@ -288,7 +288,7 @@ onUnmounted(() => {
                                         <span class="lp-panduan-card-num">07</span>
                                         <h2 class="lp-panduan-card-title">Perubahan Kebijakan</h2>
                                         <p class="lp-panduan-card-intro">
-                                            UMKM Kasir berhak mengubah kebijakan refund ini kapan saja. Perubahan akan
+                                            Kasir UMKM by MaccaPOS berhak mengubah kebijakan refund ini kapan saja. Perubahan akan
                                             diberitahukan melalui email ke pengguna terdaftar dan/atau pemberitahuan
                                             di dalam aplikasi minimal 30 hari sebelum berlaku efektif.
                                         </p>

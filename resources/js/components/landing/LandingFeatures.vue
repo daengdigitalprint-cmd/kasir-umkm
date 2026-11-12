@@ -20,11 +20,11 @@ const base = computed(() => props.assetsBase ?? '/buyer-assets');
                     <div class="col-xl-6">
                         <div class="gt-about-content">
                             <div class="gt-section-title style-3 mb-0">
-                                <h6 class="tt-capitalize wow fadeInUp">Mengapa UMKM Kasir</h6>
+                                <h6 class="tt-capitalize wow fadeInUp">Mengapa Kasir UMKM by MaccaPOS</h6>
                                 <h2 class="char-animation">Pengalaman kasir yang bikin pelanggan UMKM betah kembali</h2>
                             </div>
                             <p class="gt-text wow fadeInUp" data-wow-delay=".3s">
-                                UMKM Kasir membantu Anda mengelola produk, transaksi, dan laporan dalam satu aplikasi web. Tidak perlu lagi banyak
+                                Kasir UMKM by MaccaPOS membantu Anda mengelola produk, transaksi, dan laporan dalam satu aplikasi web. Tidak perlu lagi banyak
                                 buku catatan atau spreadsheet yang rentan hilang — semua data tersimpan rapi, mudah dicari, dan siap dipakai kapan
                                 pun.
                             </p>
@@ -68,7 +68,7 @@ const base = computed(() => props.assetsBase ?? '/buyer-assets');
                     <div class="col-xl-6">
                         <div class="gt-about-image agn-choose-5-img">
                             <div class="crm-imagewow wow fadeInRight" data-wow-delay=".3s">
-                                <img :src="`${base}/img/new-add/crm-img.png`" alt="UMKM Kasir dashboard" loading="lazy" decoding="async" />
+                                <img :src="`${base}/img/new-add/crm-img.png`" alt="Kasir UMKM by MaccaPOS dashboard" loading="lazy" decoding="async" />
                             </div>
                         </div>
                     </div>

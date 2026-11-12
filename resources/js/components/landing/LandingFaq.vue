@@ -11,14 +11,14 @@ const base = computed(() => props.assetsBase ?? '/sastik-assets');
 const faqItems: { id: string; question: string; answer: string; active?: boolean }[] = [
     {
         id: 'gratis',
-        question: 'Apakah UMKM Kasir benar-benar gratis?',
+        question: 'Apakah Kasir UMKM by MaccaPOS benar-benar gratis?',
         answer: 'Ya. Paket Starter gratis selamanya tanpa batas masa aktif, cocok untuk toko kecil dengan hingga 30 produk. Saat usaha berkembang, Anda bisa naik ke paket GrowUp seharga Rp99 ribu per bulan.',
         active: true,
     },
     {
         id: 'perangkat',
         question: 'Bisa dipakai di HP Android, tablet, atau laptop?',
-        answer: 'Bisa. UMKM Kasir berjalan di browser HP, tablet, maupun laptop, dan tersedia juga aplikasi Android di Google Play. Data tersinkron otomatis di semua perangkat.',
+        answer: 'Bisa. Kasir UMKM by MaccaPOS berjalan di browser HP, tablet, maupun laptop, dan tersedia juga aplikasi Android di Google Play. Data tersinkron otomatis di semua perangkat.',
     },
     {
         id: 'pembayaran',

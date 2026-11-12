@@ -83,7 +83,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <Head title="Daftar - UMKM Kasir">
+    <Head title="Daftar - Kasir UMKM by MaccaPOS">
         <link
             rel="stylesheet"
             :href="`${buyerAssetsBase}/css/bootstrap.min.css`"
@@ -111,7 +111,7 @@ onUnmounted(() => {
                         <div class="lp-auth-form">
                             <div class="lp-auth-mobile-logo d-lg-none mb-4 text-center">
                                 <Link href="/">
-                                    <img :src="maskotUrl" alt="UMKM Kasir" class="lp-auth-mobile-logo-img" />
+                                    <img :src="maskotUrl" alt="Kasir UMKM by MaccaPOS" class="lp-auth-mobile-logo-img" />
                                 </Link>
                             </div>
 

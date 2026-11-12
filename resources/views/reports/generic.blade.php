@@ -148,7 +148,7 @@
     @endforeach
 
     <div class="footer">
-        <p>Dicetak otomatis oleh sistem UMKM Kasir pada {{ $generatedAt }}</p>
+        <p>Dicetak otomatis oleh sistem Kasir UMKM by MaccaPOS pada {{ $generatedAt }}</p>
         <p>&copy; {{ date('Y') }} {{ $storeName }}</p>
     </div>
 </body>

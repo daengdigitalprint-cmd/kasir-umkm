@@ -8,7 +8,7 @@
             <native:row class="w-20 h-20 rounded-2xl bg-theme-primary items-center justify-center shadow-lg">
                 <native:icon :ios="Ios::Storefront" :android="Android::Storefront" class="text-white text-3xl" />
             </native:row>
-            <native:text class="text-2xl font-extrabold text-theme-on-surface">UMKM Kasir</native:text>
+            <native:text class="text-2xl font-extrabold text-theme-on-surface">Kasir UMKM by MaccaPOS</native:text>
             <native:text class="text-xs text-zinc-500 font-medium text-center">Aplikasi Kasir Native POS & Manajemen Usaha</native:text>
         </native:column>
 

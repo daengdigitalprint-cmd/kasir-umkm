@@ -23,7 +23,7 @@ class Login extends NativeComponent
 
     public function navTitle(): string
     {
-        return 'Masuk UMKM Kasir';
+        return 'Masuk Kasir UMKM by MaccaPOS';
     }
 
     public function shouldHideNavBar(): bool

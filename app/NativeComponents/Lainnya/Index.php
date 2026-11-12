@@ -13,7 +13,7 @@ class Index extends NativeComponent
 
     public string $userRole = 'Kasir';
 
-    public string $storeName = 'UMKM Kasir';
+    public string $storeName = 'Kasir UMKM by MaccaPOS';
 
     public function navTitle(): string
     {

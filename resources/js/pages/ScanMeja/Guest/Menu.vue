@@ -368,7 +368,7 @@ const submitOrder = async () => {
                     rel="noopener noreferrer"
                     class="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400 transition hover:text-violet-600"
                 >
-                    Powered by KasirUMKM
+                    Powered by Kasir UMKM by MaccaPOS
                     <ExternalLink class="h-3 w-3" />
                 </a>
             </div>
