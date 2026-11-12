@@ -19,6 +19,13 @@ class OpenAiCompatibleProvider implements AiProviderInterface
 
     protected bool $supportsFunctionCalling;
 
+    /**
+     * Sebagian model baru (mis. Claude lewat lapisan OpenAI-compatible)
+     * menolak parameter `temperature`. Begitu ditolak, parameter itu
+     * dilepas dan permintaan diulang sekali.
+     */
+    protected bool $sendTemperature = true;
+
     public function __construct(array $config)
     {
         $this->baseUrl = rtrim($config['base_url'] ?? 'https://api.openai.com/v1', '/');
@@ -34,21 +41,78 @@ class OpenAiCompatibleProvider implements AiProviderInterface
         return $this->supportsFunctionCalling;
     }
 
+    /**
+     * Susun payload permintaan. `temperature` ikut hanya bila model
+     * belum pernah menolaknya.
+     *
+     * @param  array<int, mixed>  $messages
+     * @param  array<int, mixed>  $tools
+     * @return array<string, mixed>
+     */
+    protected function buildPayload(array $messages, array $tools, bool $stream = false): array
+    {
+        $payload = [
+            'model' => $this->modelId,
+            'messages' => $messages,
+            'max_tokens' => $this->maxTokens,
+        ];
+
+        if ($this->sendTemperature) {
+            $payload['temperature'] = $this->temperature;
+        }
+
+        if ($stream) {
+            $payload['stream'] = true;
+        }
+
+        if (! empty($tools) && $this->supportsFunctionCalling) {
+            $payload['tools'] = $tools;
+            $payload['tool_choice'] = 'auto';
+        }
+
+        return $payload;
+    }
+
+    /** Apakah permintaan ditolak khusus karena parameter `temperature`? */
+    protected function rejectsTemperature(int $status, string $body): bool
+    {
+        if ($status !== 400 || ! $this->sendTemperature) {
+            return false;
+        }
+
+        $body = strtolower($body);
+
+        return str_contains($body, 'temperature')
+            && (str_contains($body, 'deprecated')
+                || str_contains($body, 'unsupported')
+                || str_contains($body, 'not supported')
+                || str_contains($body, 'does not support'));
+    }
+
+    /**
+     * Ambil pesan error yang dikirim provider (field error.message),
+     * supaya admin tahu penyebab aslinya alih-alih pesan umum.
+     */
+    protected function providerMessage(string $body): ?string
+    {
+        $data = json_decode($body, true);
+
+        if (! is_array($data)) {
+            return null;
+        }
+
+        $message = $data['error']['message'] ?? $data['message'] ?? null;
+
+        if (! is_string($message) || trim($message) === '') {
+            return null;
+        }
+
+        return \Illuminate\Support\Str::limit(trim($message), 160);
+    }
+
     public function chat(array $messages, array $tools = []): AiResponse
     {
         try {
-            $payload = [
-                'model' => $this->modelId,
-                'messages' => $messages,
-                'max_tokens' => $this->maxTokens,
-                'temperature' => $this->temperature,
-            ];
-
-            if (! empty($tools) && $this->supportsFunctionCalling) {
-                $payload['tools'] = $tools;
-                $payload['tool_choice'] = 'auto';
-            }
-
             $timeout = (int) config('ai.timeout', 45);
 
             $response = Http::withHeaders([
@@ -56,7 +120,23 @@ class OpenAiCompatibleProvider implements AiProviderInterface
                 'Content-Type' => 'application/json',
             ])
                 ->timeout($timeout)
-                ->post("{$this->baseUrl}/chat/completions", $payload);
+                ->post("{$this->baseUrl}/chat/completions", $this->buildPayload($messages, $tools));
+
+            // Model yang menolak `temperature`: lepas parameternya, ulang sekali.
+            if ($response->failed() && $this->rejectsTemperature($response->status(), $response->body())) {
+                $this->sendTemperature = false;
+
+                Log::info('AI Provider: `temperature` ditolak model, mengulang tanpa parameter itu', [
+                    'model' => $this->modelId,
+                ]);
+
+                $response = Http::withHeaders([
+                    'Authorization' => 'Bearer '.$this->apiKey,
+                    'Content-Type' => 'application/json',
+                ])
+                    ->timeout($timeout)
+                    ->post("{$this->baseUrl}/chat/completions", $this->buildPayload($messages, $tools));
+            }
 
             if ($response->failed()) {
                 Log::error('AI Provider Error', [
@@ -89,41 +169,43 @@ class OpenAiCompatibleProvider implements AiProviderInterface
     public function chatStream(array $messages, array $tools = [], ?callable $onDelta = null): AiResponse
     {
         try {
-            $payload = [
-                'model' => $this->modelId,
-                'messages' => $messages,
-                'max_tokens' => $this->maxTokens,
-                'temperature' => $this->temperature,
-                'stream' => true,
-            ];
-
-            if (! empty($tools) && $this->supportsFunctionCalling) {
-                $payload['tools'] = $tools;
-                $payload['tool_choice'] = 'auto';
-            }
-
             $timeout = (int) config('ai.timeout', 45);
 
-            $response = Http::withHeaders([
+            $send = fn () => Http::withHeaders([
                 'Authorization' => 'Bearer '.$this->apiKey,
                 'Content-Type' => 'application/json',
                 'Accept' => 'text/event-stream',
             ])
                 ->withOptions(['stream' => true])
                 ->timeout($timeout)
-                ->post("{$this->baseUrl}/chat/completions", $payload);
+                ->post("{$this->baseUrl}/chat/completions", $this->buildPayload($messages, $tools, stream: true));
 
+            $response = $send();
             $stream = $response->toPsrResponse()->getBody();
 
-            if ($response->failed()) {
-                $body = $stream->getContents();
+            // Body aliran hanya bisa dibaca sekali, jadi disimpan saat dibaca.
+            $body = $response->failed() ? $stream->getContents() : null;
 
-                Log::error('AI Provider Error (stream)', [
-                    'status' => $response->status(),
-                    'body' => $body,
+            // Model yang menolak `temperature`: lepas parameternya, ulang sekali.
+            if ($response->failed() && $this->rejectsTemperature($response->status(), (string) $body)) {
+                $this->sendTemperature = false;
+
+                Log::info('AI Provider: `temperature` ditolak model (stream), mengulang tanpa parameter itu', [
+                    'model' => $this->modelId,
                 ]);
 
-                return AiResponse::error($this->friendlyApiError($response->status(), $body));
+                $response = $send();
+                $stream = $response->toPsrResponse()->getBody();
+                $body = $response->failed() ? $stream->getContents() : null;
+            }
+
+            if ($response->failed()) {
+                Log::error('AI Provider Error (stream)', [
+                    'status' => $response->status(),
+                    'body' => (string) $body,
+                ]);
+
+                return AiResponse::error($this->friendlyApiError($response->status(), (string) $body));
             }
 
             return $this->parseSseStream($stream, $onDelta);
@@ -257,19 +339,24 @@ class OpenAiCompatibleProvider implements AiProviderInterface
 
     protected function friendlyApiError(int $status, string $body): string
     {
+        // Keterangan asli provider jauh lebih berguna untuk menelusuri masalah
+        // (mis. "model sedang maintenance") daripada pesan umum saja.
+        $detail = $this->providerMessage($body);
+        $suffix = $detail !== null ? ' (keterangan provider: '.$detail.')' : '';
+
         if ($status === 401 || $status === 403) {
-            return 'Kunci API AI tidak valid atau kedaluwarsa. Hubungi admin untuk perbarui pengaturan AI.';
+            return 'Kunci API AI tidak valid atau kedaluwarsa. Hubungi admin untuk perbarui pengaturan AI.'.$suffix;
         }
 
         if ($status === 429) {
-            return 'Batas pemakaian AI tercapai. Silakan coba lagi beberapa menit kemudian.';
+            return 'Batas pemakaian AI tercapai. Silakan coba lagi beberapa menit kemudian.'.$suffix;
         }
 
         if ($status >= 500) {
-            return 'Provider AI sedang gangguan. Silakan coba lagi beberapa saat.';
+            return 'Provider AI sedang gangguan. Silakan coba lagi beberapa saat.'.$suffix;
         }
 
-        return 'Provider AI menolak permintaan. Silakan coba lagi atau hubungi admin jika berlanjut.';
+        return 'Provider AI menolak permintaan. Silakan coba lagi atau hubungi admin jika berlanjut.'.$suffix;
     }
 
     protected function friendlyConnectionError(string $message): string
