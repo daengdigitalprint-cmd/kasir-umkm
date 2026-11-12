@@ -34,6 +34,9 @@ class AppServiceProvider extends ServiceProvider
         // Force HTTPS in production
         if (app()->environment('production')) {
             URL::forceScheme('https');
+            // URL yang dibuat (canonical, og:url, sitemap, link email) selalu memakai APP_URL,
+            // bukan host yang sedang diakses (mis. www.).
+            URL::forceRootUrl((string) config('app.url'));
         }
     }
 }

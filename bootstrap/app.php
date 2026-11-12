@@ -41,6 +41,9 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
+        // www/http -> https://APP_URL (301) supaya Google hanya melihat satu alamat.
+        $middleware->prepend(\App\Http\Middleware\RedirectToCanonicalHost::class);
+
         $middleware->web(append: [
             HandleAppearance::class,
             HandleInertiaRequests::class,
