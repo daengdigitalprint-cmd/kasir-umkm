@@ -31,15 +31,24 @@ class RegisteredUserController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
+        // Nomor WhatsApp dinormalkan ke format 62xxxxxxxxxx (siap dipakai wa.me)
+        // sebelum divalidasi, jadi pengguna bebas mengetik 08…, +62…, atau 62….
+        $request->merge(['whatsapp' => self::normalizeWhatsapp($request->input('whatsapp'))]);
+
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
+            'whatsapp' => ['required', 'string', 'regex:/^628\d{7,12}$/'],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
+        ], [
+            'whatsapp.required' => 'Nomor WhatsApp wajib diisi.',
+            'whatsapp.regex' => 'Nomor WhatsApp tidak valid. Contoh: 0812 3456 7890.',
         ]);
 
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
+            'phone' => $request->whatsapp,
             // Jenis usaha dipilih saat membuat toko pertama; default general.
             'business_type' => in_array($request->business_type, array_keys(BusinessTypePresets::TYPES), true)
                 ? $request->business_type
@@ -52,5 +61,21 @@ class RegisteredUserController extends Controller
         Auth::login($user);
 
         return to_route('dashboard');
+    }
+
+    /**
+     * 0812-3456-7890 / +62 812 3456 7890 / 812… -> 6281234567890.
+     */
+    public static function normalizeWhatsapp(mixed $value): string
+    {
+        $digits = preg_replace('/\D+/', '', (string) $value) ?? '';
+
+        if (str_starts_with($digits, '0')) {
+            $digits = '62'.substr($digits, 1);
+        } elseif (str_starts_with($digits, '8')) {
+            $digits = '62'.$digits;
+        }
+
+        return $digits;
     }
 }

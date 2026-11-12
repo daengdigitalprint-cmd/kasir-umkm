@@ -6,6 +6,7 @@ import { Form, Head, Link } from '@inertiajs/vue3';
 import {
     LoaderCircle,
     Mail,
+    MessageCircle,
     Lock,
     Eye,
     EyeOff,
@@ -166,6 +167,27 @@ onUnmounted(() => {
                                 </div>
 
                                 <div class="lp-auth-field">
+                                    <Label for="whatsapp" class="lp-auth-label">Nomor WhatsApp</Label>
+                                    <div class="lp-auth-input">
+                                        <MessageCircle class="lp-auth-input-icon" />
+                                        <Input
+                                            id="whatsapp"
+                                            type="tel"
+                                            name="whatsapp"
+                                            required
+                                            :tabindex="3"
+                                            autocomplete="tel"
+                                            inputmode="tel"
+                                            maxlength="20"
+                                            placeholder="0812 3456 7890"
+                                            class="lp-auth-input-control !pl-14 !pr-14"
+                                        />
+                                    </div>
+                                    <p class="lp-auth-hint">Untuk info akun &amp; bantuan dari tim kami.</p>
+                                    <InputError :message="errors.whatsapp" />
+                                </div>
+
+                                <div class="lp-auth-field">
                                     <Label for="password" class="lp-auth-label">Kata sandi</Label>
                                     <div class="lp-auth-input">
                                         <Lock class="lp-auth-input-icon" />
@@ -174,7 +196,7 @@ onUnmounted(() => {
                                             :type="showPassword ? 'text' : 'password'"
                                             name="password"
                                             required
-                                            :tabindex="3"
+                                            :tabindex="4"
                                             autocomplete="new-password"
                                             placeholder="Minimal 8 karakter"
                                             class="lp-auth-input-control !pl-14 !pr-14"
@@ -203,7 +225,7 @@ onUnmounted(() => {
                                             :type="showPasswordConfirmation ? 'text' : 'password'"
                                             name="password_confirmation"
                                             required
-                                            :tabindex="4"
+                                            :tabindex="5"
                                             autocomplete="new-password"
                                             placeholder="Ulangi kata sandi"
                                             class="lp-auth-input-control !pl-14 !pr-14"
@@ -223,7 +245,7 @@ onUnmounted(() => {
 
                                 <button
                                     type="submit"
-                                    :tabindex="5"
+                                    :tabindex="6"
                                     :disabled="processing"
                                     class="gt-theme-btn style-3 bg-theme lp-auth-submit"
                                 >

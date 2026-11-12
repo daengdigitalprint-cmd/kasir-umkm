@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\User;
+
 uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
 
 test('registration screen can be rendered', function () {
@@ -12,6 +14,7 @@ test('new users can register', function () {
     $response = $this->post(route('register.store'), [
         'name' => 'Test User',
         'email' => 'test@example.com',
+        'whatsapp' => '0812-3456-7890',
         'password' => 'password',
         'password_confirmation' => 'password',
     ]);
@@ -19,3 +22,38 @@ test('new users can register', function () {
     $this->assertAuthenticated();
     $response->assertRedirect(route('dashboard', absolute: false));
 });
+
+test('nomor whatsapp dinormalkan ke format 62 saat disimpan', function (string $input) {
+    $this->post(route('register.store'), [
+        'name' => 'Test User',
+        'email' => 'wa@example.com',
+        'whatsapp' => $input,
+        'password' => 'password',
+        'password_confirmation' => 'password',
+    ]);
+
+    expect(User::where('email', 'wa@example.com')->value('phone'))->toBe('6281234567890');
+})->with(['0812 3456 7890', '+62 812-3456-7890', '6281234567890', '81234567890']);
+
+test('nomor whatsapp wajib diisi', function () {
+    $this->post(route('register.store'), [
+        'name' => 'Test User',
+        'email' => 'nowa@example.com',
+        'password' => 'password',
+        'password_confirmation' => 'password',
+    ])->assertSessionHasErrors('whatsapp');
+
+    $this->assertGuest();
+});
+
+test('nomor whatsapp yang tidak valid ditolak', function (string $input) {
+    $this->post(route('register.store'), [
+        'name' => 'Test User',
+        'email' => 'badwa@example.com',
+        'whatsapp' => $input,
+        'password' => 'password',
+        'password_confirmation' => 'password',
+    ])->assertSessionHasErrors('whatsapp');
+
+    $this->assertGuest();
+})->with(['12345', '021-555-1234', 'bukan nomor']);

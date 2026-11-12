@@ -43,7 +43,16 @@ class SuperAdminController extends Controller
         $pendingPayments = SubscriptionPayment::where('status', 'pending')->count();
         $totalRevenue = SubscriptionPayment::where('status', 'confirmed')->sum('amount');
 
-        $stores = Store::with(['users', 'voucherUsages', 'subscriptionPlan:id,slug,price'])
+        $stores = Store::with([
+            'users',
+            'voucherUsages',
+            'subscriptionPlan:id,slug,price',
+            // Pemilik = anggota admin/owner pertama (pendaftar yang membuat toko).
+            'members' => fn ($q) => $q->select('users.id', 'users.name', 'users.email', 'users.phone')
+                ->wherePivotIn('role', ['owner', 'admin'])
+                ->orderBy('store_user.created_at')
+                ->orderBy('users.id'),
+        ])
             ->orderBy('created_at', 'desc')
             ->paginate(10)
             ->through(fn (Store $s) => array_merge($s->toArray(), [
@@ -51,6 +60,11 @@ class SuperAdminController extends Controller
                 'pro_trial_active' => $s->pro_trial_active,
                 'pro_trial_start' => $s->pro_trial_start?->toISOString(),
                 'pro_trial_end' => $s->pro_trial_end?->toISOString(),
+                'owner' => ($owner = $s->members->first()) ? [
+                    'name' => $owner->name,
+                    'email' => $owner->email,
+                    'phone' => $owner->phone,
+                ] : null,
             ]));
 
         $vouchers = Voucher::orderBy('created_at', 'desc')->get();

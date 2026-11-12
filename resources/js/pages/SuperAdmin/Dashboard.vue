@@ -100,6 +100,21 @@
                                 <td class="max-w-[260px] px-5 py-3.5">
                                     <p class="truncate font-semibold text-slate-900">{{ store.name }}</p>
                                     <p class="truncate text-xs text-slate-500">{{ store.address || 'Alamat belum diatur' }}</p>
+                                    <div v-if="store.owner" class="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-slate-500">
+                                        <span class="truncate" :title="store.owner.email">{{ store.owner.name }}</span>
+                                        <a
+                                            v-if="waLink(store.owner.phone)"
+                                            :href="waLink(store.owner.phone)!"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            class="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 ring-1 ring-emerald-200 ring-inset hover:bg-emerald-100"
+                                            :aria-label="`Chat WhatsApp ${store.owner.name}`"
+                                        >
+                                            <MessageCircle class="h-3 w-3" />
+                                            {{ waDisplay(store.owner.phone) }}
+                                        </a>
+                                        <span v-else class="shrink-0 text-slate-400">· WA belum ada</span>
+                                    </div>
                                 </td>
                                 <td class="px-3 py-3.5">
                                     <span class="text-sm whitespace-nowrap text-slate-700">{{ planLabel(store) }}</span>
@@ -194,6 +209,21 @@
                             <div class="min-w-0">
                                 <p class="truncate font-semibold text-slate-900">{{ store.name }}</p>
                                 <p class="truncate text-xs text-slate-500">{{ store.address || 'Alamat belum diatur' }}</p>
+                                <div v-if="store.owner" class="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-slate-500">
+                                    <span class="truncate" :title="store.owner.email">{{ store.owner.name }}</span>
+                                    <a
+                                        v-if="waLink(store.owner.phone)"
+                                        :href="waLink(store.owner.phone)!"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        class="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 ring-1 ring-emerald-200 ring-inset hover:bg-emerald-100"
+                                        :aria-label="`Chat WhatsApp ${store.owner.name}`"
+                                    >
+                                        <MessageCircle class="h-3 w-3" />
+                                        {{ waDisplay(store.owner.phone) }}
+                                    </a>
+                                    <span v-else class="shrink-0 text-slate-400">· WA belum ada</span>
+                                </div>
                             </div>
                             <span :class="statusPillClass(store)">
                                 <span class="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
@@ -1230,6 +1260,7 @@ import {
     Trash2,
     X,
     XCircle,
+    MessageCircle,
 } from 'lucide-vue-next';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
@@ -1245,6 +1276,7 @@ interface Store {
     pro_trial_active?: boolean;
     pro_trial_start?: string | null;
     pro_trial_end?: string | null;
+    owner?: { name: string; email: string; phone: string | null } | null;
     subscription_plan?: {
         slug?: string | null;
         price?: number | null;
@@ -1335,6 +1367,19 @@ const safeStats = computed(
     () => props.stats || { total_stores: 0, active_stores: 0, expired_stores: 0, expiring_soon: 0, pending_payments: 0, total_revenue: 0 },
 );
 const safeStores = computed(() => props.stores || { data: [], links: [] });
+
+/** Link wa.me dari nomor pemilik (format 62… / 08…). */
+function waLink(phone?: string | null): string | null {
+    let digits = (phone || '').replace(/\D+/g, '');
+    if (digits.startsWith('0')) digits = '62' + digits.slice(1);
+    else if (digits.startsWith('8')) digits = '62' + digits;
+    return digits.length >= 9 ? `https://wa.me/${digits}` : null;
+}
+
+function waDisplay(phone?: string | null): string {
+    const digits = (phone || '').replace(/\D+/g, '');
+    return digits.startsWith('62') ? '0' + digits.slice(2) : digits;
+}
 const safeVouchers = computed(() => props.vouchers || []);
 const safePlans = computed(() => props.plans || []);
 const safePayments = computed(() => props.recentPayments || []);
