@@ -85,18 +85,17 @@ const rightMarquee: { name: string; desig: string; avatar: string; avatarClass: 
                                 <h2 class="title wow fadeInUp" data-wow-delay="0ms" data-wow-duration="600ms">Pertanyaan yang Sering Diajukan</h2>
                             </div>
                             <div class="fs-faq-image">
-                                <img width="573" height="299" :src="`${base}/img/pricing/img01.webp`" alt="" loading="lazy" decoding="async" />
-                                <div class="img">
-                                    <img
-                                        width="378"
-                                        height="195"
-                                        class="updown-2"
-                                        :src="`${base}/img/pricing/img02.png`"
-                                        alt=""
-                                        loading="lazy"
-                                        decoding="async"
-                                    />
-                                </div>
+                                <img
+                                    width="1240"
+                                    height="860"
+                                    src="/tablet-mockup.webp"
+                                    srcset="/tablet-mockup-sm.webp 620w, /tablet-mockup.webp 1240w"
+                                    sizes="(max-width: 991px) 90vw, 520px"
+                                    alt="Tampilan kasir Kasir UMKM by MaccaPOS di tablet"
+                                    loading="lazy"
+                                    decoding="async"
+                                    style="max-width: 100%; height: auto; display: block"
+                                />
                             </div>
                         </div>
                     </div>
