@@ -727,7 +727,7 @@ const isCurrentRoute = (href: string) => {
                         <span class="text-[10px] font-bold">Riwayat</span>
                     </Button>
                     <!-- Absensi aktif: Setelan diganti Stok agar tetap 5 menu -->
-                    <Button v-if="attendanceEnabled" as="a" href="https://www.kasirumkm.web.id/stock-overview" variant="ghost" :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('https://www.kasirumkm.web.id/stock-overview') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']">
+                    <Button v-if="attendanceEnabled" as="a" href="/stock-overview" variant="ghost" :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/stock-overview') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']">
                         <History class="!h-6 !w-6 mb-1" />
                         <span class="text-[10px] font-bold">Stok</span>
                     </Button>
