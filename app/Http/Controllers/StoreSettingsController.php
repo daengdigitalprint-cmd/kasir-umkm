@@ -7,6 +7,7 @@ use App\Models\Organization;
 use App\Services\ModuleService;
 use App\Support\Accounting\ChartOfAccountsBootstrap;
 use App\Support\BusinessTypePresets;
+use App\Support\PlanModules;
 use App\Support\StoreDefaultProductCategories;
 use App\Support\StoreLocationType;
 use App\Support\StorePlanLimits;
@@ -93,6 +94,24 @@ class StoreSettingsController extends Controller
         ]);
 
         $settings = $store->settings ?? [];
+
+        // Paket Gratis: saklar modul berbayar tidak bisa diubah. Nilai tersimpan dipertahankan
+        // (bukan dipaksa false) supaya kembali berlaku begitu toko upgrade.
+        $blockedModules = [];
+        foreach (PlanModules::MODULES as $moduleKey => $module) {
+            $settingKey = $module['setting'] ?? null;
+            if ($settingKey === null || ! array_key_exists($settingKey, $validated) || ! PlanModules::locked($store, $moduleKey)) {
+                continue;
+            }
+            if ($validated[$settingKey]) {
+                $blockedModules[] = $module['label'];
+            }
+            unset($validated[$settingKey]);
+        }
+        if ($blockedModules !== []) {
+            session()->flash('warning', implode(', ', $blockedModules).' tersedia mulai paket GrowUp. Upgrade paket di halaman Langganan untuk mengaktifkannya.');
+        }
+
         if (array_key_exists('pos_show_barcode', $validated)) {
             $settings['pos_show_barcode'] = (bool) $validated['pos_show_barcode'];
             unset($validated['pos_show_barcode']);

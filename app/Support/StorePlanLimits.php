@@ -12,6 +12,21 @@ final class StorePlanLimits
     public const STARTER_MAX_PRODUCTS = 30;
 
     /**
+     * Daftar fitur paket Gratis yang ditampilkan ke pengguna (halaman Langganan, seeder,
+     * data bawaan mobile). Harus sama dengan aturan di kode: batas di subscription_plans,
+     * gerbang `allowsAdvancedRetailFeatures`, dan modul berbayar di PlanModules.
+     */
+    public const STARTER_FEATURES = [
+        'Hingga 30 produk',
+        'Hingga 50 pelanggan',
+        'Transaksi tanpa batas',
+        '1 outlet',
+        'Kasir (POS) & cetak struk',
+        'Stok dasar & riwayat stok',
+        'Laporan penjualan',
+    ];
+
+    /**
      * Paket efektif untuk toko (trial / setelah pembayaran tercatat di kolom ini).
      */
     public static function effectivePlan(Store $store): ?SubscriptionPlan

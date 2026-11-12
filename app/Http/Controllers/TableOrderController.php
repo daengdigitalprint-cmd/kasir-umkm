@@ -167,7 +167,7 @@ class TableOrderController extends Controller
             'user_id' => auth()->id(),
         ]);
 
-        if ($store->settings['kitchen_queue_enabled'] ?? false) {
+        if (\App\Support\PlanModules::settingOn($store, 'kitchen_queue_enabled')) {
             $queue = $store->queues()->where('is_active', true)->first();
             if (! $queue) {
                 $queue = $store->queues()->create(['name' => 'Kasir', 'code' => 'Q001', 'is_active' => true]);

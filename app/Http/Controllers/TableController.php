@@ -18,7 +18,7 @@ class TableController extends Controller
                 ->with('error', 'Anda perlu membuat toko terlebih dahulu.')];
         }
 
-        if (! ($store->settings['scan_meja_enabled'] ?? false)) {
+        if (! \App\Support\PlanModules::settingOn($store, 'scan_meja_enabled')) {
             return [null, redirect()->route('dashboard')
                 ->with('warning', 'Modul Scan Meja belum diaktifkan. Aktifkan di Pengaturan → Toko → Modul Fitur.')];
         }

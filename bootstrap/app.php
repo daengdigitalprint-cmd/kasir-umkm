@@ -48,6 +48,8 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleAppearance::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
+            // Modul berbayar (resep, akuntansi, KPI, AI, ...) dikunci untuk paket Gratis.
+            \App\Http\Middleware\EnsurePlanModule::class,
         ]);
 
         $middleware->alias([

@@ -12,7 +12,7 @@ const faqItems: { id: string; question: string; answer: string; active?: boolean
     {
         id: 'gratis',
         question: 'Apakah Kasir UMKM by MaccaPOS benar-benar gratis?',
-        answer: 'Ya. Paket Starter gratis selamanya tanpa batas masa aktif, cocok untuk toko kecil dengan hingga 30 produk. Saat usaha berkembang, Anda bisa naik ke paket GrowUp seharga Rp99 ribu per bulan.',
+        answer: 'Ya. Paket Starter gratis selamanya dengan transaksi tanpa batas, untuk 1 outlet dengan hingga 30 produk dan 50 pelanggan. Fitur lanjutan seperti shift kasir, pembelian, diskon, dan multi-outlet tersedia di paket GrowUp seharga Rp99 ribu per bulan.',
         active: true,
     },
     {

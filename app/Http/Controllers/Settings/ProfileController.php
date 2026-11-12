@@ -3,12 +3,12 @@
 namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
-use App\Http\Controllers\StoreSettingsController;
 use App\Http\Requests\Settings\ProfileUpdateRequest;
 use App\Models\Organization;
 use App\Support\Accounting\AccountingFeatures;
 use App\Support\BusinessTypePresets;
 use App\Support\FnBFeatures;
+use App\Support\PlanModules;
 use App\Support\ProductDiscountFeatures;
 use App\Support\StockAdjustmentApproval;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
@@ -106,12 +106,11 @@ class ProfileController extends Controller
                 'batch_expiry_email_enabled' => (bool) ($store->settings['batch_expiry_email_enabled'] ?? false),
                 'default_service_charge_percent' => (float) ($store->settings['default_service_charge_percent'] ?? 0),
                 'pos_show_barcode' => (bool) ($store->settings['pos_show_barcode'] ?? false),
-                'ai_chat_enabled' => (bool) ($store->settings['ai_chat_enabled'] ?? true),
-                'recipes_enabled' => (bool) ($store->settings['recipes_enabled']
-                    ?? StoreSettingsController::featureDefaultsForType($store->business_type ?? 'general')['recipes_enabled']),
-                'productions_enabled' => (bool) ($store->settings['productions_enabled']
-                    ?? StoreSettingsController::featureDefaultsForType($store->business_type ?? 'general')['productions_enabled']),
-                'kitchen_queue_enabled' => (bool) ($store->settings['kitchen_queue_enabled'] ?? false),
+                // Saklar modul berbayar: nilai yang berlaku (mati bila dikunci paket Gratis).
+                'ai_chat_enabled' => PlanModules::settingOn($store, 'ai_chat_enabled'),
+                'recipes_enabled' => PlanModules::settingOn($store, 'recipes_enabled'),
+                'productions_enabled' => PlanModules::settingOn($store, 'productions_enabled'),
+                'kitchen_queue_enabled' => PlanModules::settingOn($store, 'kitchen_queue_enabled'),
                 'queue_module_enabled' => (bool) ($store->settings['queue_module_enabled'] ?? false),
                 'fnb_order_types_enabled' => (bool) ($store->settings['fnb_order_types_enabled'] ?? true),
                 'fnb_split_bill_enabled' => (bool) ($store->settings['fnb_split_bill_enabled'] ?? true),
@@ -128,10 +127,10 @@ class ProfileController extends Controller
                 'attendance_enabled' => (bool) ($store->settings['attendance']['enabled'] ?? false),
                 'wholesale_enabled' => (bool) ($store->settings['wholesale_enabled'] ?? false),
                 'cup_label_enabled' => (bool) ($store->settings['cup_label_enabled'] ?? false),
-                'scan_meja_enabled' => (bool) ($store->settings['scan_meja_enabled'] ?? false),
+                'scan_meja_enabled' => PlanModules::settingOn($store, 'scan_meja_enabled'),
                 'accounting_enabled' => AccountingFeatures::enabled($store),
                 'max_backdate_days' => (int) ($store->settings['max_backdate_days'] ?? 7),
-                'receivables_enabled' => (bool) ($store->settings['receivables_enabled'] ?? true),
+                'receivables_enabled' => PlanModules::settingOn($store, 'receivables_enabled'),
                 'product_discount_enabled' => ProductDiscountFeatures::enabled($store),
                 'scan_meja_payment_methods' => $store->settings['scan_meja_payment_methods'] ?? [
                     ['type' => 'cash', 'label' => 'Tunai', 'active' => true, 'instructions' => 'Bayar langsung di kasir'],

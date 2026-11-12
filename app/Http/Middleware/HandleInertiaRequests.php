@@ -2,7 +2,6 @@
 
 namespace App\Http\Middleware;
 
-use App\Http\Controllers\StoreSettingsController;
 use App\Models\QueueEntry;
 use App\Models\Store;
 use App\Models\Transaction;
@@ -17,6 +16,7 @@ use App\Support\BarbershopFeatures;
 use App\Support\FnBFeatures;
 use App\Support\LaundryFeatures;
 use App\Support\PharmacyFeatures;
+use App\Support\PlanModules;
 use App\Support\ProductDiscountFeatures;
 use App\Support\StockAdjustmentApproval;
 use App\Support\StoreLocationType;
@@ -173,31 +173,26 @@ class HandleInertiaRequests extends Middleware
             'payroll_enabled' => $activeStore ? AttendancePayrollAddOnService::isPurchased($activeStore) : false,
             // Badge menu SDM: pengajuan cuti/lembur yang menunggu persetujuan (hanya untuk back-office).
             'pending_hr_requests' => fn () => $this->pendingHrRequests($user, $activeStore),
-            'recipes_enabled' => $activeStore
-                ? (bool) ($activeStore->settings['recipes_enabled']
-                    ?? StoreSettingsController::featureDefaultsForType($activeStore->business_type ?? 'general')['recipes_enabled'])
-                : false,
-            'productions_enabled' => $activeStore
-                ? (bool) ($activeStore->settings['productions_enabled']
-                    ?? StoreSettingsController::featureDefaultsForType($activeStore->business_type ?? 'general')['productions_enabled'])
-                : false,
-            'kitchen_queue_enabled' => $activeStore
-                ? (bool) ($activeStore->settings['kitchen_queue_enabled'] ?? false)
-                : false,
+            // Saklar modul berbayar selalu lewat PlanModules::settingOn (mati bila dikunci paket Gratis).
+            'recipes_enabled' => PlanModules::settingOn($activeStore, 'recipes_enabled'),
+            'productions_enabled' => PlanModules::settingOn($activeStore, 'productions_enabled'),
+            'kitchen_queue_enabled' => PlanModules::settingOn($activeStore, 'kitchen_queue_enabled'),
             'queue_module_enabled' => $activeStore
                 ? (bool) ($activeStore->settings['queue_module_enabled'] ?? false)
                 : false,
-            'scan_meja_enabled' => $activeStore
-                ? (bool) ($activeStore->settings['scan_meja_enabled'] ?? false)
-                : false,
+            'scan_meja_enabled' => PlanModules::settingOn($activeStore, 'scan_meja_enabled'),
             'accounting_enabled' => $activeStore ? AccountingFeatures::enabled($activeStore) : false,
-            'receivables_enabled' => $activeStore
-                ? (bool) ($activeStore->settings['receivables_enabled'] ?? true)
-                : false,
+            'receivables_enabled' => PlanModules::settingOn($activeStore, 'receivables_enabled'),
             'product_discount_enabled' => ProductDiscountFeatures::enabled($activeStore),
-            'ai_chat_enabled' => $activeStore
-                ? (bool) ($activeStore->settings['ai_chat_enabled'] ?? true)
-                : true,
+            'ai_chat_enabled' => $activeStore ? PlanModules::settingOn($activeStore, 'ai_chat_enabled') : true,
+            // Menu & saklar yang dikunci paket Gratis (ditampilkan nonaktif dengan ajakan upgrade).
+            'plan_locked_menus' => ($user && $activeStore) ? PlanModules::lockedMenus($activeStore) : [],
+            'plan_locked_settings' => ($user && $activeStore)
+                ? array_values(array_filter(
+                    array_map(fn (array $m) => $m['setting'] ?? null, PlanModules::MODULES),
+                    fn (?string $key) => $key !== null && PlanModules::settingLocked($activeStore, $key),
+                ))
+                : [],
             'pending_queue_count' => $activeStore && ($activeStore->settings['queue_module_enabled'] ?? false)
                 ? QueueEntry::where('store_id', $activeStore->id)
                     ->whereNull('transaction_id')
@@ -205,14 +200,14 @@ class HandleInertiaRequests extends Middleware
                     ->whereBetween('created_at', [today(), today()->endOfDay()])
                     ->count()
                 : 0,
-            'pending_kitchen_order_count' => $activeStore && ($activeStore->settings['kitchen_queue_enabled'] ?? false)
+            'pending_kitchen_order_count' => $activeStore && PlanModules::settingOn($activeStore, 'kitchen_queue_enabled')
                 ? QueueEntry::where('store_id', $activeStore->id)
                     ->whereNotNull('transaction_id')
                     ->where('status', 'waiting')
                     ->whereBetween('created_at', [today(), today()->endOfDay()])
                     ->count()
                 : 0,
-            'pending_table_order_count' => $activeStore && ($activeStore->settings['scan_meja_enabled'] ?? false)
+            'pending_table_order_count' => $activeStore && PlanModules::settingOn($activeStore, 'scan_meja_enabled')
                 ? Transaction::where('store_id', $activeStore->id)
                     ->where('order_status', 'pending')
                     ->where('order_type', 'dine_in')
@@ -238,7 +233,7 @@ class HandleInertiaRequests extends Middleware
             'plan_limits' => $planLimits,
             'can_access_activity_logs' => $user ? $user->canAccessActivityLogs() : false,
             'can_use_ai_assistant' => $user
-                ? (($activeStore === null || ($activeStore->settings['ai_chat_enabled'] ?? true) !== false)
+                ? (($activeStore === null || PlanModules::settingOn($activeStore, 'ai_chat_enabled'))
                     && ($user->isSuperAdmin() || $user->isAdmin() || $user->isManager() || $user->isCashier() || $user->isOwner()))
                 : false,
             'can_manage_ai_settings' => $user ? ($user->isSuperAdmin() || $user->isAdmin()) : false,

@@ -9,19 +9,19 @@ const props = defineProps<{
 const base = computed(() => props.assetsBase ?? '/sastik-assets');
 
 const starterFeatures: string[] = [
-    'Hingga 30 produk',
-    'POS dasar & cetak struk',
-    'Transaksi & laporan singkat',
-    'Pakai tanpa batas masa aktif',
-    'Manajemen stok dasar',
+    'Hingga 30 produk & 50 pelanggan',
+    'Transaksi tanpa batas',
+    'Kasir (POS) & cetak struk',
+    'Stok dasar & laporan penjualan',
+    '1 outlet, tanpa batas masa aktif',
 ];
 
 const growUpFeatures: string[] = [
-    'Produk (SKU) tanpa batas',
-    'Transaksi tanpa batas per hari',
-    'Hingga 3 outlet',
-    'Laporan lengkap (rentang 1 tahun)',
-    'Shift kasir & transfer stok antar outlet',
+    'Produk & pelanggan tanpa batas',
+    'Hingga 3 outlet & transfer stok',
+    'Shift kasir, pembelian & stok opname',
+    'Diskon, loyalitas & piutang pelanggan',
+    'Resep, akuntansi & asisten AI',
 ];
 </script>
 

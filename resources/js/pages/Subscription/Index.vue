@@ -151,6 +151,21 @@ const isPromoOnboardingPlan = (plan: Plan) => plan.slug.startsWith('promo-onboar
 
 const isStarterPlanSlug = (slug: string) => slug === 'starter' || slug === 'starter-tahunan';
 
+/** Fitur yang tidak ada di paket Gratis (sinkron dengan gerbang paket di backend). */
+const starterExcluded = [
+    'Shift kasir & kas masuk/keluar',
+    'Pembelian & retur',
+    'Diskon & loyalitas',
+    'Varian & paket produk',
+    'Stok opname & transfer stok',
+    'Resep & produksi',
+    'Piutang pelanggan',
+    'Scan QR meja & antrean dapur',
+    'Akuntansi & KPI',
+    'Asisten AI',
+    'Multi-outlet',
+];
+
 const promoNormalMonthlyPrice = 99000;
 const promoTotalMonths = 12;
 const promoPayMonths = 8;
@@ -515,6 +530,11 @@ const hasPendingPayment = computed(() => latestPayment?.status === 'pending');
                                         <span>{{ feature }}</span>
                                     </li>
                                 </ul>
+                                <!-- Paket Gratis: sebutkan terang-terangan yang tidak termasuk (sinkron dengan PlanModules.php) -->
+                                <div v-if="isStarterPlanSlug(plan.slug)" class="mb-6 rounded-xl bg-slate-50 p-3 text-left">
+                                    <p class="text-xs font-semibold text-slate-600">Tidak termasuk (mulai paket GrowUp):</p>
+                                    <p class="mt-1 text-xs leading-relaxed text-slate-500">{{ starterExcluded.join(' · ') }}</p>
+                                </div>
                                 <button
                                     v-if="!isPromoOnboardingPlan(plan) && hasMoreFeatures(plan)"
                                     type="button"

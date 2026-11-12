@@ -472,6 +472,8 @@ const navigationItems = computed((): ProcessedNavItem[] => {
     // Mode Sederhana: hanya menu inti (daftar dihitung server, lihat App\Support\UiMode).
     const simpleMode = (page.props as { ui_mode?: string }).ui_mode === 'simple';
     const simpleVisibleMenus = (page.props as { simple_visible_menus?: string[] }).simple_visible_menus ?? [];
+    // Modul berbayar yang dikunci paket Gratis (dihitung server, lihat PlanModules.php).
+    const planLockedMenus = (page.props as { plan_locked_menus?: string[] }).plan_locked_menus ?? [];
 
     return navigationSource.flatMap((item): ProcessedNavItem[] => {
         // Cek apakah menu ini diizinkan secara eksplisit lewat Manage Staff
@@ -545,7 +547,7 @@ const navigationItems = computed((): ProcessedNavItem[] => {
         }
 
         // Filter paket berlangganan
-        if (item.advancedRetailOnly && !allowAdvanced) {
+        if ((item.advancedRetailOnly && !allowAdvanced) || (item.menuKey && planLockedMenus.includes(item.menuKey))) {
             return [{ ...item, disabled: true, disabledReason: 'Upgrade ke paket berbayar untuk mengakses fitur ini' }];
         }
 

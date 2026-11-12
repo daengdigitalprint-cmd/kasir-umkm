@@ -15,7 +15,7 @@ class ScanMejaFeatures
             return false;
         }
 
-        return (bool) ($store->settings['scan_meja_enabled'] ?? false);
+        return PlanModules::settingOn($store, 'scan_meja_enabled');
     }
 
     /**

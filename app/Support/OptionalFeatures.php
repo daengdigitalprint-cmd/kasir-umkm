@@ -171,6 +171,10 @@ class OptionalFeatures
     {
         $feature = self::FEATURES[$key];
 
+        if (self::lockedByPlan($store, $key)) {
+            return false;
+        }
+
         if (isset($feature['setting']) && ! self::settingOn($store, $feature['setting'])) {
             return false;
         }
@@ -190,7 +194,23 @@ class OptionalFeatures
 
     public static function needsUpgrade(Store $store, string $key): bool
     {
-        return ! empty(self::FEATURES[$key]['advanced']) && ! StorePlanLimits::allowsAdvancedRetailFeatures($store);
+        if (! empty(self::FEATURES[$key]['advanced']) && ! StorePlanLimits::allowsAdvancedRetailFeatures($store)) {
+            return true;
+        }
+
+        return self::lockedByPlan($store, $key);
+    }
+
+    /** Fitur yang modulnya dikunci paket Gratis (lihat PlanModules). */
+    private static function lockedByPlan(Store $store, string $key): bool
+    {
+        $feature = self::FEATURES[$key];
+
+        if (isset($feature['setting']) && PlanModules::settingLocked($store, $feature['setting'])) {
+            return true;
+        }
+
+        return array_intersect($feature['menus'], PlanModules::lockedMenus($store)) !== [];
     }
 
     /**

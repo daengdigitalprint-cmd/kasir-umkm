@@ -157,7 +157,7 @@ test('metode pembayaran tidak dikenal ditolak validasi', function () {
 
 test('jurnal split tender memisah debit kas dan bank', function () {
     [$store, $cashier, $product] = makeSplitTenderStore();
-    $store->update(['settings' => ['accounting_enabled' => true]]);
+    $store->update(['settings' => ['accounting_enabled' => true, 'plan_unlocked_modules' => ['accounting']]]);
 
     $this->actingAs($cashier)
         ->postJson('/pos/process-payment', splitTenderPayload($product->id, [

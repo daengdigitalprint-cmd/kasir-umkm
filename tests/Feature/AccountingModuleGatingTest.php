@@ -39,7 +39,8 @@ function makeGatingStore(bool $accountingEnabled = false): array
         'is_subscription_active' => true,
         'subscription_plan_id' => $plan->id,
         'subscription_end' => now()->addDay(),
-        'settings' => ['accounting_enabled' => $accountingEnabled],
+        // Akuntansi modul berbayar: toko uji (paket Starter) diberi izin khusus agar gating modul yang diuji.
+        'settings' => ['accounting_enabled' => $accountingEnabled, 'plan_unlocked_modules' => ['accounting']],
     ]);
 
     $user = User::factory()->create([

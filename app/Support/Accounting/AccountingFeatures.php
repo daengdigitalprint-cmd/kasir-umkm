@@ -24,6 +24,7 @@ class AccountingFeatures
             return false;
         }
 
-        return (bool) ($store->settings['accounting_enabled'] ?? false);
+        // Paket Gratis: modul dikunci, kecuali toko yang jurnalnya sudah berjalan (PlanModules).
+        return \App\Support\PlanModules::settingOn($store, 'accounting_enabled');
     }
 }
