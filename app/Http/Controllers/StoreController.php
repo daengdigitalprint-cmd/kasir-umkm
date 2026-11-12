@@ -9,6 +9,7 @@ use App\Support\InventoryType;
 use App\Support\StoreDefaultProductCategories;
 use App\Support\StoreLocationType;
 use App\Support\StorePlanLimits;
+use App\Support\UiMode;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
@@ -196,6 +197,10 @@ class StoreController extends Controller implements HasMiddleware
 
         $featureDefaults = StoreSettingsController::featureDefaultsForType($validated['business_type'] ?? 'general');
 
+        // Mode tampilan: outlet baru mengikuti outlet lain di grup yang sama (atau outlet aktif pembuatnya);
+        // toko pertama dimulai dari Mode Sederhana.
+        $modeReference = Store::where('organization_id', $organizationId)->orderBy('id')->first() ?? $owner->store;
+
         $store = Store::create([
             ...$validated,
             'slug' => $slug,
@@ -205,6 +210,7 @@ class StoreController extends Controller implements HasMiddleware
                 'tax_rate' => 0,
                 'receipt_footer' => 'Terima kasih telah berbelanja!',
                 ...$featureDefaults,
+                'ui_mode' => UiMode::defaultForNewStore($modeReference),
             ],
         ]);
 

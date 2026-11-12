@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Settings\BackupController;
+use App\Http\Controllers\Settings\FeatureController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\StoreSettingsController;
@@ -18,6 +19,17 @@ Route::middleware('auth')->group(function () {
     Route::put('settings/store', [StoreSettingsController::class, 'update'])
         ->middleware('role.store_admin')
         ->name('settings.store.update');
+
+    Route::put('settings/ui-mode', [StoreSettingsController::class, 'updateUiMode'])
+        ->middleware('role.store_admin')
+        ->name('settings.ui-mode.update');
+
+    Route::get('settings/features', [FeatureController::class, 'index'])
+        ->middleware('role.store_admin')
+        ->name('settings.features');
+    Route::put('settings/features/{feature}', [FeatureController::class, 'update'])
+        ->middleware('role.store_admin')
+        ->name('settings.features.update');
 
     Route::get('settings/password', [PasswordController::class, 'edit'])->name('password.edit');
 

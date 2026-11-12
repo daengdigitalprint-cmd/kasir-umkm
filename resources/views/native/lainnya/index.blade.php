@@ -25,6 +25,7 @@
             </native:row>
         </native:pressable>
 
+        @if ($showKas)
         <native:pressable class="p-3" @tap="$navigate('/app/kas')">
             <native:row class="justify-between items-center">
                 <native:row class="items-center gap-3">
@@ -34,7 +35,9 @@
                 <native:icon :ios="Ios::ChevronRight" :android="Android::ChevronRight" class="text-zinc-400" />
             </native:row>
         </native:pressable>
+        @endif
 
+        @if ($showAbsensi)
         <native:pressable class="p-3" @tap="$navigate('/app/absensi')">
             <native:row class="justify-between items-center">
                 <native:row class="items-center gap-3">
@@ -44,7 +47,9 @@
                 <native:icon :ios="Ios::ChevronRight" :android="Android::ChevronRight" class="text-zinc-400" />
             </native:row>
         </native:pressable>
+        @endif
 
+        @if ($showGaji)
         <native:pressable class="p-3" @tap="$navigate('/app/gaji')">
             <native:row class="justify-between items-center">
                 <native:row class="items-center gap-3">
@@ -54,6 +59,7 @@
                 <native:icon :ios="Ios::ChevronRight" :android="Android::ChevronRight" class="text-zinc-400" />
             </native:row>
         </native:pressable>
+        @endif
 
         <native:pressable class="p-3" @tap="$navigate('/app/toko/pengaturan')">
             <native:row class="justify-between items-center">
@@ -95,6 +101,10 @@
             </native:row>
         </native:pressable>
     </native:column>
+
+    @if ($simpleMode)
+        <native:text class="text-xs text-zinc-500 px-1">Mode Sederhana aktif. Fitur lain bisa dinyalakan dari menu Fitur Tambahan di versi web.</native:text>
+    @endif
 
     <native:button variant="destructive" @tap="logout">
         Keluar dari Kasir

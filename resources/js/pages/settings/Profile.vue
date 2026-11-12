@@ -185,6 +185,18 @@ const isTaxModalOpen = ref(false);
 // Tab state
 const activeTab = ref('profile');
 
+// Mode tampilan (Sederhana / Lengkap): disimpan langsung, terpisah dari form toko.
+const uiMode = computed(() => ((page.props as { ui_mode?: string }).ui_mode === 'simple' ? 'simple' : 'full'));
+const savingUiMode = ref(false);
+function setUiMode(mode: 'simple' | 'full') {
+    if (savingUiMode.value || uiMode.value === mode) return;
+    savingUiMode.value = true;
+    router.put('/settings/ui-mode', { ui_mode: mode }, { preserveScroll: true, onFinish: () => (savingUiMode.value = false) });
+}
+// Mode Sederhana: blok "Modul Fitur" dilipat sampai pengguna membukanya (nilai form tetap terkirim).
+const showAdvancedSettings = ref(false);
+const advancedSettingsVisible = computed(() => uiMode.value === 'full' || showAdvancedSettings.value);
+
 const canManageStoreSettings = computed(() =>
     Boolean((page.props as { abilities?: { manage_store_settings?: boolean } }).abilities?.manage_store_settings),
 );
@@ -771,6 +783,74 @@ async function toggleAccounting() {
 
         <!-- Store Tab Content -->
         <div v-if="canManageStoreSettings && activeTab === 'store'">
+            <!-- Mode Tampilan -->
+            <Card class="mb-6 border-0 shadow-lg">
+                <CardHeader>
+                    <CardTitle class="flex items-center gap-2">
+                        <Blocks class="h-5 w-5" />
+                        Tampilan Aplikasi
+                    </CardTitle>
+                    <CardDescription>
+                        Pilih seberapa banyak menu yang ditampilkan. Data dan pencatatan tidak berubah, dan Anda bisa berganti kapan saja.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div class="grid gap-3 sm:grid-cols-2">
+                        <button
+                            type="button"
+                            :disabled="savingUiMode"
+                            :aria-pressed="uiMode === 'simple'"
+                            :class="[
+                                'rounded-xl border-2 p-4 text-left transition disabled:opacity-60',
+                                uiMode === 'simple' ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-gray-300',
+                            ]"
+                            @click="setUiMode('simple')"
+                        >
+                            <div class="flex items-center justify-between">
+                                <span class="font-semibold text-gray-900">Mode Sederhana</span>
+                                <span v-if="uiMode === 'simple'" class="rounded-full bg-blue-600 px-2 py-0.5 text-xs font-medium text-white"
+                                    >Aktif</span
+                                >
+                            </div>
+                            <p class="mt-1 text-sm text-gray-600">
+                                Hanya menu inti: kasir, produk, stok, pembelian, pelanggan, laporan, dan biaya. Cocok untuk mulai berjualan.
+                            </p>
+                        </button>
+                        <button
+                            type="button"
+                            :disabled="savingUiMode"
+                            :aria-pressed="uiMode === 'full'"
+                            :class="[
+                                'rounded-xl border-2 p-4 text-left transition disabled:opacity-60',
+                                uiMode === 'full' ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-gray-300',
+                            ]"
+                            @click="setUiMode('full')"
+                        >
+                            <div class="flex items-center justify-between">
+                                <span class="font-semibold text-gray-900">Mode Lengkap</span>
+                                <span v-if="uiMode === 'full'" class="rounded-full bg-blue-600 px-2 py-0.5 text-xs font-medium text-white"
+                                    >Aktif</span
+                                >
+                            </div>
+                            <p class="mt-1 text-sm text-gray-600">
+                                Semua menu tampil: opname, transfer stok, retur, diskon, loyalitas, resep, produksi, dan lainnya.
+                            </p>
+                        </button>
+                    </div>
+                    <p class="mt-4 text-sm text-gray-600">
+                        Butuh satu-dua fitur saja?
+                        <a
+                            href="/settings/features"
+                            class="font-semibold text-blue-600 hover:underline"
+                            @click.prevent="router.visit('/settings/features')"
+                        >
+                            Buka Fitur Tambahan
+                        </a>
+                        untuk menyalakannya satu per satu.
+                    </p>
+                </CardContent>
+            </Card>
+
             <!-- Store Information Card -->
             <Card class="mb-6 border-0 shadow-lg">
                 <CardHeader>
@@ -1040,7 +1120,24 @@ async function toggleAccounting() {
                             </div>
                         </div>
 
+                        <button
+                            v-if="uiMode === 'simple'"
+                            type="button"
+                            :aria-expanded="showAdvancedSettings"
+                            class="flex w-full items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-left transition hover:bg-gray-100"
+                            @click="showAdvancedSettings = !showAdvancedSettings"
+                        >
+                            <span>
+                                <span class="block text-sm font-semibold text-gray-900">Pengaturan lanjutan</span>
+                                <span class="block text-xs text-gray-600">
+                                    Modul fitur, batch & kedaluwarsa, gudang, penjualan online, login PIN kasir, dan lainnya.
+                                </span>
+                            </span>
+                            <span class="shrink-0 text-sm font-medium text-blue-600">{{ showAdvancedSettings ? 'Sembunyikan' : 'Tampilkan' }}</span>
+                        </button>
+
                         <div
+                            v-show="advancedSettingsVisible"
                             class="space-y-4 rounded-xl border border-dashed border-rose-200 bg-gradient-to-br from-rose-50 via-white to-orange-50/60 p-5"
                         >
                             <div class="flex items-start gap-3">

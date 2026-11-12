@@ -469,6 +469,9 @@ const navigationItems = computed((): ProcessedNavItem[] => {
     const allowAdvanced = planLimits == null ? true : planLimits.allows_advanced_retail === true;
     const directStockEdit = Boolean((page.props as { direct_stock_edit?: boolean }).direct_stock_edit);
     const allowedMenus = (page.props as { allowed_menus?: string[] }).allowed_menus ?? [];
+    // Mode Sederhana: hanya menu inti (daftar dihitung server, lihat App\Support\UiMode).
+    const simpleMode = (page.props as { ui_mode?: string }).ui_mode === 'simple';
+    const simpleVisibleMenus = (page.props as { simple_visible_menus?: string[] }).simple_visible_menus ?? [];
 
     return navigationSource.flatMap((item): ProcessedNavItem[] => {
         // Cek apakah menu ini diizinkan secara eksplisit lewat Manage Staff
@@ -528,6 +531,11 @@ const navigationItems = computed((): ProcessedNavItem[] => {
             if (item.storeAdminOnly && !manageStoreSettings) return [];
             if (item.ownerOnly && !isOwner) return [];
             if (item.posAndViewStock && !pos && !inventory) return [];
+        }
+
+        // 2b. MODE SEDERHANA (saringan terakhir, hanya menyembunyikan tampilan — rute tetap bisa diakses)
+        if (simpleMode && item.menuKey && !simpleVisibleMenus.includes(item.menuKey)) {
+            return [];
         }
 
         // 3. TRANSFORMASI & FORMATTING
@@ -733,6 +741,21 @@ watch([activeKey, renderItems], async () => {
     syncIndicator();
 });
 
+const isSimpleMode = computed(() => (page.props as { ui_mode?: string }).ui_mode === 'simple');
+const canSwitchUiMode = computed(() =>
+    Boolean((page.props as { abilities?: { manage_store_settings?: boolean } }).abilities?.manage_store_settings),
+);
+const switchingUiMode = ref(false);
+function switchUiMode(mode: 'simple' | 'full') {
+    if (switchingUiMode.value) return;
+    switchingUiMode.value = true;
+    router.put(
+        '/settings/ui-mode',
+        { ui_mode: mode },
+        { preserveScroll: true, onFinish: () => (switchingUiMode.value = false) },
+    );
+}
+
 const subscription = computed(() => (page.props as any).subscription);
 const planLimits = computed(() => (page.props as { plan_limits?: { plan_slug?: string | null } | null }).plan_limits);
 const isStarterPlan = computed(() => {
@@ -868,6 +891,34 @@ const subscriptionCardSoft = computed(() => {
                 </div>
             </template>
         </nav>
+
+        <!-- Fitur Tambahan: nyalakan fitur lanjutan satu per satu (Mode Sederhana) -->
+        <Link
+            v-if="canSwitchUiMode && isSimpleMode"
+            href="/settings/features"
+            :class="[
+                'mx-1 mt-4 flex w-[calc(100%-0.5rem)] items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition',
+                isCurrentRoute('/settings/features')
+                    ? 'border-violet-300 bg-violet-100 text-violet-800'
+                    : 'border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100',
+            ]"
+            @click="emit('close-mobile-menu')"
+        >
+            <Crown class="h-4 w-4 shrink-0" />
+            <span>Fitur Tambahan</span>
+        </Link>
+
+        <!-- Pintasan kembali ke Mode Lengkap. Toko Mode Lengkap (termasuk semua toko lama) tidak mendapat tombol apa pun di sidebar. -->
+        <button
+            v-if="canSwitchUiMode && isSimpleMode"
+            type="button"
+            :disabled="switchingUiMode"
+            class="mx-1 mt-2 flex w-[calc(100%-0.5rem)] items-center gap-2 rounded-xl border border-dashed border-gray-300 px-3 py-2 text-left text-xs font-medium text-gray-500 transition hover:border-violet-300 hover:bg-violet-50 hover:text-violet-700 disabled:opacity-60"
+            @click="switchUiMode('full')"
+        >
+            <Eye class="h-4 w-4 shrink-0" />
+            <span>Tampilkan semua menu</span>
+        </button>
 
         <!-- Subscription Section -->
         <p class="mt-8 mb-4 px-4 text-[10px] font-black tracking-[0.2em] text-violet-400/90 uppercase">SUBSCRIPTION</p>

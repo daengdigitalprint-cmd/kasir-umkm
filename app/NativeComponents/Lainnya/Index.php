@@ -2,6 +2,7 @@
 
 namespace App\NativeComponents\Lainnya;
 
+use App\Support\UiMode;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 use Native\Mobile\Edge\Element;
@@ -15,6 +16,15 @@ class Index extends NativeComponent
 
     public string $storeName = 'Kasir UMKM by MaccaPOS';
 
+    /** Mode Sederhana: menu lanjutan disembunyikan kecuali sudah dinyalakan (lihat UiMode). */
+    public bool $simpleMode = false;
+
+    public bool $showKas = true;
+
+    public bool $showAbsensi = true;
+
+    public bool $showGaji = true;
+
     public function navTitle(): string
     {
         return 'Menu Lainnya';
@@ -27,6 +37,15 @@ class Index extends NativeComponent
         if ($user) {
             $this->userName = $user->name ?? 'Pengguna';
             $this->userRole = ucfirst($user->role ?? 'Kasir');
+
+            $store = $user->store;
+            if ($store && UiMode::isSimple($store)) {
+                $visible = UiMode::visibleMenus($store);
+                $this->simpleMode = true;
+                $this->showKas = in_array('cash_transactions', $visible, true);
+                $this->showAbsensi = in_array('attendance', $visible, true);
+                $this->showGaji = in_array('payroll', $visible, true);
+            }
         }
     }
 

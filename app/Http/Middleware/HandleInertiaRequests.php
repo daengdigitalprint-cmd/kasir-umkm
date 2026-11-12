@@ -21,6 +21,7 @@ use App\Support\ProductDiscountFeatures;
 use App\Support\StockAdjustmentApproval;
 use App\Support\StoreLocationType;
 use App\Support\StorePlanLimits;
+use App\Support\UiMode;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -227,6 +228,11 @@ class HandleInertiaRequests extends Middleware
             'direct_stock_edit' => $activeStore
                 ? StockAdjustmentApproval::directStockEdit($activeStore)
                 : false,
+            // Mode tampilan: 'simple' menyaring sidebar ke menu inti (lihat App\Support\UiMode).
+            'ui_mode' => UiMode::of($activeStore),
+            'simple_visible_menus' => ($user && $activeStore && UiMode::isSimple($activeStore))
+                ? UiMode::visibleMenus($activeStore)
+                : [],
             'accessible_stores' => $accessibleStores,
             'subscription' => $subscriptionData,
             'plan_limits' => $planLimits,

@@ -10,6 +10,7 @@ use App\Support\BusinessTypePresets;
 use App\Support\StoreDefaultProductCategories;
 use App\Support\StoreLocationType;
 use App\Support\StorePlanLimits;
+use App\Support\UiMode;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -569,6 +570,44 @@ class StoreSettingsController extends Controller
         $out = array_values(array_unique(array_filter($out)));
 
         return implode(',', $out);
+    }
+
+    /**
+     * Ganti mode tampilan toko aktif (Mode Sederhana / Mode Lengkap).
+     * Hanya mengubah settings.ui_mode: saklar fitur dan data lain tidak disentuh.
+     */
+    public function updateUiMode(Request $request)
+    {
+        $store = $request->user()->store;
+        if (! $store) {
+            abort(404);
+        }
+
+        $validated = $request->validate([
+            'ui_mode' => 'required|string|in:'.UiMode::SIMPLE.','.UiMode::FULL,
+        ]);
+
+        $before = UiMode::of($store);
+        $after = $validated['ui_mode'];
+
+        if ($before !== $after) {
+            $settings = $store->settings ?? [];
+            $settings['ui_mode'] = $after;
+            $store->update(['settings' => $settings]);
+            UiMode::forgetCache($store);
+
+            $label = $after === UiMode::SIMPLE ? 'Mode Sederhana' : 'Mode Lengkap';
+            \App\Services\ActivityLogger::log(
+                store: $store,
+                action: 'ui_mode.changed',
+                description: "Tampilan aplikasi diubah ke {$label} oleh ".($request->user()->name ?? 'System'),
+                metadata: ['sebelum' => $before, 'sesudah' => $after],
+            );
+        }
+
+        return back()->with('success', $after === UiMode::SIMPLE
+            ? 'Mode Sederhana aktif. Hanya menu inti yang ditampilkan.'
+            : 'Mode Lengkap aktif. Semua menu ditampilkan.');
     }
 
     /**
