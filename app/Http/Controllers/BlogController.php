@@ -15,10 +15,12 @@ class BlogController extends Controller
     public function index(Request $request): View
     {
         $category = $request->query('kategori');
+        $tag = $request->query('tag');
 
         $articles = Article::query()
             ->published()
             ->when($category, fn ($q) => $q->where('category', $category))
+            ->when($tag, fn ($q) => $q->whereJsonContains('tags', $tag))
             ->orderByDesc('published_at')
             ->paginate(12)
             ->withQueryString();
@@ -35,6 +37,9 @@ class BlogController extends Controller
             'articles' => $articles,
             'categories' => $categories,
             'activeCategory' => $category,
+            'activeTag' => $tag,
+            'popularTags' => $this->popularTags(),
+            'popularArticles' => $this->popularArticles(),
         ]);
     }
 
@@ -59,7 +64,53 @@ class BlogController extends Controller
             'contentHtml' => $contentHtml,
             'toc' => $toc,
             'isPreview' => ! $article->isPublished(),
+            'popularTags' => $this->popularTags(),
+            'popularArticles' => $this->popularArticles($article->id),
         ]);
+    }
+
+    /**
+     * Tag terpopuler dihitung dari jumlah pemakaian di artikel terbit.
+     *
+     * @return array<int, array{name: string, count: int}>
+     */
+    private function popularTags(int $limit = 12): array
+    {
+        $counts = [];
+
+        Article::query()
+            ->published()
+            ->whereNotNull('tags')
+            ->pluck('tags')
+            ->each(function ($tags) use (&$counts) {
+                foreach ((array) $tags as $tag) {
+                    $tag = trim((string) $tag);
+
+                    if ($tag === '') {
+                        continue;
+                    }
+
+                    $key = mb_strtolower($tag);
+                    $counts[$key] ??= ['name' => $tag, 'count' => 0];
+                    $counts[$key]['count']++;
+                }
+            });
+
+        uasort($counts, fn ($a, $b) => $b['count'] <=> $a['count'] ?: strcmp($a['name'], $b['name']));
+
+        return array_slice(array_values($counts), 0, $limit);
+    }
+
+    /** Artikel terpopuler berdasarkan jumlah dibaca. */
+    private function popularArticles(?int $excludeId = null, int $limit = 5)
+    {
+        return Article::query()
+            ->published()
+            ->when($excludeId, fn ($q) => $q->where('id', '!=', $excludeId))
+            ->orderByDesc('views')
+            ->orderByDesc('published_at')
+            ->limit($limit)
+            ->get(['id', 'title', 'slug', 'category', 'views', 'reading_time', 'published_at']);
     }
 
     /**
