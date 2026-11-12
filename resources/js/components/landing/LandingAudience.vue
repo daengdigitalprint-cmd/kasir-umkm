@@ -15,7 +15,7 @@ const assetsBase = computed(() => props.assetsBase ?? '/sastik-assets');
         <div class="mxw-1330 container">
             <div class="fs-feature-wrapper plr-20">
                 <div class="sec-title mb-65 text-center">
-                    <h2 class="title wow fadeInUp" data-wow-delay="0ms" data-wow-duration="600ms">Fitur Pintar untuk UMKM Anda</h2>
+                    <h2 class="title wow fadeInUp" data-wow-delay="0ms" data-wow-duration="600ms">Fitur Aplikasi Kasir untuk UMKM</h2>
                 </div>
                 <div class="row mt-none-30">
                     <div class="col-xl-8 col-lg-12 mt-30">
@@ -295,14 +295,14 @@ const assetsBase = computed(() => props.assetsBase ?? '/sastik-assets');
                         <div class="fs-feature-item light_cream">
                             <div class="xb-item--top mb-45">
                                 <h3 class="xb-item--title lp-fs-h2">Cetak Struk Otomatis</h3>
-                                <p class="xb-item--content">Struk otomatis tercetak atau terkirim ke pelanggan tanpa proses tambahan.</p>
+                                <p class="xb-item--content">Struk tercetak otomatis ke printer thermal atau Bluetooth setiap transaksi selesai, lengkap dengan nama toko Anda.</p>
                             </div>
                             <div class="xb-item--dashboard_img">
                                 <div class="img img--one">
                                     <img
                                         width="354"
                                         height="560"
-                                        src="/struk.webp"
+                                        src="/struk-id.webp"
                                         alt="Contoh struk transaksi yang dicetak dari UMKM Kasir"
                                         loading="lazy"
                                         decoding="async"
@@ -343,7 +343,7 @@ const assetsBase = computed(() => props.assetsBase ?? '/sastik-assets');
                             </div>
                             <div class="xb-item--review_container wow">
                                 <div class="xb-item--review_box">
-                                    <div class="xb-title lp-h2">Revenue Overview</div>
+                                    <div class="xb-title lp-h2">Ringkasan Pendapatan</div>
                                     <div class="xb-chart">
                                         <div class="chart-item">
                                             <span></span>
@@ -363,7 +363,7 @@ const assetsBase = computed(() => props.assetsBase ?? '/sastik-assets');
                                         </div>
                                         <div class="chart-item">
                                             <span></span>
-                                            <p>May</p>
+                                            <p>Mei</p>
                                         </div>
                                         <div class="chart-item">
                                             <span></span>
@@ -375,14 +375,14 @@ const assetsBase = computed(() => props.assetsBase ?? '/sastik-assets');
                                         </div>
                                         <div class="chart-item">
                                             <span></span>
-                                            <p>Aug</p>
+                                            <p>Agu</p>
                                         </div>
                                     </div>
                                     <div class="xb-item--price_box ul_li">
-                                        <div class="xb-price lp-h3"><sup>Rp</sup>3.286</div>
-                                        <span class="xb-discount"><i class="fa-regular fa-arrow-up"></i> 125%</span>
+                                        <div class="xb-price lp-h3"><sup>Rp</sup>32,8 jt</div>
+                                        <span class="xb-discount"><i class="fa-regular fa-arrow-up"></i> 12,5%</span>
                                     </div>
-                                    <p class="xb-item--text">Pendapatan <span>naik +Rp427</span> dibanding bulan lalu.</p>
+                                    <p class="xb-item--text">Contoh: pendapatan <span>naik Rp3,6 jt</span> dibanding bulan lalu.</p>
                                 </div>
                             </div>
                             <div class="xb-item--shape">
@@ -437,8 +437,8 @@ const assetsBase = computed(() => props.assetsBase ?? '/sastik-assets');
                             <div class="xb-item--top mb-35">
                                 <h3 class="xb-item--title lp-fs-h2">Akses dari Mana Saja</h3>
                                 <p class="xb-item--content">
-                                    Pantau bisnis dari HP, tablet, atau laptop melalui browser. Tidak perlu install aplikasi tambahan — cukup login
-                                    dan langsung kelola usaha di mana pun berada.
+                                    Pantau usaha dari HP, tablet, atau laptop lewat browser, atau pakai aplikasi Android-nya. Cukup login, data
+                                    penjualan dan stok langsung tersinkron di semua perangkat.
                                 </p>
                             </div>
 
@@ -519,7 +519,7 @@ const assetsBase = computed(() => props.assetsBase ?? '/sastik-assets');
         <div class="mxw-1330 container">
             <div class="fs-process-wrapper plr-20">
                 <div class="sec-title mb-65 text-center">
-                    <h2 class="title wow fadeInUp" data-wow-delay="0ms" data-wow-duration="600ms">Alur Operasional yang Efisien</h2>
+                    <h2 class="title wow fadeInUp" data-wow-delay="0ms" data-wow-duration="600ms">Cara Kerja UMKM Kasir</h2>
                 </div>
                 <div class="fs-process-wrap">
                     <div class="row mt-none-30">
@@ -536,8 +536,8 @@ const assetsBase = computed(() => props.assetsBase ?? '/sastik-assets');
                                             decoding="async"
                                         />
                                     </div>
-                                    <h3 class="xb-item--title lp-fs-h2">01. Catat & Kelola Transaksi.</h3>
-                                    <p class="xb-item--content">Catat setiap transaksi penjualan dan kelola semuanya dalam satu tempat.</p>
+                                    <h3 class="xb-item--title lp-fs-h2">01. Atur Produk & Stok</h3>
+                                    <p class="xb-item--content">Masukkan produk, harga, dan stok awal sekali saja, atau impor dari Excel.</p>
                                 </div>
                                 <div class="fs-process-item">
                                     <div class="xb-item--icon">
@@ -550,8 +550,8 @@ const assetsBase = computed(() => props.assetsBase ?? '/sastik-assets');
                                             decoding="async"
                                         />
                                     </div>
-                                    <h3 class="xb-item--title lp-fs-h2">02. Pengalaman Kasir yang Mudah.</h3>
-                                    <p class="xb-item--content">Proses checkout cepat dan aman yang membangun kepercayaan pelanggan.</p>
+                                    <h3 class="xb-item--title lp-fs-h2">02. Layani Pelanggan di Kasir</h3>
+                                    <p class="xb-item--content">Transaksi cepat dengan tunai, QRIS, atau transfer, lalu cetak struk langsung.</p>
                                 </div>
                                 <div class="fs-process-item">
                                     <div class="xb-item--icon">
@@ -564,8 +564,8 @@ const assetsBase = computed(() => props.assetsBase ?? '/sastik-assets');
                                             decoding="async"
                                         />
                                     </div>
-                                    <h3 class="xb-item--title lp-fs-h2">03. Otomatisasi Operasional & Skala.</h3>
-                                    <p class="xb-item--content">Otomatisasi alur kerja untuk mengembangkan bisnis Anda lebih cepat.</p>
+                                    <h3 class="xb-item--title lp-fs-h2">03. Pantau Laporan Otomatis</h3>
+                                    <p class="xb-item--content">Stok berkurang otomatis dan laporan penjualan siap dibaca kapan saja.</p>
                                 </div>
                             </div>
                         </div>
@@ -576,8 +576,8 @@ const assetsBase = computed(() => props.assetsBase ?? '/sastik-assets');
                                         <img
                                             width="406"
                                             height="470"
-                                            :src="`${assetsBase}/img/process/img01.png`"
-                                            alt="Ilustrasi langkah 1: mencatat dan mengelola transaksi"
+                                            :src="`${assetsBase}/img/process/langkah-01.webp`"
+                                            alt="Ilustrasi langkah 1: mengatur produk dan stok"
                                             loading="lazy"
                                             decoding="async"
                                         />
@@ -586,8 +586,8 @@ const assetsBase = computed(() => props.assetsBase ?? '/sastik-assets');
                                         <img
                                             width="387"
                                             height="469"
-                                            :src="`${assetsBase}/img/process/img02.png`"
-                                            alt="Ilustrasi langkah 2: proses checkout kasir yang mudah"
+                                            :src="`${assetsBase}/img/process/langkah-02.webp`"
+                                            alt="Ilustrasi langkah 2: melayani pembayaran di kasir"
                                             loading="lazy"
                                             decoding="async"
                                         />
@@ -596,8 +596,8 @@ const assetsBase = computed(() => props.assetsBase ?? '/sastik-assets');
                                         <img
                                             width="484"
                                             height="453"
-                                            :src="`${assetsBase}/img/process/img03.png`"
-                                            alt="Ilustrasi langkah 3: otomatisasi operasional bisnis"
+                                            :src="`${assetsBase}/img/process/langkah-03.webp`"
+                                            alt="Ilustrasi langkah 3: memantau laporan penjualan otomatis"
                                             loading="lazy"
                                             decoding="async"
                                         />

@@ -154,15 +154,15 @@ const tabs = computed<DashboardTab[]>(() => [
         <div class="mxw-1330 container">
             <div class="fs-solution-wrapper plr-20">
                 <div class="sec-title mb-65 text-center" style="padding-top: 30px">
-                    <h2 class="title wow fadeInUp" data-wow-delay="0ms" data-wow-duration="600ms">Masalah Anda, Solusi Kami</h2>
+                    <h2 class="title wow fadeInUp" data-wow-delay="0ms" data-wow-duration="600ms">Kasir Manual vs Aplikasi Kasir Online</h2>
                 </div>
                 <div class="row mt-none-30">
                     <div class="col-lg-6 mt-30">
                         <div class="fs-solution-item wow fadeInUp" data-wow-delay="0ms" data-wow-duration="600ms">
-                            <h3 class="xb-title lp-fs-h2">Masalahnya</h3>
+                            <h3 class="xb-title lp-fs-h2">Masalah Kasir Manual</h3>
                             <p class="xb-content">
-                                Mengelola penjualan, stok, dan laporan secara manual menyebabkan kesalahan hitung, keterlambatan, dan biaya
-                                tersembunyi yang membuat operasional lebih lambat dan sulit dikendalikan.
+                                Mencatat penjualan di buku dan menghitung stok dengan tangan rawan salah hitung, selisih kas, dan laporan yang
+                                terlambat, sehingga Anda sulit tahu untung-rugi usaha yang sebenarnya.
                             </p>
                             <div class="fs-solution-chart_box">
                                 <div class="xb-item--holder">
@@ -176,15 +176,11 @@ const tabs = computed<DashboardTab[]>(() => [
                                             decoding="async"
                                         />
                                     </div>
-                                    <p class="xb-item--content">Total Transaksi</p>
-                                    <div class="xb-item--number xb-odm lp-h2">
-                                        <span class="suffix">Rp</span><span class="xbo" data-count="12,450">00</span>
-                                    </div>
+                                    <p class="xb-item--content">Waktu rekap harian</p>
+                                    <div class="xb-item--number lp-h2">± 2 jam</div>
                                     <ul class="xb-item--meta ul_li">
-                                        <li>
-                                            Rata-rata waktu: <span> <i class="fa-solid fa-angle-left"></i>3m </span>
-                                        </li>
-                                        <li>Tingkat sukses: <span>49.9%</span></li>
+                                        <li>Hitung ulang: <span>manual</span></li>
+                                        <li>Risiko selisih: <span>tinggi</span></li>
                                     </ul>
                                 </div>
                                 <div class="fs-tag-list">
@@ -194,23 +190,23 @@ const tabs = computed<DashboardTab[]>(() => [
                                     <div class="xb-item--list_box">
                                         <ul class="xb-item--list ul_li_between">
                                             <li>
-                                                <span><i class="fa-solid fa-circle-exclamation"></i></span>Kontrol Terbatas
+                                                <span><i class="fa-solid fa-circle-exclamation"></i></span>Salah Hitung
                                             </li>
                                             <li>
-                                                <span><i class="fa-solid fa-triangle-exclamation"></i></span>Biaya Tersembunyi
+                                                <span><i class="fa-solid fa-triangle-exclamation"></i></span>Stok Tidak Sinkron
                                             </li>
                                         </ul>
                                         <ul class="xb-item--list ul_li_between justify-content-center">
                                             <li>
-                                                <span><i class="fa-solid fa-triangle-exclamation"></i></span>Integrasi Lambat
+                                                <span><i class="fa-solid fa-triangle-exclamation"></i></span>Laporan Terlambat
                                             </li>
                                         </ul>
                                         <ul class="xb-item--list ul_li_between">
                                             <li>
-                                                <span><i class="fa-solid fa-circle-exclamation"></i></span>Sistem Terpisah
+                                                <span><i class="fa-solid fa-circle-exclamation"></i></span>Catatan Tercecer
                                             </li>
                                             <li>
-                                                <span><i class="fa-solid fa-circle-exclamation"></i></span>Tidak Standar
+                                                <span><i class="fa-solid fa-circle-exclamation"></i></span>Selisih Kas
                                             </li>
                                         </ul>
                                     </div>
@@ -282,9 +278,9 @@ const tabs = computed<DashboardTab[]>(() => [
                     </div>
                     <div class="col-lg-6 mt-30">
                         <div class="fs-solution-item wow fadeInUp" data-wow-delay="150ms" data-wow-duration="600ms">
-                            <h3 class="xb-title lp-fs-h2">Solusinya</h3>
+                            <h3 class="xb-title lp-fs-h2">Solusi dengan UMKM Kasir</h3>
                             <p class="xb-content">
-                                UMKM Kasir memberi Anda satu platform untuk mengelola produk, stok, transaksi, dan laporan — semua dalam satu tempat.
+                                UMKM Kasir mencatat setiap transaksi, mengurangi stok otomatis, dan menyusun laporan penjualan untuk Anda, semua dalam satu aplikasi.
                             </p>
                             <div class="fs-solution-chart_box fa-chart-two">
                                 <div class="xb-item--holder">
@@ -298,15 +294,11 @@ const tabs = computed<DashboardTab[]>(() => [
                                             decoding="async"
                                         />
                                     </div>
-                                    <p class="xb-item--content">Total Transaksi</p>
-                                    <div class="xb-item--number xb-odm lp-h2">
-                                        <span class="suffix">Rp</span><span class="xbo" data-count="12,550">00</span>
-                                    </div>
+                                    <p class="xb-item--content">Waktu rekap harian</p>
+                                    <div class="xb-item--number lp-h2">Otomatis</div>
                                     <ul class="xb-item--meta ul_li">
-                                        <li>
-                                            Rata-rata waktu: <span> <i class="fa-solid fa-angle-left"></i>3d </span>
-                                        </li>
-                                        <li>Tingkat sukses: <span>99.9%</span></li>
+                                        <li>Laporan: <span>real-time</span></li>
+                                        <li>Data: <span>tersimpan di cloud</span></li>
                                     </ul>
                                 </div>
                                 <div class="fs-tag-list">
@@ -321,7 +313,7 @@ const tabs = computed<DashboardTab[]>(() => [
                                                         alt=""
                                                         loading="lazy"
                                                         decoding="async" /></span
-                                                >Platform All-in-One
+                                                >Satu Aplikasi
                                             </li>
                                             <li>
                                                 <span
@@ -332,7 +324,7 @@ const tabs = computed<DashboardTab[]>(() => [
                                                         alt=""
                                                         loading="lazy"
                                                         decoding="async" /></span
-                                                >Transparansi Biaya
+                                                >Harga Transparan
                                             </li>
                                             <li>
                                                 <span
@@ -343,7 +335,7 @@ const tabs = computed<DashboardTab[]>(() => [
                                                         alt=""
                                                         loading="lazy"
                                                         decoding="async" /></span
-                                                >Integrasi Cepat
+                                                >Stok Real-time
                                             </li>
                                             <li>
                                                 <span
@@ -354,7 +346,7 @@ const tabs = computed<DashboardTab[]>(() => [
                                                         alt=""
                                                         loading="lazy"
                                                         decoding="async" /></span
-                                                >Sistem Sederhana
+                                                >Mudah Dipakai
                                             </li>
                                         </ul>
                                         <ul class="xb-item--list ul_li">
@@ -367,7 +359,7 @@ const tabs = computed<DashboardTab[]>(() => [
                                                         alt=""
                                                         loading="lazy"
                                                         decoding="async" /></span
-                                                >Dasbor Kontrol Penuh
+                                                >Laporan Otomatis
                                             </li>
                                             <li class="logo-img">
                                                 <img width="1024" height="1024" src="/cecklist-sm.webp" alt="" loading="lazy" decoding="async" />

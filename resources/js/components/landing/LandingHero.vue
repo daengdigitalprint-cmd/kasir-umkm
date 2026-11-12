@@ -18,10 +18,10 @@ const assetsBase = computed(() => props.assetsBase ?? '/');
                 <div class="col-xl-8 col-lg-12">
                     <div class="xb-hero-content text-center">
                         <div class="sec-title">
-                            <h1 class="title xb-blur-title heroTitleUp lp-fs-h2" data-animation-delay="0ms">Kelola usaha Anda dengan UMKM Kasir</h1>
+                            <h1 class="title xb-blur-title heroTitleUp lp-fs-h2" data-animation-delay="0ms">Aplikasi Kasir Online Gratis untuk UMKM</h1>
                         </div>
                         <p class="xb-item--content xb-blur-content xbFadeUpContent" data-animation-delay="100ms">
-                            Satu sistem sederhana untuk menangani pembayaran dan mengembangkan bisnis Anda.
+                            Catat penjualan, kelola stok, dan pantau laporan usaha dari HP atau laptop. Gratis selamanya untuk toko kecil.
                         </p>
                         <div class="xb-hero-btn xb-item--btn ul_li justify-content-center xbFadeUpItem" data-animation-delay="200ms">
                             <Link href="/register" class="thm-btn fintech-btn">Mulai gratis</Link>

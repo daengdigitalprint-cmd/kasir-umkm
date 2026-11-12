@@ -7,32 +7,43 @@ const props = defineProps<{
 
 const base = computed(() => props.assetsBase ?? '/sastik-assets');
 
+/** Sinkron dengan App\Support\LandingSeo::faqItems() (structured data FAQPage). */
 const faqItems: { id: string; question: string; answer: string; active?: boolean }[] = [
     {
-        id: 'aman',
-        question: 'Apakah data saya aman?',
-        answer: 'Data Anda dikelola di infrastruktur dengan praktik keamanan standar aplikasi web: komunikasi terenkripsi (HTTPS), pembatasan akses per akun, dan cadangan rutin sesuai kebijakan server.',
+        id: 'gratis',
+        question: 'Apakah UMKM Kasir benar-benar gratis?',
+        answer: 'Ya. Paket Starter gratis selamanya tanpa batas masa aktif, cocok untuk toko kecil dengan hingga 30 produk. Saat usaha berkembang, Anda bisa naik ke paket GrowUp seharga Rp99 ribu per bulan.',
         active: true,
+    },
+    {
+        id: 'perangkat',
+        question: 'Bisa dipakai di HP Android, tablet, atau laptop?',
+        answer: 'Bisa. UMKM Kasir berjalan di browser HP, tablet, maupun laptop, dan tersedia juga aplikasi Android di Google Play. Data tersinkron otomatis di semua perangkat.',
+    },
+    {
+        id: 'pembayaran',
+        question: 'Metode pembayaran apa saja yang bisa dicatat?',
+        answer: 'Transaksi bisa dibayar tunai, QRIS, transfer bank, atau kombinasi beberapa metode sekaligus. Struk bisa dicetak ke printer thermal atau printer Bluetooth.',
     },
     {
         id: 'multi-kasir',
         question: 'Bisa dipakai beberapa kasir sekaligus?',
-        answer: 'Ya. Beberapa pengguna dapat login pada waktu bersamaan di perangkat berbeda. Setiap transaksi tercatat dengan timestamp dan identitas kasir.',
+        answer: 'Ya. Beberapa pengguna dapat login pada waktu bersamaan di perangkat berbeda. Setiap transaksi tercatat dengan waktu dan identitas kasir, dan hak akses kasir, manajer, serta owner bisa dibedakan.',
     },
     {
         id: 'stok-varian',
         question: 'Apakah mendukung varian produk dan stok?',
-        answer: 'Varian produk (ukuran, warna) dan stok per SKU tersedia. Stok minus dapat diizinkan atau diblokir. Paket bundel bisa diatur.',
+        answer: 'Ya. Varian produk (ukuran, warna, rasa) dan stok per SKU tersedia. Stok berkurang otomatis setiap ada penjualan, dan stok minus dapat diizinkan atau diblokir.',
+    },
+    {
+        id: 'aman',
+        question: 'Apakah data saya aman?',
+        answer: 'Data Anda tersimpan di server dengan komunikasi terenkripsi (HTTPS), pembatasan akses per akun, dan backup rutin setiap hari.',
     },
     {
         id: 'migrasi',
-        question: 'Bagaimana migrasi dari sistem lama?',
-        answer: 'Tim kami membantu merencanakan impor data awal (produk, stok, pelanggan) dari spreadsheet atau export aplikasi lama.',
-    },
-    {
-        id: 'biaya',
-        question: 'Apakah ada biaya tersembunyi?',
-        answer: 'Tidak. Paket Starter gratis selamanya. Paket berbayar transparan dengan harga jelas, tanpa biaya tersembunyi.',
+        question: 'Bagaimana pindah dari pencatatan manual atau aplikasi lama?',
+        answer: 'Produk dan stok bisa diimpor sekaligus dari file Excel. Tim kami juga siap membantu memindahkan data awal dari spreadsheet atau aplikasi lama.',
     },
 ];
 
@@ -57,7 +68,7 @@ const leftMarquee: { name: string; desig: string; avatar: string; avatarClass: s
 const rightMarquee: { name: string; desig: string; avatar: string; avatarClass: string; price: string }[] = [
     { name: 'Rudi Hartono', desig: 'QRIS', avatar: 'transaction_avatar05.png', avatarClass: 'bg-Pale2', price: 'Rp90.000' },
     { name: 'Maya Sari', desig: 'Tunai', avatar: 'transaction_avatar06.png', avatarClass: 'bg-sky', price: 'Rp770.000' },
-    { name: 'Joko Widodo', desig: 'Transfer', avatar: 'transaction_avatar07.png', avatarClass: 'bg-brown', price: 'Rp760.000' },
+    { name: 'Wahyu Saputra', desig: 'Transfer', avatar: 'transaction_avatar07.png', avatarClass: 'bg-brown', price: 'Rp760.000' },
     { name: 'Rina Wati', desig: 'QRIS', avatar: 'transaction_avatar01.png', avatarClass: 'bg-Pale', price: 'Rp880.000' },
 ];
 </script>

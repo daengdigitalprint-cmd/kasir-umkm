@@ -118,7 +118,7 @@ const growUpFeatures: string[] = [
                                             </div>
                                             <div class="xb-pricing-scribble">
                                                 <p class="text text-center">
-                                                    Hemat 10% <br />
+                                                    Hemat 2 Bulan <br />
                                                     Tahunan
                                                 </p>
                                                 <svg

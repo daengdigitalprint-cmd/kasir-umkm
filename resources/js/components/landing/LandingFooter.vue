@@ -34,9 +34,9 @@ const navLinks: { label: string; href: string }[] = [
                     <div class="row mt-none-30">
                         <div class="col-lg-4 col-md-8 mt-30">
                             <div class="fs-footer-widget fs-footer-newsletter">
-                                <p class="fs-widget-title">Dibayar Tanpa Batas</p>
-                                <h2 class="xb-item--title">Bergabung dengan Bisnis yang Dibayar Lebih Pintar</h2>
-                                <p class="xb-item--content">Pembayaran lebih pintar untuk bisnis Anda, dibuat mudah.</p>
+                                <p class="fs-widget-title">Mulai Sekarang</p>
+                                <h2 class="xb-item--title">Siap Kelola Usaha Lebih Rapi?</h2>
+                                <p class="xb-item--content">Daftar gratis dalam 1 menit dan mulai catat penjualan hari ini juga.</p>
                                 <div class="xb-item--btn ul_li mt-45 gap-10">
                                     <Link class="thm-btn fintech-btn" href="/register">Mulai gratis</Link>
                                     <Link class="thm-btn fintech-btn fintech-btn--white" href="/panduan">Lihat panduan</Link>
@@ -46,7 +46,7 @@ const navLinks: { label: string; href: string }[] = [
                         <div class="col-lg-4 col-md-4 mt-30">
                             <div class="fs-footer-widget fs-footer-scanner">
                                 <div class="xb-item--inner">
-                                    <p class="xb-item--text">Pindai kode QR untuk unduh aplikasi</p>
+                                    <p class="xb-item--text">Pindai kode QR untuk unduh aplikasi Android</p>
                                     <div class="xb-item--img">
                                         <img
                                             width="1345"
@@ -58,9 +58,6 @@ const navLinks: { label: string; href: string }[] = [
                                         />
                                     </div>
                                     <ul class="xb-item--social list-unstyled ul_li">
-                                        <li>
-                                            <a href="#" aria-label="UMKM Kasir di App Store"><i class="fa-brands fa-apple" aria-hidden="true"></i></a>
-                                        </li>
                                         <li>
                                             <a
                                                 href="https://play.google.com/store/apps/details?id=com.kasirumkm.idea&pli=1"
@@ -92,13 +89,6 @@ const navLinks: { label: string; href: string }[] = [
                                         <span><i class="fa-solid fa-clock"></i></span><span>Senin – Jumat, 08.00 – 17.00 WITA</span>
                                     </li>
                                 </ul>
-                                <p class="fs-widget-title mt-25">Berlangganan Newsletter</p>
-                                <form class="xb-item--input" action="#" @submit.prevent>
-                                    <input type="text" placeholder="Masukkan email Anda" />
-                                    <a href="#" aria-label="Kirim email untuk berlangganan newsletter"
-                                        ><i class="fa-solid fa-paper-plane" aria-hidden="true"></i
-                                    ></a>
-                                </form>
                             </div>
                         </div>
                     </div>
@@ -122,9 +112,9 @@ const navLinks: { label: string; href: string }[] = [
                 <div class="xb-social-media-item fs-social-media-item ul_li_between">
                     <div class="xb-item--holder ul_li">
                         <div class="xb-item--icon">
-                            <i class="fa-brands fa-facebook"></i>
+                            <i class="fa-brands fa-whatsapp"></i>
                         </div>
-                        <span class="xb-item--name">Facebook</span>
+                        <span class="xb-item--name">WhatsApp</span>
                     </div>
                     <span class="xb-item--arrow">
                         <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -134,19 +124,14 @@ const navLinks: { label: string; href: string }[] = [
                             />
                         </svg>
                     </span>
-                    <a class="xb-overlay" href="#" aria-label="UMKM Kasir di Facebook"></a>
+                    <a class="xb-overlay" href="https://wa.me/6285242766676" target="_blank" rel="noopener noreferrer" aria-label="Chat UMKM Kasir lewat WhatsApp"></a>
                 </div>
                 <div class="xb-social-media-item fs-social-media-item ul_li_between">
                     <div class="xb-item--holder ul_li">
                         <div class="xb-item--icon">
-                            <svg width="19" height="19" viewBox="0 0 19 19" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path
-                                    d="M9.46973 0C14.6996 0 18.9395 4.25357 18.9395 9.5C18.9394 14.7464 14.6996 19 9.46973 19C4.24002 18.9998 8.74258e-05 14.7463 0 9.5C0 4.25366 4.23997 0.000150177 9.46973 0ZM8.27441 10.1201L4.02344 15.0771H4.98438L8.70117 10.7422L11.6709 15.0771H14.9131L10.5039 8.64062L14.5586 3.91309H13.5977L10.0771 8.01758L7.26562 3.91309H4.02344L8.27441 10.1201ZM13.5977 14.3848H12.1221L5.33008 4.63867H6.80566L13.5977 14.3848Z"
-                                    fill="#FFF"
-                                ></path>
-                            </svg>
+                            <i class="fa-brands fa-google-play"></i>
                         </div>
-                        <span class="xb-item--name">Twitter (X)</span>
+                        <span class="xb-item--name">Google Play</span>
                     </div>
                     <span class="xb-item--arrow">
                         <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -156,14 +141,14 @@ const navLinks: { label: string; href: string }[] = [
                             />
                         </svg>
                     </span>
-                    <a class="xb-overlay" href="#" aria-label="UMKM Kasir di Twitter (X)"></a>
+                    <a class="xb-overlay" href="https://play.google.com/store/apps/details?id=com.kasirumkm.idea" target="_blank" rel="noopener noreferrer" aria-label="Unduh UMKM Kasir di Google Play"></a>
                 </div>
                 <div class="xb-social-media-item fs-social-media-item ul_li_between">
                     <div class="xb-item--holder ul_li">
                         <div class="xb-item--icon">
-                            <i class="fa-brands fa-linkedin"></i>
+                            <i class="fa-solid fa-envelope"></i>
                         </div>
-                        <span class="xb-item--name">LinkedIn</span>
+                        <span class="xb-item--name">Email</span>
                     </div>
                     <span class="xb-item--arrow">
                         <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -173,14 +158,14 @@ const navLinks: { label: string; href: string }[] = [
                             />
                         </svg>
                     </span>
-                    <a class="xb-overlay" href="#" aria-label="UMKM Kasir di LinkedIn"></a>
+                    <a class="xb-overlay" href="mailto:info@umkmkasir.id" aria-label="Kirim email ke UMKM Kasir"></a>
                 </div>
                 <div class="xb-social-media-item fs-social-media-item ul_li_between">
                     <div class="xb-item--holder ul_li">
                         <div class="xb-item--icon">
-                            <i class="fa-brands fa-square-youtube"></i>
+                            <i class="fa-solid fa-book-open"></i>
                         </div>
-                        <span class="xb-item--name">YouTube</span>
+                        <span class="xb-item--name">Panduan</span>
                     </div>
                     <span class="xb-item--arrow">
                         <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -190,7 +175,7 @@ const navLinks: { label: string; href: string }[] = [
                             />
                         </svg>
                     </span>
-                    <a class="xb-overlay" href="#" aria-label="UMKM Kasir di YouTube"></a>
+                    <a class="xb-overlay" href="/panduan" aria-label="Baca panduan penggunaan UMKM Kasir"></a>
                 </div>
             </div>
             <div class="xb-footer_bottom fs-footer_bottom ul_li_between">

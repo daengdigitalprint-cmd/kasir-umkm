@@ -15,42 +15,42 @@ const useCases: UseCase[] = [
     {
         icon: 'fa-solid fa-utensils',
         title: 'F&B',
-        desc: 'Restoran, warung makan, dan jajanan. Antrian dapur, split bill, dan diskon otomatis.',
+        desc: 'Restoran, warung makan, dan jajanan. Antrean dapur, pesan lewat scan QR meja, split bill, dan diskon otomatis.',
     },
     {
         icon: 'fa-solid fa-store',
         title: 'Retail / Grosir',
-        desc: 'Toko kelontong, minimarket, dan grosir. Barcode, satuan, dan kemasan multi-varian.',
+        desc: 'Minimarket, toko grosir, dan toko bangunan. Scan barcode, multi satuan, dan varian produk.',
     },
     {
         icon: 'fa-solid fa-prescription-bottle-medical',
         title: 'Apotek / Kesehatan',
-        desc: 'Apotek dan klinik kecil. Batch number, kedaluwarsa, dan label peringatan.',
+        desc: 'Apotek dan toko obat. Nomor batch, pengingat tanggal kedaluwarsa, dan stok per batch.',
     },
     {
-        icon: 'fa-solid fa-screwdriver-wrench',
-        title: 'Jasa & Bengkel',
-        desc: 'Bengkel motor, jasa servis, dan cuci. Paket jasa + sparepart, status pengerjaan.',
+        icon: 'fa-solid fa-shirt',
+        title: 'Laundry',
+        desc: 'Laundry kiloan dan satuan. Nota order, estimasi selesai, dan status cucian.',
     },
     {
         icon: 'fa-solid fa-scissors',
-        title: 'Salon & Kecantikan',
-        desc: 'Salon, barbershop, dan klinik kecantikan. Booking anggota, paket bundling, dan member.',
+        title: 'Barbershop & Salon',
+        desc: 'Barbershop dan salon. Antrean pelanggan, pilih kapster, dan hitung komisi otomatis.',
     },
     {
         icon: 'fa-solid fa-mug-saucer',
         title: 'Kafe & Coffee Shop',
-        desc: 'Kafe, coffee shop, dan bakery. Modifier pesanan, takeaway, dan loyalty poin.',
+        desc: 'Kafe, coffee shop, dan bakery. Pilihan topping & level gula, takeaway, dan poin loyalti.',
     },
     {
         icon: 'fa-solid fa-basket-shopping',
         title: 'Toko Kelontong',
-        desc: 'Warung, toko kelontong, dan minimarket. Catatan hutang pelanggan dan setoran harian.',
+        desc: 'Warung dan toko kelontong. Catatan utang pelanggan, shift kasir, dan setoran harian.',
     },
     {
         icon: 'fa-solid fa-layer-group',
         title: 'Dan lainnya',
-        desc: 'Pengaturan modular — pasang menu dan fitur sesuai kebutuhan unik usaha Anda.',
+        desc: 'Fitur modular: aktifkan menu sesuai kebutuhan usaha Anda, dari produksi & resep hingga absensi karyawan.',
     },
 ];
 </script>
@@ -61,7 +61,7 @@ const useCases: UseCase[] = [
         <div class="mxw-1330 container">
             <div class="fs-usecase-wrapper plr-20">
                 <div class="sec-title mb-65 text-center">
-                    <h2 class="title wow fadeInUp" data-wow-delay="0ms" data-wow-duration="600ms">Untuk Berbagai Jenis Usaha</h2>
+                    <h2 class="title wow fadeInUp" data-wow-delay="0ms" data-wow-duration="600ms">Aplikasi Kasir untuk Berbagai Jenis Usaha</h2>
                     <p
                         class="xb-item--content wow fadeInUp mt-15"
                         data-wow-delay="100ms"

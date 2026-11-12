@@ -489,20 +489,32 @@ final class LandingSeo
     {
         return [
             [
-                'question' => 'Apakah data tersimpan aman?',
-                'answer' => 'Data Anda dikelola di infrastruktur dengan praktik keamanan standar aplikasi web: komunikasi terenkripsi (HTTPS), pembatasan akses per akun, dan cadangan rutin sesuai kebijakan server. Kami mendorong Anda memakai sandi kuat, menonaktifkan akun yang tidak dipakai, dan membatasi peran kasir agar hanya melihat yang dibutuhkan.',
+                'question' => 'Apakah UMKM Kasir benar-benar gratis?',
+                'answer' => 'Ya. Paket Starter gratis selamanya tanpa batas masa aktif, cocok untuk toko kecil dengan hingga 30 produk. Saat usaha berkembang, Anda bisa naik ke paket GrowUp seharga Rp99 ribu per bulan.',
+            ],
+            [
+                'question' => 'Bisa dipakai di HP Android, tablet, atau laptop?',
+                'answer' => 'Bisa. UMKM Kasir berjalan di browser HP, tablet, maupun laptop, dan tersedia juga aplikasi Android di Google Play. Data tersinkron otomatis di semua perangkat.',
+            ],
+            [
+                'question' => 'Metode pembayaran apa saja yang bisa dicatat?',
+                'answer' => 'Transaksi bisa dibayar tunai, QRIS, transfer bank, atau kombinasi beberapa metode sekaligus. Struk bisa dicetak ke printer thermal atau printer Bluetooth.',
             ],
             [
                 'question' => 'Bisa dipakai beberapa kasir sekaligus?',
-                'answer' => 'Ya. Beberapa pengguna dapat login pada waktu bersamaan di perangkat berbeda, asalkan jaringan stabil. Setiap transaksi dan mutasi stok tercatat dengan timestamp dan identitas kasir sehingga audit lebih mudah.',
+                'answer' => 'Ya. Beberapa pengguna dapat login pada waktu bersamaan di perangkat berbeda. Setiap transaksi tercatat dengan waktu dan identitas kasir, dan hak akses kasir, manajer, serta owner bisa dibedakan.',
             ],
             [
-                'question' => 'Apakah mendukung stok minus, bundel, dan varian?',
-                'answer' => 'Varian produk (ukuran, warna, rasa) dan pengaturan stok per SKU umumnya tersedia sesuai konfigurasi toko. Stok minus dapat diizinkan atau diblokir menurut kebijakan Anda. Paket bundel bisa diatur melalui komposisi SKU atau diskon bertingkat.',
+                'question' => 'Apakah mendukung varian produk dan stok?',
+                'answer' => 'Ya. Varian produk (ukuran, warna, rasa) dan stok per SKU tersedia. Stok berkurang otomatis setiap ada penjualan, dan stok minus dapat diizinkan atau diblokir.',
             ],
             [
-                'question' => 'Bagaimana jika butuh bantuan migrasi dari sistem lama?',
-                'answer' => 'Tim dapat membantu merencanakan impor data awal (produk, stok, pelanggan) dari spreadsheet atau export aplikasi lama. Migrasi besar disarankan di luar jam puncak penjualan.',
+                'question' => 'Apakah data saya aman?',
+                'answer' => 'Data Anda tersimpan di server dengan komunikasi terenkripsi (HTTPS), pembatasan akses per akun, dan backup rutin setiap hari.',
+            ],
+            [
+                'question' => 'Bagaimana pindah dari pencatatan manual atau aplikasi lama?',
+                'answer' => 'Produk dan stok bisa diimpor sekaligus dari file Excel. Tim kami juga siap membantu memindahkan data awal dari spreadsheet atau aplikasi lama.',
             ],
         ];
     }

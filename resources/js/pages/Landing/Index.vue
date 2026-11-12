@@ -273,11 +273,11 @@ onUnmounted(() => {
                 <link v-for="href in fallbackStylesheets" :key="href" rel="stylesheet" :href="href" />
             </template>
 
-            <!-- Caveat hanya untuk teks coretan "Hemat 10% Tahunan" di pricing:
+            <!-- Caveat hanya untuk teks coretan "Hemat 2 Bulan Tahunan" di pricing:
                  dimuat non-blocking & di-subset ke karakter itu saja (text=). -->
             <link
                 rel="stylesheet"
-                href="https://fonts.googleapis.com/css2?family=Caveat&text=Hemat%2010%25Tahunan&display=swap"
+                href="https://fonts.googleapis.com/css2?family=Caveat&text=Hemat%202%20BulanTahunan&display=swap"
                 media="print"
                 onload="this.media='all'"
             />
