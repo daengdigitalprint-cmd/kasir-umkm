@@ -71,6 +71,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('batch:send-expiry-digest')->dailyAt('07:00');
         $schedule->command('stores:backup')->dailyAt('02:00');
         $schedule->command('backup:drive', ['--cleanup'])->dailyAt('02:30');
+        // Hapus backup lokal lama sesuai retensi config/backup.php (cleanup).
+        $schedule->command('backup:clean')->dailyAt('02:50');
         $schedule->command('loyalty:expire-points')->dailyAt('03:00');
         $schedule->command('loyalty:bonus-daily')->dailyAt('03:10');
         $schedule->command('trial:expire')->hourly();
