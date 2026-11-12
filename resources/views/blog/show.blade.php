@@ -112,8 +112,14 @@
         .byline .av { width: 38px; height: 38px; border-radius: 11px; background: var(--primary-soft); color: var(--primary); display: flex; align-items: center; justify-content: center; }
         .byline strong { display: block; font-size: 14px; color: var(--ink); font-weight: 700; line-height: 1.3; }
 
+        /* Gambar mengikuti proporsi aslinya (height: auto), tidak dipotong.
+           Atribut width/height diisi dari dimensi berkas sehingga browser
+           sudah memesan ruang yang tepat sebelum gambar selesai dimuat. */
         .post-cover { margin: 0 0 8px; }
-        .post-cover img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 16px; background: var(--container); }
+        .post-cover img { display: block; width: 100%; height: auto; border-radius: 16px; background: var(--container); }
+        /* Gambar yang sangat tinggi (potret) dibatasi agar tidak mendorong
+           seluruh isi artikel ke bawah layar. */
+        .post-cover img { max-height: 70vh; width: auto; max-width: 100%; margin-inline: auto; }
 
         .prose { font-size: 16.5px; color: #1e2338; }
         .prose h2 { font-size: clamp(21px, 2.6vw, 27px); margin: 40px 0 14px; scroll-margin-top: 100px; position: relative; padding-left: 16px; }
@@ -136,9 +142,24 @@
         .prose code { background: var(--container); border: 1px solid var(--line); border-radius: 7px; padding: 2px 7px; font-size: 14px; }
         .prose hr { border: 0; border-top: 1px solid var(--line); margin: 32px 0; }
 
-        .toc { background: var(--primary-muted); border: 1px solid var(--line); border-radius: 18px; padding: 20px 24px; margin: 26px 0 30px; }
-        .toc > p { margin: 0 0 10px; font-family: var(--font-display); font-weight: 800; font-size: 15px; display: flex; align-items: center; gap: 9px; color: var(--ink); }
-        .toc > p .icon { color: var(--primary); }
+        .toc { background: var(--primary-muted); border: 1px solid var(--line); border-radius: 18px; padding: 16px 24px; margin: 26px 0 30px; }
+        .toc > summary {
+            margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 15px;
+            display: flex; align-items: center; gap: 9px; color: var(--ink);
+            cursor: pointer; list-style: none; user-select: none;
+        }
+        .toc > summary::-webkit-details-marker { display: none; }
+        .toc > summary .icon { color: var(--primary); }
+        .toc > summary .toc-count { margin-left: auto; font-family: var(--font-sans); font-weight: 600; font-size: 12.5px; color: var(--muted); }
+        /* Tanda panah penunjuk buka/tutup */
+        .toc > summary::after {
+            content: ''; width: 8px; height: 8px; flex: none; margin-left: 10px;
+            border-right: 2px solid var(--primary); border-bottom: 2px solid var(--primary);
+            transform: rotate(45deg) translate(-2px, -2px); transition: transform .2s ease;
+        }
+        .toc[open] > summary::after { transform: rotate(-135deg) translate(-2px, -2px); }
+        .toc > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; border-radius: 6px; }
+        .toc[open] > summary { margin-bottom: 12px; }
         .toc ol { margin: 0; padding-left: 20px; }
         .toc li { margin-bottom: 7px; }
         .toc li::marker { color: var(--primary); font-weight: 700; }
@@ -222,13 +243,16 @@
                     </header>
 
                     @if ($imageUrl)
+                        @php $dim = $article->featuredImageDimensions(); @endphp
                         <figure class="post-cover">
                             {{-- Gambar utama artikel: tidak lazy agar cepat tampil (LCP). --}}
                             <img
                                 src="{{ $imageUrl }}"
                                 alt="{{ $imageAlt }}"
-                                width="1200"
-                                height="675"
+                                @if ($dim)
+                                    width="{{ $dim['width'] }}"
+                                    height="{{ $dim['height'] }}"
+                                @endif
                                 fetchpriority="high"
                                 decoding="async"
                             >
@@ -236,14 +260,18 @@
                     @endif
 
                     @if (count($toc) >= 3)
-                        <nav class="toc" aria-label="Daftar isi">
-                            <p>@include('blog.partials.icon', ['name' => 'list', 'class' => 'ic-sm']) Daftar Isi</p>
+                        <details class="toc" open>
+                            <summary>
+                                @include('blog.partials.icon', ['name' => 'list', 'class' => 'ic-sm'])
+                                <span>Daftar Isi</span>
+                                <span class="toc-count">{{ count($toc) }} bagian</span>
+                            </summary>
                             <ol>
                                 @foreach ($toc as $item)
                                     <li><a href="#{{ $item['id'] }}">{{ $item['text'] }}</a></li>
                                 @endforeach
                             </ol>
-                        </nav>
+                        </details>
                     @endif
 
                     <div class="prose">

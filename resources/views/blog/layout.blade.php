@@ -86,7 +86,9 @@
         .card h2, .card h3 { font-size: 18px; line-height: 1.45; margin: 12px 0 8px; }
         .card a.card-link:hover h2, .card a.card-link:hover h3 { color: var(--primary); }
         .card p { margin: 0; color: var(--muted); font-size: 14.5px; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 20px; }
+        /* Dua kartu per baris di layar lebar, satu kolom di layar sempit. */
+        .grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
+        @media (min-width: 640px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
         .pill { display: inline-flex; align-items: center; gap: 5px; background: var(--primary-soft); color: var(--primary-dark); font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: 999px; }
         .pill-lime { background: #eefbe3; color: #3f6212; }

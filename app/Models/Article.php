@@ -6,6 +6,8 @@ use App\Services\ArticleContentService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class Article extends Model
@@ -101,6 +103,41 @@ class Article extends Model
         }
 
         return asset('storage/'.$this->featured_image);
+    }
+
+    /**
+     * Dimensi asli thumbnail, untuk menampilkannya sesuai proporsi file
+     * sekaligus mencegah layout shift (atribut width/height terisi benar).
+     *
+     * Hasil getimagesize() di-cache per berkas + waktu ubah, jadi gambar
+     * yang diganti otomatis terhitung ulang.
+     *
+     * @return array{width: int, height: int}|null
+     */
+    public function featuredImageDimensions(): ?array
+    {
+        if ($this->featured_image === null || $this->featured_image === '') {
+            return null;
+        }
+
+        $disk = Storage::disk('public');
+
+        if (! $disk->exists($this->featured_image)) {
+            return null;
+        }
+
+        $path = $disk->path($this->featured_image);
+        $key = 'article-img-size:'.md5($this->featured_image.':'.(@filemtime($path) ?: 0));
+
+        return Cache::remember($key, now()->addDays(30), function () use ($path) {
+            $size = @getimagesize($path);
+
+            if (! is_array($size) || ($size[0] ?? 0) < 1 || ($size[1] ?? 0) < 1) {
+                return null;
+            }
+
+            return ['width' => (int) $size[0], 'height' => (int) $size[1]];
+        });
     }
 
     /**

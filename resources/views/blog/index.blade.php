@@ -54,8 +54,7 @@
         .pagination .active { background: var(--primary); color: #fff; border-color: var(--primary); }
         .pagination .disabled { color: #bdb8d0; }
 
-        .feature-card { grid-column: 1 / -1; }
-        @media (min-width: 700px) { .feature-card a.card-link { padding: 32px; } .feature-card h2 { font-size: 24px; } }
+
     </style>
 @endsection
 
@@ -92,7 +91,7 @@
                 @else
                     <div class="grid">
                         @foreach ($articles as $article)
-                            <div class="card {{ $loop->first && $articles->currentPage() === 1 && ! $activeTag ? 'feature-card' : '' }}">
+                            <div class="card">
                                 <a class="card-link" href="{{ route('blog.show', $article->slug) }}">
                                     @if ($article->featuredImageUrl())
                                         <span class="thumb">
