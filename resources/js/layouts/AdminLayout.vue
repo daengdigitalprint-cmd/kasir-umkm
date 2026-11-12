@@ -10,7 +10,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/compon
 import { getInitials } from '@/composables/useInitials';
 import { resolveProfileImageSrc } from '@/lib/profileAvatar';
 import { toastWarning } from '@/lib/swal';
-import { Head, usePage, router } from '@inertiajs/vue3';
+import { Head, Link, usePage, router } from '@inertiajs/vue3';
 import { BarChart3, Bell, CalendarCheck, Crown, History, Home, Menu, Package, Settings, ShoppingCart, Store, Users, UsersRound, X, PanelLeft, Shirt, ReceiptText, Clock, ArrowRightLeft } from 'lucide-vue-next';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
@@ -659,14 +659,14 @@ const isCurrentRoute = (href: string) => {
         >
             <!-- Owner Mobile Nav -->
             <div v-if="isOwner" class="flex items-center justify-around h-20 px-4">
-                <Button as="a" href="/owner/dashboard" variant="ghost" :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/owner/dashboard') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']">
+                <Button :as="Link" href="/owner/dashboard" variant="ghost" :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/owner/dashboard') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']">
                     <Crown class="!h-6 !w-6 mb-1" />
                     <span class="text-[10px] font-bold">Dashboard</span>
                 </Button>
                 <!-- SDM (absensi & gaji) menggantikan Produk bila modul absensi aktif; badge = pengajuan menunggu -->
                 <Button
                     v-if="ownerHrEnabled"
-                    as="a"
+                    :as="Link"
                     :href="ownerHrHref"
                     variant="ghost"
                     :class="['relative flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/attendance') || isCurrentRoute('/payroll') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']"
@@ -680,15 +680,15 @@ const isCurrentRoute = (href: string) => {
                         {{ ownerHrPending > 99 ? '99+' : ownerHrPending }}
                     </span>
                 </Button>
-                <Button v-else as="a" href="/products" variant="ghost" :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/products') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']">
+                <Button v-else :as="Link" href="/products" variant="ghost" :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/products') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']">
                     <Package class="!h-6 !w-6 mb-1" />
                     <span class="text-[10px] font-bold">Produk</span>
                 </Button>
-                <Button as="a" href="/reports" variant="ghost" :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/reports') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']">
+                <Button :as="Link" href="/reports" variant="ghost" :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/reports') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']">
                     <BarChart3 class="!h-6 !w-6 mb-1" />
                     <span class="text-[10px] font-bold">Laporan</span>
                 </Button>
-                <Button as="a" href="/settings" variant="ghost" :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/settings') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']">
+                <Button :as="Link" href="/settings" variant="ghost" :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/settings') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']">
                     <Settings class="!h-6 !w-6 mb-1" />
                     <span class="text-[10px] font-bold">Pengaturan</span>
                 </Button>
@@ -698,17 +698,17 @@ const isCurrentRoute = (href: string) => {
             <!-- Kasir: 5 menu (dinamis berdasarkan status modul absensi) -->
             <div v-else-if="isCashier" class="flex items-center justify-between h-20 px-2 sm:px-6">
                 <div class="flex items-center space-x-1">
-                    <Button as="a" href="/dashboard" variant="ghost" :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/dashboard') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']">
+                    <Button :as="Link" href="/dashboard" variant="ghost" :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/dashboard') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']">
                         <Home class="!h-6 !w-6 mb-1" />
                         <span class="text-[10px] font-bold">Beranda</span>
                     </Button>
                     <!-- Absensi: tampil jika modul aktif -->
-                    <Button v-if="attendanceEnabled" as="a" href="/attendance" variant="ghost" :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/attendance') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']">
+                    <Button v-if="attendanceEnabled" :as="Link" href="/attendance" variant="ghost" :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/attendance') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']">
                         <CalendarCheck class="!h-6 !w-6 mb-1" />
                         <span class="text-[10px] font-bold">Absensi</span>
                     </Button>
                     <!-- Shift: tampil jika modul absensi tidak aktif -->
-                    <Button v-else as="a" href="/cash-shifts" variant="ghost" :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/cash-shifts') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']">
+                    <Button v-else :as="Link" href="/cash-shifts" variant="ghost" :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/cash-shifts') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']">
                         <Clock class="!h-6 !w-6 mb-1" />
                         <span class="text-[10px] font-bold">Shift</span>
                     </Button>
@@ -716,23 +716,23 @@ const isCurrentRoute = (href: string) => {
 
                 <!-- POS (tombol floating) -->
                 <div class="flex flex-col items-center relative -top-6">
-                    <Button as="a" href="/pos" class="flex flex-col items-center justify-center h-16 w-16 rounded-full shadow-lg shadow-primary/30 bg-primary hover:bg-primary/90 text-white border-[6px] border-white">
+                    <Button :as="Link" href="/pos" class="flex flex-col items-center justify-center h-16 w-16 rounded-full shadow-lg shadow-primary/30 bg-primary hover:bg-primary/90 text-white border-[6px] border-white">
                         <ShoppingCart class="!h-6 !w-6" />
                     </Button>
                 </div>
 
                 <div class="flex items-center space-x-1">
-                    <Button as="a" href="/pos/transactions" variant="ghost" :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/pos/transactions') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']">
+                    <Button :as="Link" href="/pos/transactions" variant="ghost" :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/pos/transactions') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']">
                         <ReceiptText class="!h-6 !w-6 mb-1" />
                         <span class="text-[10px] font-bold">Riwayat</span>
                     </Button>
                     <!-- Absensi aktif: Setelan diganti Stok agar tetap 5 menu -->
-                    <Button v-if="attendanceEnabled" as="a" href="/stock-overview" variant="ghost" :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/stock-overview') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']">
+                    <Button v-if="attendanceEnabled" :as="Link" href="/stock-overview" variant="ghost" :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/stock-overview') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']">
                         <History class="!h-6 !w-6 mb-1" />
                         <span class="text-[10px] font-bold">Stok</span>
                     </Button>
                     <!-- Absensi tidak aktif: tampilkan Setelan -->
-                    <Button v-else as="a" href="/settings" variant="ghost" :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/settings') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']">
+                    <Button v-else :as="Link" href="/settings" variant="ghost" :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/settings') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']">
                         <Settings class="!h-6 !w-6 mb-1" />
                         <span class="text-[10px] font-bold">Setelan</span>
                     </Button>
@@ -742,13 +742,13 @@ const isCurrentRoute = (href: string) => {
             <!-- Non-Kasir / Non-Owner: footer default -->
             <div v-else-if="!isOwner" class="flex items-center justify-between h-20 px-2 sm:px-6">
                 <div class="flex items-center space-x-1">
-                    <Button as="a" href="/dashboard" variant="ghost" :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/dashboard') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']">
+                    <Button :as="Link" href="/dashboard" variant="ghost" :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/dashboard') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']">
                         <Home class="!h-6 !w-6 mb-1" />
                         <span class="text-[10px] font-bold">Beranda</span>
                     </Button>
                     <Button
                         v-if="canInventory"
-                        as="a"
+                        :as="Link"
                         href="/products"
                         variant="ghost"
                         :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/products') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']"
@@ -762,7 +762,7 @@ const isCurrentRoute = (href: string) => {
                 <div class="flex flex-col items-center relative -top-6">
                     <Button
                         v-if="canPos && laundryEnabled"
-                        as="a"
+                        :as="Link"
                         href="/laundry-orders"
                         class="flex flex-col items-center justify-center h-16 w-16 rounded-full shadow-lg shadow-primary/30 bg-primary hover:bg-primary/90 text-white border-[6px] border-white"
                     >
@@ -770,7 +770,7 @@ const isCurrentRoute = (href: string) => {
                     </Button>
                     <Button
                         v-else-if="canPos"
-                        as="a"
+                        :as="Link"
                         href="/pos"
                         class="flex flex-col items-center justify-center h-16 w-16 rounded-full shadow-lg shadow-primary/30 bg-primary hover:bg-primary/90 text-white border-[6px] border-white"
                     >
@@ -778,7 +778,7 @@ const isCurrentRoute = (href: string) => {
                     </Button>
                     <Button
                         v-else-if="canInventory"
-                        as="a"
+                        :as="Link"
                         href="/stock-movements"
                         class="flex flex-col items-center justify-center h-16 w-16 rounded-full shadow-lg shadow-slate-400/30 bg-slate-800 hover:bg-slate-900 text-white border-[6px] border-white"
                     >
@@ -789,7 +789,7 @@ const isCurrentRoute = (href: string) => {
                 <div class="flex items-center space-x-1">
                     <Button
                         v-if="canBackoffice"
-                        as="a"
+                        :as="Link"
                         href="/customers"
                         variant="ghost"
                         :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/customers') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']"
@@ -799,7 +799,7 @@ const isCurrentRoute = (href: string) => {
                     </Button>
                     <Button
                         v-if="canBackoffice"
-                        as="a"
+                        :as="Link"
                         href="/reports"
                         variant="ghost"
                         :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/reports') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']"

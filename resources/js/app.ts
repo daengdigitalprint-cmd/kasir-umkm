@@ -13,6 +13,7 @@ import Swal from 'sweetalert2';
 import type { DefineComponent } from 'vue';
 import { createApp, h, type App as VueApp } from 'vue';
 import { initializeTheme } from './composables/useAppearance';
+import { hideInitialPreloader, installNavigationLoader } from './lib/navigationLoader';
 import { processInertiaFlash, type InertiaFlash } from './lib/swal';
 
 // Expose Swal ke window agar script inline (mis. promptPwaVersionReload di app.blade.php)
@@ -233,9 +234,14 @@ createInertiaApp({
         installErrorBoundary(app);
 
         app.mount(el);
+        installNavigationLoader();
+        hideInitialPreloader();
     },
     progress: {
-        color: '#4B5563',
+        // Bar tipis di atas layar segera saat pindah halaman (overlay menyusul bila lambat).
+        color: '#7943e5',
+        delay: 120,
+        showSpinner: false,
     },
 });
 

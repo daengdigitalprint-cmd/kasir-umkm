@@ -260,6 +260,13 @@
                 from { transform: rotate(0deg); }
                 to { transform: rotate(360deg); }
             }
+            /* Halaman aplikasi (bukan landing): preloader terang, tampil sampai Vue ter-mount
+               supaya muat penuh / refresh tidak menampilkan layar putih kosong. */
+            .lp-preloader--app { background-color: #f8fafc; transition: opacity 0.3s ease, visibility 0.3s ease; }
+            .lp-preloader--app .lp-preloader-spinner { border-color: rgba(121, 67, 229, 0.18); border-top-color: #7943e5; width: 40px; height: 40px; border-width: 3.5px; }
+            .lp-preloader--app .lp-preloader-text { color: #64748b; text-transform: none; letter-spacing: 0; font-weight: 600; }
+            .dark .lp-preloader--app { background-color: #020617; }
+            .dark .lp-preloader--app .lp-preloader-text { color: #cbd5e1; }
             @media (max-width: 575px) {
                 .lp-preloader-spinner { width: 40px; height: 40px; border-width: 3px; }
                 .lp-preloader-text { font-size: 12px; }
@@ -282,24 +289,29 @@
     </head>
     <body class="font-sans antialiased">
         {{-- Preloader - ditampilkan sebelum Inertia mount --}}
-        <div id="lp-preloader" class="lp-preloader">
+        <div id="lp-preloader" @class(['lp-preloader', 'lp-preloader--app' => ! $isLandingIndex]) role="status" aria-live="polite">
             <div class="lp-preloader-content">
                 <div class="lp-preloader-spinner"></div>
                 <div class="lp-preloader-text">Memuat...</div>
             </div>
         </div>
-        
+
         <script>
-            // Preloader - dinonaktifkan untuk dashboard/user pages
             (function() {
                 var preloader = document.getElementById('lp-preloader');
                 if (!preloader) return;
-                
-                // Langsung hide preloader (tidak perlu show/hide logic)
-                preloader.classList.add('lp-preloader-hidden');
-                setTimeout(function() {
-                    preloader.style.display = 'none';
-                }, 500);
+                var hide = function() {
+                    preloader.classList.add('lp-preloader-hidden');
+                    setTimeout(function() { preloader.style.display = 'none'; }, 400);
+                };
+                @if ($isLandingIndex)
+                    // Landing punya preloader sendiri (#preloader) — sembunyikan yang ini segera.
+                    hide();
+                @else
+                    // Halaman aplikasi: disembunyikan app.ts (hideInitialPreloader) setelah Vue ter-mount.
+                    // Pengaman bila JavaScript gagal dimuat: jangan menutupi halaman selamanya.
+                    setTimeout(hide, 10000);
+                @endif
             })();
         </script>
         
