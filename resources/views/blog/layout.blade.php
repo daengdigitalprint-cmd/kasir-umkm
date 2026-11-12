@@ -78,6 +78,11 @@
         .card { background: #fff; border: 1px solid var(--line); border-radius: 20px; overflow: hidden; display: flex; flex-direction: column; transition: border-color .2s ease, background .2s ease; }
         .card:hover { border-color: #c3b9fb; background: #fdfdff; }
         .card a.card-link { color: inherit; display: block; padding: 24px; flex: 1; }
+        /* Thumbnail berada di dalam tautan kartu (satu tautan untuk gambar +
+           judul), lalu ditarik keluar padding agar rata dengan tepi kartu. */
+        .card .thumb { display: block; overflow: hidden; background: var(--container); border-bottom: 1px solid var(--line); margin: -24px -24px 18px; }
+        .card .thumb img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; transition: transform .35s ease; }
+        .card:hover .thumb img { transform: scale(1.04); }
         .card h2, .card h3 { font-size: 18px; line-height: 1.45; margin: 12px 0 8px; }
         .card a.card-link:hover h2, .card a.card-link:hover h3 { color: var(--primary); }
         .card p { margin: 0; color: var(--muted); font-size: 14.5px; }

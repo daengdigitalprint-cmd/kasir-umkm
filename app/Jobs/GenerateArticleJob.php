@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\Article;
 use App\Models\ArticleGeneration;
 use App\Services\AI\ArticleGeneratorService;
+use App\Services\ArticleContentService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -56,7 +57,11 @@ class GenerateArticleJob implements ShouldQueue
                 'slug' => Article::uniqueSlug($data['title']),
                 'excerpt' => $data['excerpt'],
                 'content_markdown' => $data['content_markdown'],
-                'content_html' => ArticleGeneratorService::markdownToHtml($data['content_markdown']),
+                'content_html' => ArticleContentService::render(
+                    $data['content_markdown'],
+                    $data['title'],
+                    $generation->input['keyword'] ?? null,
+                ),
                 'category' => $data['category'],
                 'tags' => $data['tags'],
                 'faq' => $data['faq'],

@@ -6,6 +6,7 @@ import {
     CheckCircle,
     Eye,
     FileText,
+    ImageOff,
     Lightbulb,
     Loader2,
     Newspaper,
@@ -34,6 +35,7 @@ interface ArticleRow {
     published_at: string | null;
     created_at: string;
     public_url: string;
+    featured_image_url: string | null;
 }
 
 interface Generation {
@@ -532,16 +534,30 @@ const deleteArticle = (article: ArticleRow) => {
                         </thead>
                         <tbody class="divide-y divide-slate-100">
                             <tr v-for="article in articles.data" :key="article.id" class="align-middle hover:bg-slate-50/60">
-                                <td class="max-w-[340px] px-5 py-3.5">
-                                    <Link :href="`/superadmin/articles/${article.id}/edit`" class="block">
-                                        <p class="truncate font-semibold text-slate-900 hover:text-violet-700">{{ article.title }}</p>
-                                        <p class="mt-0.5 flex items-center gap-1.5 text-xs text-slate-400">
-                                            <span class="truncate">/blog/{{ article.slug }}</span>
-                                            <span v-if="article.generated_by_ai" class="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-violet-50 px-1.5 py-0.5 font-medium text-violet-600">
-                                                <Sparkles class="h-2.5 w-2.5" /> AI
-                                            </span>
-                                            <span v-if="article.is_pillar" class="shrink-0 rounded-full bg-emerald-50 px-1.5 py-0.5 font-medium text-emerald-600">Pilar</span>
-                                        </p>
+                                <td class="max-w-[360px] px-5 py-3.5">
+                                    <Link :href="`/superadmin/articles/${article.id}/edit`" class="flex items-start gap-3">
+                                        <span
+                                            class="flex h-11 w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50"
+                                        >
+                                            <img
+                                                v-if="article.featured_image_url"
+                                                :src="article.featured_image_url"
+                                                :alt="`Thumbnail ${article.title}`"
+                                                class="h-full w-full object-cover"
+                                                loading="lazy"
+                                            />
+                                            <ImageOff v-else class="h-4 w-4 text-slate-300" />
+                                        </span>
+                                        <div class="min-w-0 flex-1">
+                                            <p class="truncate font-semibold text-slate-900 hover:text-violet-700">{{ article.title }}</p>
+                                            <p class="mt-0.5 flex items-center gap-1.5 text-xs text-slate-400">
+                                                <span class="truncate">/blog/{{ article.slug }}</span>
+                                                <span v-if="article.generated_by_ai" class="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-violet-50 px-1.5 py-0.5 font-medium text-violet-600">
+                                                    <Sparkles class="h-2.5 w-2.5" /> AI
+                                                </span>
+                                                <span v-if="article.is_pillar" class="shrink-0 rounded-full bg-emerald-50 px-1.5 py-0.5 font-medium text-emerald-600">Pilar</span>
+                                            </p>
+                                        </div>
                                     </Link>
                                 </td>
                                 <td class="px-3 py-3.5">

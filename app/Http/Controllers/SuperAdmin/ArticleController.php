@@ -6,10 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Jobs\GenerateArticleJob;
 use App\Models\Article;
 use App\Models\ArticleGeneration;
-use App\Services\AI\ArticleGeneratorService;
+use App\Services\ArticleContentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -41,6 +42,7 @@ class ArticleController extends Controller
                 'published_at' => $a->published_at?->toISOString(),
                 'created_at' => $a->created_at->toISOString(),
                 'public_url' => $a->publicUrl(),
+                'featured_image_url' => $a->featuredImageUrl(),
             ]);
 
         $stats = [
@@ -84,6 +86,9 @@ class ArticleController extends Controller
         return Inertia::render('SuperAdmin/Articles/Edit', [
             'article' => array_merge($article->toArray(), [
                 'public_url' => $article->publicUrl(),
+                'featured_image_url' => $article->featuredImageUrl(),
+                // Dipakai UI sebagai placeholder agar admin tahu alt otomatisnya.
+                'suggested_image_alt' => ArticleContentService::thumbnailAlt($article->title, $article->focus_keyword),
             ]),
             'strategies' => Article::STRATEGIES,
         ]);
@@ -94,9 +99,19 @@ class ArticleController extends Controller
         $data = $this->validateArticle($request);
 
         $data['slug'] = Article::uniqueSlug($data['slug'] ?: $data['title']);
-        $data['content_html'] = ArticleGeneratorService::markdownToHtml($data['content_markdown']);
+        $data['content_html'] = ArticleContentService::render(
+            $data['content_markdown'],
+            $data['title'],
+            $data['focus_keyword'] ?? null,
+        );
         $data['reading_time'] = Article::estimateReadingTime($data['content_markdown']);
         $data['created_by'] = $request->user()->id;
+
+        if ($request->hasFile('featured_image')) {
+            $data['featured_image'] = $request->file('featured_image')->store('articles', 'public');
+        }
+
+        $data['featured_image_alt'] = $this->resolveImageAlt($data);
 
         $article = Article::create($data);
 
@@ -112,8 +127,34 @@ class ArticleController extends Controller
         $data['slug'] = $data['slug'] !== $article->slug
             ? Article::uniqueSlug($data['slug'] ?: $data['title'], $article->id)
             : $article->slug;
-        $data['content_html'] = ArticleGeneratorService::markdownToHtml($data['content_markdown']);
+        $data['content_html'] = ArticleContentService::render(
+            $data['content_markdown'],
+            $data['title'],
+            $data['focus_keyword'] ?? null,
+        );
         $data['reading_time'] = Article::estimateReadingTime($data['content_markdown']);
+
+        // Hapus thumbnail (dicentang admin), atau ganti dengan unggahan baru.
+        if ($request->boolean('remove_featured_image') && $article->featured_image) {
+            Storage::disk('public')->delete($article->featured_image);
+            $data['featured_image'] = null;
+            $data['featured_image_alt'] = null;
+        }
+
+        if ($request->hasFile('featured_image')) {
+            if ($article->featured_image) {
+                Storage::disk('public')->delete($article->featured_image);
+            }
+
+            $data['featured_image'] = $request->file('featured_image')->store('articles', 'public');
+        }
+
+        // Alt hanya relevan selama thumbnail ada.
+        $hasImage = array_key_exists('featured_image', $data)
+            ? $data['featured_image'] !== null
+            : $article->featured_image !== null;
+
+        $data['featured_image_alt'] = $hasImage ? $this->resolveImageAlt($data) : null;
 
         $article->update($data);
 
@@ -122,11 +163,35 @@ class ArticleController extends Controller
 
     public function destroy(Article $article): RedirectResponse
     {
+        if ($article->featured_image) {
+            Storage::disk('public')->delete($article->featured_image);
+        }
+
         $article->delete();
 
         return redirect()
             ->route('superadmin.articles.index')
             ->with('success', 'Artikel dihapus.');
+    }
+
+    /**
+     * Alt thumbnail: pakai isian admin, atau susun otomatis dari judul
+     * dan kata kunci bila dibiarkan kosong (alt kosong merugikan SEO).
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function resolveImageAlt(array $data): string
+    {
+        $alt = trim((string) ($data['featured_image_alt'] ?? ''));
+
+        if ($alt !== '') {
+            return $alt;
+        }
+
+        return ArticleContentService::thumbnailAlt(
+            (string) $data['title'],
+            $data['focus_keyword'] ?? null,
+        );
     }
 
     /** Publish sekarang / jadwalkan / kembalikan ke draft. */
@@ -214,7 +279,7 @@ class ArticleController extends Controller
      */
     private function validateArticle(Request $request, ?Article $article = null): array
     {
-        return $request->validate([
+        $validated = $request->validate([
             'title' => 'required|string|max:255',
             'slug' => 'nullable|string|max:255',
             'excerpt' => 'nullable|string|max:500',
@@ -231,6 +296,17 @@ class ArticleController extends Controller
             'canonical_url' => 'nullable|url|max:255',
             'strategy' => 'nullable|in:'.implode(',', array_keys(Article::STRATEGIES)),
             'is_pillar' => 'boolean',
+            'featured_image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'featured_image_alt' => 'nullable|string|max:160',
+            'remove_featured_image' => 'nullable|boolean',
         ]) + ['slug' => $request->input('slug', $article?->slug ?? '')];
+
+        // Kolom bantu form, bukan kolom tabel.
+        unset($validated['remove_featured_image']);
+
+        // File ditangani terpisah (disimpan ke disk, bukan disimpan apa adanya).
+        unset($validated['featured_image']);
+
+        return $validated;
     }
 }

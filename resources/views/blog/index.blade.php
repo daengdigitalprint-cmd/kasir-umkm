@@ -94,6 +94,18 @@
                         @foreach ($articles as $article)
                             <div class="card {{ $loop->first && $articles->currentPage() === 1 && ! $activeTag ? 'feature-card' : '' }}">
                                 <a class="card-link" href="{{ route('blog.show', $article->slug) }}">
+                                    @if ($article->featuredImageUrl())
+                                        <span class="thumb">
+                                            <img
+                                                src="{{ $article->featuredImageUrl() }}"
+                                                alt="{{ $article->featuredImageAlt() }}"
+                                                width="600"
+                                                height="338"
+                                                loading="{{ $loop->first ? 'eager' : 'lazy' }}"
+                                                decoding="async"
+                                            >
+                                        </span>
+                                    @endif
                                     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                                         @if ($article->category)
                                             <span class="pill">{{ $article->category }}</span>

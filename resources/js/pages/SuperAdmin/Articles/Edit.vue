@@ -8,6 +8,8 @@ import {
     CircleAlert,
     Eye,
     Globe,
+    ImagePlus,
+    Info,
     Plus,
     Save,
     Sparkles,
@@ -27,6 +29,10 @@ interface ArticleData {
     slug: string;
     excerpt: string | null;
     content_markdown: string | null;
+    featured_image: string | null;
+    featured_image_url: string | null;
+    featured_image_alt: string | null;
+    suggested_image_alt: string;
     category: string | null;
     tags: string[] | null;
     faq: FaqItem[] | null;
@@ -58,6 +64,9 @@ const form = useForm({
     slug: props.article?.slug ?? '',
     excerpt: props.article?.excerpt ?? '',
     content_markdown: props.article?.content_markdown ?? '',
+    featured_image: null as File | null,
+    featured_image_alt: props.article?.featured_image_alt ?? '',
+    remove_featured_image: false,
     category: props.article?.category ?? '',
     tags: (props.article?.tags ?? []).join(', '),
     faq: (props.article?.faq ?? []) as FaqItem[],
@@ -70,7 +79,7 @@ const form = useForm({
 });
 
 const submit = () => {
-    const transformed = form.transform((data) => ({
+    const base = (data: Record<string, any>) => ({
         ...data,
         tags: data.tags
             .split(',')
@@ -78,13 +87,73 @@ const submit = () => {
             .filter(Boolean),
         strategy: data.strategy || null,
         canonical_url: data.canonical_url || null,
-    }));
+    });
 
     if (isNew.value) {
-        transformed.post('/superadmin/articles', { preserveScroll: true });
-    } else {
-        transformed.put(`/superadmin/articles/${props.article!.id}`, { preserveScroll: true });
+        form.transform(base).post('/superadmin/articles', { preserveScroll: true, forceFormData: true });
+        return;
     }
+
+    // Unggahan file tidak bisa lewat PUT, jadi dikirim POST dengan _method.
+    form.transform((data) => ({ ...base(data), _method: 'put' })).post(`/superadmin/articles/${props.article!.id}`, {
+        preserveScroll: true,
+        forceFormData: true,
+        onSuccess: () => {
+            form.featured_image = null;
+            form.remove_featured_image = false;
+            if (fileInput.value) fileInput.value.value = '';
+            previewUrl.value = null;
+        },
+    });
+};
+
+/* ============ Thumbnail ============ */
+const fileInput = ref<HTMLInputElement | null>(null);
+const previewUrl = ref<string | null>(null);
+const imageError = ref<string | null>(null);
+
+/** Gambar yang ditampilkan: pratinjau unggahan baru, atau yang tersimpan. */
+const shownImage = computed(() => {
+    if (previewUrl.value) return previewUrl.value;
+    if (form.remove_featured_image) return null;
+    return props.article?.featured_image_url ?? null;
+});
+
+/** Alt otomatis yang akan dipakai server bila kolom alt dikosongkan. */
+const autoAlt = computed(() => {
+    const title = form.title.trim();
+    const kw = form.focus_keyword.trim();
+    if (!title) return props.article?.suggested_image_alt ?? '';
+    return kw && !title.toLowerCase().includes(kw.toLowerCase()) ? `${title} - ${kw}` : title;
+});
+
+const pickImage = (e: Event) => {
+    const file = (e.target as HTMLInputElement).files?.[0] ?? null;
+    imageError.value = null;
+
+    if (!file) {
+        form.featured_image = null;
+        previewUrl.value = null;
+        return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+        imageError.value = 'Ukuran gambar maksimal 2 MB.';
+        if (fileInput.value) fileInput.value.value = '';
+        return;
+    }
+
+    form.featured_image = file;
+    form.remove_featured_image = false;
+    previewUrl.value = URL.createObjectURL(file);
+};
+
+const removeImage = () => {
+    form.featured_image = null;
+    form.remove_featured_image = true;
+    previewUrl.value = null;
+    imageError.value = null;
+    if (fileInput.value) fileInput.value.value = '';
 };
 
 /* ============ Status / publish ============ */
@@ -133,6 +202,7 @@ const seoChecks = computed<Check[]>(() => {
         { label: 'Ada internal link (/blog/ atau /)', ok: /\]\((\/blog\/|\/)\S*\)/.test(form.content_markdown) },
         { label: 'Ada FAQ (untuk FAQ schema)', ok: form.faq.length >= 2 },
         { label: 'Ada ringkasan (excerpt)', ok: form.excerpt.trim().length > 20 },
+        { label: 'Ada thumbnail (untuk og:image)', ok: shownImage.value !== null },
     ];
 });
 
@@ -338,6 +408,76 @@ const seoScore = computed(() => {
                             </button>
                         </div>
                         <p v-if="article.views > 0" class="mt-3 text-xs text-slate-400">Sudah dibaca {{ article.views }} kali.</p>
+                    </section>
+
+                    <!-- Thumbnail artikel -->
+                    <section class="space-y-3 rounded-xl border border-slate-200 bg-white p-5">
+                        <div>
+                            <h2 class="text-sm font-semibold text-slate-900">Thumbnail Artikel</h2>
+                            <p class="text-xs text-slate-500">Tampil di daftar artikel, halaman artikel, dan saat dibagikan ke sosial media.</p>
+                        </div>
+
+                        <div
+                            v-if="shownImage"
+                            class="relative overflow-hidden rounded-lg border border-slate-200 bg-slate-50"
+                        >
+                            <img :src="shownImage" :alt="form.featured_image_alt || autoAlt" class="aspect-[16/9] w-full object-cover" />
+                            <button
+                                type="button"
+                                class="absolute top-2 right-2 inline-flex items-center gap-1 rounded-lg bg-white/95 px-2 py-1 text-xs font-semibold text-red-600 ring-1 ring-slate-200 hover:bg-red-50"
+                                @click="removeImage"
+                            >
+                                <Trash2 class="h-3.5 w-3.5" /> Hapus
+                            </button>
+                            <span
+                                v-if="previewUrl"
+                                class="absolute bottom-2 left-2 rounded-lg bg-violet-600 px-2 py-0.5 text-[11px] font-semibold text-white"
+                            >
+                                Belum disimpan
+                            </span>
+                        </div>
+
+                        <label
+                            v-else
+                            class="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center transition hover:border-violet-300 hover:bg-violet-50/40"
+                        >
+                            <ImagePlus class="h-6 w-6 text-slate-400" />
+                            <span class="text-sm font-semibold text-slate-700">Unggah thumbnail</span>
+                            <span class="text-xs text-slate-500">JPG, PNG, atau WebP · maks 2 MB · rasio 16:9</span>
+                            <input ref="fileInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden" @change="pickImage" />
+                        </label>
+
+                        <div v-if="shownImage" class="flex gap-2">
+                            <label
+                                class="inline-flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                            >
+                                <ImagePlus class="h-3.5 w-3.5" /> Ganti gambar
+                                <input ref="fileInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden" @change="pickImage" />
+                            </label>
+                        </div>
+
+                        <p v-if="imageError" class="text-xs text-red-600">{{ imageError }}</p>
+                        <p v-if="form.errors.featured_image" class="text-xs text-red-600">{{ form.errors.featured_image }}</p>
+
+                        <div>
+                            <div class="mb-1 flex items-center justify-between">
+                                <label for="f-alt" class="block text-xs font-semibold text-slate-600">Teks alt gambar</label>
+                                <span class="text-[11px] text-slate-400">{{ form.featured_image_alt.length }}/160</span>
+                            </div>
+                            <input
+                                id="f-alt"
+                                v-model="form.featured_image_alt"
+                                type="text"
+                                maxlength="160"
+                                :placeholder="autoAlt"
+                                class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-400 focus:outline-none"
+                            />
+                            <p class="mt-1 flex items-start gap-1 text-[11px] text-slate-500">
+                                <Info class="mt-0.5 h-3 w-3 shrink-0" />
+                                <span v-if="form.featured_image_alt.trim()">Dipakai pembaca layar &amp; mesin pencari untuk memahami gambar.</span>
+                                <span v-else>Dikosongkan? Akan diisi otomatis: <strong class="font-semibold text-slate-700">{{ autoAlt || '—' }}</strong></span>
+                            </p>
+                        </div>
                     </section>
 
                     <!-- Checklist SEO -->

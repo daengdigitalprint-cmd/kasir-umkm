@@ -7,6 +7,9 @@
     $publishedIso = $article->published_at?->toIso8601String();
     $modifiedIso = $article->updated_at?->toIso8601String();
 
+    $imageUrl = $article->featuredImageUrl();
+    $imageAlt = $imageUrl ? $article->featuredImageAlt() : null;
+
     $schema = [
         '@context' => 'https://schema.org',
         '@type' => 'Article',
@@ -19,6 +22,14 @@
         'author' => ['@type' => 'Organization', 'name' => 'Kasir UMKM by MaccaPOS', 'url' => url('/')],
         'publisher' => ['@type' => 'Organization', 'name' => 'Kasir UMKM by MaccaPOS', 'url' => url('/')],
     ];
+
+    if ($imageUrl) {
+        $schema['image'] = [[
+            '@type' => 'ImageObject',
+            'url' => $imageUrl,
+            'caption' => $imageAlt,
+        ]];
+    }
     if ($article->focus_keyword) {
         $schema['keywords'] = implode(', ', array_filter(array_merge([$article->focus_keyword], $article->tags ?? [])));
     }
@@ -72,7 +83,15 @@
     @foreach ($article->tags ?? [] as $tag)
         <meta property="article:tag" content="{{ $tag }}">
     @endforeach
-    <meta name="twitter:card" content="summary">
+    @if ($imageUrl)
+        <meta property="og:image" content="{{ $imageUrl }}">
+        <meta property="og:image:alt" content="{{ $imageAlt }}">
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:image" content="{{ $imageUrl }}">
+        <meta name="twitter:image:alt" content="{{ $imageAlt }}">
+    @else
+        <meta name="twitter:card" content="summary">
+    @endif
     <script type="application/ld+json">{!! json_encode($schema, $jsonFlags) !!}</script>
     <script type="application/ld+json">{!! json_encode($breadcrumbSchema, $jsonFlags) !!}</script>
     @if ($faqSchema)
@@ -93,7 +112,10 @@
         .byline .av { width: 38px; height: 38px; border-radius: 11px; background: var(--primary-soft); color: var(--primary); display: flex; align-items: center; justify-content: center; }
         .byline strong { display: block; font-size: 14px; color: var(--ink); font-weight: 700; line-height: 1.3; }
 
-        .prose { font-size: 16.5px; color: #1e293b; }
+        .post-cover { margin: 0 0 8px; }
+        .post-cover img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 16px; background: var(--container); }
+
+        .prose { font-size: 16.5px; color: #1e2338; }
         .prose h2 { font-size: clamp(21px, 2.6vw, 27px); margin: 40px 0 14px; scroll-margin-top: 100px; position: relative; padding-left: 16px; }
         .prose h2::before { content: ''; position: absolute; left: 0; top: .18em; bottom: .18em; width: 5px; border-radius: 999px; background: var(--primary); }
         .prose h3 { font-size: 19px; margin: 30px 0 10px; }
@@ -199,6 +221,20 @@
                         </div>
                     </header>
 
+                    @if ($imageUrl)
+                        <figure class="post-cover">
+                            {{-- Gambar utama artikel: tidak lazy agar cepat tampil (LCP). --}}
+                            <img
+                                src="{{ $imageUrl }}"
+                                alt="{{ $imageAlt }}"
+                                width="1200"
+                                height="675"
+                                fetchpriority="high"
+                                decoding="async"
+                            >
+                        </figure>
+                    @endif
+
                     @if (count($toc) >= 3)
                         <nav class="toc" aria-label="Daftar isi">
                             <p>@include('blog.partials.icon', ['name' => 'list', 'class' => 'ic-sm']) Daftar Isi</p>
@@ -285,6 +321,18 @@
                     @foreach ($related as $rel)
                         <div class="card">
                             <a class="card-link" href="{{ route('blog.show', $rel->slug) }}">
+                                @if ($rel->featuredImageUrl())
+                                    <span class="thumb">
+                                        <img
+                                            src="{{ $rel->featuredImageUrl() }}"
+                                            alt="{{ $rel->featuredImageAlt() }}"
+                                            width="600"
+                                            height="338"
+                                            loading="lazy"
+                                            decoding="async"
+                                        >
+                                    </span>
+                                @endif
                                 @if ($rel->category)
                                     <span class="pill">{{ $rel->category }}</span>
                                 @endif

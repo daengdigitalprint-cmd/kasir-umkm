@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\ArticleContentService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -33,6 +34,7 @@ class Article extends Model
         'content_markdown',
         'content_html',
         'featured_image',
+        'featured_image_alt',
         'category',
         'tags',
         'faq',
@@ -89,6 +91,31 @@ class Article extends Model
     public function publicUrl(): string
     {
         return url('/blog/'.$this->slug);
+    }
+
+    /** URL penuh thumbnail (null bila belum ada). */
+    public function featuredImageUrl(): ?string
+    {
+        if ($this->featured_image === null || $this->featured_image === '') {
+            return null;
+        }
+
+        return asset('storage/'.$this->featured_image);
+    }
+
+    /**
+     * Alt thumbnail: yang diisi admin, atau disusun otomatis dari judul.
+     * Tidak pernah mengembalikan string kosong selama thumbnail ada.
+     */
+    public function featuredImageAlt(): string
+    {
+        $alt = trim((string) $this->featured_image_alt);
+
+        if ($alt !== '') {
+            return $alt;
+        }
+
+        return ArticleContentService::thumbnailAlt($this->title, $this->focus_keyword);
     }
 
     /** Buat slug unik dari judul. */

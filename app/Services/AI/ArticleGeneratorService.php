@@ -188,14 +188,15 @@ PROMPT;
         return $topics;
     }
 
-    /** Konversi markdown artikel ke HTML aman untuk halaman publik. */
+    /**
+     * Konversi markdown artikel ke HTML aman untuk halaman publik.
+     *
+     * @deprecated Pakai ArticleContentService::render() yang juga melengkapi
+     *             atribut alt & lazy loading pada gambar.
+     */
     public static function markdownToHtml(string $markdown): string
     {
-        return Str::markdown($markdown, [
-            'html_input' => 'strip',
-            'allow_unsafe_links' => false,
-            'max_nesting_level' => 20,
-        ]);
+        return \App\Services\ArticleContentService::render($markdown);
     }
 
     protected function articleSystemPrompt(): string
@@ -213,6 +214,7 @@ Aturan penulisan WAJIB:
 7. Sebut produk "Kasir UMKM by MaccaPOS" secara halus 1-2 kali bila relevan (soft-selling, bukan hard-selling), dengan link [Kasir UMKM by MaccaPOS](/).
 8. Akhiri dengan heading "## Kesimpulan" berisi rangkuman singkat + ajakan halus mencoba aplikasi kasir.
 9. JANGAN mengarang data statistik dengan sumber palsu. Boleh pakai estimasi umum dengan bahasa "umumnya", "rata-rata".
+10. Gambar: jangan menyisipkan gambar apa pun kecuali diminta. Bila tetap menulis gambar markdown, WAJIB mengisi teks alt yang deskriptif, contoh ![Tampilan laporan penjualan harian di aplikasi kasir](url) — jangan pernah ![](url) tanpa alt.
 
 Balas HANYA dengan satu objek JSON valid (tanpa code fence, tanpa teks lain) dengan struktur:
 {
