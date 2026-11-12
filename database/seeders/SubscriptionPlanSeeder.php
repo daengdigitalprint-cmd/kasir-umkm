@@ -147,7 +147,7 @@ class SubscriptionPlanSeeder extends Seeder
                 'max_customers' => null,
                 'max_stores' => 3,
                 'features' => $growupFeatures,
-                'is_active' => true,
+                'is_active' => false, // tidak ditawarkan lagi (lebih mahal dari GrowUp tahunan)
                 'is_popular' => false,
                 'sort_order' => 6,
                 'billing_cycle' => 'yearly',
