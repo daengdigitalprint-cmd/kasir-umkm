@@ -2,27 +2,87 @@
 import { Link } from '@inertiajs/vue3';
 import { computed } from 'vue';
 
+/** Bentuk data dari App\Support\LandingPricing::payload(). */
+export interface LandingPricingData {
+    free: {
+        name: string;
+        description: string;
+        price_label: string;
+        max_products: number | null;
+        max_customers: number | null;
+        max_stores: number | null;
+    };
+    paid: {
+        name: string;
+        description: string;
+        monthly_label: string;
+        yearly_label: string;
+        max_stores: number | null;
+    };
+    yearly_saving_months: number | null;
+}
+
 const props = defineProps<{
     assetsBase?: string;
+    pricing?: LandingPricingData;
 }>();
 
 const base = computed(() => props.assetsBase ?? '/sastik-assets');
 
-const starterFeatures: string[] = [
-    'Hingga 30 produk & 50 pelanggan',
-    'Transaksi tanpa batas',
-    'Kasir (POS) & cetak struk',
-    'Stok dasar & laporan penjualan',
-    '1 outlet, tanpa batas masa aktif',
-];
+/**
+ * Cadangan bila prop tidak dikirim (mis. komponen dipakai di luar halaman
+ * landing). Angka sebenarnya selalu datang dari pengaturan Super Admin.
+ */
+const data = computed<LandingPricingData>(
+    () =>
+        props.pricing ?? {
+            free: {
+                name: 'Starter',
+                description: 'Gratis untuk coba dan toko kecil.',
+                price_label: 'Gratis',
+                max_products: null,
+                max_customers: null,
+                max_stores: 1,
+            },
+            paid: {
+                name: 'GrowUp',
+                description: 'Untuk pertumbuhan outlet: operasional penuh, laporan mendalam, multi-outlet.',
+                monthly_label: '',
+                yearly_label: '',
+                max_stores: 3,
+            },
+            yearly_saving_months: null,
+        },
+);
 
-const growUpFeatures: string[] = [
-    'Produk & pelanggan tanpa batas',
-    'Hingga 3 outlet & transfer stok',
-    'Shift kasir, pembelian & stok opname',
-    'Diskon, loyalitas & piutang pelanggan',
-    'Resep, akuntansi & asisten AI',
-];
+/** Angka kuota mengikuti batas yang diatur admin, tidak ditulis tetap. */
+const starterFeatures = computed<string[]>(() => {
+    const free = data.value.free;
+    const kuota: string[] = [];
+
+    if (free.max_products) kuota.push(free.max_products + ' produk');
+    if (free.max_customers) kuota.push(free.max_customers + ' pelanggan');
+
+    return [
+        kuota.length ? 'Hingga ' + kuota.join(' & ') : 'Produk & pelanggan tanpa batas',
+        'Transaksi tanpa batas',
+        'Kasir (POS) & cetak struk',
+        'Stok dasar & laporan penjualan',
+        (free.max_stores ?? 1) + ' outlet, tanpa batas masa aktif',
+    ];
+});
+
+const growUpFeatures = computed<string[]>(() => {
+    const outlet = data.value.paid.max_stores;
+
+    return [
+        'Produk & pelanggan tanpa batas',
+        outlet ? 'Hingga ' + outlet + ' outlet & transfer stok' : 'Outlet tanpa batas & transfer stok',
+        'Shift kasir, pembelian & stok opname',
+        'Diskon, loyalitas & piutang pelanggan',
+        'Resep, akuntansi & asisten AI',
+    ];
+});
 </script>
 
 <template>
@@ -58,11 +118,11 @@ const growUpFeatures: string[] = [
                                                         decoding="async"
                                                     />
                                                 </div>
-                                                <h3 class="xb-item--title lp-fs-h2">Paket Starter</h3>
-                                                <p class="xb-item--text">Gratis untuk coba dan toko kecil.</p>
+                                                <h3 class="xb-item--title lp-fs-h2">Paket {{ data.free.name }}</h3>
+                                                <p class="xb-item--text">{{ data.free.description }}</p>
                                             </div>
                                             <div class="xb-item--price_box">
-                                                <div class="xb-item--price lp-h3">Gratis</div>
+                                                <div class="xb-item--price lp-h3">{{ data.free.price_label }}</div>
                                                 <span class="xb-item--text">Selamanya</span>
                                             </div>
                                         </div>
@@ -103,22 +163,21 @@ const growUpFeatures: string[] = [
                                                         decoding="async"
                                                     />
                                                 </div>
-                                                <h3 class="xb-item--title lp-fs-h2">Paket GrowUp</h3>
-                                                <p class="xb-item--text">
-                                                    Untuk pertumbuhan outlet: operasional penuh, laporan mendalam, multi-outlet.
-                                                </p>
+                                                <h3 class="xb-item--title lp-fs-h2">Paket {{ data.paid.name }}</h3>
+                                                <p class="xb-item--text">{{ data.paid.description }}</p>
                                             </div>
                                             <div class="xb-item--price_box pricing_amount_monthly">
-                                                <div class="xb-item--price lp-h3">Rp99 rb</div>
+                                                <div class="xb-item--price lp-h3">{{ data.paid.monthly_label }}</div>
                                                 <span class="xb-item--text">Per bulan</span>
                                             </div>
                                             <div class="xb-item--price_box pricing_amount_yearly">
-                                                <div class="xb-item--price lp-h3">Rp990 rb</div>
+                                                <div class="xb-item--price lp-h3">{{ data.paid.yearly_label }}</div>
                                                 <span class="xb-item--text">Per tahun</span>
                                             </div>
-                                            <div class="xb-pricing-scribble">
+                                            <!-- Coretan hemat hanya tampil bila tahunan memang lebih murah. -->
+                                            <div v-if="data.yearly_saving_months" class="xb-pricing-scribble">
                                                 <p class="text text-center">
-                                                    Hemat 2 Bulan <br />
+                                                    Hemat {{ data.yearly_saving_months }} Bulan <br />
                                                     Tahunan
                                                 </p>
                                                 <svg

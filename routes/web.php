@@ -103,6 +103,8 @@ Route::get('/', function () {
         'ogImageType' => $og['mime'],
         'ogImageWidth' => $og['width'],
         'ogImageHeight' => $og['height'],
+        // Harga paket diambil langsung dari pengaturan Super Admin.
+        'pricing' => \App\Support\LandingPricing::payload(),
     ]);
 })->name('home');
 

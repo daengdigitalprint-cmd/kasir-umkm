@@ -140,7 +140,59 @@ final class LandingSeo
         }
         $html = trim((string) file_get_contents($path));
 
-        return $html !== '' ? $html : null;
+        return $html !== '' ? self::injectLivePrices($html) : null;
+    }
+
+    /**
+     * Ganti harga di HTML prerender dengan harga terbaru dari database.
+     *
+     * Prerender adalah potret statis yang dibuat sekali lewat
+     * scripts/prerender-landing.mjs, jadi angkanya membeku di sana. Tanpa
+     * penggantian ini, crawler (dan tampilan sekejap sebelum Vue mengambil
+     * alih) akan melihat harga lama meski admin sudah mengubahnya.
+     *
+     * Pola tidak ketemu -> HTML dikembalikan apa adanya, tidak pernah error.
+     */
+    private static function injectLivePrices(string $html): string
+    {
+        try {
+            $pricing = \App\Support\LandingPricing::payload();
+        } catch (\Throwable) {
+            return $html;
+        }
+
+        $replacements = [
+            'pricing_amount_monthly' => $pricing['paid']['monthly_label'],
+            'pricing_amount_yearly' => $pricing['paid']['yearly_label'],
+        ];
+
+        foreach ($replacements as $boxClass => $label) {
+            $html = (string) preg_replace(
+                '/(class="[^"]*'.preg_quote($boxClass, '/').'[^"]*"><div class="xb-item--price[^"]*">)[^<]*(<\/div>)/i',
+                '${1}'.str_replace('$', '\$', e($label)).'${2}',
+                $html,
+                1,
+            );
+        }
+
+        // Coretan "Hemat N Bulan Tahunan": ikut angka terbaru, atau dibuang
+        // sama sekali bila berlangganan tahunan tidak lagi lebih murah.
+        $saving = $pricing['yearly_saving_months'];
+
+        if ($saving === null) {
+            // Elemen coretan tidak punya <div> bersarang, jadi penutup pertama
+            // sudah pasti miliknya sendiri.
+            $html = (string) preg_replace('/<div class="xb-pricing-scribble">.*?<\/div>/is', '', $html, 1);
+        } else {
+            $html = (string) preg_replace(
+                '/(<div class="xb-pricing-scribble">.*?<p class="text text-center">)\s*Hemat\s*\d+\s*Bulan/is',
+                '${1}Hemat '.$saving.' Bulan',
+                $html,
+                1,
+            );
+        }
+
+        return $html;
     }
 
     /**

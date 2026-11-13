@@ -5,7 +5,7 @@ import LandingFaq from '@/components/landing/LandingFaq.vue';
 import LandingFooter from '@/components/landing/LandingFooter.vue';
 import LandingHero from '@/components/landing/LandingHero.vue';
 import LandingNav from '@/components/landing/LandingNav.vue';
-import LandingPricing from '@/components/landing/LandingPricing.vue';
+import LandingPricing, { type LandingPricingData } from '@/components/landing/LandingPricing.vue';
 import LandingUseCase from '@/components/landing/LandingUseCase.vue';
 import LandingValue from '@/components/landing/LandingValue.vue';
 import { Head, router } from '@inertiajs/vue3';
@@ -35,6 +35,8 @@ const props = withDefaults(
         landingAssetVersion?: string;
         /** false bila aset teroptimasi (landing.min.css, gsap-core.min.js, ...) belum ter-deploy. */
         landingOptimized?: boolean;
+        /** Harga & batas paket dari pengaturan Super Admin (LandingPricing::payload). */
+        pricing?: LandingPricingData;
     }>(),
     {
         // Wajib eksplisit: Vue meng-cast prop Boolean yang tidak dikirim menjadi false.
@@ -319,7 +321,7 @@ onUnmounted(() => {
                         <LandingBrand :assets-base="assetsBase" />
                         <LandingAudience :assets-base="assetsBase" />
                         <LandingUseCase :assets-base="assetsBase" />
-                        <LandingPricing :assets-base="assetsBase" />
+                        <LandingPricing :assets-base="assetsBase" :pricing="props.pricing" />
                         <LandingFaq :assets-base="assetsBase" />
                     </main>
 
