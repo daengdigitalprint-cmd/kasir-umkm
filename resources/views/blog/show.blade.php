@@ -350,12 +350,15 @@
                         <div class="card">
                             <a class="card-link" href="{{ route('blog.show', $rel->slug) }}">
                                 @if ($rel->featuredImageUrl())
+                                    @php $relDim = $rel->featuredImageDimensions(); @endphp
                                     <span class="thumb">
                                         <img
                                             src="{{ $rel->featuredImageUrl() }}"
                                             alt="{{ $rel->featuredImageAlt() }}"
-                                            width="600"
-                                            height="338"
+                                            @if ($relDim)
+                                                width="{{ $relDim['width'] }}"
+                                                height="{{ $relDim['height'] }}"
+                                            @endif
                                             loading="lazy"
                                             decoding="async"
                                         >

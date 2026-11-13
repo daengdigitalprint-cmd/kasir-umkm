@@ -22,7 +22,8 @@ class BlogController extends Controller
             ->when($category, fn ($q) => $q->where('category', $category))
             ->when($tag, fn ($q) => $q->whereJsonContains('tags', $tag))
             ->orderByDesc('published_at')
-            ->paginate(12)
+            // Halaman kedua muncul begitu artikel terbit lebih dari 10.
+            ->paginate(10)
             ->withQueryString();
 
         $categories = Article::query()

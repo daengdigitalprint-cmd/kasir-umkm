@@ -94,12 +94,15 @@
                             <div class="card">
                                 <a class="card-link" href="{{ route('blog.show', $article->slug) }}">
                                     @if ($article->featuredImageUrl())
+                                        @php $dim = $article->featuredImageDimensions(); @endphp
                                         <span class="thumb">
                                             <img
                                                 src="{{ $article->featuredImageUrl() }}"
                                                 alt="{{ $article->featuredImageAlt() }}"
-                                                width="600"
-                                                height="338"
+                                                @if ($dim)
+                                                    width="{{ $dim['width'] }}"
+                                                    height="{{ $dim['height'] }}"
+                                                @endif
                                                 loading="{{ $loop->first ? 'eager' : 'lazy' }}"
                                                 decoding="async"
                                             >
