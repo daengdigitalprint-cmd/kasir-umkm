@@ -60,6 +60,22 @@ test('toko pertama bisa dibuat hanya dengan nama dan jenis usaha', function () {
         ->and($store->organization_id)->not->toBeNull();
 });
 
+test('toko baru: AI, resep, produksi, hutang piutang mati; koreksi stok tampil', function (string $businessType) {
+    $user = User::factory()->create(['store_id' => null]);
+
+    $this->actingAs($user)
+        ->post(route('stores.store'), ['name' => 'Toko Bawaan', 'business_type' => $businessType])
+        ->assertSessionHasNoErrors();
+
+    $store = $user->fresh()->store;
+
+    expect($store->settings['ai_chat_enabled'])->toBeFalse()
+        ->and($store->settings['recipes_enabled'])->toBeFalse()
+        ->and($store->settings['productions_enabled'])->toBeFalse()
+        ->and($store->settings['receivables_enabled'])->toBeFalse()
+        ->and(\App\Support\UiMode::visibleMenus($store))->toContain('stock_adjustment', 'stock_opnames');
+})->with(['general', 'fnb', 'bakery']);
+
 test('nomor whatsapp dinormalkan ke format 62 saat disimpan', function (string $input) {
     $this->post(route('register.store'), [
         'name' => 'Test User',

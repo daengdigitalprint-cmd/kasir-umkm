@@ -6,6 +6,7 @@ use App\Models\Organization;
 use App\Models\Store;
 use App\Support\BusinessTypePresets;
 use App\Support\InventoryType;
+use App\Support\OptionalFeatures;
 use App\Support\StoreDefaultProductCategories;
 use App\Support\StoreLocationType;
 use App\Support\StorePlanLimits;
@@ -228,7 +229,17 @@ class StoreController extends Controller implements HasMiddleware
 
         unset($validated['organization_mode'], $validated['organization_name'], $validated['organization_id']);
 
-        $featureDefaults = StoreSettingsController::featureDefaultsForType($validated['business_type'] ?? 'general');
+        // Toko baru mulai dari tampilan yang ringkas: Asisten AI, Resep, Produksi, dan
+        // Hutang Piutang mati (dinyalakan sendiri di Pengaturan / Fitur Tambahan), sedangkan
+        // Penyesuaian Stok & Opname langsung tampil di Mode Sederhana.
+        // Nilainya disimpan eksplisit supaya toko lama (tanpa nilai tersimpan) tidak ikut berubah.
+        $featureDefaults = [
+            'ai_chat_enabled' => false,
+            'recipes_enabled' => false,
+            'productions_enabled' => false,
+            'receivables_enabled' => false,
+            'simple_extras' => OptionalFeatures::FEATURES['stock_correction']['menus'],
+        ];
 
         // Mode tampilan: outlet baru mengikuti outlet lain di grup yang sama (atau outlet aktif pembuatnya);
         // toko pertama dimulai dari Mode Sederhana.
