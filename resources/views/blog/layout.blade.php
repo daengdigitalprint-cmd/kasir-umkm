@@ -32,6 +32,9 @@
         body {
             margin: 0; background: var(--surface); color: var(--ink);
             font-family: var(--font-sans); line-height: 1.75; -webkit-font-smoothing: antialiased;
+            /* Judul artikel & tag berasal dari input bebas: kata atau tautan
+               yang sangat panjang dipenggal, bukan melebarkan halaman. */
+            overflow-wrap: break-word;
         }
         h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 800; letter-spacing: -0.02em; line-height: 1.25; color: var(--ink); }
         a { color: var(--primary); text-decoration: none; }
@@ -90,8 +93,11 @@
         .card h2, .card h3 { font-size: 18px; line-height: 1.45; margin: 12px 0 8px; }
         .card a.card-link:hover h2, .card a.card-link:hover h3 { color: var(--primary); }
         .card p { margin: 0; color: var(--muted); font-size: 14.5px; }
-        /* Dua kartu per baris di layar lebar, satu kolom di layar sempit. */
-        .grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
+        /* Dua kartu per baris di layar lebar, satu kolom di layar sempit.
+           minmax(0,1fr), bukan 1fr: kolom grid secara bawaan tidak boleh lebih
+           sempit dari isinya, sehingga satu elemen lebar (tabel, URL panjang)
+           melebarkan seluruh halaman di layar kecil. */
+        .grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
         @media (min-width: 640px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
         .pill { display: inline-flex; align-items: center; gap: 5px; background: var(--primary-soft); color: var(--primary-dark); font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: 999px; }
@@ -100,8 +106,11 @@
         .meta { color: var(--muted); font-size: 13.5px; }
 
         /* ====== Layout isi + sidebar ====== */
-        .layout { display: grid; grid-template-columns: 1fr; gap: 28px; padding: 28px 0 10px; }
-        .sidebar { display: flex; flex-direction: column; gap: 18px; }
+        .layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; padding: 28px 0 10px; }
+        /* Kolom artikel boleh menyusut; tanpa ini isi yang lebar mendorong
+           lebar halaman di ponsel. */
+        .layout > main { min-width: 0; }
+        .sidebar { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
         @media (min-width: 1024px) {
             .layout { grid-template-columns: minmax(0,1fr) 340px; gap: 32px; align-items: start; }
             /* Sticky: sidebar ikut diam saat scroll sampai kolom artikel habis.
@@ -120,7 +129,9 @@
 
         .poplist { list-style: none; margin: 0; padding: 0; }
         .poplist li + li { margin-top: 6px; padding-top: 14px; border-top: 1px solid var(--line); }
+        /* Anak flex boleh menyusut; tanpa min-width judul panjang mendorong lebar widget. */
         .poplist a { display: flex; gap: 12px; align-items: flex-start; color: inherit; }
+        .poplist a > span:last-child { min-width: 0; }
         .poplist .num { flex: none; width: 28px; height: 28px; border-radius: 9px; background: var(--primary-muted); color: var(--primary); font-family: var(--font-display); font-weight: 800; font-size: 13px; display: flex; align-items: center; justify-content: center; }
         .poplist a:hover .num { background: var(--primary); color: #fff; }
         .poplist .t { font-size: 14.5px; font-weight: 600; line-height: 1.5; margin: 0 0 3px; display: block; }
@@ -148,13 +159,13 @@
         /* Di layar sempit dibuat dua kolom agar barisnya rata, tidak menyisakan
            satu item melebar sendiri di baris terakhir. */
         @media (max-width: 767px) {
-            .foot-nav { display: grid; grid-template-columns: 1fr 1fr; }
+            .foot-nav { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
             .foot-nav a { border-bottom: 1px solid var(--line); }
             .foot-nav a:nth-child(2n) { border-right: 0; }
             .foot-nav a:nth-last-child(-n+2) { border-bottom: 0; }
         }
         .foot-main { display: grid; gap: 28px; padding: clamp(26px, 4vw, 44px); }
-        @media (min-width: 900px) { .foot-main { grid-template-columns: 1.3fr 1fr; } }
+        @media (min-width: 900px) { .foot-main { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); } }
         .foot-main h2 { font-size: clamp(24px, 3.2vw, 36px); margin: 10px 0 12px; }
         .foot-main > div > p { color: #4a4860; margin: 0 0 22px; max-width: 420px; }
         .foot-acts { display: flex; flex-wrap: wrap; gap: 10px; }

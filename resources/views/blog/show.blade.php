@@ -121,7 +121,16 @@
            seluruh isi artikel ke bawah layar. */
         .post-cover img { max-height: 70vh; width: auto; max-width: 100%; margin-inline: auto; }
 
-        .prose { font-size: 16.5px; color: #1e2338; }
+        /* Isi artikel adalah HTML hasil generate: bisa memuat URL panjang, blok
+           kode, embed video, atau gambar berukuran tetap. Semua dijaga agar
+           tidak melebarkan halaman di layar ponsel. */
+        .prose { font-size: 16.5px; color: #1e2338; min-width: 0; overflow-wrap: break-word; }
+        .prose img, .prose video, .prose iframe, .prose embed, .prose object, .prose svg { max-width: 100%; }
+        .prose img, .prose video { height: auto; }
+        /* Embed (YouTube dll.) bawaannya 560×315 piksel tetap. */
+        .prose iframe { width: 100%; aspect-ratio: 16 / 9; height: auto; border-radius: 16px; }
+        .prose pre { overflow-x: auto; max-width: 100%; background: var(--container); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin: 24px 0; font-size: 14px; }
+        .prose pre code { background: none; border: 0; padding: 0; }
         .prose h2 { font-size: clamp(21px, 2.6vw, 27px); margin: 40px 0 14px; scroll-margin-top: 100px; position: relative; padding-left: 16px; }
         .prose h2::before { content: ''; position: absolute; left: 0; top: .18em; bottom: .18em; width: 5px; border-radius: 999px; background: var(--primary); }
         .prose h3 { font-size: 19px; margin: 30px 0 10px; }
@@ -139,6 +148,14 @@
         .prose th, .prose td { border-bottom: 1px solid var(--line); padding: 12px 16px; text-align: left; }
         .prose tr:last-child td { border-bottom: 0; }
         .prose th { background: var(--primary-muted); font-family: var(--font-display); font-weight: 700; color: var(--primary-dark); white-space: nowrap; }
+        /* Di layar sempit judul kolom boleh melipat dan padding dikecilkan:
+           dengan white-space: nowrap, lebar minimum tabel 3 kolom sudah
+           melebihi ruang yang tersisa di ponsel (±276px pada layar 360px). */
+        @media (max-width: 640px) {
+            .prose table { font-size: 14px; }
+            .prose th { white-space: normal; }
+            .prose th, .prose td { padding: 10px 12px; }
+        }
         .prose code { background: var(--container); border: 1px solid var(--line); border-radius: 7px; padding: 2px 7px; font-size: 14px; }
         .prose hr { border: 0; border-top: 1px solid var(--line); margin: 32px 0; }
 
