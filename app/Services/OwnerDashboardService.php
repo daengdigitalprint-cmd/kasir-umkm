@@ -6,6 +6,7 @@ use App\Models\Transaction;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 class OwnerDashboardService
 {
@@ -13,7 +14,10 @@ class OwnerDashboardService
 
     private const PERIOD_FORMATS = [
         'daily' => 'Y-m-d',
-        'weekly' => 'Y-W',
+        // 'o' = tahun ISO (wajib dipasangkan dengan pekan ISO 'W'; memakai 'Y'
+        // membuat pekan lintas tahun masuk ember yang salah). '\W' = huruf W
+        // literal, pembeda dari kunci bulanan "2026-11".
+        'weekly' => 'o-\WW',
         'monthly' => 'Y-m',
         'yearly' => 'Y',
     ];
@@ -172,7 +176,13 @@ class OwnerDashboardService
         $result = [];
         foreach ($rows as $row) {
             $periodKey = Carbon::parse($row->day_key)->format($dateFormat);
-            $result[$periodKey][$row->store_id] = (float) $row->revenue;
+
+            // SQL mengelompokkan per hari, sedangkan satu kunci periode
+            // (pekan/bulan/tahun) menampung banyak hari. Harus dijumlahkan:
+            // penugasan biasa membuat hari terakhir menimpa hari sebelumnya,
+            // sehingga pendapatan sepekan/sebulan hanya terbaca satu hari.
+            $result[$periodKey][$row->store_id] =
+                ($result[$periodKey][$row->store_id] ?? 0.0) + (float) $row->revenue;
         }
 
         return $result;
@@ -214,12 +224,25 @@ class OwnerDashboardService
         if ($period === 'monthly') {
             return Carbon::parse($key.'-01');
         }
-        // weekly: "2026-W28" format dari strftime
-        if (preg_match('/(\d{4})-W(\d{2})/', $key, $m)) {
-            return Carbon::parse("{$m[1]}-01-01")->addWeeks((int) $m[2] - 1)->startOfWeek();
+        // weekly: kunci "2026-W42" (tahun ISO + nomor pekan ISO).
+        if (preg_match('/^(\d{4})-W(\d{1,2})$/', $key, $m)) {
+            // setISODate menempatkan tanggal pada pekan ISO yang diminta.
+            // Menambah pekan dari 1 Januari meleset saat 1 Januari masih
+            // termasuk pekan terakhir tahun sebelumnya.
+            return Carbon::now()->setISODate((int) $m[1], (int) $m[2])->startOfWeek();
         }
 
-        return Carbon::parse($key)->startOfWeek();
+        // Kunci di luar dugaan tidak boleh menjatuhkan dashboard dengan 500.
+        try {
+            return Carbon::parse($key)->startOfWeek();
+        } catch (\Throwable $e) {
+            Log::warning('OwnerDashboard: kunci periode tidak dikenali', [
+                'period' => $period,
+                'key' => $key,
+            ]);
+
+            return Carbon::now()->startOfWeek();
+        }
     }
 
     /**
