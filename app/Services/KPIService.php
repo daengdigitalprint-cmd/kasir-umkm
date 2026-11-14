@@ -9,6 +9,7 @@ use App\Models\Transaction;
 use App\Support\CacheKeys;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class KPIService
 {
@@ -36,10 +37,16 @@ class KPIService
             ->where('store_id', $store->id)
             ->where('status', 'completed')
             ->whereBetween('created_at', [$previousMonth, $previousMonth->copy()->endOfMonth()])
-            ->selectRaw('COALESCE(SUM(total_amount), 0) as revenue, COUNT(*) as transactions')
+            ->selectRaw(self::NET_REVENUE_SQL.' as revenue, COUNT(*) as transactions')
             ->first();
 
-        $previousRevenue = (float) $prevStats->revenue;
+        // Dikurangi retur supaya target disusun dari dasar yang sama dengan
+        // realisasi; kalau tidak, progres target jadi terlihat lebih buruk.
+        $previousRevenue = (float) $prevStats->revenue - $this->returnsQuery(
+            $store,
+            $previousMonth,
+            $previousMonth->copy()->endOfMonth(),
+        );
         $previousTransactions = (int) $prevStats->transactions;
 
         $targetRevenue = $previousRevenue > 0
@@ -101,24 +108,21 @@ class KPIService
             ->where('status', 'completed')
             ->whereBetween('created_at', [$monthStart, $monthEnd])
             ->selectRaw('
-                COALESCE(SUM(total_amount), 0) as revenue,
+                '.self::NET_REVENUE_SQL.' as revenue,
                 COUNT(*) as transactions,
                 COUNT(DISTINCT customer_id) as active_customers
             ')
             ->first();
 
-        $revenue = (float) $stats->revenue;
+        $revenue = (float) $stats->revenue - $this->returnsQuery($store, $monthStart, $monthEnd);
         $transactions = (int) $stats->transactions;
         $activeCustomers = (int) $stats->active_customers;
         $avgTransaction = $transactions > 0 ? $revenue / $transactions : 0;
 
-        // Hitung HPP (COGS) dan Gross Profit Margin
-        $cogs = (float) \App\Models\TransactionItem::query()
-            ->join('transactions', 'transaction_items.transaction_id', '=', 'transactions.id')
-            ->where('transactions.store_id', $store->id)
-            ->where('transactions.status', 'completed')
-            ->whereBetween('transactions.created_at', [$monthStart, $monthEnd])
-            ->sum(\Illuminate\Support\Facades\DB::raw('transaction_items.quantity * transaction_items.unit_cost_snapshot'));
+        // HPP & laba kotor. Keduanya kini dibandingkan terhadap penjualan
+        // bersih (tanpa pajak), sehingga marginnya tidak lagi menggelembung.
+        $cogsData = $this->cogsQuery($store, $monthStart, $monthEnd);
+        $cogs = $cogsData['cogs'];
 
         $grossProfit = $revenue - $cogs;
         $grossMarginPercentage = $revenue > 0 ? ($grossProfit / $revenue) * 100 : 0;
@@ -139,7 +143,7 @@ class KPIService
             ->where('store_id', $store->id)
             ->where('status', 'completed')
             ->whereBetween('created_at', [$monthStart, $monthEnd])
-            ->selectRaw('DATE(created_at) as day_key, SUM(total_amount) as revenue')
+            ->selectRaw('DATE(created_at) as day_key, SUM(subtotal - discount_amount) as revenue')
             ->groupBy('day_key')
             ->pluck('revenue', 'day_key');
 
@@ -158,7 +162,12 @@ class KPIService
             'revenue' => $revenue,
             'transactions' => $transactions,
             'avg_transaction_value' => round($avgTransaction, 2),
+            'cogs' => round($cogs, 2),
+            'gross_profit' => round($grossProfit, 2),
             'gross_margin_percentage' => round($grossMarginPercentage, 1),
+            // Persen penjualan yang harga modalnya diketahui. Margin di atas
+            // hanya bisa dipercaya sejauh angka ini.
+            'cogs_coverage' => $cogsData['coverage'],
             'active_customers' => $activeCustomers,
             'new_customers' => $newCustomers,
             'growth_rate' => $growthRate !== null ? round($growthRate, 2) : null,
@@ -225,13 +234,13 @@ class KPIService
             ->where('status', 'completed')
             ->whereBetween('created_at', [$start, $end])
             ->selectRaw('
-                COALESCE(SUM(total_amount), 0) as revenue,
+                '.self::NET_REVENUE_SQL.' as revenue,
                 COUNT(*) as transactions,
                 COUNT(DISTINCT customer_id) as active_customers
             ')
             ->first();
 
-        $revenue = (float) $stats->revenue;
+        $revenue = (float) $stats->revenue - $this->returnsQuery($store, $start, $end);
         $transactions = (int) $stats->transactions;
         $activeCustomers = (int) $stats->active_customers;
 
@@ -350,13 +359,68 @@ class KPIService
         ];
     }
 
+    /**
+     * Ekspresi SQL penjualan bersih.
+     *
+     * Sengaja BUKAN total_amount. total_amount dibentuk sebagai
+     * subtotal - diskon + pajak + service charge + tip, sehingga memuat uang
+     * yang bukan pendapatan usaha (PPN milik negara, tip milik karyawan).
+     * Memakainya untuk margin membuat marginnya menggelembung, karena HPP
+     * tidak mengandung pajak. Definisi ini sama dengan OwnerDashboardService.
+     */
+    private const NET_REVENUE_SQL = 'COALESCE(SUM(subtotal - discount_amount), 0)';
+
+    /** Penjualan bersih setelah dikurangi retur. */
     private function revenueQuery(Store $store, Carbon $start, Carbon $end): float
     {
-        return (float) Transaction::query()
+        $gross = (float) Transaction::query()
             ->where('store_id', $store->id)
             ->where('status', 'completed')
             ->whereBetween('created_at', [$start, $end])
-            ->sum('total_amount');
+            ->sum(DB::raw('subtotal - discount_amount'));
+
+        return $gross - $this->returnsQuery($store, $start, $end);
+    }
+
+    /** Retur penjualan, dinilai sebelum pajak agar sebanding dengan penjualan. */
+    private function returnsQuery(Store $store, Carbon $start, Carbon $end): float
+    {
+        return (float) DB::table('sales_returns')
+            ->where('store_id', $store->id)
+            ->whereBetween('returned_at', [$start, $end])
+            ->sum(DB::raw('subtotal - discount_amount'));
+    }
+
+    /**
+     * HPP beserta cakupannya.
+     *
+     * Tidak semua baris punya harga modal. Cakupan dihitung berbobot omzet
+     * supaya menggambarkan seberapa besar bagian penjualan yang marginnya
+     * benar-benar terhitung — tanpa ini, outlet tanpa harga modal tampak
+     * bermargin 100%.
+     *
+     * @return array{cogs: float, coverage: float}
+     */
+    private function cogsQuery(Store $store, Carbon $start, Carbon $end): array
+    {
+        $row = DB::table('transaction_items as ti')
+            ->join('transactions as t', 'ti.transaction_id', '=', 't.id')
+            ->where('t.store_id', $store->id)
+            ->where('t.status', 'completed')
+            ->whereBetween('t.created_at', [$start, $end])
+            ->selectRaw('
+                COALESCE(SUM(ti.quantity * COALESCE(ti.unit_cost_snapshot, 0)), 0) as cogs,
+                COALESCE(SUM(CASE WHEN COALESCE(ti.unit_cost_snapshot, 0) > 0 THEN ti.total_price ELSE 0 END), 0) as covered,
+                COALESCE(SUM(ti.total_price), 0) as total
+            ')
+            ->first();
+
+        $total = (float) ($row->total ?? 0);
+
+        return [
+            'cogs' => (float) ($row->cogs ?? 0),
+            'coverage' => $total > 0 ? round(((float) $row->covered / $total) * 100, 1) : 0.0,
+        ];
     }
 
     private function transactionsQuery(Store $store, Carbon $start, Carbon $end)

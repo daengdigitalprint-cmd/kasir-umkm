@@ -3,7 +3,7 @@ import { Head, router, useForm } from '@inertiajs/vue3';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { BarChart3, TrendingUp, TrendingDown, Minus, ShoppingCart, DollarSign, Activity, AlertTriangle, Package, Crown, Percent, Users, UserPlus, Settings2 } from 'lucide-vue-next';
+import { Wallet, BarChart3, TrendingUp, TrendingDown, Minus, ShoppingCart, DollarSign, Activity, AlertTriangle, Package, Crown, Percent, Users, UserPlus, Settings2 } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -23,7 +23,11 @@ interface KpiData {
     revenue: number;
     transactions: number;
     avg_transaction_value: number;
+    cogs: number;
+    gross_profit: number;
     gross_margin_percentage: number;
+    /** Persen penjualan yang harga modalnya diketahui (0-100). */
+    cogs_coverage: number;
     active_customers: number;
     new_customers: number;
     growth_rate: number | null;
@@ -263,6 +267,27 @@ const saveSettings = () => {
                         </div>
                         <p class="text-xl font-black text-slate-900">{{ formatCurrency(kpi.avg_transaction_value) }}</p>
                         <p class="text-xs text-slate-400 mt-3">ATV (Average Transaction Value)</p>
+                    </CardContent>
+                </Card>
+
+                <!-- Laba Kotor: penjualan bersih - HPP -->
+                <Card class="rounded-2xl shadow-sm">
+                    <CardContent class="p-5">
+                        <div class="flex items-center gap-3 mb-3">
+                            <div class="p-2 bg-indigo-50 rounded-xl">
+                                <Wallet class="h-5 w-5 text-indigo-600" />
+                            </div>
+                            <span class="text-sm text-slate-600">Laba Kotor</span>
+                        </div>
+                        <p class="text-xl font-black" :class="kpi.gross_profit >= 0 ? 'text-slate-900' : 'text-red-600'">
+                            {{ formatCurrency(kpi.gross_profit) }}
+                        </p>
+                        <p class="text-xs text-slate-400 mt-3">
+                            Margin {{ kpi.gross_margin_percentage }}%
+                            <span v-if="kpi.cogs_coverage < 80" class="text-amber-600 font-medium">
+                                · data HPP {{ kpi.cogs_coverage }}%
+                            </span>
+                        </p>
                     </CardContent>
                 </Card>
 
