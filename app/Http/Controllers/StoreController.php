@@ -38,6 +38,16 @@ class StoreController extends Controller implements HasMiddleware
     {
         $user = auth()->user();
 
+        // Toko pertama: onboarding ringkas (nama toko + jenis usaha saja).
+        // Form lengkap di bawah dipakai untuk menambah outlet berikutnya.
+        if ($user && ! $user->stores()->exists()) {
+            return Inertia::render('Stores/Onboarding', [
+                'businessTypes' => BusinessTypePresets::TYPES,
+                'defaultBusinessType' => $user->business_type ?? 'general',
+                'userName' => $user->name,
+            ]);
+        }
+
         $joinableOrganizations = [];
         if ($user) {
             $orgIds = $user->stores()
@@ -115,6 +125,29 @@ class StoreController extends Controller implements HasMiddleware
 
     public function store(Request $request)
     {
+        // Onboarding toko pertama hanya mengirim nama + jenis usaha (+ zona waktu hasil deteksi);
+        // sisanya diisi nilai bawaan dan bisa diubah di Pengaturan Toko.
+        $creator = $request->user();
+        if ($creator && ! $creator->stores()->exists()) {
+            $phone = (string) ($creator->phone ?? '');
+            if (str_starts_with($phone, '62')) {
+                $phone = '0'.substr($phone, 2);
+            }
+            $timezone = $request->input('timezone');
+            $request->merge([
+                'timezone' => in_array($timezone, ['Asia/Jakarta', 'Asia/Makassar', 'Asia/Jayapura'], true)
+                    ? $timezone
+                    : 'Asia/Jakarta',
+            ]);
+            $request->mergeIfMissing([
+                'currency' => 'IDR',
+                'location_type' => StoreLocationType::OUTLET,
+                'organization_mode' => 'new',
+                'phone' => $phone !== '' ? $phone : null,
+                'email' => $creator->email,
+            ]);
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'business_type' => 'required|string|in:'.implode(',', array_keys(BusinessTypePresets::TYPES)),

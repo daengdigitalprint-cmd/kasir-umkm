@@ -116,6 +116,17 @@ onUnmounted(() => {
                                 </Link>
                             </div>
 
+                            <div class="lp-auth-steps" aria-label="Langkah 1 dari 2">
+                                <div class="lp-auth-steps-text">
+                                    <span>Langkah 1 dari 2</span>
+                                    <span class="lp-auth-steps-next">Berikutnya: siapkan toko</span>
+                                </div>
+                                <div class="lp-auth-steps-bar" aria-hidden="true">
+                                    <span class="is-active"></span>
+                                    <span></span>
+                                </div>
+                            </div>
+
                             <div class="gt-section-title style-3 mb-4">
                                 <h6 class="tt-capitalize wow fadeInUp">Buat akun baru</h6>
                                 <h2 class="char-animation">Daftar gratis Sekarang</h2>
@@ -338,6 +349,41 @@ onUnmounted(() => {
         padding: 24px 18px;
         border-radius: 16px;
     }
+}
+
+.lp-auth-steps {
+    margin-bottom: 20px;
+}
+.lp-auth-steps-text {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #3d7a12;
+}
+.lp-auth-steps-next {
+    letter-spacing: 0;
+    text-transform: none;
+    font-weight: 600;
+    color: #94a3b8;
+}
+.lp-auth-steps-bar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+.lp-auth-steps-bar span {
+    height: 6px;
+    border-radius: 999px;
+    background: #e2e8f0;
+}
+.lp-auth-steps-bar span.is-active {
+    background: #A0EA71;
 }
 
 .lp-auth-mobile-logo-img {

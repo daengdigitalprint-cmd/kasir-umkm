@@ -20,7 +20,44 @@ test('new users can register', function () {
     ]);
 
     $this->assertAuthenticated();
-    $response->assertRedirect(route('dashboard', absolute: false));
+    $response->assertRedirect(route('stores.create', absolute: false));
+});
+
+test('pengguna baru melihat onboarding ringkas, bukan form outlet lengkap', function () {
+    $user = User::factory()->create(['store_id' => null]);
+
+    $this->actingAs($user)
+        ->get(route('stores.create'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->component('Stores/Onboarding'));
+});
+
+test('toko pertama bisa dibuat hanya dengan nama dan jenis usaha', function () {
+    $user = User::factory()->create([
+        'store_id' => null,
+        'phone' => '6281234567890',
+        'email' => 'pemilik@example.com',
+    ]);
+
+    $this->actingAs($user)
+        ->post(route('stores.store'), [
+            'name' => 'Warung Makmur',
+            'business_type' => 'retail',
+            'timezone' => 'Asia/Makassar',
+        ])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('dashboard', absolute: false));
+
+    $store = $user->fresh()->store;
+
+    expect($store)->not->toBeNull()
+        ->and($store->name)->toBe('Warung Makmur')
+        ->and($store->business_type)->toBe('retail')
+        ->and($store->currency)->toBe('IDR')
+        ->and($store->timezone)->toBe('Asia/Makassar')
+        ->and($store->phone)->toBe('081234567890')
+        ->and($store->email)->toBe('pemilik@example.com')
+        ->and($store->organization_id)->not->toBeNull();
 });
 
 test('nomor whatsapp dinormalkan ke format 62 saat disimpan', function (string $input) {

@@ -60,7 +60,9 @@ class RegisteredUserController extends Controller
 
         Auth::login($user);
 
-        return to_route('dashboard');
+        // Langsung ke langkah 2 (siapkan toko) — tanpa mampir dashboard yang
+        // akan melempar balik dengan pesan error "perlu membuat toko".
+        return to_route('stores.create');
     }
 
     /**
