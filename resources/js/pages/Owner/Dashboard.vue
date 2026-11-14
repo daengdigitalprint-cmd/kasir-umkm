@@ -21,6 +21,7 @@ import {
 import zoomPlugin from 'chartjs-plugin-zoom';
 import { Line, Bar } from 'vue-chartjs';
 import {
+    Wallet,
     TrendingUp,
     TrendingDown,
     Download,
@@ -71,6 +72,23 @@ interface OutletSummary {
     average: number;
     growth: number | null;
     previous_total: number;
+    cogs: number;
+    gross_profit: number;
+    margin: number | null;
+    /** Persen penjualan yang harga modalnya diketahui (0-100). */
+    cogs_coverage: number;
+}
+
+interface RevenueTotals {
+    /** Penjualan bersih: subtotal - diskon - retur, tanpa pajak/servis/tip. */
+    net_revenue: number;
+    cogs: number;
+    gross_profit: number;
+    margin: number | null;
+    /** Pajak + service charge + tip: tertagih di kasir, bukan pendapatan usaha. */
+    collected_not_revenue: number;
+    returns: number;
+    cogs_coverage: number;
 }
 
 interface ChartDataResponse {
@@ -78,6 +96,7 @@ interface ChartDataResponse {
     period_keys: string[];
     datasets: DatasetEntry[];
     summary: Record<string, OutletSummary>;
+    totals: RevenueTotals;
     period: string;
     start_date: string;
     end_date: string;
@@ -127,6 +146,12 @@ const summaryList = computed(() => {
 });
 
 const totalAllOutlets = computed(() => summaryList.value.reduce((sum, item) => sum + item.total, 0));
+
+/** Ringkasan laba dari server; aman bila backend lama belum mengirim totals. */
+const totals = computed<RevenueTotals | null>(() => props.chartData?.totals ?? null);
+
+/** Cakupan HPP rendah = angka margin belum bisa dipercaya penuh. */
+const marginTerpercaya = computed(() => (totals.value?.cogs_coverage ?? 0) >= 80);
 const avgGrowth = computed(() => {
     const growths = summaryList.value.filter((s) => s.growth !== null).map((s) => s.growth as number);
     return growths.length > 0 ? growths.reduce((a, b) => a + b, 0) / growths.length : null;
@@ -325,15 +350,18 @@ function setQuickRange(days: number) {
         </Card>
 
         <!-- Summary Cards -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-            <!-- Total Pendapatan Semua Outlet -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <!-- Penjualan bersih: tanpa pajak, service charge, tip; setelah retur -->
             <Card class="border-0 shadow-lg">
                 <CardContent class="p-5">
                     <div class="flex items-center justify-between">
                         <div>
-                            <p class="text-xs font-medium text-gray-500">Total Pendapatan</p>
+                            <p class="text-xs font-medium text-gray-500">Penjualan Bersih</p>
                             <p class="text-2xl font-bold text-gray-900 mt-1">Rp {{ formatCurrency(totalAllOutlets) }}</p>
-                            <p class="text-xs text-gray-400 mt-1">Semua outlet dipilih</p>
+                            <p v-if="totals && totals.collected_not_revenue > 0" class="text-xs text-gray-400 mt-1">
+                                Di luar pajak Rp {{ formatCurrency(totals.collected_not_revenue) }}
+                            </p>
+                            <p v-else class="text-xs text-gray-400 mt-1">Semua outlet dipilih</p>
                         </div>
                         <div class="p-3 bg-primary/10 rounded-full">
                             <DollarSign class="h-6 w-6 text-primary" />
@@ -355,6 +383,29 @@ function setQuickRange(days: number) {
                         </div>
                         <div class="p-3 bg-emerald-100 rounded-full">
                             <Store class="h-6 w-6 text-emerald-600" />
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <!-- Laba kotor = penjualan bersih - HPP -->
+            <Card class="border-0 shadow-lg">
+                <CardContent class="p-5">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-medium text-gray-500">Laba Kotor</p>
+                            <p class="text-2xl font-bold mt-1" :class="(totals?.gross_profit ?? 0) >= 0 ? 'text-gray-900' : 'text-red-600'">
+                                Rp {{ formatCurrency(totals?.gross_profit ?? 0) }}
+                            </p>
+                            <p class="text-xs text-gray-400 mt-1">
+                                Margin {{ totals?.margin !== null && totals?.margin !== undefined ? formatPercent(totals.margin) : '—' }}
+                                <span v-if="totals && !marginTerpercaya" class="text-amber-600 font-medium">
+                                    · data HPP {{ totals.cogs_coverage }}%
+                                </span>
+                            </p>
+                        </div>
+                        <div class="p-3 rounded-full" :class="(totals?.gross_profit ?? 0) >= 0 ? 'bg-indigo-100' : 'bg-red-100'">
+                            <Wallet class="h-6 w-6" :class="(totals?.gross_profit ?? 0) >= 0 ? 'text-indigo-600' : 'text-red-600'" />
                         </div>
                     </div>
                 </CardContent>

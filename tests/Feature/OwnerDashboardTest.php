@@ -118,7 +118,8 @@ test('service menyediakan data export', function () {
     $export = $service->exportData($owner, 'monthly', '2026-07-01', '2026-07-31');
 
     expect($export)->toHaveCount(2);
-    expect($export[0])->toHaveKeys(['Periode', 'Outlet', 'Pendapatan']);
+    // Kolom diganti jadi 'Penjualan Bersih': angkanya kini tanpa pajak/servis/tip dan setelah retur.
+    expect($export[0])->toHaveKeys(['Periode', 'Outlet', 'Penjualan Bersih']);
 });
 
 // ═══════════════════════════════════════════════════════

@@ -6,6 +6,7 @@ use App\Models\Transaction;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class OwnerDashboardService
@@ -56,10 +57,18 @@ class OwnerDashboardService
             $stores = $this->ownerStores($user)->keyBy('id');
             $dateFormat = self::PERIOD_FORMATS[$period] ?? 'Y-m-d';
 
-            // Data periode aktif
-            $currentData = $this->queryRevenue($storeIds, $start, $end, $dateFormat);
-            // Data periode sebelumnya (untuk hitung pertumbuhan)
-            $previousData = $this->queryRevenue($storeIds, $prevStart, $prevEnd, $dateFormat);
+            // Penjualan bersih dikurangi retur, untuk periode aktif & sebelumnya.
+            $currentData = $this->netOfReturns(
+                $this->queryRevenue($storeIds, $start, $end, $dateFormat),
+                $this->queryReturns($storeIds, $start, $end, $dateFormat),
+            );
+            $previousData = $this->netOfReturns(
+                $this->queryRevenue($storeIds, $prevStart, $prevEnd, $dateFormat),
+                $this->queryReturns($storeIds, $prevStart, $prevEnd, $dateFormat),
+            );
+
+            // HPP per outlet untuk menghitung laba kotor.
+            $cogsByStore = $this->queryCogs($storeIds, $start, $end);
 
             // Build labels (semua periode unik dari kedua dataset)
             $allPeriods = collect(array_keys($currentData + $previousData))->sort()->values()->all();
@@ -97,6 +106,17 @@ class OwnerDashboardService
                 $periodCount = max(count($allPeriods), 1);
                 $growth = $previousTotal > 0 ? (($currentTotal - $previousTotal) / $previousTotal) * 100 : null;
 
+                // Laba kotor = penjualan bersih - HPP.
+                $cogsRow = $cogsByStore[$sid] ?? ['cogs' => 0.0, 'covered' => 0.0, 'total' => 0.0];
+                $cogs = $cogsRow['cogs'];
+                $grossProfit = $currentTotal - $cogs;
+
+                // Berapa bagian penjualan yang harga modalnya diketahui.
+                // Tanpa ini, outlet tanpa data HPP akan tampak bermargin 100%.
+                $coverage = $cogsRow['total'] > 0
+                    ? ($cogsRow['covered'] / $cogsRow['total']) * 100
+                    : 0.0;
+
                 $summary[$sid] = [
                     'name' => $storeName,
                     'color' => $color,
@@ -104,6 +124,10 @@ class OwnerDashboardService
                     'average' => $currentTotal / $periodCount,
                     'growth' => $growth,
                     'previous_total' => $previousTotal,
+                    'cogs' => $cogs,
+                    'gross_profit' => $grossProfit,
+                    'margin' => $currentTotal > 0 ? ($grossProfit / $currentTotal) * 100 : null,
+                    'cogs_coverage' => round($coverage, 1),
                 ];
             }
 
@@ -115,11 +139,34 @@ class OwnerDashboardService
                 return $carbon->format($format);
             }, $allPeriods);
 
+            // Ringkasan gabungan seluruh outlet terpilih.
+            $totalNet = array_sum(array_column($summary, 'total'));
+            $totalCogs = array_sum(array_column($summary, 'cogs'));
+            $coveredRevenue = array_sum(array_column($cogsByStore, 'covered'));
+            $itemRevenue = array_sum(array_column($cogsByStore, 'total'));
+
+            $totals = [
+                'net_revenue' => $totalNet,
+                'cogs' => $totalCogs,
+                'gross_profit' => $totalNet - $totalCogs,
+                'margin' => $totalNet > 0 ? (($totalNet - $totalCogs) / $totalNet) * 100 : null,
+                // Pajak, service charge, dan tip ikut tertagih di kasir tapi
+                // bukan pendapatan usaha — ditampilkan agar selisih dengan
+                // uang yang masuk laci bisa dijelaskan.
+                'collected_not_revenue' => $this->queryTax($storeIds, $start, $end),
+                'returns' => array_sum(array_map(
+                    'array_sum',
+                    $this->queryReturns($storeIds, $start, $end, $dateFormat)
+                )),
+                'cogs_coverage' => $itemRevenue > 0 ? round(($coveredRevenue / $itemRevenue) * 100, 1) : 0.0,
+            ];
+
             return [
                 'labels' => $labels,
                 'period_keys' => $allPeriods,
                 'datasets' => $datasets,
                 'summary' => $summary,
+                'totals' => $totals,
                 'period' => $period,
                 'start_date' => $startDate,
                 'end_date' => $endDate,
@@ -140,7 +187,13 @@ class OwnerDashboardService
         $dateFormat = self::PERIOD_FORMATS[$period] ?? 'Y-m-d';
 
         $stores = $this->ownerStores($user)->keyBy('id');
-        $data = $this->queryRevenue($storeIds, $start, $end, $dateFormat);
+
+        // Angka yang sama dengan dashboard: penjualan bersih setelah retur,
+        // tanpa pajak/service charge/tip.
+        $data = $this->netOfReturns(
+            $this->queryRevenue($storeIds, $start, $end, $dateFormat),
+            $this->queryReturns($storeIds, $start, $end, $dateFormat),
+        );
 
         $rows = [];
         foreach ($data as $periodKey => $storeRevenues) {
@@ -148,7 +201,7 @@ class OwnerDashboardService
                 $rows[] = [
                     'Periode' => $periodKey,
                     'Outlet' => $stores[$sid]->name ?? "Toko #{$sid}",
-                    'Pendapatan' => $revenue,
+                    'Penjualan Bersih' => $revenue,
                 ];
             }
         }
@@ -159,30 +212,141 @@ class OwnerDashboardService
     }
 
     /**
+     * Penjualan bersih per periode per outlet.
+     *
+     * Memakai (subtotal - diskon), BUKAN total_amount. total_amount dibentuk
+     * sebagai subtotal - diskon + pajak + service charge + tip, sehingga
+     * memuat uang yang bukan pendapatan usaha: PPN milik negara dan tip milik
+     * karyawan. Retur penjualan dikurangkan terpisah lewat queryReturns().
+     *
      * @param  array<int>  $storeIds
      * @return array<string, array<int, float>>
      */
     private function queryRevenue(array $storeIds, Carbon $start, Carbon $end, string $dateFormat): array
     {
-        // Grup berdasarkan DATE(created_at) di SQL, lalu format di PHP
-        // untuk menghindari perbedaan DATE_FORMAT antara MySQL dan SQLite.
         $rows = Transaction::whereIn('store_id', $storeIds)
             ->whereBetween('created_at', [$start, $end])
             ->where('status', 'completed')
-            ->selectRaw('store_id, DATE(created_at) as day_key, SUM(total_amount) as revenue')
+            ->selectRaw('store_id, DATE(created_at) as day_key, SUM(subtotal - discount_amount) as revenue')
             ->groupBy('store_id', 'day_key')
+            ->get();
+
+        return $this->bucketByPeriod($rows, $dateFormat, 'revenue');
+    }
+
+    /**
+     * Pajak yang ikut tertagih (bukan pendapatan usaha). Ditampilkan terpisah
+     * supaya pemilik paham selisihnya dengan uang yang masuk laci.
+     *
+     * @param  array<int>  $storeIds
+     */
+    private function queryTax(array $storeIds, Carbon $start, Carbon $end): float
+    {
+        return (float) Transaction::whereIn('store_id', $storeIds)
+            ->whereBetween('created_at', [$start, $end])
+            ->where('status', 'completed')
+            ->sum(DB::raw('tax_amount + service_charge_amount + tip_amount'));
+    }
+
+    /**
+     * Retur penjualan per periode per outlet, memakai nilai sebelum pajak
+     * agar sebanding dengan penjualan bersih.
+     *
+     * @param  array<int>  $storeIds
+     * @return array<string, array<int, float>>
+     */
+    private function queryReturns(array $storeIds, Carbon $start, Carbon $end, string $dateFormat): array
+    {
+        $rows = DB::table('sales_returns')
+            ->whereIn('store_id', $storeIds)
+            ->whereBetween('returned_at', [$start, $end])
+            ->selectRaw('store_id, DATE(returned_at) as day_key, SUM(subtotal - discount_amount) as revenue')
+            ->groupBy('store_id', 'day_key')
+            ->get();
+
+        return $this->bucketByPeriod($rows, $dateFormat, 'revenue');
+    }
+
+    /**
+     * HPP dan cakupannya per outlet.
+     *
+     * Tidak semua baris transaksi punya harga modal (produk tanpa harga beli,
+     * atau dicatat sebelum fitur ini ada). Cakupan dihitung berbobot omzet —
+     * bukan jumlah baris — supaya menggambarkan seberapa besar bagian
+     * penjualan yang marginnya benar-benar terhitung.
+     *
+     * @param  array<int>  $storeIds
+     * @return array<int, array{cogs: float, covered: float, total: float}>
+     */
+    private function queryCogs(array $storeIds, Carbon $start, Carbon $end): array
+    {
+        $rows = DB::table('transaction_items as ti')
+            ->join('transactions as t', 'ti.transaction_id', '=', 't.id')
+            ->whereIn('t.store_id', $storeIds)
+            ->whereBetween('t.created_at', [$start, $end])
+            ->where('t.status', 'completed')
+            ->selectRaw('
+                t.store_id,
+                SUM(ti.quantity * COALESCE(ti.unit_cost_snapshot, 0)) as cogs,
+                SUM(CASE WHEN COALESCE(ti.unit_cost_snapshot, 0) > 0 THEN ti.total_price ELSE 0 END) as covered,
+                SUM(ti.total_price) as total
+            ')
+            ->groupBy('t.store_id')
             ->get();
 
         $result = [];
         foreach ($rows as $row) {
-            $periodKey = Carbon::parse($row->day_key)->format($dateFormat);
+            $result[(int) $row->store_id] = [
+                'cogs' => (float) $row->cogs,
+                'covered' => (float) $row->covered,
+                'total' => (float) $row->total,
+            ];
+        }
 
-            // SQL mengelompokkan per hari, sedangkan satu kunci periode
-            // (pekan/bulan/tahun) menampung banyak hari. Harus dijumlahkan:
-            // penugasan biasa membuat hari terakhir menimpa hari sebelumnya,
-            // sehingga pendapatan sepekan/sebulan hanya terbaca satu hari.
-            $result[$periodKey][$row->store_id] =
-                ($result[$periodKey][$row->store_id] ?? 0.0) + (float) $row->revenue;
+        return $result;
+    }
+
+    /**
+     * Kurangkan retur dari penjualan, per periode per outlet.
+     *
+     * @param  array<string, array<int, float>>  $revenue
+     * @param  array<string, array<int, float>>  $returns
+     * @return array<string, array<int, float>>
+     */
+    private function netOfReturns(array $revenue, array $returns): array
+    {
+        foreach ($returns as $periodKey => $byStore) {
+            foreach ($byStore as $storeId => $amount) {
+                $revenue[$periodKey][$storeId] = ($revenue[$periodKey][$storeId] ?? 0.0) - $amount;
+            }
+        }
+
+        return $revenue;
+    }
+
+    /**
+     * Kelompokkan baris harian ke kunci periode.
+     *
+     * SQL mengelompokkan per hari, sedangkan satu kunci periode
+     * (pekan/bulan/tahun) menampung banyak hari. Harus dijumlahkan:
+     * penugasan biasa membuat hari terakhir menimpa hari sebelumnya,
+     * sehingga pendapatan sepekan/sebulan hanya terbaca satu hari.
+     *
+     * @param  iterable<object>  $rows
+     * @return array<string, array<int, float>>
+     */
+    private function bucketByPeriod(iterable $rows, string $dateFormat, string $valueKey): array
+    {
+        $result = [];
+
+        foreach ($rows as $row) {
+            // Format di PHP, bukan DATE_FORMAT di SQL, supaya hasilnya sama
+            // antara MySQL dan SQLite.
+            $periodKey = Carbon::parse($row->day_key)->format($dateFormat);
+            $storeId = (int) $row->store_id;
+
+            $result[$periodKey][$storeId] =
+                ($result[$periodKey][$storeId] ?? 0.0) + (float) $row->{$valueKey};
         }
 
         return $result;

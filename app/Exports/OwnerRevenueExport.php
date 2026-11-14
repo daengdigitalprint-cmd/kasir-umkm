@@ -12,7 +12,7 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class OwnerRevenueExport implements FromArray, WithColumnWidths, WithHeadings, WithStyles, WithTitle
 {
-    /** @param list<array{Periode: string, Outlet: string, Pendapatan: float}> */
+    /** @param list<array{Periode: string, Outlet: string, 'Penjualan Bersih': float}> */
     public function __construct(
         protected array $data
     ) {}
@@ -24,12 +24,12 @@ class OwnerRevenueExport implements FromArray, WithColumnWidths, WithHeadings, W
 
     public function headings(): array
     {
-        return ['Periode', 'Outlet', 'Pendapatan'];
+        return ['Periode', 'Outlet', 'Penjualan Bersih'];
     }
 
     public function title(): string
     {
-        return 'Pendapatan Outlet';
+        return 'Penjualan Bersih Outlet';
     }
 
     public function columnWidths(): array
