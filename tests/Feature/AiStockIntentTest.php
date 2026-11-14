@@ -611,3 +611,27 @@ it('menggunakan get_top_products saat percakapan sebelumnya tentang produk terla
     expect($result['tool'])->toBe('get_top_products')
         ->and($result['arguments']['date_from'])->toMatch('/^\d{4}-\d{2}-24$/');
 });
+
+it('pertanyaan soal membuat produk tidak menjadikan tanda baca sebagai nama produk', function (string $message) {
+    $result = detectAiIntent($message);
+
+    expect($result)->toHaveKey('text')
+        ->and($result)->not->toHaveKey('tool')
+        ->and($result['text'])->toContain('nama produk dan harga jualnya')
+        ->and($result['text'])->not->toContain('Harga jual');
+})->with([
+    'apa kamu bisa bantu saya buat produk baru ?',
+    'bisa bantu buat produk baru?',
+    'tambah produk baru dong?',
+    'buat produk baru gak bisa?',
+    'tolong buatkan produk baru!',
+]);
+
+it('nama produk tetap terbaca walau diakhiri tanda baca', function () {
+    expect(detectAiIntent('tambah produk Kopi Susu?')['text'])->toContain('Harga jual **Kopi Susu**');
+
+    $result = detectAiIntent('tambah produk Teh Botol harga 6000 modal 4000 stok 100');
+    expect($result['tool'])->toBe('create_product')
+        ->and($result['arguments']['name'])->toBe('Teh Botol')
+        ->and($result['arguments']['price'])->toEqual(6000);
+});

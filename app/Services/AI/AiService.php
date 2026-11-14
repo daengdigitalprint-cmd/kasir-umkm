@@ -902,9 +902,14 @@ class AiService
         $args = [];
 
         if (preg_match('/(?:\btambah(?:kan)?\b|\bmenambah(?:kan)?\b|\bnambah(?:kan)?\b|\bbuat(?:kan)?\b|\binput\b|\bmasukkan\b|\binsert\b|\bcreate\b)\s+(?:\w+\s+){0,2}(?:produk|barang)\s+(.+?)(?:,|\s+(?:harga|modal|kategori|stok|satuan|hpp|cost|sku)\b|$)/iu', $message, $m) || preg_match('/^\s*(.+?)\s+harga\b/i', $message, $m)) {
-            $name = trim($m[1], " \t\n\r\0\x0B,.");
-            $name = trim((string) preg_replace('/^(?:baru|yang|ini|itu|saya|kita)\s+/iu', '', $name));
-            if ($name !== '' && ! preg_match('/^(?:baru|yang|ini|itu|saja|saya|kita|donk|dong|ya|aja|dulu|dong ya)$/iu', $name)) {
+            // Tanda baca di ujung (mis. "buat produk baru ?") bukan bagian dari nama produk.
+            $punctuation = " \t\n\r\0\x0B,.?!;:";
+            $name = trim($m[1], $punctuation);
+            $name = trim((string) preg_replace('/^(?:(?:baru|yang|ini|itu|saya|kita)(?:\s+|$))+/iu', '', $name), $punctuation);
+            // Kata pengisi/penanya di ujung kalimat ("... produk baru dong?", "... produk baru gak?").
+            $name = trim((string) preg_replace('/(?:(?:^|\s+)(?:saja|donk|dong|ya|yaa|aja|dulu|deh|nih|kah|gak|ga|nggak|enggak|tidak|bisa|gimana|bagaimana|caranya))+$/iu', '', $name), $punctuation);
+            // Nama produk harus memuat huruf atau angka; "?" saja bukan nama.
+            if ($name !== '' && preg_match('/[\p{L}\p{N}]/u', $name)) {
                 $args['name'] = $name;
             }
         }
