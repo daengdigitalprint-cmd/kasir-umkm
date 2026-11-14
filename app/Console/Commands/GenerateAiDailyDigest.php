@@ -9,6 +9,9 @@ use App\Models\Store;
 use App\Models\Transaction;
 use App\Models\TransactionItem;
 use App\Models\User;
+use App\Services\AI\AiMetrics;
+use App\Services\AI\AiPeriod;
+use App\Services\AI\AiStockVelocity;
 use App\Services\Alerts\AlertPushService;
 use App\Services\KPIService;
 use Carbon\Carbon;
@@ -32,6 +35,9 @@ class GenerateAiDailyDigest extends Command
 
     private const SALES_WINDOW_DAYS = 14;
 
+    /** Bagian stok dari digest terakhir yang disusun (null bila ada penjualan). */
+    private ?string $stockSection = null;
+
     private const MONTHS_ID = [
         1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
         5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
@@ -48,15 +54,16 @@ class GenerateAiDailyDigest extends Command
     public function handle(): int
     {
         $dry = (bool) $this->option('dry-run');
-        $date = Carbon::yesterday();
         $created = 0;
         $skipped = 0;
 
         Store::query()
             ->where('is_active', true)
             ->orderBy('id')
-            ->chunkById(50, function ($stores) use ($date, $dry, &$created, &$skipped) {
+            ->chunkById(50, function ($stores) use ($dry, &$created, &$skipped) {
                 foreach ($stores as $store) {
+                    // "Kemarin" menurut jam toko, bukan jam server.
+                    $date = Carbon::instance(AiPeriod::now($store)->subDay()->startOfDay());
                     $digest = $this->buildDigest($store, $date);
 
                     if ($digest === null) {
@@ -91,32 +98,24 @@ class GenerateAiDailyDigest extends Command
      */
     private function buildDigest(Store $store, Carbon $date): ?string
     {
-        $start = $date->copy()->startOfDay();
-        $end = $date->copy()->endOfDay();
+        // Batas hari menurut jam toko, dikonversi ke zona aplikasi untuk query.
+        $start = AiPeriod::toDb($date->copy()->startOfDay());
+        $end = AiPeriod::toDb($date->copy()->endOfDay());
 
-        $stats = Transaction::query()
+        // Pendapatan bersih (subtotal − diskon − retur), sama dengan laporan & chat AI.
+        $summary = AiMetrics::summary([$store->id], $start, $end);
+        $revenue = (float) $summary['revenue'];
+        $transactions = (int) $summary['transactions'];
+
+        $activeCustomers = (int) Transaction::query()
             ->where('store_id', $store->id)
             ->where('status', 'completed')
             ->whereBetween('created_at', [$start, $end])
-            ->selectRaw('
-                COALESCE(SUM(total_amount), 0) as revenue,
-                COUNT(*) as transactions,
-                COUNT(DISTINCT customer_id) as active_customers
-            ')
-            ->first();
+            ->distinct()
+            ->count('customer_id');
 
-        $revenue = (float) $stats->revenue;
-        $transactions = (int) $stats->transactions;
-        $activeCustomers = (int) $stats->active_customers;
-
-        $lowStock = Product::query()
-            ->where('store_id', $store->id)
-            ->active()
-            ->where('track_stock', true)
-            ->whereColumn('stock_quantity', '<=', 'min_stock_level')
-            ->orderBy('stock_quantity')
-            ->limit(self::LOW_STOCK_LIMIT)
-            ->get();
+        $lowStockResult = AiStockVelocity::lowStock((int) $store->id, self::LOW_STOCK_LIMIT);
+        $lowStock = $lowStockResult['items'];
 
         $urgentRestock = $this->urgentRestockItems($store, $end);
 
@@ -136,6 +135,14 @@ class GenerateAiDailyDigest extends Command
             '• Rata-rata transaksi: Rp '.$this->formatMoney($transactions > 0 ? $revenue / $transactions : 0),
             '• Pelanggan aktif: '.$activeCustomers,
         ];
+
+        if ($transactions > 0 && $summary['margin_reliable'] && $summary['gross_margin_pct'] !== null) {
+            $lines[] = '• Laba kotor: Rp '.$this->formatMoney((float) $summary['gross_profit']).' (margin '.AiMetrics::number($summary['gross_margin_pct']).'%)';
+        }
+
+        // Bagian stok dikumpulkan terpisah agar digest yang isinya sama persis
+        // dengan kemarin tidak dikirim berulang ke toko tanpa penjualan.
+        $salesLineCount = count($lines);
 
         if ($transactions > 0) {
             $topProducts = TransactionItem::query()
@@ -160,12 +167,15 @@ class GenerateAiDailyDigest extends Command
 
         if ($lowStock->isNotEmpty()) {
             $lines[] = '';
-            $lines[] = '⚠️ Stok menipis (sisa ≤ minimum):';
+            $lines[] = '⚠️ Stok menipis / habis:';
             foreach ($lowStock as $product) {
-                $lines[] = '• '.$product->name.' — sisa '.$this->formatStock((float) $product->stock_quantity).' (min '.$this->formatStock((float) $product->min_stock_level).')';
+                $lines[] = '• '.$product->name.' — sisa '.$this->formatStock((float) $product->stock_quantity)
+                    .((float) $product->min_stock_level > 0
+                        ? ' (min '.$this->formatStock((float) $product->min_stock_level).')'
+                        : ' (habis, masih terjual/terpakai 30 hari terakhir)');
             }
 
-            $totalLow = (int) $alerts['low_stock_count'];
+            $totalLow = (int) $lowStockResult['total'];
             if ($totalLow > $lowStock->count()) {
                 $lines[] = '• …dan '.($totalLow - $lowStock->count()).' produk lainnya.';
             }
@@ -184,6 +194,12 @@ class GenerateAiDailyDigest extends Command
                 $eta = $item['days_left'] <= 0 ? 'hari ini' : '±'.$item['days_left'].' hari lagi';
                 $lines[] = '• '.$item['product']->name.' — sisa '.$this->formatStock((float) $item['product']->stock_quantity).' '.$item['product']->unit.' (±'.$this->formatStock($item['avg_per_day']).' unit/hari), perkiraan habis '.$eta.'. Siapkan restock.';
             }
+        }
+
+        if ($transactions === 0) {
+            $this->stockSection = implode("\n", array_slice($lines, $salesLineCount));
+        } else {
+            $this->stockSection = null;
         }
 
         return implode("\n", $lines);
@@ -208,6 +224,16 @@ class GenerateAiDailyDigest extends Command
 
         if ($alreadySent) {
             return false;
+        }
+
+        // Tanpa penjualan kemarin dan kondisi stok sama persis dengan digest
+        // terakhir: tidak ada kabar baru, jangan ulangi pesan yang sama tiap hari.
+        if ($this->stockSection !== null && $this->stockSection !== '') {
+            $last = $conversation->messages()->where('role', 'assistant')->reorder()->latest('id')->value('content');
+
+            if (is_string($last) && str_contains($last, $this->stockSection)) {
+                return false;
+            }
         }
 
         AiMessage::query()->create([
@@ -260,31 +286,24 @@ class GenerateAiDailyDigest extends Command
      */
     private function urgentRestockItems(Store $store, Carbon $end)
     {
-        $soldPerProduct = TransactionItem::query()
-            ->join('transactions', 'transaction_items.transaction_id', '=', 'transactions.id')
-            ->where('transactions.store_id', $store->id)
-            ->where('transactions.status', 'completed')
-            ->where('transactions.created_at', '>=', $end->copy()->subDays(self::SALES_WINDOW_DAYS - 1)->startOfDay())
-            ->where('transactions.created_at', '<=', $end)
-            ->whereNotNull('transaction_items.product_id')
-            ->groupBy('transaction_items.product_id')
-            ->selectRaw('transaction_items.product_id as product_id, COALESCE(SUM(transaction_items.quantity), 0) as sold_total')
-            ->pluck('sold_total', 'product_id');
+        // Termasuk bahan baku/kemasan yang terpakai lewat resep, bukan hanya penjualan langsung.
+        $soldPerProduct = AiStockVelocity::usage(
+            [(int) $store->id],
+            $end->copy()->subDays(self::SALES_WINDOW_DAYS)->addSecond(),
+            $end
+        )->filter(fn (float $used) => $used > 0);
 
         if ($soldPerProduct->isEmpty()) {
             return collect();
         }
 
-        return Product::query()
-            ->where('store_id', $store->id)
-            ->active()
-            ->where('track_stock', true)
+        return AiStockVelocity::trackedProducts([(int) $store->id])
             ->where('stock_quantity', '>', 0)
             ->whereColumn('stock_quantity', '>', 'min_stock_level')
             ->whereIn('id', $soldPerProduct->keys())
             ->get()
             ->map(function (Product $product) use ($soldPerProduct) {
-                $avgPerDay = (float) $soldPerProduct[$product->id] / self::SALES_WINDOW_DAYS;
+                $avgPerDay = (float) $soldPerProduct[$product->id] / AiStockVelocity::activeDays($product, self::SALES_WINDOW_DAYS);
 
                 return [
                     'product' => $product,

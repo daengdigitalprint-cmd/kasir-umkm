@@ -27,6 +27,12 @@ class AiService
 
     protected ?Store $store;
 
+    /** Jumlah pesan terakhir yang dikirim sebagai konteks. */
+    protected const HISTORY_LIMIT = 24;
+
+    /** Batas putaran pemanggilan tool dalam satu jawaban. */
+    protected const MAX_TOOL_ROUNDS = 4;
+
     public function __construct(?User $user = null, ?Store $store = null)
     {
         $this->user = $user;
@@ -53,7 +59,8 @@ class AiService
                 'model_id' => $config->model_id,
                 'api_key' => $config->api_key,
                 'max_tokens' => $config->max_tokens,
-                'temperature' => $config->temperature,
+                // Bawaan kolom ini 0.7 — terlalu longgar untuk jawaban berbasis angka.
+                'temperature' => min((float) $config->temperature, (float) config('ai.chat_temperature_max', 0.3)),
                 'supports_function_calling' => $config->supports_function_calling,
             ]);
         }
@@ -64,6 +71,10 @@ class AiService
         // Fallback terakhir ke config file (.env)
         $providerName = config('ai.default_provider', 'openai');
         $providerConfig = config("ai.providers.{$providerName}", config('ai.providers.openai'));
+
+        // Asisten ini menjawab dari angka toko: pakai temperature rendah agar
+        // model tidak "berkreasi". Bawaan provider (0.7) terlalu longgar.
+        $providerConfig['temperature'] = (float) config('ai.chat_temperature', 0.2);
 
         return new OpenAiCompatibleProvider($providerConfig);
     }
@@ -180,10 +191,12 @@ class AiService
         }
 
         // Respons biasa (bukan tool call) - simpan dan kirim ke user
+        $plainContent = $this->cleanAssistantContent($response->getContent());
+
         $assistantMessage = AiMessage::create([
             'conversation_id' => $conversation->id,
             'role' => 'assistant',
-            'content' => $response->getContent(),
+            'content' => $plainContent,
             'tool_calls' => $response->getToolCalls(),
             'tokens_used' => $response->tokensUsed,
         ]);
@@ -194,7 +207,7 @@ class AiService
             'message' => [
                 'id' => $assistantMessage->id,
                 'role' => 'assistant',
-                'content' => $response->getContent(),
+                'content' => $plainContent,
                 'timestamp' => $assistantMessage->created_at->format('H:i'),
             ],
         ];
@@ -218,16 +231,7 @@ class AiService
 
         // --- Komisi barber/teknisi (khusus barbershop) ---
         if (preg_match('/\b(komisi|commission)\b.*\b(barber|teknisi|cukur|pangkas)\b|\b(barber|teknisi|cukur|pangkas)\b.*\b(komisi|commission)\b|\bcek\b.*\bkomisi\b|\bkomisi\s+barber\b|\bkomisi\s+teknisi\b/u', $text)) {
-            $arguments = ['period' => match (true) {
-                str_contains($text, 'kemarin') => 'yesterday',
-                str_contains($text, 'hari ini') => 'today',
-                str_contains($text, 'minggu lalu') => 'last_week',
-                str_contains($text, 'bulan lalu') => 'last_month',
-                str_contains($text, 'minggu') => 'this_week',
-                str_contains($text, 'bulan') => 'this_month',
-                str_contains($text, 'tahun') => 'this_year',
-                default => 'this_month',
-            }];
+            $arguments = ['period' => $this->periodFromText($text, 'this_month')];
 
             if (preg_match('/\b(?:barber|teknisi|cukur|pangkas)\s+([a-z0-9][a-z0-9\s.\'\-]{1,30})/iu', $message, $m)) {
                 $candidate = trim($m[1]);
@@ -256,16 +260,7 @@ class AiService
 
         // --- Laporan laba rugi (pendapatan - HPP - beban operasional = laba bersih) ---
         if (preg_match('/laporan\s+(?:laba|rugi|keuangan|profit)|laba\s+(?:bersih|rugi)|untung\s+(?:bersih|kotor)|rugi\s+bersih|beban\s+operasional|biaya\s+operasional|berapa\s+(?:laba|untung|rugi)|(?:cek|lihat|tampilkan|hitung)\s+(?:laba|untung|rugi)(?!\s+kotor)|(?:laba|untung|rugi)\s+(?:saya|kita|usaha|bisnis|toko)?\s*(?:hari\s+ini|kemarin|minggu|bulan|tahun)/', $text)) {
-            $arguments = ['period' => match (true) {
-                str_contains($text, 'kemarin') => 'yesterday',
-                str_contains($text, 'hari ini') => 'today',
-                str_contains($text, 'minggu lalu') => 'last_week',
-                str_contains($text, 'bulan lalu') => 'last_month',
-                str_contains($text, 'minggu') => 'this_week',
-                str_contains($text, 'bulan') => 'this_month',
-                str_contains($text, 'tahun') => 'this_year',
-                default => 'this_month',
-            }];
+            $arguments = ['period' => $this->periodFromText($text, 'this_month')];
 
             if ($allBranches) {
                 $arguments['scope'] = 'all';
@@ -291,32 +286,14 @@ class AiService
 
         // --- Perbandingan performa antar cabang/outlet (multi-cabang) ---
         if (preg_match('/(?:banding(?:kan|in)?|perbandingan|komparasi)\s+(?:performa\s+|penjualan\s+|kinerja\s+|hasil\s+)?(?:antar\s+|antara\s+|lintas\s+|sesama\s+)?(?:cabang|outlet)|(?:cabang|outlet)\s+mana\s+yang|(?:ranking|peringkat|urutan)\s+(?:cabang|outlet)|(?:cabang|outlet)\s+(?:terbaik|terburuk|terlaris|tersepi|paling\s+(?:laris|untung|besar|ramai|sepi))|(?:performa|kinerja|penjualan|hasil)\s+(?:antar|antara|lintas|sesama)\s+(?:cabang|outlet)/', $text)) {
-            $arguments = ['period' => match (true) {
-                str_contains($text, 'kemarin') => 'yesterday',
-                str_contains($text, 'hari ini') => 'today',
-                str_contains($text, 'minggu lalu') => 'last_week',
-                str_contains($text, 'bulan lalu') => 'last_month',
-                str_contains($text, 'minggu') => 'this_week',
-                str_contains($text, 'bulan') => 'this_month',
-                str_contains($text, 'tahun') => 'this_year',
-                default => 'this_month',
-            }];
+            $arguments = ['period' => $this->periodFromText($text, 'this_month')];
 
             return ['tool' => 'compare_branches', 'arguments' => $arguments];
         }
 
         // --- Deteksi anomali transaksi / anti-fraud kasir ---
         if (preg_match('/transaksi\s+(?:yang\s+)?(?:mencurigakan|aneh|janggal|ganjil)|\b(?:anomali|fraud|kecurangan)\b|anti[\s-]*fraud|void\s+(?:berulang|banyak|terus|beruntun)|(?:diskon)\s+(?:aneh|tidak\s+wajar|besar|gede|berlebihan|gila|anehnya)|selisih\s+kas|audit\s+(?:kasir|transaksi|penjualan)|kasir\s+(?:nakal|curang)|tampilkan\s+(?:semua\s+)?data(?:nya)?|data\s+selisih\s+kas|data\s+diskon|data\s+indikasi/', $text)) {
-            $arguments = ['period' => match (true) {
-                str_contains($text, 'kemarin') => 'yesterday',
-                str_contains($text, 'hari ini') => 'today',
-                str_contains($text, 'minggu lalu') => 'last_week',
-                str_contains($text, 'bulan lalu') => 'last_month',
-                str_contains($text, 'minggu') => 'this_week',
-                str_contains($text, 'bulan') => 'this_month',
-                str_contains($text, 'tahun') => 'this_year',
-                default => 'this_month',
-            }];
+            $arguments = ['period' => $this->periodFromText($text, 'this_month')];
 
             if (preg_match('/(\d+(?:[.,]\d+)?)\s*(?:%|persen)/', $text, $m)) {
                 $arguments['discount_threshold_pct'] = (float) str_replace(',', '.', $m[1]);
@@ -353,12 +330,7 @@ class AiService
 
         // --- Insight penjualan & margin (analisa/performa bisnis, bukan ringkasan angka) ---
         if (preg_match('/(?:kenapa|kok|mengapa)\s+(?:penjualan|omset|omzet|usaha|bisnis)|(?:analisa|analisis|performa|kinerja|evaluasi)\s+(?:toko|penjualan|usaha|bisnis)|(?:analisa|analisis)\s+(?:semua\s*)?(?:cabang|outlet)|(?:produk|barang)\s+mana\s+yang\s+(?:margin|laba|profit)|\bmargin\b|laba\s+kotor/', $text)) {
-            $arguments = ['period' => match (true) {
-                str_contains($text, 'hari ini') => 'today',
-                str_contains($text, 'bulan') => 'this_month',
-                str_contains($text, 'tahun') => 'this_year',
-                default => 'this_week',
-            }];
+            $arguments = ['period' => $this->periodFromText($text, 'this_week')];
 
             if ($allBranches) {
                 $arguments['scope'] = 'all';
@@ -392,29 +364,26 @@ class AiService
 
         // --- Ringkasan penjualan semua cabang (sebelum cabang per periode tunggal) ---
         if ($allBranches && preg_match('/(?:penjualan|omset|omzet|laporan\s+penjualan)/', $text)) {
-            $arguments = ['period' => match (true) {
-                str_contains($text, 'kemarin') => 'yesterday',
-                str_contains($text, 'hari ini') => 'today',
-                str_contains($text, 'bulan') => 'this_month',
-                str_contains($text, 'minggu') => 'this_week',
-                default => 'this_month',
-            }, 'scope' => 'all'];
+            $arguments = ['period' => $this->periodFromText($text, 'this_month'), 'scope' => 'all'];
 
             return ['tool' => 'get_sales_summary', 'arguments' => $arguments];
         }
 
-        // --- Penjualan hari ini / ringkasan penjualan ---
-        if (preg_match('/(?:penjualan|omset|omzet|laporan\s+penjualan)\s+(?:hari\s+ini|hari\s+ini)/', $text)) {
-            return ['tool' => 'get_sales_summary', 'arguments' => ['period' => 'today']];
+        // --- Daftar produk yang terjual pada suatu periode ---
+        if (preg_match('/(?:daftar|apa\s+saja|rincian|detail|tampilkan)\s+(?:semua\s+)?(?:produk|barang|item)\b.*(?:terjual|penjualan|laku)|(?:produk|barang|item)\s+(?:apa\s+saja\s+)?yang\s+(?:terjual|laku)/u', $text)) {
+            $arguments = ['period' => $this->periodFromText($text, 'today'), 'limit' => 20];
+
+            if ($allBranches) {
+                $arguments['scope'] = 'all';
+            }
+
+            return ['tool' => 'get_top_products', 'arguments' => $arguments];
         }
-        if (preg_match('/(?:penjualan|omset|omzet|laporan\s+penjualan)\s+(?:kemarin)/', $text)) {
-            return ['tool' => 'get_sales_summary', 'arguments' => ['period' => 'yesterday']];
-        }
-        if (preg_match('/(?:penjualan|omset|omzet|laporan\s+penjualan)\s+(?:bulan\s+ini)/', $text)) {
-            return ['tool' => 'get_sales_summary', 'arguments' => ['period' => 'this_month']];
-        }
-        if (preg_match('/(?:penjualan|omset|omzet|laporan\s+penjualan)\s+(?:minggu\s+ini)/', $text)) {
-            return ['tool' => 'get_sales_summary', 'arguments' => ['period' => 'this_week']];
+
+        // --- Ringkasan penjualan untuk periode yang disebut (hari ini, kemarin, minggu lalu, dst.) ---
+        if (preg_match('/\b(?:penjualan|omset|omzet)\b/u', $text) && AiPeriod::detect($text) !== null
+            && ! preg_match('/\b(?:tambah|buat|ubah|hapus|input)\b/u', $text)) {
+            return ['tool' => 'get_sales_summary', 'arguments' => ['period' => AiPeriod::detect($text)]];
         }
 
         // --- Riwayat aksi AI ---
@@ -424,39 +393,34 @@ class AiService
 
         // --- Produk terlaris semua cabang (sebelum cabang per periode tunggal) ---
         if ($allBranches && preg_match('/(?:produk|barang)\s+(?:terlaris|paling\s+laku)/', $text)) {
-            $arguments = ['period' => match (true) {
-                str_contains($text, 'minggu') => 'this_week',
-                str_contains($text, 'hari ini') => 'today',
-                str_contains($text, 'bulan lalu') => 'last_month',
-                default => 'this_month',
-            }, 'scope' => 'all'];
+            $arguments = ['period' => $this->periodFromText($text, 'this_month'), 'scope' => 'all'];
 
             return ['tool' => 'get_top_products', 'arguments' => $arguments];
         }
 
-        // --- Produk terlaris ---
-        if (preg_match('/(?:produk|barang)\s+(?:terlaris|paling\s+laku)\s+minggu\s+ini/', $text)) {
-            return ['tool' => 'get_top_products', 'arguments' => ['period' => 'this_week']];
+        // --- Produk terlaris / paling tidak laku ---
+        if (preg_match('/(?:produk|barang)\s+(?:yang\s+)?(?:terlaris|paling\s+(?:laku|laris|banyak\s+terjual))/u', $text)) {
+            return ['tool' => 'get_top_products', 'arguments' => ['period' => $this->periodFromText($text, 'this_month')]];
         }
-        if (preg_match('/(?:produk|barang)\s+(?:terlaris|paling\s+laku)\s+hari\s+ini/', $text)) {
-            return ['tool' => 'get_top_products', 'arguments' => ['period' => 'today']];
-        }
-        if (preg_match('/(?:produk|barang)\s+(?:terlaris|paling\s+laku)\s+bulan\s+ini/', $text)) {
-            return ['tool' => 'get_top_products', 'arguments' => ['period' => 'this_month']];
-        }
-        if (preg_match('/(?:produk|barang)\s+(?:terlaris|paling\s+laku|terlaris\s+ini)/', $text)) {
-            return ['tool' => 'get_top_products', 'arguments' => ['period' => 'this_month']];
+        if (preg_match('/(?:produk|barang)\s+(?:yang\s+)?(?:paling\s+(?:tidak|nggak|gak|ga|kurang)\s+laku|paling\s+sedikit\s+terjual|kurang\s+laku)/u', $text)) {
+            return ['tool' => 'get_top_products', 'arguments' => ['period' => $this->periodFromText($text, 'this_month'), 'order' => 'bottom']];
         }
 
         // --- Cek stok (tanpa nama produk tertentu = stok rendah) ---
-        if (preg_match('/^(?:cek|lihat|tampilkan|daftar)\s+stok$/i', $text)) {
+        $stockCategory = preg_match('/\b(?:stok|persediaan)/u', $text) ? $this->detectCategoryInText($text) : null;
+        $withCategory = fn (array $arguments) => $stockCategory !== null ? $arguments + ['category' => $stockCategory] : $arguments;
+
+        if (preg_match('/^(?:cek|lihat|tampilkan|daftar)\s+(?:semua\s+)?stok$/i', $text)) {
             return ['tool' => 'check_stock', 'arguments' => ['show_all' => true]];
         }
-        if (preg_match('/(?:stok(?:nya)?|persediaan)(?:\s+\w+){0,3}\s+habis/', $text)) {
-            return ['tool' => 'check_stock', 'arguments' => ['out_of_stock' => true]];
+        if (preg_match('/(?:stok(?:nya)?|persediaan)(?:\s+\w+){0,3}\s+(?:habis|kosong)/u', $text)) {
+            return ['tool' => 'check_stock', 'arguments' => $withCategory(['out_of_stock' => true])];
         }
-        if (preg_match('/(?:stok(?:nya)?|persediaan)(?:\s+\w+){0,3}\s+(?:rendah|menipis)/', $text)) {
-            return ['tool' => 'check_stock', 'arguments' => []];
+        if (preg_match('/(?:stok(?:nya)?|persediaan)(?:\s+\w+){0,3}\s+(?:rendah|menipis|sedikit|tipis|kritis)/u', $text)) {
+            return ['tool' => 'check_stock', 'arguments' => $withCategory([])];
+        }
+        if ($stockCategory !== null && preg_match('/\b(?:cek|lihat|tampilkan|daftar)\b/u', $text)) {
+            return ['tool' => 'check_stock', 'arguments' => ['category' => $stockCategory, 'show_all' => true]];
         }
 
         // --- Cek stok produk tertentu ---
@@ -481,7 +445,7 @@ class AiService
         }
 
         // --- Insight laba per produk / produk bocor / bundling / cross-sell ---
-        if (preg_match('/(?:produk|barang)\s+(?:bocor|boros)|(?:produk|barang)\s+(?:mana|apa)\s+(?:yang\s+)?(?:bocor|boros|rugi)|(?:insight|analisa|analisis)\s+(?:laba|profit|margin)\s+(?:per\s+produk|produk)|(?:cross[\s-]?sell|bundl(?:e|ing)|(?:s|kombinasi)\s+produk)|(?:sering|biasa|banyak)\s+(?:dibeli|beli|terjual)\s+(?:bareng|bersama|sekaligus|sekalian)|(?:produk|barang)\s+(?:apa|mana)\s+(?:yang\s+)?(?:bisa|cocok|bagus)\s+(?:di\s*[-]?bundle|untuk\s+(?:bundl|promosi)|untuk\s+dipromosi)/i', $text)) {
+        if (preg_match('/(?:produk|barang)\s+(?:bocor|boros)|(?:produk|barang)\s+(?:mana|apa)\s+(?:yang\s+)?(?:bocor|boros|rugi)|(?:insight|analisa|analisis)\s+(?:laba|profit|margin)\s+(?:per\s+produk|produk)|(?:\bcross[\s-]?sell\b|\bbundl(?:e|ing)\b|\b(?:paket|kombinasi)\s+produk\b)|(?:sering|biasa|banyak)\s+(?:dibeli|beli|terjual)\s+(?:bareng|bersama|sekaligus|sekalian)|(?:produk|barang)\s+(?:apa|mana)\s+(?:yang\s+)?(?:bisa|cocok|bagus)\s+(?:di\s*[-]?bundle|untuk\s+(?:bundl|promosi)|untuk\s+dipromosi)/i', $text)) {
             $arguments = [];
 
             if ($allBranches) {
@@ -525,6 +489,48 @@ class AiService
         $specificDate = $this->detectSpecificDate($text, $message, $conversation);
         if ($specificDate !== null) {
             return $specificDate;
+        }
+
+        return null;
+    }
+
+    /** Periode yang disebut user; bila tidak disebut, pakai bawaan tool. */
+    protected function periodFromText(string $text, string $default): string
+    {
+        return AiPeriod::detect($text) ?? $default;
+    }
+
+    /**
+     * Kategori produk toko ini yang disebut dalam pesan (mis. "bahan baku"),
+     * dicocokkan dengan nama kategori yang benar-benar ada — bukan tebakan.
+     */
+    protected function detectCategoryInText(string $text): ?string
+    {
+        if (! $this->store) {
+            return null;
+        }
+
+        if (preg_match('/\bkategori\s+([\p{L}\d][\p{L}\d\s&\-]{1,40}?)(?:\s+(?:yang|dengan|stok(?:nya)?|habis|rendah|menipis)\b|[.,?!]|$)/u', $text, $m)) {
+            return trim($m[1]);
+        }
+
+        $names = \App\Models\ProductCategory::query()
+            ->where('store_id', $this->store->id)
+            ->pluck('name')
+            ->merge(Product::query()->where('store_id', $this->store->id)->whereNotNull('category')->distinct()->pluck('category'))
+            ->filter(fn ($name) => is_string($name) && mb_strlen(trim($name)) >= 4)
+            ->map(fn (string $name) => trim($name))
+            ->unique()
+            ->sortByDesc(fn (string $name) => mb_strlen($name));
+
+        $compact = preg_replace('/\s+/u', '', $text);
+
+        foreach ($names as $name) {
+            $needle = mb_strtolower($name);
+
+            if (str_contains($text, $needle) || str_contains((string) $compact, (string) preg_replace('/\s+/u', '', $needle))) {
+                return $name;
+            }
         }
 
         return null;
@@ -717,7 +723,7 @@ class AiService
     {
         $text = strtolower(trim($message));
 
-        $hasAction = preg_match('/(?:\btambah(?:kan)?\b|\bisi\b|\bpenuhi\b|\bsetel\b|\bubah\b|\bset\b)/', $text);
+        $hasAction = preg_match('/(?:\btambah(?:kan)?\b|\bisi\b|\bpenuhi\b|\bsetel\b|\bubah\b|\bset\b|\bupdate\b)/', $text);
         $hasBulkTarget = preg_match('/\bsemua\b/', $text) && preg_match('/\bstok\b|\bpersediaan\b/', $text);
         $hasReferencedProducts = preg_match('/(?:stok|persediaan)\s+(?:produk|barang)\s+(?:ini|tersebut|tsb)/', $text);
 
@@ -1217,11 +1223,12 @@ class AiService
     {
         if ($toolName === 'get_top_products' && ! empty($data['products'])) {
             $products = collect($data['products'])->map(fn (array $product, int $index) => sprintf(
-                '%d. **%s** — %s terjual (%s)',
+                '%d. **%s** — %s terjual (%s)%s',
                 $index + 1,
                 $product['product_name'],
-                $product['quantity_sold'],
+                AiMetrics::number($product['quantity_sold'], 2),
                 $product['revenue_formatted'],
+                isset($product['margin_pct']) ? ', margin '.AiMetrics::number($product['margin_pct']).'%' : '',
             ))->implode("\n");
 
             return "{$message}\n\n{$products}";
@@ -1233,10 +1240,16 @@ class AiService
 
         if ($toolName === 'check_stock' && ! empty($data['products'])) {
             $products = collect($data['products'])->map(fn (array $product) => sprintf(
-                '- **%s** — %s %s',
+                '- **%s** — %s %s%s%s',
                 $product['name'],
                 $product['stock'],
                 $product['unit'],
+                ! empty($product['min_stock_level']) ? ' (min '.$product['min_stock_level'].')' : '',
+                match (true) {
+                    ($product['stock_tracked'] ?? true) === false => ' · stok tidak dilacak',
+                    ! empty($product['is_out_of_stock']) => ' · **habis**',
+                    default => '',
+                },
             ))->implode("\n");
 
             return "{$message}\n\n{$products}";
@@ -1313,48 +1326,94 @@ class AiService
         return implode("\n\n", $sections);
     }
 
+    /**
+     * Jalankan tool yang diminta model, lalu biarkan model melanjutkan.
+     *
+     * Model boleh memanggil tool lagi (sampai MAX_TOOL_ROUNDS putaran) — mis.
+     * cek penjualan lalu cek stok produk penyebabnya — sebelum menulis jawaban.
+     * Sebelumnya hanya satu putaran, sehingga pertanyaan yang butuh dua sumber
+     * data dijawab setengah atau ditebak.
+     */
     protected function handleToolCalls(AiConversation $conversation, AiMessage $assistantMessage, AiResponse $response, ?callable $onDelta = null): array
     {
         $toolResults = [];
+        $tools = $this->toolRegistry->getToolDefinitions();
 
-        foreach ($response->getToolCalls() as $toolCall) {
-            $toolName = $toolCall['function']['name'];
-            $toolArgs = json_decode($toolCall['function']['arguments'], true) ?? [];
-            $toolCallId = $toolCall['id'];
+        for ($round = 1; ; $round++) {
+            foreach ($response->getToolCalls() as $toolCall) {
+                $toolName = $toolCall['function']['name'];
+                $toolArgs = json_decode($toolCall['function']['arguments'] ?? '', true);
+                $toolArgs = is_array($toolArgs) ? $toolArgs : [];
+                $toolCallId = $toolCall['id'];
 
-            // Eksekusi tool
-            $result = $this->toolRegistry->execute($toolName, $toolArgs, $this->user);
+                $result = $this->toolRegistry->execute($toolName, $toolArgs, $this->user);
 
-            // Simpan hasil tool
-            AiMessage::create([
-                'conversation_id' => $conversation->id,
-                'role' => 'tool',
-                'content' => $result->toJson(),
-                'tool_call_id' => $toolCallId,
-            ]);
+                AiMessage::create([
+                    'conversation_id' => $conversation->id,
+                    'role' => 'tool',
+                    'content' => $result->toJson(),
+                    'tool_call_id' => $toolCallId,
+                ]);
 
-            // Audit log
-            $this->logAudit($toolName, $toolArgs, $result);
+                $this->logAudit($toolName, $toolArgs, $result);
 
-            $toolResults[] = [
-                'tool_call_id' => $toolCallId,
-                'name' => $toolName,
-                'result' => $result->toArray(),
-            ];
-        }
+                $toolResults[] = [
+                    'tool_call_id' => $toolCallId,
+                    'name' => $toolName,
+                    'result' => $result->toArray(),
+                ];
+            }
 
-        // Kirim hasil tool ke AI untuk respons final
-        $messages = $this->buildMessages($conversation);
-        $finalResponse = $onDelta
-            ? $this->provider->chatStream($messages, [], $onDelta)
-            : $this->provider->chat($messages);
+            $isLastRound = $round >= self::MAX_TOOL_ROUNDS;
+            $messages = $this->buildMessages($conversation);
+            $nextTools = $isLastRound ? [] : $tools;
 
-        if ($finalResponse->isSuccess()) {
+            $next = $onDelta
+                ? $this->provider->chatStream($messages, $nextTools, $onDelta)
+                : $this->provider->chat($messages, $nextTools);
+
+            if (! $next->isSuccess()) {
+                return [
+                    'success' => false,
+                    'error' => $next->error,
+                    'conversation_id' => $conversation->id,
+                    'tool_results' => $toolResults,
+                    'status' => 502,
+                ];
+            }
+
+            if (! $isLastRound && $next->hasToolCalls()) {
+                $confirmation = $this->findConfirmationForToolCalls($next->getToolCalls());
+
+                if ($confirmation) {
+                    return [
+                        'success' => true,
+                        'conversation_id' => $conversation->id,
+                        'confirmation' => $confirmation,
+                        'tool_results' => $toolResults,
+                    ];
+                }
+
+                AiMessage::create([
+                    'conversation_id' => $conversation->id,
+                    'role' => 'assistant',
+                    'content' => $next->getContent(),
+                    'tool_calls' => $next->getToolCalls(),
+                    'tokens_used' => $next->tokensUsed,
+                ]);
+
+                $response = $next;
+
+                continue;
+            }
+
+            $content = $this->cleanAssistantContent($next->getContent());
+
             $finalMessage = AiMessage::create([
                 'conversation_id' => $conversation->id,
                 'role' => 'assistant',
-                'content' => $finalResponse->getContent(),
-                'tokens_used' => $finalResponse->tokensUsed,
+                'content' => $content,
+                'tokens_used' => $next->tokensUsed,
             ]);
 
             return [
@@ -1363,20 +1422,30 @@ class AiService
                 'message' => [
                     'id' => $finalMessage->id,
                     'role' => 'assistant',
-                    'content' => $finalResponse->getContent(),
+                    'content' => $content,
                     'timestamp' => $finalMessage->created_at->format('H:i'),
                 ],
                 'tool_results' => $toolResults,
             ];
         }
+    }
 
-        return [
-            'success' => false,
-            'error' => $finalResponse->error,
-            'conversation_id' => $conversation->id,
-            'tool_results' => $toolResults,
-            'status' => 502,
-        ];
+    /**
+     * Rapikan teks jawaban model: buang pseudo tool-call yang bocor sebagai
+     * teks (mis. "<tool_call>update_product…") dan jangan pernah mengirim
+     * jawaban kosong ke user.
+     */
+    protected function cleanAssistantContent(?string $content): string
+    {
+        $content = (string) $content;
+        $content = (string) preg_replace('/<tool_call>.*?(?:<\/tool_call>|$)/su', '', $content);
+        $content = trim($content);
+
+        if ($content === '') {
+            return 'Maaf, saya belum berhasil menyusun jawaban untuk itu. Coba ulangi dengan lebih spesifik — misalnya sebutkan produk, periode (hari ini/minggu ini/bulan lalu), atau data yang ingin dilihat (penjualan, stok, laba).';
+        }
+
+        return $content;
     }
 
     protected function buildMessages(AiConversation $conversation): array
@@ -1386,11 +1455,22 @@ class AiService
         ];
 
         // Ambil 20 pesan terakhir untuk konteks
+        // Diurutkan berdasarkan id: beberapa pesan (user, hasil tool, jawaban)
+        // tersimpan pada detik yang sama, sehingga urutan created_at acak dan
+        // model menerima riwayat yang teracak.
         $recentMessages = $conversation->messages()
-            ->orderBy('created_at', 'desc')
-            ->limit(20)
+            ->reorder()
+            ->orderBy('id', 'desc')
+            ->limit(self::HISTORY_LIMIT)
             ->get()
-            ->reverse();
+            ->reverse()
+            ->values();
+
+        // Riwayat tidak boleh diawali potongan pasangan tool (hasil tool tanpa
+        // pemanggilnya), karena provider menolak/kebingungan.
+        while ($recentMessages->isNotEmpty() && $recentMessages->first()->role === 'tool') {
+            $recentMessages->shift();
+        }
 
         foreach ($recentMessages as $msg) {
             $message = [

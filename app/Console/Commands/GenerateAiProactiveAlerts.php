@@ -9,14 +9,14 @@ use App\Models\AiAlert;
 use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Store;
-use App\Models\Transaction;
-use App\Models\TransactionItem;
 use App\Models\User;
+use App\Services\AI\AiMetrics;
+use App\Services\AI\AiPeriod;
+use App\Services\AI\AiStockVelocity;
 use App\Services\AI\TransactionAnomalyDetector;
 use App\Services\Alerts\AlertPushService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\DB;
 
 class GenerateAiProactiveAlerts extends Command
 {
@@ -136,14 +136,11 @@ class GenerateAiProactiveAlerts extends Command
      */
     private function lowStockAlert(Store $store): ?array
     {
-        $products = Product::query()
-            ->where('store_id', $store->id)
-            ->active()
-            ->where('track_stock', true)
-            ->whereColumn('stock_quantity', '<=', 'min_stock_level')
-            ->orderBy('stock_quantity')
-            ->limit(self::LOW_STOCK_LIMIT)
-            ->get();
+        // Hanya stok yang benar-benar perlu ditindak: di bawah stok minimum, atau
+        // habis padahal masih terjual/terpakai. "Sisa 0 (min 0)" yang tak bergerak dilewati.
+        $lowStock = AiStockVelocity::lowStock((int) $store->id, self::LOW_STOCK_LIMIT);
+        $products = $lowStock['items'];
+        $total = (int) $lowStock['total'];
 
         if ($products->isEmpty()) {
             return null;
@@ -163,9 +160,11 @@ class GenerateAiProactiveAlerts extends Command
         return [
             'type' => 'low_stock',
             'title' => 'Stok kritis',
-            'message' => "{$products->count()} produk menyentuh batas minimum: {$lines}. Segera restock sebelum kehabisan.",
+            'message' => "{$total} produk menyentuh batas minimum atau habis: {$lines}"
+                .($total > $products->count() ? ', dan '.($total - $products->count()).' lainnya' : '')
+                .'. Segera restock sebelum kehabisan.',
             'data' => [
-                'count' => $products->count(),
+                'count' => $total,
                 'items' => $products->map(fn (Product $product): array => [
                     'id' => $product->id,
                     'name' => $product->name,
@@ -272,10 +271,12 @@ class GenerateAiProactiveAlerts extends Command
         $dropPointsThreshold = (float) config('alerts.margin.drop_points_threshold', 5.0);
         $dropPercentThreshold = (float) config('alerts.margin.drop_percent_threshold', 15.0);
 
-        $now = Carbon::now();
-        $recentStart = $now->copy()->subDays($windowDays)->startOfDay();
-        $recentEnd = $now->copy()->endOfDay();
-        $prevStart = $recentStart->copy()->subDays($windowDays);
+        // Dua jendela penuh yang sama panjang, berakhir kemarin (jam toko): hari
+        // ini baru berjalan sebagian dan tidak sebanding dengan hari penuh.
+        $today = AiPeriod::now($store)->startOfDay();
+        $recentStart = Carbon::instance(AiPeriod::toDb($today->copy()->subDays($windowDays)));
+        $recentEnd = Carbon::instance(AiPeriod::toDb($today->copy()->subSecond()));
+        $prevStart = Carbon::instance(AiPeriod::toDb($today->copy()->subDays($windowDays * 2)));
         $prevEnd = $recentStart->copy()->subSecond();
 
         $recent = $this->marginForPeriod($store, $recentStart, $recentEnd);
@@ -298,7 +299,7 @@ class GenerateAiProactiveAlerts extends Command
             'type' => 'margin_drop',
             'title' => 'Margin turun',
             'message' => sprintf(
-                'Margin kotor %d hari terakhir %.1f%% (sebelumnya %.1f%%) — turun %.1f poin (%.1f%%). Periksa diskon/beban HPP.',
+                'Margin kotor %d hari terakhir (s.d. kemarin) %.1f%% vs %.1f%% pada periode sebelumnya — turun %.1f poin (%.1f%%). Periksa diskon dan kenaikan harga modal (tanya asisten: "produk bocor").',
                 $windowDays,
                 $recent['margin_pct'],
                 $prev['margin_pct'],
@@ -324,26 +325,21 @@ class GenerateAiProactiveAlerts extends Command
      */
     private function marginForPeriod(Store $store, Carbon $start, Carbon $end): ?array
     {
-        $revenue = (float) Transaction::query()
-            ->where('store_id', $store->id)
-            ->where('status', 'completed')
-            ->whereBetween('created_at', [$start, $end])
-            ->sum('total_amount');
+        // Definisi sama dengan laporan: pendapatan bersih (tanpa pajak/servis/tip).
+        $summary = AiMetrics::summary([(int) $store->id], $start, $end);
 
-        if ($revenue <= 0) {
+        // Margin hanya dibandingkan bila harga modal cukup tercatat di periode
+        // itu. Baris tanpa harga modal dulu dihitung bermodal nol, sehingga
+        // perubahan kelengkapan data tampak sebagai "margin turun".
+        if ($summary['revenue'] <= 0 || ! $summary['margin_reliable'] || $summary['covered_margin_pct'] === null) {
             return null;
         }
 
-        $cogs = (float) TransactionItem::query()
-            ->join('transactions', 'transaction_items.transaction_id', '=', 'transactions.id')
-            ->where('transactions.store_id', $store->id)
-            ->where('transactions.status', 'completed')
-            ->whereBetween('transactions.created_at', [$start, $end])
-            ->sum(DB::raw('transaction_items.quantity * transaction_items.unit_cost_snapshot'));
-
-        $marginPct = (($revenue - $cogs) / $revenue) * 100;
-
-        return ['revenue' => $revenue, 'cogs' => $cogs, 'margin_pct' => $marginPct];
+        return [
+            'revenue' => (float) $summary['revenue'],
+            'cogs' => (float) $summary['hpp'],
+            'margin_pct' => (float) $summary['covered_margin_pct'],
+        ];
     }
 
     private function storeAlert(User $user, Store $store, array $alert): bool

@@ -3,13 +3,12 @@
 namespace App\Tools\Reports;
 
 use App\Models\OperationalExpense;
-use App\Models\Transaction;
-use App\Models\TransactionItem;
 use App\Models\User;
+use App\Services\AI\AiMetrics;
+use App\Services\AI\AiPeriod;
 use App\Services\AI\AiStoreScope;
 use App\Tools\AiTool;
 use App\Tools\ToolResult;
-use Illuminate\Support\Carbon;
 
 class ProfitReportTool extends AiTool
 {
@@ -20,7 +19,7 @@ class ProfitReportTool extends AiTool
 
     public function getDescription(): string
     {
-        return 'Membuat laporan laba rugi: pendapatan, HPP, laba kotor (margin), beban operasional (sewa, gaji, listrik, dll), dan laba bersih untuk periode tertentu. Gunakan saat user bertanya "berapa laba/untung/rugi", "laba bersih", "laba rugi", "beban operasional", atau "laporan keuangan".';
+        return 'Membuat laporan laba rugi: pendapatan bersih, HPP, laba kotor (margin), beban operasional (sewa, gaji, listrik, dll), dan laba bersih untuk periode tertentu, lengkap dengan catatan bila harga modal/beban belum tercatat. Gunakan saat user bertanya "berapa laba/untung/rugi", "laba bersih", "laba rugi", "beban operasional", atau "laporan keuangan".';
     }
 
     public function getParameters(): array
@@ -28,8 +27,8 @@ class ProfitReportTool extends AiTool
         return [
             'period' => [
                 'type' => 'string',
-                'description' => 'Periode laporan: "today", "yesterday", "this_week", "last_week", "this_month", "last_month", "this_year"',
-                'enum' => ['today', 'yesterday', 'this_week', 'last_week', 'this_month', 'last_month', 'this_year'],
+                'description' => 'Periode laporan (default: this_month). Periode berjalan dihitung sampai hari ini.',
+                'enum' => AiPeriod::PERIODS,
             ],
             'date_from' => [
                 'type' => 'string',
@@ -58,44 +57,12 @@ class ProfitReportTool extends AiTool
         $storeIds = $scope['store_ids'];
         $allBranches = $scope['all_branches'];
 
-        $dateRange = $this->getDateRange($args);
-        $from = $dateRange['from'];
-        $to = $dateRange['to'];
-
-        $sales = Transaction::whereIn('store_id', $storeIds)
-            ->where('status', 'completed')
-            ->whereBetween('created_at', [$from, $to])
-            ->selectRaw('COALESCE(SUM(total_amount), 0) as revenue, COUNT(*) as transactions')
-            ->first();
-
-        $revenue = (float) $sales->revenue;
-        $transactions = (int) $sales->transactions;
-
-        $cogs = TransactionItem::query()
-            ->join('transactions', 'transactions.id', '=', 'transaction_items.transaction_id')
-            ->whereIn('transactions.store_id', $storeIds)
-            ->where('transactions.status', 'completed')
-            ->whereBetween('transactions.created_at', [$from, $to])
-            ->selectRaw('
-                COALESCE(SUM(transaction_items.total_price), 0) as line_revenue,
-                COALESCE(SUM(transaction_items.total_cost_snapshot), 0) as hpp,
-                COALESCE(SUM(transaction_items.gross_profit_snapshot), 0) as gross_profit
-            ')
-            ->first();
-
-        $hpp = (float) $cogs->hpp;
-        $grossProfit = (float) $cogs->gross_profit;
-
-        // Fallback: jika salah satu snapshot kosong, hitung dari yang tersedia.
-        if ($grossProfit === 0.0 && $hpp > 0) {
-            $grossProfit = (float) $cogs->line_revenue - $hpp;
-        } elseif ($hpp === 0.0 && $grossProfit > 0) {
-            $hpp = (float) $cogs->line_revenue - $grossProfit;
-        }
+        $range = AiPeriod::resolve($args, $store, 'this_month');
+        $summary = AiMetrics::summary($storeIds, $range['from'], $range['to']);
 
         $expenseRows = OperationalExpense::query()
             ->whereIn('store_id', $storeIds)
-            ->whereBetween('expense_date', [$from->toDateString(), $to->toDateString()])
+            ->whereBetween('expense_date', [$range['local_from']->toDateString(), $range['local_to']->toDateString()])
             ->selectRaw('category, COALESCE(SUM(amount), 0) as total')
             ->groupBy('category')
             ->get();
@@ -111,23 +78,37 @@ class ProfitReportTool extends AiTool
             ->values()
             ->toArray();
 
+        $revenue = (float) $summary['revenue'];
+        $grossProfit = (float) $summary['gross_profit'];
         $netProfit = $grossProfit - $totalExpense;
 
         $data = [
             'scope' => $allBranches ? AiStoreScope::ALL : AiStoreScope::CURRENT,
             'stores_analyzed' => count($storeIds),
             'period' => [
-                'from' => $from->format('d/m/Y'),
-                'to' => $to->format('d/m/Y'),
+                'label' => $range['label'],
+                'from' => $range['display_from'],
+                'to' => $range['display_to'],
             ],
             'revenue' => round($revenue),
-            'hpp' => round($hpp),
+            'returns' => $summary['returns'],
+            'transactions' => $summary['transactions'],
+            'hpp' => $summary['hpp'],
             'gross_profit' => round($grossProfit),
             'gross_margin_pct' => $revenue > 0 ? round($grossProfit / $revenue * 100, 1) : 0,
+            'cost_coverage_pct' => $summary['cost_coverage_pct'],
+            'covered_margin_pct' => $summary['covered_margin_pct'],
+            'margin_reliable' => $summary['margin_reliable'],
             'operational_expenses' => round($totalExpense),
             'expense_breakdown' => $expenseBreakdown,
             'net_profit' => round($netProfit),
             'net_margin_pct' => $revenue > 0 ? round($netProfit / $revenue * 100, 1) : 0,
+            'data_notes' => array_values(array_filter([
+                AiMetrics::coverageNote($summary),
+                $revenue > 0 && $totalExpense <= 0
+                    ? 'Belum ada beban operasional yang dicatat pada periode ini, jadi laba bersih di sini sama dengan laba kotor. Catat sewa, gaji, listrik, dll agar laba bersih akurat.'
+                    : null,
+            ])),
         ];
 
         return ToolResult::success(
@@ -136,39 +117,16 @@ class ProfitReportTool extends AiTool
         );
     }
 
-    protected function getDateRange(array $args): array
-    {
-        if (! empty($args['date_from']) && ! empty($args['date_to'])) {
-            return [
-                'from' => Carbon::parse($args['date_from'])->startOfDay(),
-                'to' => Carbon::parse($args['date_to'])->endOfDay(),
-            ];
-        }
-
-        $period = $args['period'] ?? 'this_month';
-        $now = Carbon::now();
-
-        return match ($period) {
-            'today' => ['from' => $now->copy()->startOfDay(), 'to' => $now->copy()->endOfDay()],
-            'yesterday' => ['from' => $now->copy()->subDay()->startOfDay(), 'to' => $now->copy()->subDay()->endOfDay()],
-            'this_week' => ['from' => $now->copy()->startOfWeek(), 'to' => $now->copy()->endOfWeek()],
-            'last_week' => ['from' => $now->copy()->subWeek()->startOfWeek(), 'to' => $now->copy()->subWeek()->endOfWeek()],
-            'this_month' => ['from' => $now->copy()->startOfMonth(), 'to' => $now->copy()->endOfMonth()],
-            'last_month' => ['from' => $now->copy()->subMonth()->startOfMonth(), 'to' => $now->copy()->subMonth()->endOfMonth()],
-            'this_year' => ['from' => $now->copy()->startOfYear(), 'to' => $now->copy()->endOfYear()],
-            default => ['from' => $now->copy()->startOfMonth(), 'to' => $now->copy()->endOfMonth()],
-        };
-    }
-
     protected function summaryMessage(array $data, bool $allBranches, int $storeCount): string
     {
         $lines = [
             'Laporan laba rugi **'.$data['period']['from'].' - '.$data['period']['to'].'**'
                 .($allBranches ? " (semua cabang — {$storeCount} outlet)" : '').':',
             '',
-            '- Pendapatan: '.$this->formatCurrency((float) $data['revenue']),
+            '- Pendapatan bersih: '.$this->formatCurrency((float) $data['revenue'])
+                .($data['returns'] > 0 ? ' (setelah retur '.$this->formatCurrency((float) $data['returns']).')' : ''),
             '- HPP: '.$this->formatCurrency((float) $data['hpp']),
-            '- **Laba kotor: '.$this->formatCurrency((float) $data['gross_profit'])." (margin {$data['gross_margin_pct']}%)**",
+            '- **Laba kotor: '.$this->formatCurrency((float) $data['gross_profit']).' (margin '.AiMetrics::number($data['gross_margin_pct']).'%)**',
             '- Beban operasional: '.$this->formatCurrency((float) $data['operational_expenses']),
         ];
 
@@ -180,11 +138,29 @@ class ProfitReportTool extends AiTool
             $lines[] = '  Rincian: '.implode(', ', $parts);
         }
 
-        $lines[] = '- **Laba bersih: '.$this->formatCurrency((float) $data['net_profit'])." (margin {$data['net_margin_pct']}%)**";
+        $lines[] = '- **Laba bersih: '.$this->formatCurrency((float) $data['net_profit']).' (margin '.AiMetrics::number($data['net_margin_pct']).'%)**';
 
-        if ($data['net_profit'] < 0) {
+        if ($data['revenue'] <= 0) {
             $lines[] = '';
-            $lines[] = 'Perhatian: periode ini **rugi bersih** — pertimbangkan menekan beban operasional atau menaikkan penjualan produk margin tinggi.';
+            $lines[] = 'Belum ada penjualan selesai pada periode ini.';
+        }
+
+        foreach ($data['data_notes'] as $note) {
+            $lines[] = '';
+            $lines[] = $note;
+        }
+
+        if ($data['net_profit'] < 0 && $data['revenue'] > 0) {
+            $largest = $data['expense_breakdown'][0] ?? null;
+            $lines[] = '';
+            $lines[] = 'Perhatian: periode ini **rugi bersih** '.$this->formatCurrency(abs((float) $data['net_profit'])).'.'
+                .($largest
+                    ? ' Beban terbesar: '.$largest['label'].' '.$this->formatCurrency((float) $largest['total'])
+                        .' ('.AiMetrics::number($largest['total'] / $data['revenue'] * 100).'% dari pendapatan).'
+                    : '')
+                .($data['gross_profit'] > 0
+                    ? ' Untuk impas, laba kotor perlu naik '.$this->formatCurrency(abs((float) $data['net_profit'])).' atau beban turun sebesar itu.'
+                    : ' Laba kotor sudah negatif — periksa harga jual dan harga modal produk.');
         }
 
         return implode("\n", $lines);

@@ -4,6 +4,7 @@ namespace App\Tools\Reports;
 
 use App\Models\TransactionItem;
 use App\Models\User;
+use App\Services\AI\AiPeriod;
 use App\Services\AI\AiStoreScope;
 use App\Tools\AiTool;
 use App\Tools\ToolResult;
@@ -59,14 +60,17 @@ class SalesForecastTool extends AiTool
         $historyDays = max(7, min(365, (int) ($args['history_days'] ?? 90)));
         $scope = AiStoreScope::resolve($user, $args['scope'] ?? AiStoreScope::CURRENT);
 
-        $historyFrom = Carbon::today()->subDays($historyDays - 1);
-        $historyTo = Carbon::today();
+        // Histori berakhir KEMARIN (jam toko). Hari ini baru berjalan sebagian;
+        // bila ikut dihitung — dengan bobot terbesar — prediksi jadi terlalu rendah.
+        $today = AiPeriod::now($store)->startOfDay();
+        $historyTo = $today->copy()->subDay();
+        $historyFrom = $today->copy()->subDays($historyDays);
 
         $query = TransactionItem::query()
             ->join('transactions', 'transactions.id', '=', 'transaction_items.transaction_id')
             ->whereIn('transactions.store_id', $scope['store_ids'])
             ->where('transactions.status', 'completed')
-            ->whereBetween('transactions.created_at', [$historyFrom->copy()->startOfDay(), $historyTo->copy()->endOfDay()])
+            ->whereBetween('transactions.created_at', [AiPeriod::toDb($historyFrom), AiPeriod::toDb($historyTo->copy()->endOfDay())])
             ->where('transactions.is_void', false)
             ->whereNotNull('transaction_items.product_id');
 
@@ -74,22 +78,36 @@ class SalesForecastTool extends AiTool
             $query->where('transaction_items.product_name', 'like', "%{$args['product_name']}%");
         }
 
-        $dailyRows = $query
-            ->groupByRaw('DATE(transactions.created_at)')
-            ->selectRaw('DATE(transactions.created_at) as sale_date, COALESCE(SUM(transaction_items.quantity), 0) as qty, COALESCE(SUM(transaction_items.total_price), 0) as revenue')
-            ->get()
-            ->keyBy(fn ($row) => Carbon::parse($row->sale_date)->format('Y-m-d'));
+        // Dikelompokkan per hari menurut jam toko (bukan jam server).
+        $dailyRows = [];
+        foreach ($query->get(['transactions.created_at as sold_at', 'transaction_items.quantity', 'transaction_items.total_price']) as $row) {
+            $day = AiPeriod::toStore($row->sold_at, $store)->format('Y-m-d');
+            $dailyRows[$day] ??= ['qty' => 0.0, 'revenue' => 0.0];
+            $dailyRows[$day]['qty'] += (float) $row->quantity;
+            $dailyRows[$day]['revenue'] += (float) $row->total_price;
+        }
 
-        $historyDates = collect(range(0, $historyDays - 1))
+        // Toko/produk yang baru berjualan: mulai dari hari penjualan pertama,
+        // supaya hari-hari sebelum buka tidak dihitung sebagai "hari sepi".
+        if ($dailyRows !== []) {
+            $firstSale = Carbon::parse(min(array_keys($dailyRows)), $today->getTimezone())->startOfDay();
+            if ($firstSale->gt($historyFrom)) {
+                $historyFrom = $firstSale;
+            }
+        }
+
+        $effectiveDays = (int) $historyFrom->diffInDays($historyTo) + 1;
+
+        $historyDates = collect(range(0, max(0, $effectiveDays - 1)))
             ->map(fn (int $offset) => $historyFrom->copy()->addDays($offset))
             ->values();
 
-        $qtySeries = $historyDates->map(fn (Carbon $date) => (float) ($dailyRows[$date->format('Y-m-d')]->qty ?? 0))->all();
-        $revenueSeries = $historyDates->map(fn (Carbon $date) => (float) ($dailyRows[$date->format('Y-m-d')]->revenue ?? 0))->all();
+        $qtySeries = $historyDates->map(fn (Carbon $date) => (float) ($dailyRows[$date->format('Y-m-d')]['qty'] ?? 0))->all();
+        $revenueSeries = $historyDates->map(fn (Carbon $date) => (float) ($dailyRows[$date->format('Y-m-d')]['revenue'] ?? 0))->all();
 
         $totalQty = array_sum($qtySeries);
         $daysWithSales = count(array_filter($qtySeries, fn (float $qty) => $qty > 0));
-        $confidence = $this->confidence($historyDays, $daysWithSales);
+        $confidence = $this->confidence($effectiveDays, $daysWithSales);
 
         $baseQty = $this->recentWeightedAverage($qtySeries);
         $baseRevenue = $this->recentWeightedAverage($revenueSeries);
@@ -97,7 +115,7 @@ class SalesForecastTool extends AiTool
         $revenueFactors = $this->weekdayFactors($historyDates, $revenueSeries);
 
         $forecastDates = collect(range(1, $forecastDays))
-            ->map(fn (int $offset) => Carbon::today()->addDays($offset))
+            ->map(fn (int $offset) => $today->copy()->addDays($offset))
             ->values();
 
         $items = $forecastDates->map(function (Carbon $date) use ($baseQty, $baseRevenue, $qtyFactors, $revenueFactors) {
@@ -126,7 +144,8 @@ class SalesForecastTool extends AiTool
             'scope' => $scope['all_branches'] ? AiStoreScope::ALL : AiStoreScope::CURRENT,
             'product_name' => $args['product_name'] ?? null,
             'history_total_qty' => $totalQty,
-            'avg_sales_per_day' => round($totalQty / $historyDays, 2),
+            'avg_sales_per_day' => round($totalQty / max(1, $effectiveDays), 2),
+            'history_days_used' => $effectiveDays,
             'confidence' => $confidence,
             'method' => 'rata-rata berbobot 14 hari terakhir + faktor hari dalam seminggu',
             'items' => $items,
@@ -155,7 +174,8 @@ class SalesForecastTool extends AiTool
             $message .= " Nilai historis per unit ± {$this->formatCurrency((float) $avgRevenuePerUnit)}.";
         }
 
-        $message .= " Keyakinan prediksi: {$confidence} (basis {$historyDays} hari, {$daysWithSales} hari ada penjualan).";
+        $message .= " Keyakinan prediksi: {$confidence} (basis {$effectiveDays} hari histori sampai kemarin, {$daysWithSales} hari ada penjualan)."
+            .($confidence === 'rendah' ? ' Histori masih pendek/jarang — anggap angka ini perkiraan kasar, bukan target.' : '').'';
 
         if ($scope['all_branches']) {
             $message = '**Semua cabang** ('.count($scope['store_ids'])." outlet):\n\n".$message;

@@ -22,6 +22,8 @@ function createProactiveAlertStore(): Store
 {
     return Store::query()->create([
         'name' => 'Toko Peringatan',
+        // Zona UTC agar "kemarin" pada tes sama dengan kemarin menurut jam server tes.
+        'timezone' => 'UTC',
         'slug' => 'toko-peringatan-'.uniqid(),
         'is_active' => true,
     ]);
@@ -280,4 +282,31 @@ it('menolak menandai peringatan milik user lain', function () {
         ->assertForbidden();
 
     expect($alert->fresh()->is_read)->toBeFalse();
+});
+
+it('tidak membuat peringatan stok untuk produk "sisa 0 (min 0)" yang tidak bergerak', function () {
+    $store = createProactiveAlertStore();
+    User::factory()->create(['store_id' => $store->id, 'role' => 'admin']);
+    createProactiveAlertProduct($store, ['name' => 'Menu Musiman', 'stock_quantity' => 0, 'min_stock_level' => 0]);
+
+    $this->artisan('ai:proactive-alerts')->assertExitCode(0);
+
+    expect(AiAlert::query()->where('type', 'low_stock')->count())->toBe(0);
+});
+
+it('tidak memberi peringatan margin turun bila harga modal belum tercatat', function () {
+    $store = createProactiveAlertStore();
+    $user = User::factory()->create(['store_id' => $store->id, 'role' => 'admin']);
+    $product = createProactiveAlertProduct($store, ['stock_quantity' => 50, 'min_stock_level' => 5]);
+
+    // Periode sebelumnya punya harga modal (margin 60%); periode terkini tidak punya sama sekali.
+    recordMarginSale($store, $user, $product, 100000, 40000, now()->subDays(10));
+    recordMarginSale($store, $user, $product, 100000, 0, now()->subDays(2));
+    TransactionItem::query()->where('unit_cost_snapshot', 0)->update([
+        'unit_cost_snapshot' => null, 'total_cost_snapshot' => null, 'gross_profit_snapshot' => null,
+    ]);
+
+    $this->artisan('ai:proactive-alerts')->assertExitCode(0);
+
+    expect(AiAlert::query()->where('type', 'margin_drop')->count())->toBe(0);
 });

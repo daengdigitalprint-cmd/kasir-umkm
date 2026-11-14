@@ -4,18 +4,21 @@ declare(strict_types=1);
 
 namespace App\Tools\Reports;
 
-use App\Models\TransactionItem;
 use App\Models\User;
+use App\Services\AI\AiMetrics;
+use App\Services\AI\AiPeriod;
 use App\Services\AI\AiStoreScope;
 use App\Tools\AiTool;
 use App\Tools\ToolResult;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 /**
- * Analisa gabungan: produk bocor (terlaris tapi margin tipis / sering diskon),
+ * Analisa gabungan: produk bocor (margin tipis / sering diskon),
  * rekomendasi bundling/cross-sell (produk A sering bareng B), dan
  * produk slow-moving dengan margin tinggi (target promosi).
+ *
+ * Margin hanya dinilai untuk produk yang harga modalnya tercatat. Produk
+ * tanpa harga modal dilaporkan terpisah — tidak dianggap bermargin 0% atau 100%.
  */
 class ProductProfitInsightTool extends AiTool
 {
@@ -26,7 +29,7 @@ class ProductProfitInsightTool extends AiTool
 
     public function getDescription(): string
     {
-        return 'Analisa mendalam profit per produk: mendeteksi "produk bocor" (terlaris tapi margin tipis atau sering diskon), menemukan pasangan produk yang sering dibeli bersama untuk bundling/cross-sell, dan mengidentifikasi produk slow-moving dengan margin tinggi yang cocok untuk dipromosikan. Gunakan saat user bertanya "produk mana yang boros", "produk apa yang bisa di-bundle", "cross-sell", "margin tipis", "produk bocor", atau "insight laba per produk".';
+        return 'Analisa mendalam profit per produk: mendeteksi "produk bocor" (margin tipis, dijual di bawah modal, atau sering diskon) lengkap dengan potensi tambahan laba, menemukan pasangan produk yang sering dibeli bersama untuk bundling/cross-sell, dan mengidentifikasi produk slow-moving dengan margin tinggi yang cocok untuk dipromosikan. Gunakan saat user bertanya "produk mana yang boros", "produk apa yang bisa di-bundle", "cross-sell", "margin tipis", "produk bocor", atau "insight laba per produk".';
     }
 
     public function getParameters(): array
@@ -34,8 +37,8 @@ class ProductProfitInsightTool extends AiTool
         return [
             'period' => [
                 'type' => 'string',
-                'description' => 'Periode analisis: "this_week", "this_month", "last_month", "this_year" (default: this_month)',
-                'enum' => ['this_week', 'this_month', 'last_month', 'this_year'],
+                'description' => 'Periode analisis (default: last_30_days)',
+                'enum' => AiPeriod::PERIODS,
             ],
             'margin_threshold_pct' => [
                 'type' => 'number',
@@ -65,36 +68,15 @@ class ProductProfitInsightTool extends AiTool
         $storeIds = $scope['store_ids'];
         $allBranches = $scope['all_branches'];
 
-        $period = $args['period'] ?? 'this_month';
         $limit = max(1, min(50, (int) ($args['limit'] ?? 10)));
         $marginThreshold = max(0, min(100, (float) ($args['margin_threshold_pct'] ?? 15)));
 
-        $range = $this->getPeriodRange($period);
-        $from = $range['from'];
-        $to = $range['to'];
+        $range = AiPeriod::resolve(['period' => $args['period'] ?? 'last_30_days'], $store, 'last_30_days');
+        $period = ['label' => $range['label'], 'from' => $range['display_from'], 'to' => $range['display_to']];
 
-        // Ambil semua item transaksi completed dalam periode.
-        $items = TransactionItem::query()
-            ->join('transactions', 'transactions.id', '=', 'transaction_items.transaction_id')
-            ->whereIn('transactions.store_id', $storeIds)
-            ->where('transactions.status', 'completed')
-            ->whereBetween('transactions.created_at', [$from, $to])
-            ->whereNotNull('transaction_items.product_id')
-            ->select([
-                'transaction_items.transaction_id',
-                'transaction_items.product_id',
-                'transaction_items.product_name',
-                'transaction_items.quantity',
-                'transaction_items.unit_price',
-                'transaction_items.total_price',
-                'transaction_items.discount_amount',
-                'transaction_items.unit_cost_snapshot',
-                'transaction_items.total_cost_snapshot',
-                'transaction_items.gross_profit_snapshot',
-            ])
-            ->get();
+        $products = AiMetrics::byProduct($storeIds, $range['from'], $range['to']);
 
-        if ($items->isEmpty()) {
+        if ($products->isEmpty()) {
             return ToolResult::success(
                 data: [
                     'leaking_products' => [],
@@ -102,18 +84,18 @@ class ProductProfitInsightTool extends AiTool
                     'slow_movers_high_margin' => [],
                     'summary' => [
                         'total_products_analyzed' => 0,
-                        'period' => ['from' => $from->format('d/m/Y'), 'to' => $to->format('d/m/Y')],
+                        'period' => $period,
                     ],
                 ],
-                message: 'Belum ada data transaksi di periode ini — tidak bisa melakukan analisa.'
+                message: "Belum ada data transaksi di periode {$period['from']} - {$period['to']} — tidak bisa melakukan analisa."
             );
         }
 
-        $leaking = $this->detectLeakingProducts($items, $marginThreshold, $limit);
-        $bundling = $this->analyzeBundling($items, $limit);
-        $slowMovers = $this->detectSlowMoversHighMargin($items, $storeIds, $from, $to, $limit);
+        $withoutCost = $products->filter(fn (array $row) => ! $row['has_cost'] && $row['revenue'] > 0)->sortByDesc('revenue')->values();
 
-        $totalProductsAnalyzed = $items->pluck('product_id')->unique()->count();
+        $leaking = $this->detectLeakingProducts($products, $marginThreshold, $limit);
+        $bundling = $this->analyzeBundling($storeIds, $range, $limit);
+        $slowMovers = $this->detectSlowMoversHighMargin($products, $limit);
 
         $data = [
             'scope' => $allBranches ? AiStoreScope::ALL : AiStoreScope::CURRENT,
@@ -121,13 +103,19 @@ class ProductProfitInsightTool extends AiTool
             'leaking_products' => $leaking,
             'bundling_suggestions' => $bundling,
             'slow_movers_high_margin' => $slowMovers,
+            'products_without_cost' => $withoutCost->take(5)->map(fn (array $row) => [
+                'product_name' => $row['product_name'],
+                'revenue' => $row['revenue'],
+            ])->toArray(),
             'summary' => [
-                'total_products_analyzed' => $totalProductsAnalyzed,
+                'total_products_analyzed' => $products->count(),
+                'products_with_cost' => $products->count() - $withoutCost->count(),
+                'products_without_cost' => $withoutCost->count(),
                 'leaking_count' => count($leaking),
                 'bundling_pairs_count' => count($bundling),
                 'slow_movers_count' => count($slowMovers),
                 'margin_threshold_pct' => $marginThreshold,
-                'period' => ['from' => $from->format('d/m/Y'), 'to' => $to->format('d/m/Y')],
+                'period' => $period,
             ],
         ];
 
@@ -138,32 +126,28 @@ class ProductProfitInsightTool extends AiTool
     }
 
     /**
-     * Deteksi produk bocor: terlaris tapi margin tipis atau sering didiskon.
+     * Produk bocor: margin di bawah ambang (hanya bila harga modal tercatat)
+     * atau porsi diskon tinggi. Diurutkan dari potensi tambahan laba terbesar.
      *
-     * @param  Collection<int, TransactionItem>  $items
+     * @param  Collection<int, array<string, mixed>>  $products
      * @return array<int, array<string, mixed>>
      */
-    private function detectLeakingProducts(Collection $items, float $marginThreshold, int $limit): array
+    private function detectLeakingProducts(Collection $products, float $marginThreshold, int $limit): array
     {
-        $byProduct = $items->groupBy('product_id');
-
         $candidates = [];
 
-        foreach ($byProduct as $productId => $group) {
-            $totalRevenue = (float) $group->sum('total_price');
-            $totalProfit = (float) $group->sum('gross_profit_snapshot');
-            $totalDiscount = (float) $group->sum('discount_amount');
-            $totalQty = (float) $group->sum('quantity');
+        foreach ($products as $row) {
+            $revenue = (float) $row['revenue'];
 
-            if ($totalRevenue <= 0) {
+            if ($revenue <= 0) {
                 continue;
             }
 
-            $marginPct = round($totalProfit / $totalRevenue * 100, 1);
-            $discountRatio = round($totalDiscount / ($totalRevenue + $totalDiscount) * 100, 1);
+            $discount = (float) $row['discount'];
+            $discountRatio = round($discount / ($revenue + $discount) * 100, 1);
+            $marginPct = $row['margin_pct'];
 
-            // Produk "bocor": terlaris dengan margin rendah ATAU diskon tinggi.
-            $isLowMargin = $marginPct < $marginThreshold;
+            $isLowMargin = $row['has_cost'] && $marginPct < $marginThreshold;
             $isHighDiscount = $discountRatio > 20;
 
             if (! $isLowMargin && ! $isHighDiscount) {
@@ -171,31 +155,37 @@ class ProductProfitInsightTool extends AiTool
             }
 
             $reasons = [];
+            $potentialGain = 0.0;
 
             if ($isLowMargin) {
-                $reasons[] = "margin hanya {$marginPct}%";
+                $reasons[] = $marginPct < 0
+                    ? 'dijual DI BAWAH harga modal (margin '.AiMetrics::number($marginPct).'%)'
+                    : 'margin hanya '.AiMetrics::number($marginPct).'%';
+                // Tambahan laba bila margin dinaikkan ke ambang, pada volume yang sama.
+                $potentialGain = round($revenue * ($marginThreshold - $marginPct) / 100);
             }
 
             if ($isHighDiscount) {
-                $reasons[] = "diskon rata-rata {$discountRatio}% dari harga jual";
+                $reasons[] = 'diskon rata-rata '.AiMetrics::number($discountRatio).'% dari harga jual';
             }
 
             $candidates[] = [
-                'product_id' => $productId,
-                'product_name' => $group->first()->product_name ?? 'Unknown',
-                'total_revenue' => round($totalRevenue),
-                'total_profit' => round($totalProfit),
+                'product_id' => $row['product_id'],
+                'product_name' => $row['product_name'],
+                'total_revenue' => round($revenue),
+                'total_profit' => $row['gross_profit'],
                 'margin_pct' => $marginPct,
-                'total_discount' => round($totalDiscount),
+                'total_discount' => round($discount),
                 'discount_ratio_pct' => $discountRatio,
-                'quantity_sold' => round($totalQty, 2),
+                'quantity_sold' => $row['quantity'],
+                'potential_gain_at_threshold' => $potentialGain,
                 'reasons' => $reasons,
             ];
         }
 
-        // Urutkan: margin paling rendah dulu, lalu discount_ratio tertinggi.
+        // Margin terendah dulu; tanpa data margin (hanya diskon tinggi) di belakang.
         usort($candidates, function (array $a, array $b) {
-            $marginCmp = $a['margin_pct'] <=> $b['margin_pct'];
+            $marginCmp = ($a['margin_pct'] ?? PHP_FLOAT_MAX) <=> ($b['margin_pct'] ?? PHP_FLOAT_MAX);
 
             return $marginCmp !== 0 ? $marginCmp : $b['discount_ratio_pct'] <=> $a['discount_ratio_pct'];
         });
@@ -204,38 +194,42 @@ class ProductProfitInsightTool extends AiTool
     }
 
     /**
-     * Market basket analysis: cari pasangan produk yang sering dibeli bersama.
+     * Market basket analysis: pasangan produk yang sering dibeli bersama.
      *
-     * @param  Collection<int, TransactionItem>  $items
+     * @param  array<int, int>  $storeIds
+     * @param  array<string, mixed>  $range
      * @return array<int, array<string, mixed>>
      */
-    private function analyzeBundling(Collection $items, int $limit): array
+    private function analyzeBundling(array $storeIds, array $range, int $limit): array
     {
-        // Kelompokkan item per transaksi.
-        $byTransaction = $items->groupBy('transaction_id');
+        $items = AiMetrics::itemsQuery($storeIds, $range['from'], $range['to'])
+            ->whereNotNull('transaction_items.product_id')
+            ->get(['transaction_items.transaction_id', 'transaction_items.product_id', 'transaction_items.product_name']);
 
-        // Hanya ambil transaksi dengan >1 produk unik (cross-sell = beli bareng).
-        $multiProductTransactions = $byTransaction->filter(function ($group) {
-            return $group->pluck('product_id')->unique()->count() > 1;
-        });
+        $multiProductTransactions = $items->groupBy('transaction_id')
+            ->filter(fn ($group) => $group->pluck('product_id')->unique()->count() > 1);
 
         if ($multiProductTransactions->isEmpty()) {
             return [];
         }
 
-        // Hitung frekuensi co-occurrence per pasangan produk.
         $pairCounts = [];
         $productNameMap = [];
+        $productTransactionCounts = [];
+
+        foreach ($items->groupBy('transaction_id') as $group) {
+            foreach ($group->pluck('product_id')->unique() as $productId) {
+                $productTransactionCounts[$productId] = ($productTransactionCounts[$productId] ?? 0) + 1;
+            }
+        }
 
         foreach ($multiProductTransactions as $group) {
             $productIds = $group->pluck('product_id')->unique()->sort()->values()->toArray();
 
-            // Simpan nama produk.
             foreach ($group as $item) {
-                $productNameMap[$item->product_id] = $item->product_name ?? 'Unknown';
+                $productNameMap[$item->product_id] = $item->product_name ?? 'Tanpa nama';
             }
 
-            // Buat semua pasangan unik (combinations of 2).
             $count = count($productIds);
 
             for ($i = 0; $i < $count; $i++) {
@@ -246,33 +240,37 @@ class ProductProfitInsightTool extends AiTool
             }
         }
 
-        if (empty($pairCounts)) {
+        if ($pairCounts === []) {
             return [];
         }
 
-        // Urutkan berdasarkan frekuensi, ambil top N.
         arsort($pairCounts);
 
         $totalMultiProductTx = $multiProductTransactions->count();
         $pairs = [];
 
-        foreach (array_slice($pairCounts, 0, $limit * 3) as $key => $count) {
-            [$idA, $idB] = explode('-', $key);
-            $nameA = $productNameMap[$idA] ?? 'Unknown';
-            $nameB = $productNameMap[$idB] ?? 'Unknown';
+        foreach (array_slice($pairCounts, 0, $limit * 3, true) as $key => $count) {
+            [$idA, $idB] = explode('-', (string) $key);
+            $nameA = $productNameMap[$idA] ?? 'Tanpa nama';
+            $nameB = $productNameMap[$idB] ?? 'Tanpa nama';
             $confidence = round($count / $totalMultiProductTx * 100, 1);
 
-            // Filter: minimal co-occurrence 2x dan confidence >= 5%.
+            // Minimal 2x muncul bersama dan ≥5% dari transaksi multi-produk.
             if ($count < 2 || $confidence < 5) {
                 continue;
             }
+
+            $shareOfA = round($count / max(1, $productTransactionCounts[$idA] ?? 1) * 100);
+            $shareOfB = round($count / max(1, $productTransactionCounts[$idB] ?? 1) * 100);
 
             $pairs[] = [
                 'product_a' => ['id' => (int) $idA, 'name' => $nameA],
                 'product_b' => ['id' => (int) $idB, 'name' => $nameB],
                 'co_occurrence' => $count,
                 'confidence_pct' => $confidence,
-                'suggestion' => "Beli **{$nameA}** + **{$nameB}** sering bareng ({$count}x transaksi) — cocok untuk bundling.",
+                'buyers_of_a_also_buy_b_pct' => $shareOfA,
+                'buyers_of_b_also_buy_a_pct' => $shareOfB,
+                'suggestion' => "**{$nameA}** + **{$nameB}** dibeli bareng {$count}x ({$shareOfA}% pembeli {$nameA} juga membeli {$nameB}) — cocok untuk paket/bundling.",
             ];
 
             if (count($pairs) >= $limit) {
@@ -284,70 +282,42 @@ class ProductProfitInsightTool extends AiTool
     }
 
     /**
-     * Deteksi produk slow-moving tapi margin tinggi (target promosi / bundling).
+     * Produk jarang terjual tetapi margin tinggi (target promosi / bundling).
      *
-     * @param  Collection<int, TransactionItem>  $items
-     * @param  array<int, int>  $storeIds
+     * @param  Collection<int, array<string, mixed>>  $products
      * @return array<int, array<string, mixed>>
      */
-    private function detectSlowMoversHighMargin(Collection $items, array $storeIds, Carbon $from, Carbon $to, int $limit): array
+    private function detectSlowMoversHighMargin(Collection $products, int $limit): array
     {
-        $byProduct = $items->groupBy('product_id');
-
-        // Hitung median qty sold untuk threshold "slow-moving".
-        $allQtySold = $byProduct->map(fn ($g) => (float) $g->sum('quantity'))->sort()->values();
-        $medianQty = $allQtySold->count() > 0
+        $allQtySold = $products->pluck('quantity')->map(fn ($qty) => (float) $qty)->sort()->values();
+        $percentile25 = $allQtySold->count() > 0
             ? $allQtySold[(int) floor($allQtySold->count() * 0.25)]
             : 0;
 
-        // Threshold: 25th percentile atau minimal 2 unit.
-        $slowThreshold = max(2, $medianQty);
+        // Ambang "jarang terjual": persentil ke-25 atau minimal 2 unit.
+        $slowThreshold = max(2, $percentile25);
 
         $candidates = [];
 
-        foreach ($byProduct as $productId => $group) {
-            $totalRevenue = (float) $group->sum('total_price');
-            $totalProfit = (float) $group->sum('gross_profit_snapshot');
-            $totalQty = (float) $group->sum('quantity');
-
-            if ($totalRevenue <= 0 || $totalQty > $slowThreshold) {
-                continue;
-            }
-
-            $marginPct = round($totalProfit / $totalRevenue * 100, 1);
-
-            // Hanya yang margin-nya di atas 40% (tergolong tinggi).
-            if ($marginPct <= 40) {
+        foreach ($products as $row) {
+            if (! $row['has_cost'] || $row['revenue'] <= 0 || $row['quantity'] > $slowThreshold || $row['margin_pct'] <= 40) {
                 continue;
             }
 
             $candidates[] = [
-                'product_id' => $productId,
-                'product_name' => $group->first()->product_name ?? 'Unknown',
-                'total_revenue' => round($totalRevenue),
-                'total_profit' => round($totalProfit),
-                'margin_pct' => $marginPct,
-                'quantity_sold' => round($totalQty, 2),
-                'suggestion' => "Produk ini jarang terjual ({$totalQty} unit) tapi margin tinggi ({$marginPct}%) — cocok untuk dipromosikan atau di-bundle dengan produk laris.",
+                'product_id' => $row['product_id'],
+                'product_name' => $row['product_name'],
+                'total_revenue' => $row['revenue'],
+                'total_profit' => $row['gross_profit'],
+                'margin_pct' => $row['margin_pct'],
+                'quantity_sold' => $row['quantity'],
+                'suggestion' => 'Produk ini jarang terjual ('.AiMetrics::number($row['quantity'], 2).' unit) tapi margin tinggi ('.AiMetrics::number($row['margin_pct']).'%) — cocok untuk dipromosikan atau di-bundle dengan produk laris.',
             ];
         }
 
-        // Urutkan: margin tertinggi dulu.
         usort($candidates, fn (array $a, array $b) => $b['margin_pct'] <=> $a['margin_pct']);
 
         return array_slice($candidates, 0, $limit);
-    }
-
-    private function getPeriodRange(string $period): array
-    {
-        $now = Carbon::now();
-
-        return match ($period) {
-            'this_week' => ['from' => $now->copy()->startOfWeek(), 'to' => $now->copy()->endOfWeek()],
-            'last_month' => ['from' => $now->copy()->subMonth()->startOfMonth(), 'to' => $now->copy()->subMonth()->endOfMonth()],
-            'this_year' => ['from' => $now->copy()->startOfYear(), 'to' => $now->copy()->endOfYear()],
-            default => ['from' => $now->copy()->startOfMonth(), 'to' => $now->copy()->endOfMonth()],
-        };
     }
 
     /**
@@ -358,25 +328,28 @@ class ProductProfitInsightTool extends AiTool
         $summary = $data['summary'];
         $lines = [
             'Insight profit per produk **'.$summary['period']['from'].' - '.$summary['period']['to'].'**: '
-            ."{$summary['total_products_analyzed']} produk dianalisis (margin threshold {$summary['margin_threshold_pct']}%).",
+            ."{$summary['total_products_analyzed']} produk dianalisis (margin threshold ".AiMetrics::number($summary['margin_threshold_pct']).'%).',
         ];
 
-        // Produk bocor.
         $leaking = $data['leaking_products'];
 
         if ($leaking !== []) {
             $lines[] = '';
-            $lines[] = '**Produk Bocor** (terlaris tapi margin tipis / sering diskon):';
+            $lines[] = '**Produk Bocor** (margin tipis / sering diskon):';
 
             foreach (array_slice($leaking, 0, 5) as $item) {
-                $reasons = implode(', ', $item['reasons']);
-                $lines[] = '- **'.$item['product_name'].'** — margin '.$item['margin_pct']
-                    .'%, diskon '.$item['discount_ratio_pct']
-                    .'% — '.$reasons;
+                $line = '- **'.$item['product_name'].'** — '.implode(', ', $item['reasons'])
+                    .'; omzet '.AiMetrics::rupiah($item['total_revenue']);
+
+                if ($item['potential_gain_at_threshold'] > 0) {
+                    $line .= '. Bila margin dinaikkan ke '.AiMetrics::number($summary['margin_threshold_pct']).'%: laba +'
+                        .AiMetrics::rupiah($item['potential_gain_at_threshold']).' pada volume yang sama';
+                }
+
+                $lines[] = $line;
             }
         }
 
-        // Bundling.
         $bundling = $data['bundling_suggestions'];
 
         if ($bundling !== []) {
@@ -385,11 +358,11 @@ class ProductProfitInsightTool extends AiTool
 
             foreach (array_slice($bundling, 0, 5) as $pair) {
                 $lines[] = '- '.$pair['product_a']['name'].' + '.$pair['product_b']['name']
-                    .' — '.$pair['co_occurrence'].'x dibeli bareng (confidence '.$pair['confidence_pct'].'%)';
+                    .' — '.$pair['co_occurrence'].'x dibeli bareng ('.$pair['buyers_of_a_also_buy_b_pct'].'% pembeli '
+                    .$pair['product_a']['name'].' juga membeli '.$pair['product_b']['name'].')';
             }
         }
 
-        // Slow movers.
         $slow = $data['slow_movers_high_margin'];
 
         if ($slow !== []) {
@@ -397,14 +370,23 @@ class ProductProfitInsightTool extends AiTool
             $lines[] = '**Produk Slow-Moving Margin Tinggi** (target promosi):';
 
             foreach (array_slice($slow, 0, 5) as $item) {
-                $lines[] = '- **'.$item['product_name'].'** — '.$item['quantity_sold']
-                    .' unit terjual, margin '.$item['margin_pct'].'%';
+                $lines[] = '- **'.$item['product_name'].'** — '.AiMetrics::number($item['quantity_sold'], 2)
+                    .' unit terjual, margin '.AiMetrics::number($item['margin_pct']).'%';
             }
+        }
+
+        if ($summary['products_without_cost'] > 0) {
+            $names = implode(', ', array_column($data['products_without_cost'], 'product_name'));
+            $lines[] = '';
+            $lines[] = "Catatan: **{$summary['products_without_cost']} dari {$summary['total_products_analyzed']} produk** belum punya harga modal, jadi marginnya tidak dinilai"
+                .($names !== '' ? " (omzet terbesar: {$names})" : '').'. Isi harga modalnya agar analisa laba lengkap.';
         }
 
         if ($leaking === [] && $bundling === [] && $slow === []) {
             $lines[] = '';
-            $lines[] = 'Tidak ada insight signifikan ditemukan — data penjualan masih terlalu sedikit atau semua produk sudah sehat.';
+            $lines[] = $summary['products_with_cost'] === 0
+                ? 'Belum ada kesimpulan margin yang bisa ditarik karena harga modal belum tercatat.'
+                : 'Tidak ada produk bocor, pasangan bundling, atau slow-mover margin tinggi yang memenuhi ambang pada periode ini.';
         }
 
         return implode("\n", $lines);

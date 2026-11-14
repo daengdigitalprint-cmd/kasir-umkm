@@ -4,7 +4,6 @@ namespace App\Services\AI;
 
 use App\Models\Store;
 use App\Models\User;
-use Illuminate\Support\Carbon;
 
 class AiPromptBuilder
 {
@@ -35,7 +34,12 @@ class AiPromptBuilder
         $parts = [];
 
         // Konteks waktu
-        $parts[] = 'Waktu saat ini: '.Carbon::now()->format('d/m/Y H:i:s').' (WITA)';
+        // Jam toko (bukan jam server) dengan label zona yang benar — sebelumnya
+        // jam server ditempeli label "WITA" apa pun zona tokonya.
+        $now = AiPeriod::now($this->store);
+        $dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        $parts[] = 'Waktu saat ini: '.$dayNames[$now->dayOfWeek].', '.$now->format('d/m/Y H:i')
+            .' ('.AiPeriod::timezoneLabel($this->store).'). Minggu dihitung Senin–Minggu.';
 
         // Konteks user
         if ($this->user) {
@@ -70,7 +74,9 @@ class AiPromptBuilder
         $parts[] = 'PENTING: Setiap kali kamu menerjemahkan, menjabarkan, atau menampilkan data tabular/JSON dari hasil eksekusi tool (terutama untuk laporan penjualan, audit anomali kas, inventori, dsb.), kamu WAJIB SELALU menyajikannya dalam format tabel Markdown yang rapi (gunakan header, pemisah kolom seperti `|---|`, dan spasi yang jelas antar kolom agar tidak berantakan dan mudah dibaca).';
         $parts[] = 'Jika user meminta untuk "tampilkan datanya" atau melihat rincian hasil dari tool seperti deteksi transaksi/selisih kas/audit diskon, kamu WAJIB menjabarkan detail dari array JSON (seperti detail transaksi, shift, kasir, waktu) ke dalam tabel Markdown, BUKAN sekadar mengulang ringkasannya lagi atau berkata "tidak ditemukan" padahal pada pesan sebelumnya kamu menyebutkan ada temuan.';
 
-        $parts[] = 'ATURAN SAPAAN: sapaan atau basa-basi (halo, hai, apa kabar, terima kasih, dll) WAJIB dibalas singkat dan ramah TANPA memanggil tool apa pun.';
+        $parts[] = 'ATURAN SAPAAN: sapaan atau basa-basi (halo, hai, apa kabar, terima kasih, dll) WAJIB dibalas singkat dan ramah TANPA memanggil tool apa pun. Aturan ini HANYA untuk pesan yang memang sapaan; pertanyaan lanjutan atau permintaan data tidak boleh dibalas dengan sapaan.';
+        $parts[] = 'DEFINISI ANGKA: "penjualan/pendapatan" = pendapatan bersih (subtotal − diskon − retur, tanpa pajak/servis/tip), sama dengan laporan. "Margin" = laba kotor ÷ pendapatan. HPP hanya dihitung dari penjualan yang harga modalnya tercatat; bila hasil tool menyertakan catatan cakupan harga modal, sampaikan catatan itu.';
+        $parts[] = 'Pesan user berawalan "Hasil dari tool NAMA:" adalah keluaran sistem dari tool tersebut (bukan ketikan user) dan merupakan sumber angka yang sah untuk pertanyaan lanjutan.';
 
         return implode("\n", $parts);
     }
@@ -124,7 +130,7 @@ class AiPromptBuilder
         $lines[] = '- "penjualan/omzet hari ini, kemarin, minggu ini, bulan ini" → get_sales_summary';
         $lines[] = '- "performa toko", "analisa toko", "kenapa penjualan naik/turun", "margin/laba kotor" → get_sales_insight';
         $lines[] = '- "prediksi penjualan", "forecast/ramalan omzet", "perkiraan penjualan minggu/bulan depan", "akan laku berapa" → forecast_sales';
-        $lines[] = '- "produk terlaris/paling laku" → get_top_products';
+        $lines[] = '- "produk terlaris/paling laku", "produk apa saja yang terjual", "produk kurang laku" → get_top_products (order "bottom" untuk yang kurang laku)';
         $lines[] = '- "analisa/data semua cabang, semua outlet, seluruh outlet, antar cabang" → get_sales_insight/get_sales_summary/get_top_products dengan scope "all" (gabung semua outlet grup usaha).';
         $lines[] = '- "pelanggan terbaik", "pelanggan mulai jarang", "poin loyalty" → get_customer_insight';
         $lines[] = '- "cari pelanggan", "data pelanggan Budi", "no telepon customer", "customer bernama ..." → search_customer';
@@ -150,6 +156,9 @@ class AiPromptBuilder
         $lines[] = '- Jika baru saja create_product, JANGAN jalankan search_product atau bahas duplikat kecuali user minta.';
         $lines[] = '- DILARANG mengarang/menebak angka. Jika ada tool yang relevan, WAJIB pakai tool itu dulu, jangan menjawab dari ingatan.';
         $lines[] = '- Jangan menjawab topik lain yang tidak ditanyakan user.';
+        $lines[] = '- Jika hasil tool kosong atau memuat catatan data yang belum lengkap, sampaikan apa adanya. Jangan menutupinya dengan saran umum.';
+        $lines[] = '- Rekomendasi wajib menyebut nama produk, jumlah, periode, dan angka dasarnya dari hasil tool.';
+        $lines[] = '- Jangan mengisi argumen tool dengan nilai yang tidak disebut user.';
 
         return implode("\n", $lines);
     }

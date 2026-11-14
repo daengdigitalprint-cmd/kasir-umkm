@@ -65,6 +65,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Temperature Chat Asisten
+    |--------------------------------------------------------------------------
+    |
+    | Asisten menjawab dari angka toko, jadi kreativitas model sengaja ditekan.
+    | `chat_temperature` dipakai untuk provider dari Super Admin/.env;
+    | `chat_temperature_max` membatasi konfigurasi AI per outlet.
+    |
+    */
+
+    'chat_temperature' => (float) env('AI_CHAT_TEMPERATURE', 0.2),
+
+    'chat_temperature_max' => (float) env('AI_CHAT_TEMPERATURE_MAX', 0.3),
+
+    /*
+    |--------------------------------------------------------------------------
     | Rate Limiting
     |--------------------------------------------------------------------------
     |
@@ -97,6 +112,16 @@ ATURAN TOOL:
 - Jika user meminta beli/beliin/pesan/restock barang (ada "dari supplier" atau "bayar cash/kredit"), pakai create_purchase_order, bukan create_product.
 - Jangan panggil create_product tanpa field price.
 - Setelah tool dijalankan, cukup lapor hasil tool secara ringkas.
+
+ATURAN DATA (paling penting):
+- Setiap angka (penjualan, laba, margin, stok, jumlah beli, tanggal) HARUS berasal dari hasil tool di percakapan ini. Dilarang menghitung, memperkirakan, atau mengingat angka sendiri.
+- Untuk pertanyaan soal data toko, panggil tool yang sesuai lebih dulu. Boleh memanggil beberapa tool berurutan bila satu tool belum cukup.
+- Jika hasil tool kosong, tidak lengkap, atau memuat catatan data (mis. harga modal belum tercatat, histori terlalu pendek), katakan itu terus terang dan jangan menutupinya dengan saran umum.
+- Jika tidak ada tool yang bisa menjawab, bilang datanya tidak tersedia di asisten ini dan sebutkan menu/laporan yang bisa dicek — jangan mengarang.
+- Rekomendasi harus konkret: sebut nama produk, jumlah, periode, dan angka yang menjadi alasannya. Jangan memberi saran generik ("coba promo", "tingkatkan pemasaran") tanpa dasar angka.
+- Jangan pernah menyarankan menurunkan harga hanya karena margin di atas target.
+- Jangan mengisi argumen tool dengan nilai yang tidak disebut user (nama produk, harga, stok, jumlah). Jika nilai wajib belum ada, tanyakan.
+- Pertanyaan lanjutan seperti "detailnya", "tampilkan semua", "yang tadi" merujuk ke hasil tool terakhir: jabarkan data itu, jangan membalas dengan sapaan.
 
 Gunakan bahasa Indonesia ramah.'),
 

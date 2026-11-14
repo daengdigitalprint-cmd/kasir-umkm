@@ -21,7 +21,7 @@ function createRunwayStore(): Store
 
 function createRunwayProduct(Store $store, array $overrides = []): Product
 {
-    return Product::query()->create(array_merge([
+    $product = Product::query()->create(array_merge([
         'store_id' => $store->id,
         'name' => 'Produk Runway',
         'price' => 10000,
@@ -29,6 +29,11 @@ function createRunwayProduct(Store $store, array $overrides = []): Product
         'track_stock' => true,
         'is_active' => true,
     ], $overrides));
+
+    // Produk sudah lama ada: laju harian dibagi seluruh jendela analisis.
+    $product->forceFill(['created_at' => now()->subDays(120)])->save();
+
+    return $product;
 }
 
 function recordRunwaySale(Store $store, User $user, Product $product, int $quantity, int $daysAgo): void

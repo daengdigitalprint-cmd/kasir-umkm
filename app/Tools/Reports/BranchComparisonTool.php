@@ -6,10 +6,11 @@ use App\Models\Store;
 use App\Models\Transaction;
 use App\Models\TransactionItem;
 use App\Models\User;
+use App\Services\AI\AiMetrics;
+use App\Services\AI\AiPeriod;
 use App\Services\AI\AiStoreScope;
 use App\Tools\AiTool;
 use App\Tools\ToolResult;
-use Illuminate\Support\Carbon;
 
 class BranchComparisonTool extends AiTool
 {
@@ -69,7 +70,7 @@ class BranchComparisonTool extends AiTool
             ->get()
             ->keyBy('id');
 
-        $dateRange = $this->getDateRange($args);
+        $dateRange = AiPeriod::resolve($args, $store, 'this_month');
         $from = $dateRange['from'];
         $to = $dateRange['to'];
 
@@ -77,7 +78,7 @@ class BranchComparisonTool extends AiTool
             ->whereIn('store_id', $storeIds)
             ->where('status', 'completed')
             ->whereBetween('created_at', [$from, $to])
-            ->selectRaw('store_id, COALESCE(SUM(total_amount), 0) as revenue, COUNT(*) as transactions')
+            ->selectRaw('store_id, COALESCE(SUM(subtotal - discount_amount), 0) as revenue, COUNT(*) as transactions')
             ->groupBy('store_id')
             ->get()
             ->keyBy('store_id');
@@ -88,7 +89,7 @@ class BranchComparisonTool extends AiTool
             ->where('transactions.status', 'completed')
             ->whereBetween('transactions.created_at', [$from, $to])
             ->groupBy('transactions.store_id')
-            ->selectRaw('transactions.store_id as store_id, COALESCE(SUM(transaction_items.gross_profit_snapshot), 0) as gross_profit')
+            ->selectRaw('transactions.store_id as store_id, COALESCE(SUM(CASE WHEN '.AiMetrics::LINE_COST_SQL.' IS NOT NULL THEN transaction_items.total_price - '.AiMetrics::LINE_COST_SQL.' ELSE 0 END), 0) as gross_profit')
             ->get()
             ->keyBy('store_id');
 
@@ -117,8 +118,8 @@ class BranchComparisonTool extends AiTool
 
         $data = [
             'period' => [
-                'from' => $from->format('d/m/Y'),
-                'to' => $to->format('d/m/Y'),
+                'from' => $dateRange['display_from'],
+                'to' => $dateRange['display_to'],
             ],
             'branches' => $ranked,
             'total_revenue' => round($totalRevenue),
@@ -130,30 +131,6 @@ class BranchComparisonTool extends AiTool
             data: $data,
             message: $this->summaryMessage($data)
         );
-    }
-
-    protected function getDateRange(array $args): array
-    {
-        if (! empty($args['date_from']) && ! empty($args['date_to'])) {
-            return [
-                'from' => Carbon::parse($args['date_from'])->startOfDay(),
-                'to' => Carbon::parse($args['date_to'])->endOfDay(),
-            ];
-        }
-
-        $period = $args['period'] ?? 'this_month';
-        $now = Carbon::now();
-
-        return match ($period) {
-            'today' => ['from' => $now->copy()->startOfDay(), 'to' => $now->copy()->endOfDay()],
-            'yesterday' => ['from' => $now->copy()->subDay()->startOfDay(), 'to' => $now->copy()->subDay()->endOfDay()],
-            'this_week' => ['from' => $now->copy()->startOfWeek(), 'to' => $now->copy()->endOfWeek()],
-            'last_week' => ['from' => $now->copy()->subWeek()->startOfWeek(), 'to' => $now->copy()->subWeek()->endOfWeek()],
-            'this_month' => ['from' => $now->copy()->startOfMonth(), 'to' => $now->copy()->endOfMonth()],
-            'last_month' => ['from' => $now->copy()->subMonth()->startOfMonth(), 'to' => $now->copy()->subMonth()->endOfMonth()],
-            'this_year' => ['from' => $now->copy()->startOfYear(), 'to' => $now->copy()->endOfYear()],
-            default => ['from' => $now->copy()->startOfMonth(), 'to' => $now->copy()->endOfMonth()],
-        };
     }
 
     protected function summaryMessage(array $data): string

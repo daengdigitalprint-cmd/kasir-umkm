@@ -2,12 +2,12 @@
 
 namespace App\Tools\Reports;
 
-use App\Models\Transaction;
 use App\Models\User;
+use App\Services\AI\AiMetrics;
+use App\Services\AI\AiPeriod;
 use App\Services\AI\AiStoreScope;
 use App\Tools\AiTool;
 use App\Tools\ToolResult;
-use Illuminate\Support\Carbon;
 
 class TopProductsTool extends AiTool
 {
@@ -18,7 +18,7 @@ class TopProductsTool extends AiTool
 
     public function getDescription(): string
     {
-        return 'Mendapatkan daftar produk terlaris berdasarkan jumlah penjualan atau pendapatan. Gunakan tool ini saat user ingin melihat produk paling laku.';
+        return 'Daftar produk terjual pada suatu periode beserta jumlah, pendapatan, dan margin (bila harga modal tercatat). Urutkan menurut jumlah, pendapatan, atau laba; `order` "bottom" untuk produk paling tidak laku di antara yang terjual. Gunakan untuk "produk terlaris", "produk apa saja yang terjual", "produk paling menguntungkan".';
     }
 
     public function getParameters(): array
@@ -26,17 +26,30 @@ class TopProductsTool extends AiTool
         return [
             'period' => [
                 'type' => 'string',
-                'description' => 'Periode: "today", "this_week", "this_month", "last_month"',
-                'enum' => ['today', 'this_week', 'this_month', 'last_month'],
+                'description' => 'Periode (default: this_month). Periode berjalan dihitung sampai hari ini.',
+                'enum' => AiPeriod::PERIODS,
+            ],
+            'date_from' => [
+                'type' => 'string',
+                'description' => 'Tanggal mulai (Y-m-d), dipakai bersama date_to untuk rentang khusus',
+            ],
+            'date_to' => [
+                'type' => 'string',
+                'description' => 'Tanggal akhir (Y-m-d)',
             ],
             'sort_by' => [
                 'type' => 'string',
-                'description' => 'Urutkan berdasarkan: "quantity" (jumlah terjual) atau "revenue" (pendapatan)',
-                'enum' => ['quantity', 'revenue'],
+                'description' => 'Urutkan berdasarkan: "quantity" (jumlah terjual, default), "revenue" (pendapatan), atau "profit" (laba kotor)',
+                'enum' => ['quantity', 'revenue', 'profit'],
+            ],
+            'order' => [
+                'type' => 'string',
+                'description' => '"top" = tertinggi dulu (default), "bottom" = terendah dulu',
+                'enum' => ['top', 'bottom'],
             ],
             'limit' => [
                 'type' => 'integer',
-                'description' => 'Jumlah produk yang ditampilkan (default: 10)',
+                'description' => 'Jumlah produk yang ditampilkan (default: 10, maksimal 50)',
             ],
             'scope' => [
                 'type' => 'string',
@@ -53,93 +66,77 @@ class TopProductsTool extends AiTool
             return ToolResult::error('User tidak memiliki toko');
         }
 
-        $sortBy = $args['sort_by'] ?? 'quantity';
-        $limit = $args['limit'] ?? 10;
+        $sortBy = in_array($args['sort_by'] ?? null, ['quantity', 'revenue', 'profit'], true) ? $args['sort_by'] : 'quantity';
+        $bottom = ($args['order'] ?? 'top') === 'bottom';
+        $limit = max(1, min(50, (int) ($args['limit'] ?? 10)));
 
         $scope = AiStoreScope::resolve($user, $args['scope'] ?? AiStoreScope::CURRENT);
         $storeIds = $scope['store_ids'];
         $allBranches = $scope['all_branches'];
 
-        $dateRange = $this->getDateRange($args);
+        $range = AiPeriod::resolve($args, $store, 'this_month');
 
-        $query = Transaction::whereIn('store_id', $storeIds)
-            ->where('status', 'completed')
-            ->whereBetween('created_at', [$dateRange['from'], $dateRange['to']]);
+        $stats = AiMetrics::byProduct($storeIds, $range['from'], $range['to']);
 
-        $transactions = $query->get();
+        $sortKey = match ($sortBy) {
+            'revenue' => 'revenue',
+            'profit' => 'gross_profit',
+            default => 'quantity',
+        };
 
-        // Hitung produk terlaris
-        $productStats = $transactions->flatMap(fn ($t) => $t->items ?? [])
-            ->groupBy('product_id')
-            ->map(function ($group) {
-                $first = $group->first();
+        // Urutan laba hanya adil untuk produk yang harga modalnya tercatat.
+        $pool = $sortBy === 'profit' ? $stats->filter(fn (array $row) => $row['has_cost']) : $stats;
+        $sorted = $bottom ? $pool->sortBy($sortKey) : $pool->sortByDesc($sortKey);
 
-                return [
-                    'product_id' => $first->product_id,
-                    'product_name' => $first->product_name ?? 'Unknown',
-                    'quantity_sold' => $group->sum('quantity'),
-                    'revenue' => $group->sum('total_price'),
-                    'average_price' => $group->avg('unit_price'),
-                ];
-            });
+        $topProducts = $sorted->take($limit)->values()->map(function (array $row) {
+            $quantity = (float) $row['quantity'];
+            $averagePrice = $quantity > 0 ? $row['revenue'] / $quantity : 0;
 
-        // Sort
-        if ($sortBy === 'revenue') {
-            $productStats = $productStats->sortByDesc('revenue');
-        } else {
-            $productStats = $productStats->sortByDesc('quantity_sold');
-        }
+            return [
+                'product_id' => $row['product_id'],
+                'product_name' => $row['product_name'],
+                'quantity_sold' => $row['quantity'],
+                'revenue' => $row['revenue'],
+                'average_price' => round($averagePrice),
+                'gross_profit' => $row['gross_profit'],
+                'margin_pct' => $row['margin_pct'],
+                'revenue_formatted' => $this->formatCurrency($row['revenue']),
+                'average_price_formatted' => $this->formatCurrency($averagePrice),
+            ];
+        })->toArray();
 
-        $topProducts = $productStats->take($limit)->values()->toArray();
+        $sortLabel = match ($sortBy) {
+            'revenue' => 'pendapatan',
+            'profit' => 'laba kotor',
+            default => 'jumlah terjual',
+        };
 
-        // Format currency
-        foreach ($topProducts as &$product) {
-            $product['revenue_formatted'] = $this->formatCurrency($product['revenue']);
-            $product['average_price_formatted'] = $this->formatCurrency($product['average_price']);
-        }
+        $period = $range['display_from'] === $range['display_to']
+            ? $range['display_from']
+            : $range['display_from'].' - '.$range['display_to'];
 
-        $sortLabel = $sortBy === 'revenue' ? 'pendapatan' : 'jumlah terjual';
+        $message = count($topProducts) > 0
+            ? (($bottom ? 'Produk paling sedikit terjual' : 'Top '.count($topProducts).' produk terlaris')
+                ." {$period} (berdasarkan {$sortLabel})"
+                .($allBranches ? ' — semua cabang ('.count($storeIds).' outlet)' : '')
+                .($stats->count() > count($topProducts) ? ', dari '.$stats->count().' produk yang terjual' : ''))
+            : "Tidak ada data penjualan pada periode {$period}";
 
         return ToolResult::success(
             data: [
                 'scope' => $allBranches ? AiStoreScope::ALL : AiStoreScope::CURRENT,
                 'stores_analyzed' => count($storeIds),
                 'period' => [
-                    'from' => $dateRange['from']->format('d/m/Y'),
-                    'to' => $dateRange['to']->format('d/m/Y'),
+                    'label' => $range['label'],
+                    'from' => $range['display_from'],
+                    'to' => $range['display_to'],
                 ],
                 'sort_by' => $sortBy,
+                'order' => $bottom ? 'bottom' : 'top',
                 'products' => $topProducts,
-                'total_products_sold' => $productStats->count(),
+                'total_products_sold' => $stats->count(),
             ],
-            message: count($topProducts) > 0
-                ? ('Top '.count($topProducts)." produk terlaris (berdasarkan {$sortLabel})"
-                    .($allBranches ? ' — semua cabang ('.count($storeIds).' outlet)' : ''))
-                : 'Tidak ada data penjualan pada periode ini'
+            message: $message
         );
-    }
-
-    protected function getDateRange(array $args): array
-    {
-        $now = Carbon::now();
-
-        if (! empty($args['date_from']) && ! empty($args['date_to'])) {
-            return [
-                'from' => Carbon::parse($args['date_from'])->startOfDay(),
-                'to' => Carbon::parse($args['date_to'])->endOfDay(),
-            ];
-        }
-
-        $period = $args['period'] ?? 'this_month';
-
-        return match ($period) {
-            'today' => ['from' => $now->copy()->startOfDay(), 'to' => $now->copy()->endOfDay()],
-            'yesterday' => ['from' => $now->copy()->subDay()->startOfDay(), 'to' => $now->copy()->subDay()->endOfDay()],
-            'this_week' => ['from' => $now->copy()->startOfWeek(), 'to' => $now->copy()->endOfWeek()],
-            'last_week' => ['from' => $now->copy()->subWeek()->startOfWeek(), 'to' => $now->copy()->subWeek()->endOfWeek()],
-            'this_month' => ['from' => $now->copy()->startOfMonth(), 'to' => $now->copy()->endOfMonth()],
-            'last_month' => ['from' => $now->copy()->subMonth()->startOfMonth(), 'to' => $now->copy()->subMonth()->endOfMonth()],
-            default => ['from' => $now->copy()->startOfMonth(), 'to' => $now->copy()->endOfMonth()],
-        };
     }
 }

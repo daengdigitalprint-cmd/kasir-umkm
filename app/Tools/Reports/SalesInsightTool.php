@@ -2,12 +2,13 @@
 
 namespace App\Tools\Reports;
 
-use App\Models\Transaction;
+use App\Models\Product;
 use App\Models\User;
+use App\Services\AI\AiMetrics;
+use App\Services\AI\AiPeriod;
 use App\Services\AI\AiStoreScope;
 use App\Tools\AiTool;
 use App\Tools\ToolResult;
-use Illuminate\Support\Carbon;
 
 class SalesInsightTool extends AiTool
 {
@@ -18,7 +19,7 @@ class SalesInsightTool extends AiTool
 
     public function getDescription(): string
     {
-        return 'Menganalisis performa penjualan: membandingkan periode berjalan dengan periode sebelumnya (naik/turun berapa persen), produk mana yang paling mendorong perubahan, dan margin kotor per produk. Gunakan saat user bertanya "kenapa penjualan naik/turun", "analisa toko saya", "performa toko bagaimana", atau analisis bisnis lainnya.';
+        return 'Menganalisis performa penjualan: membandingkan periode dengan periode sebelumnya yang SETARA (mis. 1–14 bulan ini vs 1–14 bulan lalu), produk mana yang paling mendorong perubahan (beserta sisa stoknya), jumlah transaksi vs nilai per transaksi, dan margin kotor. Gunakan saat user bertanya "kenapa penjualan naik/turun", "analisa toko saya", "performa toko bagaimana", atau analisis bisnis lainnya.';
     }
 
     public function getParameters(): array
@@ -26,8 +27,8 @@ class SalesInsightTool extends AiTool
         return [
             'period' => [
                 'type' => 'string',
-                'description' => 'Periode analisis: "today", "this_week", "this_month", "this_year" (default: this_week)',
-                'enum' => ['today', 'this_week', 'this_month', 'this_year'],
+                'description' => 'Periode analisis (default: this_week). Periode berjalan dihitung sampai hari ini dan dibandingkan dengan rentang yang sama panjang sebelumnya.',
+                'enum' => AiPeriod::PERIODS,
             ],
             'scope' => [
                 'type' => 'string',
@@ -48,14 +49,18 @@ class SalesInsightTool extends AiTool
         $storeIds = $scope['store_ids'];
         $allBranches = $scope['all_branches'];
 
-        $range = $this->getCurrentRange($args['period'] ?? 'this_week');
-        $previousRange = $this->getPreviousRange($range['from'], $range['to']);
+        $range = AiPeriod::resolve(['period' => $args['period'] ?? 'this_week'], $store, 'this_week');
+        $previousRange = AiPeriod::previous($range);
 
-        $current = $this->summarize($storeIds, $range['from'], $range['to']);
-        $previous = $this->summarize($storeIds, $previousRange['from'], $previousRange['to']);
+        $currentSummary = AiMetrics::summary($storeIds, $range['from'], $range['to']);
+        $previousSummary = AiMetrics::summary($storeIds, $previousRange['from'], $previousRange['to']);
 
-        $revenueChangePct = $this->percentChange($previous['revenue'], $current['revenue']);
-        $transactionsChangePct = $this->percentChange($previous['transactions'], $current['transactions']);
+        $currentProducts = AiMetrics::byProduct($storeIds, $range['from'], $range['to']);
+        $previousProducts = AiMetrics::byProduct($storeIds, $previousRange['from'], $previousRange['to']);
+
+        $revenueChangePct = $this->percentChange($previousSummary['revenue'], $currentSummary['revenue']);
+        $transactionsChangePct = $this->percentChange($previousSummary['transactions'], $currentSummary['transactions']);
+        $averageChangePct = $this->percentChange($previousSummary['average_transaction'], $currentSummary['average_transaction']);
 
         $direction = 'stabil';
         if ($revenueChangePct !== null && $revenueChangePct >= 5) {
@@ -64,121 +69,104 @@ class SalesInsightTool extends AiTool
             $direction = 'turun';
         }
 
-        $trends = $this->productTrends($storeIds, $range, $previousRange);
-        $recommendations = $this->recommendations($direction, $current, $trends);
+        $trends = $this->productTrends($currentProducts, $previousProducts, $storeIds, $allBranches, $range['days']);
 
-        // Ringkasan dihitung dari data lengkap (termasuk margin) sebelum
-        // margin dihapus dari `current`, agar angka margin tidak hilang.
-        $message = $this->summaryMessage($direction, $revenueChangePct, $current, $previous, $trends, $recommendations);
+        $margin = [
+            'total_gross_profit' => $currentSummary['gross_profit'],
+            'gross_margin_pct' => $currentSummary['gross_margin_pct'] ?? 0,
+            'cost_coverage_pct' => $currentSummary['cost_coverage_pct'],
+            'covered_margin_pct' => $currentSummary['covered_margin_pct'],
+            'reliable' => $currentSummary['margin_reliable'],
+            'top_products' => $currentProducts
+                ->filter(fn (array $row) => $row['has_cost'])
+                ->sortByDesc('gross_profit')
+                ->take(5)
+                ->map(fn (array $row) => [
+                    'product_name' => $row['product_name'],
+                    'revenue' => $row['revenue'],
+                    'gross_profit' => $row['gross_profit'],
+                    'margin_pct' => $row['margin_pct'],
+                ])
+                ->values()
+                ->toArray(),
+        ];
+
+        $current = $this->publicSummary($currentSummary);
+        $previous = $this->publicSummary($previousSummary);
+
+        $recommendations = $this->recommendations($direction, $currentSummary, $previousSummary, $trends, $transactionsChangePct, $averageChangePct);
+        $coverageNote = AiMetrics::coverageNote($currentSummary);
+
+        $message = $this->summaryMessage($direction, $revenueChangePct, $current, $previous, $trends, $margin, $recommendations, $range, $previousRange, $coverageNote);
 
         if ($allBranches) {
             $message = 'Analisa **semua cabang** ('.count($storeIds)." outlet):\n\n".$message;
         }
 
-        $margin = $current['margin'];
-
-        unset($current['margin']);
-
-        $insight = [
-            'scope' => $allBranches ? AiStoreScope::ALL : AiStoreScope::CURRENT,
-            'stores_analyzed' => count($storeIds),
-            'period' => [
-                'from' => $range['from']->format('d/m/Y'),
-                'to' => $range['to']->format('d/m/Y'),
-                'previous_from' => $previousRange['from']->format('d/m/Y'),
-                'previous_to' => $previousRange['to']->format('d/m/Y'),
-            ],
-            'current' => $current,
-            'previous' => $previous,
-            'revenue_change_pct' => $revenueChangePct,
-            'transactions_change_pct' => $transactionsChangePct,
-            'direction' => $direction,
-            'biggest_increases' => $trends['increases'],
-            'biggest_decreases' => $trends['decreases'],
-            'margin' => $margin,
-            'recommendations' => $recommendations,
-        ];
-
         return ToolResult::success(
-            data: $insight,
+            data: [
+                'scope' => $allBranches ? AiStoreScope::ALL : AiStoreScope::CURRENT,
+                'stores_analyzed' => count($storeIds),
+                'period' => [
+                    'label' => $range['label'],
+                    'from' => $range['display_from'],
+                    'to' => $range['display_to'],
+                    'previous_from' => $previousRange['display_from'],
+                    'previous_to' => $previousRange['display_to'],
+                    'comparison' => $range['is_running']
+                        ? 'periode berjalan dibandingkan dengan rentang yang sama panjang sebelumnya'
+                        : 'periode penuh dibandingkan dengan periode penuh sebelumnya',
+                ],
+                'current' => $current,
+                'previous' => $previous,
+                'revenue_change_pct' => $revenueChangePct,
+                'transactions_change_pct' => $transactionsChangePct,
+                'average_transaction_change_pct' => $averageChangePct,
+                'direction' => $direction,
+                'biggest_increases' => $trends['increases'],
+                'biggest_decreases' => $trends['decreases'],
+                'margin' => $margin,
+                'recommendations' => $recommendations,
+                'data_notes' => array_values(array_filter([$coverageNote])),
+            ],
             message: $message
         );
     }
 
     /**
-     * @param  array<int, int>  $storeIds
+     * @param  array<string, mixed>  $summary
+     * @return array<string, mixed>
      */
-    protected function summarize(array $storeIds, Carbon $from, Carbon $to): array
+    protected function publicSummary(array $summary): array
     {
-        $transactions = Transaction::with('items')
-            ->whereIn('store_id', $storeIds)
-            ->where('status', 'completed')
-            ->whereBetween('created_at', [$from, $to])
-            ->get();
-
-        $revenue = (float) $transactions->sum('total_amount');
-        $transactionCount = $transactions->count();
-        $itemsSold = $transactions->flatMap(fn ($t) => $t->items ?? [])->sum('quantity');
-
-        $items = $transactions->flatMap(fn ($t) => $t->items ?? []);
-
-        $marginByProduct = $items->groupBy('product_id')->map(function ($group) {
-            $grossProfit = $group->sum(fn ($item) => (float) ($item->gross_profit_snapshot ?? 0));
-            $lineRevenue = (float) $group->sum('total_price');
-
-            return [
-                'product_name' => $group->first()->product_name ?? 'Unknown',
-                'revenue' => round($lineRevenue),
-                'gross_profit' => round($grossProfit),
-                'margin_pct' => $lineRevenue > 0 ? round($grossProfit / $lineRevenue * 100, 1) : 0,
-            ];
-        })->sortByDesc('gross_profit')->take(5)->values();
-
-        $totalGrossProfit = (float) $items->sum(fn ($item) => (float) ($item->gross_profit_snapshot ?? 0));
-
         return [
-            'revenue' => round($revenue),
-            'transactions' => $transactionCount,
-            'items_sold' => (float) $itemsSold,
-            'average_transaction' => $transactionCount > 0 ? round($revenue / $transactionCount) : 0,
-            'margin' => [
-                'total_gross_profit' => round($totalGrossProfit),
-                'gross_margin_pct' => $revenue > 0 ? round($totalGrossProfit / $revenue * 100, 1) : 0,
-                'top_products' => $marginByProduct,
-            ],
+            'revenue' => $summary['revenue'],
+            'transactions' => $summary['transactions'],
+            'items_sold' => $summary['items_sold'],
+            'average_transaction' => $summary['average_transaction'],
         ];
     }
 
     /**
+     * @param  \Illuminate\Support\Collection<int, array<string, mixed>>  $currentProducts
+     * @param  \Illuminate\Support\Collection<int, array<string, mixed>>  $previousProducts
      * @param  array<int, int>  $storeIds
+     * @return array{increases: array<int, array<string, mixed>>, decreases: array<int, array<string, mixed>>}
      */
-    protected function productTrends(array $storeIds, array $range, array $previousRange): array
+    protected function productTrends($currentProducts, $previousProducts, array $storeIds, bool $allBranches, int $periodDays): array
     {
-        $current = $this->salesByProduct($storeIds, $range['from'], $range['to']);
-        $previous = $this->salesByProduct($storeIds, $previousRange['from'], $previousRange['to']);
+        $current = $currentProducts->keyBy('product_id');
+        $previous = $previousProducts->keyBy('product_id');
+        $productIds = $current->keys()->merge($previous->keys())->unique();
 
-        $currentQty = $current['quantities'];
-        $previousQty = $previous['quantities'];
-        $names = $current['names'] + $previous['names'];
-
-        $revenueByProduct = Transaction::with('items')
-            ->whereIn('store_id', $storeIds)
-            ->where('status', 'completed')
-            ->whereBetween('created_at', [$range['from'], $range['to']])
-            ->get()
-            ->flatMap(fn ($t) => $t->items ?? [])
-            ->groupBy('product_id')
-            ->map(fn ($group) => round((float) $group->sum('total_price')));
-
-        $productIds = $currentQty->keys()->merge($previousQty->keys())->unique();
-
-        $changes = $productIds->map(function ($productId) use ($currentQty, $previousQty, $revenueByProduct, $names) {
-            $now = (float) ($currentQty[$productId] ?? 0);
-            $before = (float) ($previousQty[$productId] ?? 0);
+        $changes = $productIds->map(function ($productId) use ($current, $previous) {
+            $now = (float) ($current[$productId]['quantity'] ?? 0);
+            $before = (float) ($previous[$productId]['quantity'] ?? 0);
             $delta = $now - $before;
 
             return [
-                'product_name' => $names[$productId] ?? 'Unknown',
+                'product_id' => (int) $productId,
+                'product_name' => $current[$productId]['product_name'] ?? $previous[$productId]['product_name'] ?? 'Tanpa nama',
                 'qty_previous' => $before,
                 'qty_current' => $now,
                 'qty_change' => $delta,
@@ -186,64 +174,45 @@ class SalesInsightTool extends AiTool
                     ? round($delta / $before * 100, 1)
                     : ($now > 0 ? null : 0),
                 'is_new' => $before == 0 && $now > 0,
-                'revenue_current' => $revenueByProduct[$productId] ?? 0,
+                'revenue_current' => $current[$productId]['revenue'] ?? 0,
+                'revenue_previous' => $previous[$productId]['revenue'] ?? 0,
+                'revenue_change' => ($current[$productId]['revenue'] ?? 0) - ($previous[$productId]['revenue'] ?? 0),
             ];
-        })->filter(fn ($row) => $row['qty_change'] != 0);
+        })->filter(fn (array $row) => $row['qty_change'] != 0);
 
-        return [
-            'increases' => $changes->filter(fn ($row) => $row['qty_change'] > 0)->sortByDesc('qty_change')->take(3)->values()->toArray(),
-            'decreases' => $changes->filter(fn ($row) => $row['qty_change'] < 0)->sortBy('qty_change')->take(3)->values()->toArray(),
-        ];
-    }
+        $increases = $changes->filter(fn (array $row) => $row['qty_change'] > 0)->sortByDesc('qty_change')->take(3)->values();
+        $decreases = $changes->filter(fn (array $row) => $row['qty_change'] < 0)->sortBy('qty_change')->take(3)->values();
 
-    /**
-     * @param  array<int, int>  $storeIds
-     */
-    protected function salesByProduct(array $storeIds, Carbon $from, Carbon $to): array
-    {
-        $transactions = Transaction::with('items')
-            ->whereIn('store_id', $storeIds)
-            ->where('status', 'completed')
-            ->whereBetween('created_at', [$from, $to])
-            ->get();
+        // Sisa stok memberi tahu apakah penurunan disebabkan barang kosong,
+        // dan apakah produk yang sedang naik stoknya cukup. Hanya untuk satu
+        // outlet: lintas cabang, stok tiap outlet berbeda.
+        $stocks = $allBranches
+            ? collect()
+            : Product::query()
+                ->whereIn('store_id', $storeIds)
+                ->whereIn('id', $increases->pluck('product_id')->merge($decreases->pluck('product_id')))
+                ->get(['id', 'stock_quantity', 'track_stock', 'unit'])
+                ->keyBy('id');
 
-        $quantities = [];
-        $names = [];
+        $withStock = function (array $row) use ($stocks, $periodDays) {
+            $product = $stocks[$row['product_id']] ?? null;
 
-        foreach ($transactions->flatMap(fn ($t) => $t->items ?? []) as $item) {
-            if ($item->product_id === null) {
-                continue;
+            if ($product && $product->track_stock) {
+                $stock = (float) $product->stock_quantity;
+                $perDay = $periodDays > 0 ? $row['qty_current'] / $periodDays : 0;
+
+                $row['stock'] = round($stock, 2);
+                $row['unit'] = $product->unit ?? 'pcs';
+                $row['stock_days_left'] = $perDay > 0 ? (int) floor(max(0, $stock) / $perDay) : null;
             }
 
-            $quantities[$item->product_id] = ($quantities[$item->product_id] ?? 0) + (float) $item->quantity;
-            $names[$item->product_id] = $item->product_name ?? 'Unknown';
-        }
+            return $row;
+        };
 
         return [
-            'quantities' => collect($quantities),
-            'names' => $names,
+            'increases' => $increases->map($withStock)->toArray(),
+            'decreases' => $decreases->map($withStock)->toArray(),
         ];
-    }
-
-    protected function getCurrentRange(string $period): array
-    {
-        $now = Carbon::now();
-
-        return match ($period) {
-            'today' => ['from' => $now->copy()->startOfDay(), 'to' => $now->copy()->endOfDay()],
-            'this_month' => ['from' => $now->copy()->startOfMonth(), 'to' => $now->copy()->endOfMonth()],
-            'this_year' => ['from' => $now->copy()->startOfYear(), 'to' => $now->copy()->endOfYear()],
-            default => ['from' => $now->copy()->startOfWeek(), 'to' => $now->copy()->endOfWeek()],
-        };
-    }
-
-    protected function getPreviousRange(Carbon $from, Carbon $to): array
-    {
-        $durationSeconds = $to->getTimestamp() - $from->getTimestamp();
-        $previousTo = Carbon::createFromTimestamp($from->getTimestamp() - 1);
-        $previousFrom = Carbon::createFromTimestamp($previousTo->getTimestamp() - $durationSeconds);
-
-        return ['from' => $previousFrom, 'to' => $previousTo];
     }
 
     protected function percentChange(float $previous, float $current): ?float
@@ -256,66 +225,105 @@ class SalesInsightTool extends AiTool
     }
 
     /**
-     * Menyusun saran aksi konkret dari data insight secara deterministik,
-     * tanpa memanggil provider AI.
+     * Saran aksi yang seluruhnya diturunkan dari angka toko (deterministik,
+     * tanpa memanggil provider AI). Tidak ada saran generik tanpa dasar data.
      *
      * @return array<int, string>
      */
-    protected function recommendations(string $direction, array $current, array $trends): array
+    protected function recommendations(string $direction, array $current, array $previous, array $trends, ?float $transactionsChangePct, ?float $averageChangePct): array
     {
         $tips = [];
-
-        $decreasing = collect($trends['decreases'])->pluck('product_name')->take(2)->implode(', ');
-        $increasing = collect($trends['increases'])->pluck('product_name')->take(2)->implode(', ');
-        $marginPct = $current['margin']['gross_margin_pct'] ?? 0;
+        $number = fn ($value) => AiMetrics::number($value, 2);
 
         if ($current['revenue'] <= 0) {
-            $tips[] = 'Belum ada penjualan di periode ini — jalankan promo sederhana (bundling/diskon) atau tawarkan langsung ke pelanggan lama untuk memicu transaksi pertama.';
-        } elseif ($direction === 'turun') {
-            $tips[] = $decreasing !== ''
-                ? "Penurunan terpusat di produk {$decreasing} — beri promo atau paket hemat di produk tersebut, dan pastikan stok serta tampilannya di kasir selalu baik."
-                : 'Penjualan turun — coba promo mingguan atau paket hemat untuk menarik pembeli kembali.';
-        } elseif ($direction === 'naik') {
-            $tips[] = $increasing !== ''
-                ? "Pertahankan pola yang berhasil: jaga stok produk {$increasing} agar tidak kosong, dan terapkan cara jual yang sama ke produk lain."
-                : 'Pertahankan pola penjualan yang berhasil dan pastikan stok selalu tersedia.';
-        } else {
-            $tips[] = 'Penjualan stabil — coba promo mingguan atau bundling untuk mendorong kenaikan transaksi.';
+            $tips[] = $previous['revenue'] > 0
+                ? 'Belum ada penjualan pada periode ini, padahal periode pembanding mencatat '.AiMetrics::rupiah($previous['revenue']).' — pastikan transaksi sudah diinput/tersinkron dan toko memang buka.'
+                : 'Belum ada penjualan pada periode ini maupun periode pembanding, jadi belum ada pola yang bisa dianalisa. Coba periode yang lebih panjang (mis. bulan ini).';
+
+            return $tips;
         }
 
-        if ($current['revenue'] > 0 && $marginPct > 0 && $marginPct < 20) {
-            $tips[] = "Margin kotor tipis ({$marginPct}%) — tinjau harga jual atau cari supplier lebih hemat agar laba per transaksi naik.";
+        foreach (array_slice($trends['decreases'], 0, 2) as $row) {
+            $change = "{$number($row['qty_previous'])} → {$number($row['qty_current'])} unit";
+
+            if (isset($row['stock']) && $row['stock'] <= 0) {
+                $tips[] = "**{$row['product_name']}** turun ({$change}) dan stoknya sekarang **habis** — kemungkinan besar penjualan hilang karena barang kosong. Restock dulu sebelum memikirkan promo.";
+            } elseif ($direction === 'turun') {
+                $tips[] = "**{$row['product_name']}** turun paling banyak ({$change}"
+                    .(isset($row['stock']) ? ", stok masih {$number($row['stock'])} {$row['unit']}" : '')
+                    .') — cek harga, ketersediaan di etalase/kasir, dan apakah ada pesaing atau varian pengganti.';
+            }
+        }
+
+        foreach (array_slice($trends['increases'], 0, 2) as $row) {
+            if (! isset($row['stock_days_left']) || $row['stock_days_left'] > 7) {
+                continue;
+            }
+
+            $tips[] = $row['stock'] <= 0
+                ? "**{$row['product_name']}** sedang naik ({$number($row['qty_previous'])} → {$number($row['qty_current'])} unit) tetapi stoknya **habis** — segera restock agar momentumnya tidak hilang."
+                : "**{$row['product_name']}** sedang naik ({$number($row['qty_previous'])} → {$number($row['qty_current'])} unit) dan stoknya tinggal {$number($row['stock'])} {$row['unit']} (±{$row['stock_days_left']} hari pada laju sekarang) — restock lebih awal.";
+        }
+
+        if ($transactionsChangePct !== null && $averageChangePct !== null && $previous['transactions'] >= 5) {
+            if ($transactionsChangePct <= -10 && $averageChangePct > -5) {
+                $tips[] = 'Yang turun adalah **jumlah transaksi** ('.AiMetrics::number($transactionsChangePct).'%), bukan nilai belanja per transaksi — fokus ke mendatangkan pembeli (jam buka, promosi ke pelanggan lama), bukan menaikkan harga.';
+            } elseif ($averageChangePct <= -10 && $transactionsChangePct > -5) {
+                $tips[] = 'Jumlah pembeli relatif tetap, tetapi **nilai per transaksi turun** '.AiMetrics::number(abs($averageChangePct)).'% ('.AiMetrics::rupiah($previous['average_transaction']).' → '.AiMetrics::rupiah($current['average_transaction']).') — dorong pembelian tambahan/paket di kasir.';
+            }
+        }
+
+        if ($current['margin_reliable'] && $current['gross_margin_pct'] !== null && $current['gross_margin_pct'] < 20) {
+            $tips[] = 'Margin kotor tipis ('.AiMetrics::number($current['gross_margin_pct']).'%) — tinjau harga jual atau harga beli produk dengan margin terendah (tanya "produk bocor" untuk daftarnya).';
+        }
+
+        if ($tips === []) {
+            $tips[] = match ($direction) {
+                'naik' => 'Penjualan naik tanpa masalah stok yang terdeteksi pada produk pendorongnya — pertahankan ketersediaan produk tersebut.',
+                'turun' => 'Penjualan turun merata (tidak terpusat di produk tertentu) — bandingkan jumlah transaksi per hari untuk melihat hari mana yang sepi.',
+                default => 'Penjualan stabil dibanding periode pembanding; tidak ada produk atau stok yang perlu tindakan segera.',
+            };
         }
 
         return $tips;
     }
 
-    protected function summaryMessage(string $direction, ?float $revenueChangePct, array $current, array $previous, array $trends, array $recommendations = []): string
+    /**
+     * @param  array<int, string>  $recommendations
+     */
+    protected function summaryMessage(string $direction, ?float $revenueChangePct, array $current, array $previous, array $trends, array $margin, array $recommendations, array $range, array $previousRange, ?string $coverageNote): string
     {
         $revenueNow = $this->formatCurrency((float) $current['revenue']);
         $revenueBefore = $this->formatCurrency((float) $previous['revenue']);
 
         $changeLabel = $revenueChangePct === null
             ? 'dari nol (periode sebelumnya tidak ada penjualan)'
-            : (($revenueChangePct >= 0 ? 'naik ' : 'turun ').abs($revenueChangePct).'%');
+            : (($revenueChangePct >= 0 ? 'naik ' : 'turun ').AiMetrics::number(abs($revenueChangePct)).'%');
 
-        $message = "Penjualan ({$changeLabel}): {$revenueNow} vs periode sebelumnya {$revenueBefore} "
+        $message = "Periode **{$range['display_from']} - {$range['display_to']}** dibanding **{$previousRange['display_from']} - {$previousRange['display_to']}**"
+            .($range['is_running'] ? ' (rentang setara, periode masih berjalan)' : '').".\n\n"
+            ."Penjualan ({$changeLabel}): {$revenueNow} vs periode sebelumnya {$revenueBefore} "
             ."dari {$current['transactions']} transaksi (sebelumnya {$previous['transactions']}).";
 
         $topIncrease = $trends['increases'][0] ?? null;
         if ($topIncrease) {
             $message .= $topIncrease['is_new']
                 ? " Produk baru yang mulai terjual: {$topIncrease['product_name']}."
-                : " Pendorong utama: {$topIncrease['product_name']} (+{$topIncrease['qty_change']} unit).";
+                : " Pendorong utama: {$topIncrease['product_name']} (+".AiMetrics::number($topIncrease['qty_change'], 2).' unit).';
         }
 
         $topDecrease = $trends['decreases'][0] ?? null;
         if ($topDecrease) {
-            $message .= " Penurunan terbesar: {$topDecrease['product_name']} ({$topDecrease['qty_change']} unit).";
+            $message .= " Penurunan terbesar: {$topDecrease['product_name']} (".AiMetrics::number($topDecrease['qty_change'], 2).' unit).';
         }
 
-        $marginPct = $current['margin']['gross_margin_pct'] ?? 0;
-        $message .= " Margin kotor periode ini: {$marginPct}%.";
+        if ($current['revenue'] > 0 && $margin['cost_coverage_pct'] > 0) {
+            $message .= ' Margin kotor periode ini: '.AiMetrics::number($margin['gross_margin_pct']).'%.';
+        }
+
+        if ($coverageNote !== null) {
+            $message .= "\n\n".$coverageNote;
+        }
 
         if ($recommendations !== []) {
             $message .= "\n\n**Rekomendasi:**\n".implode("\n", array_map(fn (string $tip) => "- {$tip}", $recommendations));

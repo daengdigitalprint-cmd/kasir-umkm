@@ -4,8 +4,9 @@ namespace App\Tools\Stock;
 
 use App\Models\Product;
 use App\Models\PurchaseLine;
-use App\Models\TransactionItem;
 use App\Models\User;
+use App\Services\AI\AiMetrics;
+use App\Services\AI\AiStockVelocity;
 use App\Services\AI\AiStoreScope;
 use App\Tools\AiTool;
 use App\Tools\ToolResult;
@@ -62,20 +63,10 @@ class RecommendRestockTool extends AiTool
         $limit = max(1, min(50, (int) ($args['limit'] ?? 10)));
         $since = Carbon::now()->subDays($days);
 
-        $soldPerProduct = TransactionItem::query()
-            ->join('transactions', 'transactions.id', '=', 'transaction_items.transaction_id')
-            ->whereIn('transactions.store_id', $storeIds)
-            ->where('transactions.status', 'completed')
-            ->where('transactions.created_at', '>=', $since)
-            ->whereNotNull('transaction_items.product_id')
-            ->groupBy('transaction_items.product_id')
-            ->selectRaw('transaction_items.product_id as product_id, COALESCE(SUM(transaction_items.quantity), 0) as sold_total')
-            ->pluck('sold_total', 'product_id');
+        // Termasuk bahan baku/kemasan yang terpakai lewat resep, bukan hanya penjualan langsung.
+        $soldPerProduct = AiStockVelocity::usage($storeIds, $since);
 
-        $products = Product::query()
-            ->whereIn('store_id', $storeIds)
-            ->where('is_active', true)
-            ->where('track_stock', true)
+        $products = AiStockVelocity::trackedProducts($storeIds)
             ->with(['productCategory', 'store'])
             ->get();
 
@@ -91,7 +82,7 @@ class RecommendRestockTool extends AiTool
 
         $items = $products->map(function (Product $product) use ($soldPerProduct, $days, $coverageDays, $suppliers, $allBranches) {
             $sold = (float) ($soldPerProduct[$product->id] ?? 0);
-            $avgPerDay = $sold / $days;
+            $avgPerDay = $sold / AiStockVelocity::activeDays($product, $days);
             $stock = (float) $product->stock_quantity;
             $minStock = (float) $product->min_stock_level;
 
@@ -126,6 +117,9 @@ class RecommendRestockTool extends AiTool
                 'reason' => $belowMin
                     ? 'stok di bawah minimum'
                     : "diprediksi habis dalam {$daysLeft} hari",
+                // Di bawah minimum tetapi tidak bergerak: jangan dibeli membabi buta.
+                'no_recent_sales' => $sold <= 0,
+                'cost_known' => $unitCost > 0,
             ];
 
             if ($allBranches) {
@@ -179,16 +173,22 @@ class RecommendRestockTool extends AiTool
 
             $lines[] = '- **'.$item['name'].'**'.$branch
                 .' — beli **'.$item['suggested_quantity'].' '.$item['unit'].'**'
-                .' (sisa stok '.$item['stock'].', '.$item['reason'].')'
-                .', estimasi '.$this->formatCurrency((float) $item['estimated_cost']).$supplier;
+                .' (sisa stok '.$item['stock'].', '.$item['reason']
+                .($item['avg_sales_per_day'] > 0 ? ', laku ±'.AiMetrics::number($item['avg_sales_per_day'], 2).'/hari' : '').')'
+                .($item['cost_known'] ? ', estimasi '.$this->formatCurrency((float) $item['estimated_cost']) : ', harga modal belum tercatat')
+                .$supplier
+                .($item['no_recent_sales'] ? ' — tidak ada penjualan/pemakaian pada periode analisis, pastikan masih perlu distok' : '');
         }
+
+        $unknownCost = count(array_filter($items, fn (array $item) => ! $item['cost_known']));
 
         if (count($items) > 8) {
             $lines[] = '- …dan '.(count($items) - 8).' produk lainnya.';
         }
 
         $lines[] = '';
-        $lines[] = '**Estimasi total modal: '.$this->formatCurrency($totalCost).'**';
+        $lines[] = '**Estimasi total modal: '.$this->formatCurrency($totalCost).'**'
+            .($unknownCost > 0 ? " (belum termasuk {$unknownCost} produk tanpa harga modal)" : '');
         $lines[] = 'Buatkan pesanan pembelian langsung dengan perintah "beli [produk] [jumlah] dari supplier [nama]".';
 
         return implode("\n", $lines);

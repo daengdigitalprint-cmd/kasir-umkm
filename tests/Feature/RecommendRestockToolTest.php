@@ -52,7 +52,7 @@ function createRestockBranchGroup(): array
 
 function createRestockProduct(Store $store, string $name, float $stock, float $minStock, float $costPrice): Product
 {
-    return Product::query()->create([
+    $product = Product::query()->create([
         'store_id' => $store->id,
         'name' => $name,
         'price' => 20000,
@@ -63,6 +63,11 @@ function createRestockProduct(Store $store, string $name, float $stock, float $m
         'track_stock' => true,
         'is_active' => true,
     ]);
+
+    // Produk sudah lama ada: laju harian dibagi seluruh jendela analisis.
+    $product->forceFill(['created_at' => now()->subDays(120)])->save();
+
+    return $product;
 }
 
 function recordRestockSale(Store $store, User $user, Product $product, int $quantity, \Carbon\Carbon $createdAt): void

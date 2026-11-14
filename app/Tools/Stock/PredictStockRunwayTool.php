@@ -3,14 +3,18 @@
 namespace App\Tools\Stock;
 
 use App\Models\Product;
-use App\Models\TransactionItem;
 use App\Models\User;
+use App\Services\AI\AiMetrics;
+use App\Services\AI\AiPeriod;
+use App\Services\AI\AiStockVelocity;
 use App\Tools\AiTool;
 use App\Tools\ToolResult;
 use Illuminate\Support\Carbon;
 
 class PredictStockRunwayTool extends AiTool
 {
+    protected const MAX_ROWS = 30;
+
     public function getName(): string
     {
         return 'predict_stock_runway';
@@ -18,7 +22,7 @@ class PredictStockRunwayTool extends AiTool
 
     public function getDescription(): string
     {
-        return 'Memprediksi kapan stok produk akan habis berdasarkan rata-rata penjualan harian (stock runway). Gunakan saat user bertanya "stok habis kapan", "kapan harus restock", "produk mana yang akan habis", atau prediksi/peringatan dini stok.';
+        return 'Memprediksi kapan stok produk akan habis berdasarkan rata-rata pemakaian harian (penjualan langsung maupun bahan baku yang terpakai lewat resep/produksi). Gunakan saat user bertanya "stok habis kapan", "kapan harus restock", "produk mana yang akan habis", atau prediksi/peringatan dini stok.';
     }
 
     public function getParameters(): array
@@ -26,11 +30,11 @@ class PredictStockRunwayTool extends AiTool
         return [
             'product_name' => [
                 'type' => 'string',
-                'description' => 'Nama produk spesifik yang ingin diprediksi (opsional, dicari dengan LIKE)',
+                'description' => 'Nama produk spesifik yang ingin diprediksi (opsional, pencarian sebagian nama)',
             ],
             'days' => [
                 'type' => 'integer',
-                'description' => 'Periode analisis penjualan dalam hari (default: 30)',
+                'description' => 'Periode analisis pemakaian dalam hari (default: 30)',
             ],
             'warning_days' => [
                 'type' => 'integer',
@@ -48,31 +52,24 @@ class PredictStockRunwayTool extends AiTool
 
         $days = max(1, min(365, (int) ($args['days'] ?? 30)));
         $warningDays = max(0, (int) ($args['warning_days'] ?? 14));
-        $since = Carbon::now()->subDays($days);
+        $productName = trim((string) ($args['product_name'] ?? ''));
+        $now = Carbon::now();
 
-        $soldPerProduct = TransactionItem::query()
-            ->join('transactions', 'transactions.id', '=', 'transaction_items.transaction_id')
-            ->where('transactions.store_id', $store->id)
-            ->where('transactions.status', 'completed')
-            ->where('transactions.created_at', '>=', $since)
-            ->whereNotNull('transaction_items.product_id')
-            ->groupBy('transaction_items.product_id')
-            ->selectRaw('transaction_items.product_id as product_id, COALESCE(SUM(transaction_items.quantity), 0) as sold_total')
-            ->pluck('sold_total', 'product_id');
+        $usage = AiStockVelocity::usage([$store->id], $now->copy()->subDays($days), $now);
 
-        $query = Product::where('store_id', $store->id)
-            ->where('is_active', true)
-            ->where('track_stock', true);
+        $query = AiStockVelocity::trackedProducts([$store->id]);
 
-        if (! empty($args['product_name'])) {
-            $query->where('name', 'like', "%{$args['product_name']}%");
+        if ($productName !== '') {
+            $query->where('name', 'like', "%{$productName}%");
         }
 
         $products = $query->with('productCategory')->get();
+        $today = AiPeriod::now($store);
 
-        $items = $products->map(function (Product $product) use ($soldPerProduct, $days) {
-            $sold = (float) ($soldPerProduct[$product->id] ?? 0);
-            $avgPerDay = $sold / $days;
+        $all = $products->map(function (Product $product) use ($usage, $days, $now, $today) {
+            $used = (float) ($usage[$product->id] ?? 0);
+            $activeDays = AiStockVelocity::activeDays($product, $days, $now);
+            $avgPerDay = $used / $activeDays;
             $stock = (float) $product->stock_quantity;
 
             $daysLeft = null;
@@ -85,43 +82,73 @@ class PredictStockRunwayTool extends AiTool
                 'name' => $product->name,
                 'sku' => $product->sku,
                 'category' => $product->productCategory?->name ?? $product->category ?? '-',
-                'stock' => $this->formatStock($product->stock_quantity),
+                'stock' => $this->formatStock((string) $product->stock_quantity),
                 'unit' => $product->unit ?? 'pcs',
-                'sold_last_'.$days.'_days' => $this->formatStock((string) $sold),
+                'sold_last_'.$days.'_days' => $this->formatStock((string) $used),
+                'usage_days_basis' => $activeDays,
                 'avg_per_day' => round($avgPerDay, 2),
                 'days_left' => $daysLeft,
                 'estimated_out_of_stock_date' => $daysLeft !== null
-                    ? Carbon::now()->addDays($daysLeft)->format('d/m/Y')
+                    ? $today->copy()->addDays($daysLeft)->format('d/m/Y')
                     : null,
                 'urgency' => $this->urgency($product, $daysLeft),
             ];
-        })->filter(function (array $item) use ($warningDays) {
-            if ($item['days_left'] === null) {
-                return false;
-            }
+        });
 
-            return $item['days_left'] <= $warningDays;
-        })->sortBy('days_left')->values();
+        $noUsage = $all->filter(fn (array $item) => $item['days_left'] === null);
+
+        $items = $all
+            ->filter(fn (array $item) => $item['days_left'] !== null && $item['days_left'] <= $warningDays)
+            ->sortBy('days_left')
+            ->values();
 
         if ($items->isEmpty()) {
+            $message = match (true) {
+                $productName !== '' && $products->isEmpty() => "Tidak ditemukan produk berstok dengan nama \"{$productName}\".",
+                $productName !== '' && $noUsage->count() === $all->count() => "Tidak ada produk \"{$productName}\" yang terjual/terpakai dalam {$days} hari terakhir, jadi tanggal habisnya belum bisa diperkirakan (stok sekarang: "
+                    .$all->take(3)->map(fn (array $item) => "{$item['name']} {$item['stock']} {$item['unit']}")->implode(', ').').',
+                $usage->isEmpty() => "Tidak ada produk yang bisa diprediksi: belum ada penjualan/pemakaian stok tercatat dalam {$days} hari terakhir.",
+                default => "Tidak ada produk yang diprediksi habis dalam {$warningDays} hari ke depan (analisis {$days} hari terakhir, {$all->count()} produk berstok diperiksa)",
+            };
+
             return ToolResult::success(
-                data: ['items' => [], 'period_days' => $days, 'warning_days' => $warningDays],
-                message: "Tidak ada produk yang diprediksi habis dalam {$warningDays} hari ke depan (analisis {$days} hari terakhir)"
+                data: ['items' => [], 'period_days' => $days, 'warning_days' => $warningDays, 'products_checked' => $all->count(), 'products_without_usage' => $noUsage->count()],
+                message: $message
             );
         }
 
         $critical = $items->filter(fn (array $item) => $item['urgency'] === 'kritis' || $item['urgency'] === 'habis')->count();
+        $shown = $items->take(self::MAX_ROWS)->values();
+
+        $lines = [
+            "{$items->count()} produk diprediksi habis dalam {$warningDays} hari ke depan"
+                .($critical > 0 ? " ({$critical} di antaranya kritis)" : '')
+                ." — berdasarkan pemakaian {$days} hari terakhir:",
+            '',
+        ];
+
+        foreach ($shown->take(10) as $item) {
+            $lines[] = '- **'.$item['name'].'** — sisa '.$item['stock'].' '.$item['unit']
+                .', rata-rata '.AiMetrics::number($item['avg_per_day'], 2).'/hari → '
+                .($item['days_left'] <= 0 ? '**sudah habis**' : "habis ±{$item['days_left']} hari lagi ({$item['estimated_out_of_stock_date']})")
+                ." [{$item['urgency']}]";
+        }
+
+        if ($items->count() > 10) {
+            $lines[] = '- …dan '.($items->count() - 10).' produk lainnya.';
+        }
 
         return ToolResult::success(
             data: [
-                'items' => $items,
+                'items' => $shown,
                 'total' => $items->count(),
                 'critical_count' => $critical,
                 'period_days' => $days,
                 'warning_days' => $warningDays,
+                'products_checked' => $all->count(),
+                'products_without_usage' => $noUsage->count(),
             ],
-            message: "{$items->count()} produk diprediksi habis dalam {$warningDays} hari ke depan"
-                .($critical > 0 ? " ({$critical} di antaranya kritis)" : '')
+            message: implode("\n", $lines)
         );
     }
 

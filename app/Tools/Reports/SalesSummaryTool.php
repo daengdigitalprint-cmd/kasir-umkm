@@ -2,12 +2,13 @@
 
 namespace App\Tools\Reports;
 
-use App\Models\Transaction;
 use App\Models\User;
+use App\Services\AI\AiMetrics;
+use App\Services\AI\AiPeriod;
 use App\Services\AI\AiStoreScope;
 use App\Tools\AiTool;
 use App\Tools\ToolResult;
-use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class SalesSummaryTool extends AiTool
 {
@@ -18,7 +19,7 @@ class SalesSummaryTool extends AiTool
 
     public function getDescription(): string
     {
-        return 'Mendapatkan ringkasan penjualan untuk periode tertentu. Gunakan tool ini saat user ingin melihat laporan penjualan.';
+        return 'Ringkasan penjualan (pendapatan bersih = subtotal − diskon − retur, sama dengan laporan) untuk suatu periode: total, jumlah transaksi, rata-rata, metode pembayaran, dan 5 produk terlaris. Gunakan untuk pertanyaan omzet/penjualan/laporan penjualan.';
     }
 
     public function getParameters(): array
@@ -26,8 +27,8 @@ class SalesSummaryTool extends AiTool
         return [
             'period' => [
                 'type' => 'string',
-                'description' => 'Periode laporan: "today", "yesterday", "this_week", "last_week", "this_month", "last_month", "this_year"',
-                'enum' => ['today', 'yesterday', 'this_week', 'last_week', 'this_month', 'last_month', 'this_year'],
+                'description' => 'Periode laporan (default: today). Periode berjalan dihitung sampai hari ini.',
+                'enum' => AiPeriod::PERIODS,
             ],
             'date_from' => [
                 'type' => 'string',
@@ -56,85 +57,105 @@ class SalesSummaryTool extends AiTool
         $storeIds = $scope['store_ids'];
         $allBranches = $scope['all_branches'];
 
-        // Tentukan rentang tanggal
-        $dateRange = $this->getDateRange($args);
-        $dateFrom = $dateRange['from'];
-        $dateTo = $dateRange['to'];
+        $range = AiPeriod::resolve($args, $store, 'today');
+        $summary = AiMetrics::summary($storeIds, $range['from'], $range['to']);
 
-        $query = Transaction::whereIn('store_id', $storeIds)
+        $paymentMethods = DB::table('transactions')
+            ->whereIn('store_id', $storeIds)
             ->where('status', 'completed')
-            ->whereBetween('created_at', [$dateFrom, $dateTo]);
-
-        $transactions = $query->get();
-
-        $totalSales = $transactions->sum('total_amount');
-        $totalTransactions = $transactions->count();
-        $averageTransaction = $totalTransactions > 0 ? $totalSales / $totalTransactions : 0;
-
-        // Metode pembayaran
-        $paymentMethods = $transactions->groupBy('payment_method')
-            ->map(fn ($group) => [
-                'method' => $group->first()->payment_method,
-                'count' => $group->count(),
-                'total' => $group->sum('total'),
+            ->whereBetween('created_at', [$range['from'], $range['to']])
+            ->groupBy('payment_method')
+            ->selectRaw('payment_method as method, COUNT(*) as count, COALESCE(SUM(total_amount), 0) as total')
+            ->orderByDesc('total')
+            ->get()
+            ->map(fn ($row) => [
+                'method' => $row->method ?: 'lainnya',
+                'count' => (int) $row->count,
+                'total' => round((float) $row->total),
             ])
-            ->values()
             ->toArray();
 
-        // Produk terlaris
-        $topProducts = $transactions->flatMap(fn ($t) => $t->items ?? [])
-            ->groupBy('product_id')
-            ->map(fn ($group) => [
-                'product_name' => $group->first()->product_name ?? 'Unknown',
-                'quantity' => $group->sum('quantity'),
-                'revenue' => $group->sum('total_price'),
-            ])
+        $topProducts = AiMetrics::byProduct($storeIds, $range['from'], $range['to'])
             ->sortByDesc('quantity')
             ->take(5)
+            ->map(fn (array $row) => [
+                'product_name' => $row['product_name'],
+                'quantity' => $row['quantity'],
+                'revenue' => $row['revenue'],
+            ])
             ->values()
             ->toArray();
 
-        return ToolResult::success(
-            data: [
-                'scope' => $allBranches ? AiStoreScope::ALL : AiStoreScope::CURRENT,
-                'stores_analyzed' => count($storeIds),
-                'period' => [
-                    'from' => $dateFrom->format('d/m/Y'),
-                    'to' => $dateTo->format('d/m/Y'),
-                ],
-                'total_sales' => $this->formatCurrency($totalSales),
-                'total_transactions' => $totalTransactions,
-                'average_transaction' => $this->formatCurrency($averageTransaction),
-                'payment_methods' => $paymentMethods,
-                'top_products' => $topProducts,
+        $data = [
+            'scope' => $allBranches ? AiStoreScope::ALL : AiStoreScope::CURRENT,
+            'stores_analyzed' => count($storeIds),
+            'period' => [
+                'label' => $range['label'],
+                'from' => $range['display_from'],
+                'to' => $range['display_to'],
             ],
-            message: ($allBranches ? 'Ringkasan penjualan semua cabang ('.count($storeIds).' outlet) ' : 'Ringkasan penjualan ')
-                     .$dateFrom->format('d/m/Y').' - '.$dateTo->format('d/m/Y').': '.
-                     "Total penjualan {$this->formatCurrency($totalSales)} dari {$totalTransactions} transaksi"
-        );
+            'total_sales' => $this->formatCurrency($summary['revenue']),
+            'total_sales_value' => $summary['revenue'],
+            'collected_value' => $summary['collected'],
+            'returns_value' => $summary['returns'],
+            'total_transactions' => $summary['transactions'],
+            'items_sold' => $summary['items_sold'],
+            'average_transaction' => $this->formatCurrency($summary['average_transaction']),
+            'payment_methods' => $paymentMethods,
+            'top_products' => $topProducts,
+        ];
+
+        return ToolResult::success(data: $data, message: $this->summaryMessage($data, $summary, $allBranches, count($storeIds)));
     }
 
-    protected function getDateRange(array $args): array
+    /**
+     * @param  array<string, mixed>  $data
+     * @param  array<string, mixed>  $summary
+     */
+    protected function summaryMessage(array $data, array $summary, bool $allBranches, int $storeCount): string
     {
-        if (! empty($args['date_from']) && ! empty($args['date_to'])) {
-            return [
-                'from' => Carbon::parse($args['date_from'])->startOfDay(),
-                'to' => Carbon::parse($args['date_to'])->endOfDay(),
-            ];
+        $period = $data['period']['from'] === $data['period']['to']
+            ? $data['period']['from']
+            : $data['period']['from'].' - '.$data['period']['to'];
+
+        $head = ($allBranches ? "Ringkasan penjualan semua cabang ({$storeCount} outlet) " : 'Ringkasan penjualan ')
+            .$period.': Total penjualan '.$data['total_sales']." dari {$summary['transactions']} transaksi";
+
+        if ($summary['transactions'] === 0) {
+            return $head.'. Belum ada transaksi selesai pada periode ini.';
         }
 
-        $period = $args['period'] ?? 'today';
-        $now = Carbon::now();
+        $lines = [
+            $head.'.',
+            '',
+            '- Rata-rata per transaksi: '.$data['average_transaction'],
+            '- Item terjual: '.AiMetrics::number($summary['items_sold'], 2),
+        ];
 
-        return match ($period) {
-            'today' => ['from' => $now->copy()->startOfDay(), 'to' => $now->copy()->endOfDay()],
-            'yesterday' => ['from' => $now->copy()->subDay()->startOfDay(), 'to' => $now->copy()->subDay()->endOfDay()],
-            'this_week' => ['from' => $now->copy()->startOfWeek(), 'to' => $now->copy()->endOfWeek()],
-            'last_week' => ['from' => $now->copy()->subWeek()->startOfWeek(), 'to' => $now->copy()->subWeek()->endOfWeek()],
-            'this_month' => ['from' => $now->copy()->startOfMonth(), 'to' => $now->copy()->endOfMonth()],
-            'last_month' => ['from' => $now->copy()->subMonth()->startOfMonth(), 'to' => $now->copy()->subMonth()->endOfMonth()],
-            'this_year' => ['from' => $now->copy()->startOfYear(), 'to' => $now->copy()->endOfYear()],
-            default => ['from' => $now->copy()->startOfDay(), 'to' => $now->copy()->endOfDay()],
-        };
+        if ($summary['returns'] > 0) {
+            $lines[] = '- Retur: '.$this->formatCurrency($summary['returns']).' (sudah dikurangkan dari total penjualan)';
+        }
+
+        if (abs($summary['collected'] - $summary['gross_sales']) >= 1) {
+            $lines[] = '- Uang diterima termasuk pajak/servis/tip: '.$this->formatCurrency($summary['collected']);
+        }
+
+        if ($data['payment_methods'] !== []) {
+            $lines[] = '';
+            $lines[] = '**Metode pembayaran:**';
+            foreach ($data['payment_methods'] as $method) {
+                $lines[] = '- '.ucfirst(str_replace('_', ' ', (string) $method['method'])).": {$method['count']} transaksi, ".$this->formatCurrency($method['total']);
+            }
+        }
+
+        if ($data['top_products'] !== []) {
+            $lines[] = '';
+            $lines[] = '**Produk terlaris periode ini:**';
+            foreach ($data['top_products'] as $index => $product) {
+                $lines[] = ($index + 1).'. '.$product['product_name'].' — '.AiMetrics::number($product['quantity'], 2).' terjual ('.$this->formatCurrency($product['revenue']).')';
+            }
+        }
+
+        return implode("\n", $lines);
     }
 }

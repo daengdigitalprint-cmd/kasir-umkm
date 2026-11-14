@@ -17,6 +17,8 @@ function createDigestStore(): Store
 {
     return Store::query()->create([
         'name' => 'Toko Digest',
+        // Zona UTC agar "kemarin" pada tes sama dengan kemarin menurut jam server tes.
+        'timezone' => 'UTC',
         'slug' => 'toko-digest-'.uniqid(),
         'is_active' => true,
     ]);
@@ -172,6 +174,9 @@ it('memberi peringatan produk yang akan segera habis meski stok masih di atas mi
         'is_active' => true,
     ]);
 
+    // Produk sudah lama ada: laju harian dibagi seluruh jendela 14 hari.
+    $product->forceFill(['created_at' => now()->subDays(60)])->save();
+
     recordDigestItemSale($store, $user, $product, 140, now()->subDays(2)->setTime(12, 0));
 
     $this->artisan('ai:daily-digest')->assertExitCode(0);
@@ -221,4 +226,75 @@ it('mengirim push email digest ke penerima', function () {
     $this->artisan('ai:daily-digest')->assertExitCode(0);
 
     Notification::assertSentToTimes($user, AiAlertPushNotification::class, 1);
+});
+
+it('memakai pendapatan bersih tanpa pajak pada digest', function () {
+    $store = createDigestStore();
+    $user = User::factory()->create(['store_id' => $store->id, 'role' => 'admin']);
+    $product = Product::query()->create([
+        'store_id' => $store->id, 'name' => 'Nasi Goreng', 'price' => 100000,
+        'stock_quantity' => 50, 'min_stock_level' => 0, 'track_stock' => true, 'is_active' => true,
+    ]);
+
+    recordDigestSale($store, $user, $product, 1, now()->subDay()->setTime(12, 0));
+    Transaction::query()->where('store_id', $store->id)->update(['tax_amount' => 11000, 'total_amount' => 111000]);
+
+    $this->artisan('ai:daily-digest')->assertExitCode(0);
+
+    $content = AiMessage::query()->where('role', 'assistant')->value('content');
+
+    expect($content)->toContain('Pendapatan: Rp 100.000')
+        ->and($content)->not->toContain('111.000');
+});
+
+it('tidak melaporkan produk "sisa 0 (min 0)" yang tidak bergerak sebagai stok menipis', function () {
+    $store = createDigestStore();
+    User::factory()->create(['store_id' => $store->id, 'role' => 'admin']);
+    Product::query()->create([
+        'store_id' => $store->id, 'name' => 'Menu Musiman', 'price' => 10000,
+        'stock_quantity' => 0, 'min_stock_level' => 0, 'track_stock' => true, 'is_active' => true,
+    ]);
+
+    $this->artisan('ai:daily-digest')->assertExitCode(0);
+
+    expect(AiMessage::query()->count())->toBe(0);
+});
+
+it('tidak mengulang digest stok yang sama untuk toko tanpa penjualan', function () {
+    $store = createDigestStore();
+    User::factory()->create(['store_id' => $store->id, 'role' => 'admin']);
+    Product::query()->create([
+        'store_id' => $store->id, 'name' => 'Plastik Cup', 'price' => 500,
+        'stock_quantity' => 100, 'min_stock_level' => 350, 'track_stock' => true, 'is_active' => true,
+    ]);
+
+    $this->artisan('ai:daily-digest')->assertExitCode(0);
+
+    $this->travel(1)->days();
+    $this->artisan('ai:daily-digest')->assertExitCode(0);
+
+    expect(AiMessage::query()->where('role', 'assistant')->count())->toBe(1);
+});
+
+it('menentukan "kemarin" menurut zona waktu toko', function () {
+    // 14 Nov 18:00 UTC = 15 Nov 02:00 WITA → kemarin (toko) = 14 Nov.
+    $this->travelTo(\Carbon\Carbon::parse('2026-11-14 18:00:00', 'UTC'));
+
+    $store = createDigestStore();
+    $store->update(['timezone' => 'Asia/Makassar']);
+    $user = User::factory()->create(['store_id' => $store->id, 'role' => 'admin']);
+    $product = Product::query()->create([
+        'store_id' => $store->id, 'name' => 'Es Teh', 'price' => 5000,
+        'stock_quantity' => 50, 'min_stock_level' => 0, 'track_stock' => true, 'is_active' => true,
+    ]);
+
+    // 14 Nov 10:00 WITA (= 02:00 UTC).
+    recordDigestSale($store, $user, $product, 2, \Carbon\Carbon::parse('2026-11-14 02:00:00', 'UTC'));
+
+    $this->artisan('ai:daily-digest')->assertExitCode(0);
+
+    $content = AiMessage::query()->where('role', 'assistant')->value('content');
+
+    expect($content)->toContain('Digest Harian 2026-11-14')
+        ->and($content)->toContain('Pendapatan: Rp 10.000');
 });
