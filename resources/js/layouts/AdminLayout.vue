@@ -178,19 +178,11 @@ async function refreshAiAlerts(): Promise<void> {
     }
 }
 
-async function markAiAlertRead(alert: AiAlertItem): Promise<void> {
-    if (!aiChatEnabled.value || alert.is_read) return;
-    try {
-        const res = await fetch(`/ai/alerts/${alert.id}/read`, {
-            method: 'POST',
-            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest', ...aiCsrfHeaders() },
-        });
-        if (res.ok) {
-            alert.is_read = true;
-        }
-    } catch (e) {
-        console.debug('Gagal menandai peringatan AI:', e);
-    }
+/** Klik peringatan: server menandai dibaca, memindah toko aktif bila perlu, lalu mengarahkan ke halaman detail. */
+function openAiAlert(alert: AiAlertItem): void {
+    if (!aiChatEnabled.value) return;
+    alert.is_read = true;
+    router.post(`/ai/alerts/${alert.id}/open`);
 }
 
 const setupAiAlertEcho = () => {
@@ -369,7 +361,7 @@ const isCurrentRoute = (href: string) => {
                                     :key="alert.id"
                                     type="button"
                                     class="flex w-full items-start gap-2 rounded-xl px-2 py-2 text-left hover:bg-slate-50"
-                                    @click="markAiAlertRead(alert)"
+                                    @click="openAiAlert(alert)"
                                 >
                                     <span class="mt-1.5 size-2 shrink-0 rounded-full" :class="alert.is_read ? 'bg-slate-300' : 'bg-red-500'"></span>
                                     <span class="min-w-0 flex-1">
@@ -574,7 +566,7 @@ const isCurrentRoute = (href: string) => {
                                             :key="alert.id"
                                             type="button"
                                             class="flex w-full items-start gap-2 rounded-xl px-2 py-2 text-left hover:bg-slate-50"
-                                            @click="markAiAlertRead(alert)"
+                                            @click="openAiAlert(alert)"
                                         >
                                             <span class="mt-1.5 size-2 shrink-0 rounded-full" :class="alert.is_read ? 'bg-slate-300' : 'bg-red-500'"></span>
                                             <span class="min-w-0 flex-1">

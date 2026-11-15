@@ -765,6 +765,7 @@ Route::middleware(['auth', 'throttle:30,1', 'ai.enabled'])->prefix('ai')->name('
     // Peringatan proaktif in-app (push real-time via WebSocket)
     Route::get('/alerts', [App\Http\Controllers\Ai\AiAlertController::class, 'index'])->name('alerts.index');
     Route::post('/alerts/{alert}/read', [App\Http\Controllers\Ai\AiAlertController::class, 'markRead'])->name('alerts.read');
+    Route::post('/alerts/{alert}/open', [App\Http\Controllers\Ai\AiAlertController::class, 'open'])->name('alerts.open');
 
     // Admin Settings (butuh permission khusus)
     Route::middleware(['role:superadmin,store_admin'])->prefix('settings')->name('settings.')->group(function () {

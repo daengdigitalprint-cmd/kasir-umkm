@@ -284,6 +284,64 @@ it('menolak menandai peringatan milik user lain', function () {
     expect($alert->fresh()->is_read)->toBeFalse();
 });
 
+it('membuka halaman detail saat peringatan diklik dan menandainya dibaca', function () {
+    $store = createProactiveAlertStore();
+    $user = User::factory()->create(['store_id' => $store->id, 'role' => 'admin']);
+    createProactiveAlertProduct($store);
+
+    $this->artisan('ai:proactive-alerts')->assertExitCode(0);
+
+    $alert = AiAlert::query()->where('type', 'low_stock')->firstOrFail();
+
+    $this->actingAs($user)
+        ->post("/ai/alerts/{$alert->id}/open")
+        ->assertRedirect('/stock-overview?low_stock=1');
+
+    expect($alert->fresh()->is_read)->toBeTrue();
+});
+
+it('memindah toko aktif saat membuka peringatan milik outlet lain', function () {
+    $storeA = createProactiveAlertStore();
+    $storeB = createProactiveAlertStore();
+    $user = User::factory()->create(['store_id' => $storeA->id, 'role' => 'admin']);
+    $user->stores()->attach($storeB->id, ['role' => 'manager']);
+
+    $alert = AiAlert::query()->create([
+        'user_id' => $user->id,
+        'store_id' => $storeB->id,
+        'type' => 'margin_drop',
+        'title' => 'Margin turun',
+        'message' => 'Margin turun.',
+        'data' => ['window_days' => 7],
+        'alert_date' => '2026-11-15',
+        'is_read' => false,
+    ]);
+
+    $this->actingAs($user)
+        ->post("/ai/alerts/{$alert->id}/open")
+        ->assertRedirect('/reports/sales?start_date=2026-11-08&end_date=2026-11-14');
+
+    expect((int) $user->fresh()->store_id)->toBe((int) $storeB->id)
+        ->and($user->fresh()->role)->toBe('manager');
+});
+
+it('menolak membuka peringatan milik user lain', function () {
+    $store = createProactiveAlertStore();
+    User::factory()->create(['store_id' => $store->id, 'role' => 'admin']);
+    $other = User::factory()->create(['store_id' => $store->id, 'role' => 'cashier']);
+    createProactiveAlertProduct($store);
+
+    $this->artisan('ai:proactive-alerts')->assertExitCode(0);
+
+    $alert = AiAlert::query()->firstOrFail();
+
+    $this->actingAs($other)
+        ->post("/ai/alerts/{$alert->id}/open")
+        ->assertForbidden();
+
+    expect($alert->fresh()->is_read)->toBeFalse();
+});
+
 it('tidak membuat peringatan stok untuk produk "sisa 0 (min 0)" yang tidak bergerak', function () {
     $store = createProactiveAlertStore();
     User::factory()->create(['store_id' => $store->id, 'role' => 'admin']);
