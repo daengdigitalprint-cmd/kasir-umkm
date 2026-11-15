@@ -369,6 +369,11 @@ function addSampleServices() {
                                 Kelola Kategori
                             </a>
                         </DropdownMenuItem>
+                        <DropdownMenuItem as-child>
+                            <a href="/product-option-groups" class="flex items-center gap-2 cursor-pointer">
+                                Pilihan Tambahan (gula, topping)
+                            </a>
+                        </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem class="flex items-center gap-2 cursor-pointer" @click="downloadExport">
                             <Download class="h-4 w-4" />

@@ -284,6 +284,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('product-categories.update');
         Route::delete('product-categories/{product_category}', [App\Http\Controllers\ProductController::class, 'productCategoriesDestroy'])
             ->name('product-categories.destroy');
+
+        // Grup pilihan tambahan (gula, topping, …). Nama route berawalan "products."
+        // agar kasir dengan hak menu Produk ikut bisa mengaksesnya.
+        Route::get('product-option-groups', [App\Http\Controllers\ModifierGroupController::class, 'index'])
+            ->name('products.option-groups.index');
+        Route::post('product-option-groups', [App\Http\Controllers\ModifierGroupController::class, 'store'])
+            ->name('products.option-groups.store');
+        Route::put('product-option-groups/{modifier_group}', [App\Http\Controllers\ModifierGroupController::class, 'update'])
+            ->name('products.option-groups.update');
+        Route::delete('product-option-groups/{modifier_group}', [App\Http\Controllers\ModifierGroupController::class, 'destroy'])
+            ->name('products.option-groups.destroy');
     });
     Route::get('customers/search', [App\Http\Controllers\CustomerController::class, 'search'])->middleware(['store.active']);
     Route::post('customers/quick-store', [App\Http\Controllers\CustomerController::class, 'quickStore'])->middleware(['store.active']);

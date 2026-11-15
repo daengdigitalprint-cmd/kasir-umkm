@@ -116,6 +116,14 @@ class Product extends Model
         return $this->hasMany(ProductSaleConsumption::class);
     }
 
+    /** Grup pilihan tambahan (gula, topping, …) yang ditempel ke produk ini. */
+    public function modifierGroups(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(ModifierGroup::class, 'modifier_group_product')
+            ->orderBy('modifier_groups.sort_order')
+            ->orderBy('modifier_groups.id');
+    }
+
     public function saleConsumptionsForVariant(?int $variantId = null): \Illuminate\Database\Eloquent\Builder
     {
         $query = ProductSaleConsumption::query()

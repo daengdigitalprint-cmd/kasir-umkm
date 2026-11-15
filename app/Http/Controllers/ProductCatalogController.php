@@ -35,6 +35,7 @@ class ProductCatalogController extends Controller
                     ),
                     'componentVariant' => fn ($q3) => $q3->select('id', 'product_id', 'name', 'stock_quantity'),
                 ]),
+                'modifierGroups:id,name,selection,is_required,options',
             ]);
 
         if ($updatedAfter) {
@@ -57,6 +58,7 @@ class ProductCatalogController extends Controller
                 'is_active' => (bool) $product->is_active,
                 'images' => $product->images,
                 'modifier_options' => $product->modifier_options,
+                'modifier_groups' => $product->modifierGroups,
                 'allows_decimal' => (bool) $product->allows_decimal,
                 'has_variants' => (bool) $product->has_variants,
                 'is_bundle' => (bool) $product->is_bundle,

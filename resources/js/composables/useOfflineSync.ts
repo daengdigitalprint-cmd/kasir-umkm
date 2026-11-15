@@ -94,6 +94,7 @@ async function syncPending() {
                     // Server mengabaikan diskon ini bila modul Diskon per Produk nonaktif.
                     line_discount: Number(item.line_discount) || 0,
                     modifiers: (item.modifiers as Array<{ key: string }> | undefined) ?? [],
+                    notes: (item.notes as string | null | undefined) ?? null,
                 })),
                 payment_method: rest.payment_method,
                 amount_paid: rest.amount_paid,

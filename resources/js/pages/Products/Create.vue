@@ -13,6 +13,10 @@ import { toastWarning, toastSuccess } from '@/lib/swal';
 import { useAllowsAdvancedRetail } from '@/composables/usePlanLimits';
 import BarcodeScanner from '@/components/BarcodeScanner.vue';
 import BarcodeGenerator from '@/components/BarcodeGenerator.vue';
+import OptionGroupsPicker from '@/components/products/OptionGroupsPicker.vue';
+import ProductFormModeToggle from '@/components/products/ProductFormModeToggle.vue';
+import { useProductFormMode } from '@/composables/useProductFormMode';
+import type { OptionGroup } from '@/types/optionGroups';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 interface CatalogPresets {
@@ -42,6 +46,7 @@ interface ProductCategoryOption {
 }
 
 interface Props {
+    wholesaleEnabled?: boolean;
     store: {
         id: number;
         name: string;
@@ -50,6 +55,7 @@ interface Props {
     catalogPresets?: CatalogPresets;
     batchTrackingEnabled?: boolean;
     fnbModifierEnabled?: boolean;
+    modifierGroups?: OptionGroup[];
     pharmacyFieldsEnabled?: boolean;
     barbershopEnabled?: boolean;
     bundleCatalogProducts?: BundleCatalogProduct[];
@@ -72,6 +78,7 @@ const props = withDefaults(defineProps<Props>(), {
     catalogPresets: () => ({ categories: [], units: [] }),
     batchTrackingEnabled: false,
     fnbModifierEnabled: false,
+    modifierGroups: () => [],
     pharmacyFieldsEnabled: false,
     barbershopEnabled: false,
     bundleCatalogProducts: () => [],
@@ -194,6 +201,7 @@ const form = useForm({
     bundles_json: '',
     sale_consumptions_json: '',
     modifier_options_json: '',
+    modifier_group_ids_json: '[]',
     pharmacy_sale_class: 'otc' as 'otc' | 'limited' | 'prescription',
     pharmacy_registration_no: '',
     service_duration_minutes: null as number | null,
@@ -247,6 +255,9 @@ const profitPercent = computed<number | null>(() => {
     if (cost <= 0) return null;
     return Math.round(((price - cost) / cost) * 10000) / 100;
 });
+
+/** Grup pilihan tambahan (gula, topping, …) yang ditempel ke produk ini. */
+const selectedModifierGroupIds = ref<number[]>([]);
 
 interface ModifierOptionRow {
     key: string;
@@ -448,6 +459,8 @@ interface ConsumptionFormRow {
  * Produk bervarian dikecualikan karena backend meminta konfigurasi varian
  * dilakukan setelah produk dibuat, lewat halaman Edit.
  */
+const { showAdvanced } = useProductFormMode(false, () => form.errors);
+
 const showConsumptionBlock = computed(
     () => !form.is_bundle && !form.has_variants && (form.inventory_type === 'sellable' || !form.inventory_type),
 );
@@ -635,6 +648,8 @@ const submit = () => {
         form.batches_json = '';
     }
 
+    form.modifier_group_ids_json = JSON.stringify(form.is_bundle ? [] : selectedModifierGroupIds.value);
+
     if (props.fnbModifierEnabled) {
         form.modifier_options_json = form.is_bundle
             ? ''
@@ -707,6 +722,8 @@ const submitAndAddAnother = () => {
         </div>
 
         <form @submit.prevent="submit" class="space-y-8">
+                <ProductFormModeToggle v-model="showAdvanced" />
+
                 <!-- Informasi Dasar -->
                 <Card>
                     <CardHeader>
@@ -766,9 +783,9 @@ const submitAndAddAnother = () => {
                             </div>
                         </div>
 
-                        <div class="grid gap-6 md:grid-cols-2">
+                        <div class="grid gap-6 md:grid-cols-2" v-show="showAdvanced">
                             <div class="space-y-2">
-                                <Label for="sku">SKU <span class="text-gray-500 font-normal">(Optional)</span></Label>
+                                <Label for="sku">SKU / kode produk <span class="text-gray-500 font-normal">(Opsional)</span></Label>
                                 <Input
                                     id="sku"
                                     v-model="form.sku"
@@ -844,7 +861,7 @@ const submitAndAddAnother = () => {
                             </div>
                         </div>
 
-                        <div class="space-y-2">
+                        <div class="space-y-2" v-show="showAdvanced">
                             <Label for="description">Deskripsi</Label>
                             <textarea
                                 id="description"
@@ -892,7 +909,7 @@ const submitAndAddAnother = () => {
                                 </p>
                             </div>
 
-                            <div class="space-y-2">
+                            <div class="space-y-2" v-if="wholesaleEnabled" v-show="showAdvanced">
                                 <Label for="wholesale_price">Harga Grosir</Label>
                                 <Input
                                     id="wholesale_price"
@@ -908,7 +925,7 @@ const submitAndAddAnother = () => {
                             </div>
 
                             <div class="space-y-2">
-                                <Label for="cost_price">Modal/HPP</Label>
+                                <Label for="cost_price">Harga modal</Label>
                                 <Input
                                     id="cost_price"
                                     v-model="costPriceDisplay"
@@ -926,9 +943,9 @@ const submitAndAddAnother = () => {
                             </div>
                         </div>
 
-                        <div class="grid gap-6 md:grid-cols-2">
+                        <div class="grid gap-6 md:grid-cols-2" v-show="showAdvanced">
                             <div class="space-y-2">
-                                <Label for="inventory_type">Jenis inventory *</Label>
+                                <Label for="inventory_type">Jenis barang *</Label>
                                 <select
                                     id="inventory_type"
                                     v-model="form.inventory_type"
@@ -937,12 +954,12 @@ const submitAndAddAnother = () => {
                                 >
                                     <option v-for="(label, key) in inventoryTypes" :key="key" :value="key">{{ label }}</option>
                                 </select>
-                                <p class="text-xs text-muted-foreground">Menentukan fungsi produk pada pembelian, recipe, produksi, dan POS.</p>
+                                <p class="text-xs text-muted-foreground">Barang jual tampil di kasir; bahan baku dan kemasan hanya dipakai untuk resep/produksi.</p>
                                 <div v-if="form.errors.inventory_type" class="text-sm text-red-600">{{ form.errors.inventory_type }}</div>
                             </div>
 
                             <div class="space-y-2">
-                                <Label for="base_unit">Satuan dasar ledger *</Label>
+                                <Label for="base_unit">Satuan dasar stok *</Label>
                                 <select
                                     id="base_unit"
                                     v-model="form.base_unit"
@@ -951,12 +968,12 @@ const submitAndAddAnother = () => {
                                 >
                                     <option v-for="(label, key) in baseUnits" :key="key" :value="key">{{ label }}</option>
                                 </select>
-                                <p class="text-xs text-muted-foreground">Stok internal disimpan dalam satuan dasar terpilih (pcs, gram, kg, ml, atau liter).</p>
+                                <p class="text-xs text-muted-foreground">Satuan untuk menghitung stok (pcs, gram, kg, ml, atau liter).</p>
                                 <div v-if="form.errors.base_unit" class="text-sm text-red-600">{{ form.errors.base_unit }}</div>
                             </div>
                         </div>
 
-                        <div class="grid gap-6 md:grid-cols-3">
+                        <div class="grid gap-6" :class="showAdvanced ? 'md:grid-cols-3' : 'md:grid-cols-2'">
                             <div class="space-y-2">
                                 <Label for="stock_quantity">Stok Awal *</Label>
                                 <Input
@@ -984,7 +1001,7 @@ const submitAndAddAnother = () => {
                                 </div>
                             </div>
 
-                            <div class="space-y-2">
+                            <div class="space-y-2" v-show="showAdvanced">
                                 <Label for="min_stock_level">Stok Minimum *</Label>
                                 <Input
                                     id="min_stock_level"
@@ -1024,7 +1041,7 @@ const submitAndAddAnother = () => {
                             </div>
                         </div>
 
-                        <div class="grid gap-6 md:grid-cols-2">
+                        <div class="grid gap-6 md:grid-cols-2" v-show="showAdvanced">
                             <div class="space-y-2">
                                 <Label for="brand">Merek</Label>
                                 <Input
@@ -1134,7 +1151,7 @@ const submitAndAddAnother = () => {
                             Produk akan selalu tersedia tanpa batasan stok
                         </p>
 
-                        <div class="flex items-center space-x-2">
+                        <div class="flex items-center space-x-2" v-show="showAdvanced">
                             <input
                                 type="checkbox"
                                 id="allow_negative_stock"
@@ -1146,11 +1163,11 @@ const submitAndAddAnother = () => {
                                 Izinkan Penjualan Stok Habis
                             </Label>
                         </div>
-                        <p class="text-xs text-muted-foreground ml-7 -mt-2" :class="{ 'opacity-50': form.unlimited_stock }">
+                        <p v-show="showAdvanced" class="text-xs text-muted-foreground ml-7 -mt-2" :class="{ 'opacity-50': form.unlimited_stock }">
                             Produk tetap bisa dijual meskipun stok habis. Stok akan menjadi negatif.
                         </p>
 
-                        <template v-if="allowsAdvancedRetail">
+                        <template v-if="allowsAdvancedRetail && showAdvanced">
                             <div class="flex items-center space-x-2">
                                 <Checkbox
                                     id="allows_decimal"
@@ -1394,14 +1411,14 @@ const submitAndAddAnother = () => {
                         </div>
 
                         <div
-                            v-if="showConsumptionBlock"
+                            v-if="showConsumptionBlock && (showAdvanced || consumptionEnabled)"
                             class="rounded-xl border border-violet-200 bg-violet-50/50 p-4 space-y-3"
                         >
                             <div class="flex flex-wrap items-center justify-between gap-2">
                                 <div>
-                                    <p class="text-sm font-semibold text-violet-900">Komponen konsumsi penjualan</p>
+                                    <p class="text-sm font-semibold text-violet-900">Bahan yang terpakai saat terjual</p>
                                     <p class="text-xs text-violet-900/90 mt-0.5">
-                                        Konfigurasi stok mana yang berkurang saat produk ini terjual (bahan baku / produksi output / packaging).
+                                        Mis. 1 es teh memakai 10 gram teh dan 1 gelas plastik. Stok bahan itu berkurang otomatis tiap produk ini terjual.
                                     </p>
                                 </div>
                                 <Button
@@ -1424,7 +1441,7 @@ const submitAndAddAnother = () => {
                                     class="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
                                 />
                                 <Label for="consumption_enabled_create" class="text-sm text-violet-900">
-                                    Aktifkan komponen konsumsi untuk produk ini
+                                    Produk ini memakai bahan baku saat terjual
                                 </Label>
                             </div>
                             <p v-if="!consumptionEnabled" class="text-xs text-violet-900/80 ml-6 -mt-1">
@@ -1486,6 +1503,16 @@ const submitAndAddAnother = () => {
                                 {{ form.errors.sale_consumptions_json }}
                             </div>
                         </div>
+
+
+                        <button
+                            v-if="!showAdvanced"
+                            type="button"
+                            class="text-sm font-medium text-primary underline-offset-2 hover:underline"
+                            @click="showAdvanced = true"
+                        >
+                            + Tampilkan pengaturan lanjutan (stok minimum, pajak, varian, paket, bahan baku)
+                        </button>
 
                         <div
                             v-if="batchTrackingEnabled && form.track_stock && !form.has_variants && !form.is_bundle"
@@ -1597,11 +1624,18 @@ const submitAndAddAnother = () => {
                     </CardContent>
                 </Card>
 
+                <OptionGroupsPicker
+                    v-if="!form.is_bundle"
+                    v-model="selectedModifierGroupIds"
+                    :groups="modifierGroups"
+                />
+
                 <Card v-if="fnbModifierEnabled && !form.is_bundle">
                     <CardHeader>
-                        <CardTitle>Opsi modifier (F&amp;B)</CardTitle>
+                        <CardTitle>Pilihan khusus produk ini</CardTitle>
                         <CardDescription>
-                            Tambahan harga per opsi (level pedas, topping, ukuran minuman). Kunci boleh kosong — akan dibuat otomatis dari nama.
+                            Tambahan yang hanya ada di produk ini dan boleh dipilih lebih dari satu. Untuk pilihan yang dipakai banyak
+                            produk (gula, es, topping), gunakan grup di atas.
                         </CardDescription>
                     </CardHeader>
                     <CardContent class="space-y-3">
@@ -1618,7 +1652,6 @@ const submitAndAddAnother = () => {
                             <table class="w-full text-sm">
                                 <thead>
                                     <tr class="border-b bg-muted/40 text-left">
-                                        <th class="p-2 font-semibold w-[100px]">Kunci</th>
                                         <th class="p-2 font-semibold min-w-[140px]">Nama</th>
                                         <th class="p-2 font-semibold w-[120px]">Harga +</th>
                                         <th class="p-2 w-10"></th>
@@ -1626,9 +1659,6 @@ const submitAndAddAnother = () => {
                                 </thead>
                                 <tbody>
                                     <tr v-for="(row, idx) in modifierOptionRows" :key="idx" class="border-b last:border-0">
-                                        <td class="p-2">
-                                            <Input v-model="row.key" type="text" placeholder="auto" class="h-9" />
-                                        </td>
                                         <td class="p-2">
                                             <Input v-model="row.label" type="text" placeholder="Contoh: Pedas level 2" class="h-9" />
                                         </td>

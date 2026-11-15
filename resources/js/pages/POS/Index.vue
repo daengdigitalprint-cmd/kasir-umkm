@@ -65,9 +65,33 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 
 interface ProductModifierOption {
     key: string;
+    /** Teks di keranjang; opsi grup memakai awalan nama grup ("Gula: Sedikit"). */
     label: string;
     price: number;
+    /** Teks di popup pilihan (tanpa awalan grup). */
+    optionLabel?: string;
 }
+
+interface ProductModifierGroup {
+    id: number;
+    name: string;
+    selection: 'single' | 'multiple';
+    is_required: boolean;
+    options?: Array<{ key: string; label: string; price: number | string }> | null;
+}
+
+/** Bagian di popup pilihan: satu grup, atau "Tambahan" untuk opsi khusus produk. */
+interface ModifierPickerSection {
+    id: string;
+    name: string;
+    single: boolean;
+    required: boolean;
+    options: ProductModifierOption[];
+}
+
+/** Kunci baris transaksi untuk catatan bebas per item (lihat ModifierOptions::NOTE_KEY). */
+const ITEM_NOTE_KEY = '__note';
+const ITEM_NOTE_MAX = 150;
 
 interface ProductVariant {
     id: number;
@@ -140,6 +164,7 @@ interface Product {
     sale_consumptions?: SaleConsumption[];
     image_url?: string;
     modifier_options?: ProductModifierOption[] | null;
+    modifier_groups?: ProductModifierGroup[] | null;
     pharmacy_sale_class?: string | null;
 }
 
@@ -267,6 +292,8 @@ interface CartItem {
     quantity: number;
     subtotal: number;
     selectedModifiers: ProductModifierOption[];
+    /** Catatan bebas kasir untuk item ini (mis. "es dipisah"). */
+    note?: string;
     /** Diskon manual per baris (Rupiah), dibatasi maksimal sebesar subtotal baris. */
     lineDiscount?: number;
 }
@@ -730,6 +757,7 @@ interface SaveOrderForm {
         quantity: number;
         unit_price: number;
         modifiers: any[];
+        notes?: string | null;
     }>;
     order_type: 'dine_in' | 'takeaway' | 'delivery' | '';
     table_reference: string;
@@ -1190,6 +1218,7 @@ const removeLoyaltyVoucher = () => {
 const modifierPickerOpen = ref(false);
 const modifierPickerProduct = ref<Product | null>(null);
 const modifierPickerSelectedKeys = ref<string[]>([]);
+const modifierPickerNote = ref('');
 const pendingVariantForModifier = ref<ProductVariant | null>(null);
 
 const variantPickerOpen = ref(false);
@@ -1510,18 +1539,63 @@ function handleSearchEnter() {
     }
 }
 
-function normalizedModifierOptions(product: Product): ProductModifierOption[] {
-    const raw = product.modifier_options;
-    if (!Array.isArray(raw) || raw.length === 0) {
-        return [];
+/** Bagian pilihan produk: tiap grup yang ditempel + opsi khusus produk ("Tambahan"). */
+function modifierPickerSections(product: Product): ModifierPickerSection[] {
+    const sections: ModifierPickerSection[] = [];
+    for (const g of Array.isArray(product.modifier_groups) ? product.modifier_groups : []) {
+        const options = (Array.isArray(g.options) ? g.options : [])
+            .filter((o) => o && typeof o.key === 'string' && o.key && o.label)
+            .map((o) => ({
+                // Kunci harus sama dengan ModifierGroup::optionKey() di server.
+                key: `g${g.id}:${o.key}`,
+                label: `${g.name}: ${o.label}`,
+                optionLabel: String(o.label),
+                price: Math.max(0, Number(o.price) || 0),
+            }));
+        if (options.length > 0) {
+            sections.push({
+                id: `g${g.id}`,
+                name: g.name,
+                single: g.selection === 'single',
+                required: !!g.is_required,
+                options,
+            });
+        }
     }
-    return raw
+    const own = (Array.isArray(product.modifier_options) ? product.modifier_options : [])
         .filter((o) => o && typeof o.key === 'string' && o.key && o.label)
         .map((o) => ({
             key: String(o.key),
             label: String(o.label),
+            optionLabel: String(o.label),
             price: Math.max(0, Number(o.price) || 0),
         }));
+    if (own.length > 0) {
+        sections.push({ id: 'own', name: 'Tambahan', single: false, required: false, options: own });
+    }
+    return sections;
+}
+
+function normalizedModifierOptions(product: Product): ProductModifierOption[] {
+    return modifierPickerSections(product).flatMap((s) => s.options);
+}
+
+/** Ambil catatan item dari snapshot modifiers transaksi/open bill. */
+function hydrationNote(raw: unknown): string {
+    if (!Array.isArray(raw)) {
+        return '';
+    }
+    const entry = raw.find((x) => x && typeof x === 'object' && (x as { key?: unknown }).key === ITEM_NOTE_KEY) as
+        | { note?: unknown }
+        | undefined;
+    return entry && typeof entry.note === 'string' ? entry.note : '';
+}
+
+function cleanItemNote(raw: string | null | undefined): string {
+    return String(raw ?? '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, ITEM_NOTE_MAX);
 }
 
 function hydrationModifiersForProduct(product: Product, raw: unknown): ProductModifierOption[] {
@@ -1673,6 +1747,7 @@ function hydrateFromPreOrder(h: PreOrderHydration) {
             quantity: qty,
             subtotal: 0,
             selectedModifiers,
+            note: hydrationNote(line.modifiers),
         };
         recalcLine(item);
         cart.value.push(item);
@@ -1710,6 +1785,7 @@ function proceedToModifiersOrAdd(product: Product, variant: ProductVariant | nul
     }
     modifierPickerProduct.value = product;
     modifierPickerSelectedKeys.value = [];
+    modifierPickerNote.value = '';
     modifierPickerOpen.value = true;
 }
 
@@ -1866,7 +1942,7 @@ async function showComponentStockIssuesModal(product: Product, issues: Component
     return result.isConfirmed;
 }
 
-function addToCartInternal(product: Product, variant: ProductVariant | null, selectedModifiers: ProductModifierOption[]) {
+function addToCartInternal(product: Product, variant: ProductVariant | null, selectedModifiers: ProductModifierOption[], note = '') {
     if (product.has_variants) {
         if (!variant) {
             return;
@@ -1879,7 +1955,11 @@ function addToCartInternal(product: Product, variant: ProductVariant | null, sel
     const mk = modifiersKey(selectedModifiers);
     const vk = variantScopeKey(variant);
     const existingItem = cart.value.find(
-        (item) => item.product.id === product.id && variantScopeKey(item.variant) === vk && modifiersKey(item.selectedModifiers) === mk,
+        (item) =>
+            item.product.id === product.id &&
+            variantScopeKey(item.variant) === vk &&
+            modifiersKey(item.selectedModifiers) === mk &&
+            (item.note ?? '') === note,
     );
     const step = qtyStep(product);
     const stk = lineStock(product, variant);
@@ -1902,6 +1982,7 @@ function addToCartInternal(product: Product, variant: ProductVariant | null, sel
             quantity: start,
             subtotal: 0,
             selectedModifiers,
+            note,
         };
         recalcLine(item);
         cart.value.push(item);
@@ -1981,13 +2062,41 @@ function cancelVariantPicker() {
     variantPickerProduct.value = null;
 }
 
-function toggleModifierPickerKey(key: string) {
+function toggleModifierPickerKey(section: ModifierPickerSection, key: string) {
     const cur = modifierPickerSelectedKeys.value;
-    const i = cur.indexOf(key);
-    if (i >= 0) {
-        modifierPickerSelectedKeys.value = cur.filter((k) => k !== key);
-    } else {
-        modifierPickerSelectedKeys.value = [...cur, key];
+    if (section.single) {
+        // Pilih satu: ganti pilihan lain di grup yang sama; klik ulang membatalkan bila tidak wajib.
+        const others = cur.filter((k) => !section.options.some((o) => o.key === k));
+        modifierPickerSelectedKeys.value = cur.includes(key) && !section.required ? others : [...others, key];
+        return;
+    }
+    modifierPickerSelectedKeys.value = cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key];
+}
+
+/** Total tambahan harga dari pilihan yang sedang dicentang di popup. */
+const modifierPickerExtra = computed(() => {
+    const p = modifierPickerProduct.value;
+    if (!p) return 0;
+    return normalizedModifierOptions(p)
+        .filter((o) => modifierPickerSelectedKeys.value.includes(o.key))
+        .reduce((sum, o) => sum + o.price, 0);
+});
+
+/** Ubah catatan bebas pada baris keranjang (tersedia untuk semua produk). */
+async function editCartItemNote(item: CartItem) {
+    const result = await Swal.fire({
+        title: 'Catatan item',
+        text: item.product.name,
+        input: 'text',
+        inputValue: item.note ?? '',
+        inputPlaceholder: 'Mis. es dipisah, jangan pakai sedotan',
+        inputAttributes: { maxlength: String(ITEM_NOTE_MAX), autocapitalize: 'sentences' },
+        showCancelButton: true,
+        confirmButtonText: 'Simpan',
+        cancelButtonText: 'Batal',
+    });
+    if (result.isConfirmed) {
+        item.note = cleanItemNote(result.value as string);
     }
 }
 
@@ -1996,13 +2105,21 @@ function confirmModifierPicker() {
     if (!p) {
         return;
     }
-    const opts = normalizedModifierOptions(p);
-    const selected = opts.filter((o) => modifierPickerSelectedKeys.value.includes(o.key));
+    const sections = modifierPickerSections(p);
+    const missing = sections.find(
+        (s) => s.required && !s.options.some((o) => modifierPickerSelectedKeys.value.includes(o.key)),
+    );
+    if (missing) {
+        toastWarning(`Pilih ${missing.name} dulu.`);
+        return;
+    }
+    const selected = sections.flatMap((s) => s.options).filter((o) => modifierPickerSelectedKeys.value.includes(o.key));
     const v = pendingVariantForModifier.value;
-    addToCartInternal(p, v, selected);
+    addToCartInternal(p, v, selected, cleanItemNote(modifierPickerNote.value));
     modifierPickerOpen.value = false;
     modifierPickerProduct.value = null;
     modifierPickerSelectedKeys.value = [];
+    modifierPickerNote.value = '';
     pendingVariantForModifier.value = null;
 }
 
@@ -2010,6 +2127,7 @@ function cancelModifierPicker() {
     modifierPickerOpen.value = false;
     modifierPickerProduct.value = null;
     modifierPickerSelectedKeys.value = [];
+    modifierPickerNote.value = '';
     pendingVariantForModifier.value = null;
 }
 
@@ -2501,6 +2619,7 @@ async function loadOpenBillToCart(bill: OpenBill) {
                 quantity: roundCartQty(Number(it.quantity), product),
                 subtotal: 0,
                 selectedModifiers: hydrationModifiersForProduct(product, it.modifiers ?? []),
+                note: hydrationNote(it.modifiers),
             };
             recalcLine(item);
             newCart.push(item);
@@ -2657,6 +2776,7 @@ function openSaveOrderDrawer() {
         quantity: it.quantity,
         unit_price: it.subtotal / Math.max(it.quantity, 0.0001),
         modifiers: (it.selectedModifiers ?? []).map((m) => ({ key: m.key })),
+        notes: it.note || null,
     }));
     saveOrderForm.value.order_type = orderType.value || 'dine_in';
     saveOrderForm.value.table_reference = tableReference.value;
@@ -2806,6 +2926,7 @@ const processPayment = async () => {
             subtotal: item.subtotal,
             line_discount: effectiveLineDiscount(item),
             modifiers: item.selectedModifiers.map((m) => ({ key: m.key })),
+            notes: item.note || null,
             product_name: item.product.name,
             variant_name: item.variant?.name ?? null,
         })),
@@ -4144,8 +4265,17 @@ const sendWhatsAppInvoice = () => {
                                             {{ item.variant.name }}
                                         </p>
                                         <ul v-if="item.selectedModifiers.length > 0" class="mt-0.5 space-y-0.5 text-[10px] text-violet-600">
-                                            <li v-for="m in item.selectedModifiers" :key="m.key">+ {{ m.label }} (+{{ formatCurrency(m.price) }})</li>
+                                            <li v-for="m in item.selectedModifiers" :key="m.key">
+                                                + {{ m.label }}<template v-if="m.price > 0"> (+{{ formatCurrency(m.price) }})</template>
+                                            </li>
                                         </ul>
+                                        <button
+                                            type="button"
+                                            class="mt-0.5 block max-w-full truncate text-left text-[10px] font-medium text-amber-700 hover:underline"
+                                            @click="editCartItemNote(item)"
+                                        >
+                                            {{ item.note ? `Catatan: ${item.note}` : '+ Catatan' }}
+                                        </button>
                                         <!-- Harga + Kontrol Qty sejajar di bawah -->
                                         <div class="mt-1 flex items-center justify-between gap-2">
                                             <p class="text-sm font-bold text-gray-900 tabular-nums">
@@ -5262,27 +5392,54 @@ const sendWhatsAppInvoice = () => {
                             <h3 class="font-bold text-slate-900">
                                 {{ modifierPickerProduct.name }}{{ pendingVariantForModifier ? ` — ${pendingVariantForModifier.name}` : '' }}
                             </h3>
-                            <p class="mt-1 text-xs text-slate-500">Pilih tambahan (boleh tidak pilih).</p>
+                            <p class="mt-1 text-xs text-slate-500">Pilih sesuai pesanan pelanggan.</p>
                         </div>
-                        <div class="max-h-56 space-y-2 overflow-y-auto">
-                            <label
-                                v-for="opt in normalizedModifierOptions(modifierPickerProduct)"
-                                :key="opt.key"
-                                class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-100 p-2 text-sm hover:bg-slate-50"
-                            >
-                                <input
-                                    type="checkbox"
-                                    class="rounded border-gray-300"
-                                    :checked="modifierPickerSelectedKeys.includes(opt.key)"
-                                    @change="toggleModifierPickerKey(opt.key)"
+                        <div class="max-h-[55vh] space-y-4 overflow-y-auto pr-1">
+                            <div v-for="section in modifierPickerSections(modifierPickerProduct)" :key="section.id" class="space-y-1.5">
+                                <div class="flex items-center justify-between gap-2">
+                                    <p class="text-sm font-semibold text-slate-800">{{ section.name }}</p>
+                                    <span
+                                        class="rounded-full px-2 py-0.5 text-[10px] font-medium"
+                                        :class="section.required ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'"
+                                    >
+                                        {{ section.required ? 'Wajib' : 'Opsional' }} · {{ section.single ? 'pilih 1' : 'boleh banyak' }}
+                                    </span>
+                                </div>
+                                <label
+                                    v-for="opt in section.options"
+                                    :key="opt.key"
+                                    class="flex cursor-pointer items-center gap-2 rounded-lg border p-2 text-sm hover:bg-slate-50"
+                                    :class="modifierPickerSelectedKeys.includes(opt.key) ? 'border-teal-500 bg-teal-50/60' : 'border-slate-100'"
+                                >
+                                    <input
+                                        :type="section.single ? 'radio' : 'checkbox'"
+                                        :name="`modifier-${section.id}`"
+                                        class="border-gray-300"
+                                        :class="section.single ? '' : 'rounded'"
+                                        :checked="modifierPickerSelectedKeys.includes(opt.key)"
+                                        @click="toggleModifierPickerKey(section, opt.key)"
+                                    />
+                                    <span class="flex-1">{{ opt.optionLabel ?? opt.label }}</span>
+                                    <span v-if="opt.price > 0" class="font-medium text-emerald-700">+{{ formatCurrency(opt.price) }}</span>
+                                </label>
+                            </div>
+                            <div class="space-y-1.5">
+                                <label for="modifier-picker-note" class="text-sm font-semibold text-slate-800">Catatan</label>
+                                <Input
+                                    id="modifier-picker-note"
+                                    v-model="modifierPickerNote"
+                                    type="text"
+                                    :maxlength="ITEM_NOTE_MAX"
+                                    placeholder="Mis. es dipisah (opsional)"
+                                    @keyup.enter="confirmModifierPicker"
                                 />
-                                <span class="flex-1">{{ opt.label }}</span>
-                                <span class="font-medium text-emerald-700">+{{ formatCurrency(opt.price) }}</span>
-                            </label>
+                            </div>
                         </div>
                         <div class="flex gap-2">
                             <Button variant="outline" class="flex-1" type="button" @click="cancelModifierPicker"> Batal </Button>
-                            <Button class="flex-1" type="button" @click="confirmModifierPicker"> Tambah </Button>
+                            <Button class="flex-1" type="button" @click="confirmModifierPicker">
+                                Tambah<template v-if="modifierPickerExtra > 0"> (+{{ formatCurrency(modifierPickerExtra) }})</template>
+                            </Button>
                         </div>
                     </div>
                 </div>

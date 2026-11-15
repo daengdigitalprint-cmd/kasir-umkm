@@ -23,6 +23,7 @@ export interface OfflineSaleItem {
     subtotal: number;
     line_discount?: number;
     modifiers?: { key: string }[];
+    notes?: string | null;
     product_name: string;
     variant_name?: string | null;
 }

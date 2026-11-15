@@ -88,6 +88,7 @@ class POSController extends Controller
                 'saleConsumptions' => fn ($q) => $q->select(
                     'id', 'product_id', 'product_variant_id', 'component_product_id', 'quantity', 'base_unit', 'sort_order',
                 ),
+                'modifierGroups:id,name,selection,is_required,options',
             ])
             ->get()
             ->append('image_url');
@@ -434,6 +435,7 @@ class POSController extends Controller
                 'items.*.variant_name' => 'nullable|string|max:255',
                 'items.*.modifiers' => 'nullable|array',
                 'items.*.modifiers.*.key' => 'required|string|max:64',
+                'items.*.notes' => 'nullable|string|max:150',
                 'items.*.line_discount' => 'nullable|numeric|min:0',
                 'payment_method' => 'required|in:cash,card,ewallet,transfer,other,credit',
                 'amount_paid' => 'required|numeric|min:0',
@@ -711,7 +713,7 @@ class POSController extends Controller
                     SaleConsumptionResolver::validateStock($store, $product, $variant, $qty);
                 }
 
-                $modifiers = $this->normalizeLineModifiers($product, $item['modifiers'] ?? null);
+                $modifiers = $this->normalizeLineModifiers($product, $item['modifiers'] ?? null, $item['notes'] ?? null);
                 $modifierUnitSum = 0.0;
                 foreach ($modifiers as $m) {
                     $modifierUnitSum += (float) $m['price'];
@@ -1385,6 +1387,7 @@ class POSController extends Controller
                 'items.*.quantity' => ['required', 'numeric', 'min:0.0001'],
                 'items.*.unit_price' => 'nullable|numeric|min:0',
                 'items.*.modifiers' => 'nullable|array',
+                'items.*.notes' => 'nullable|string|max:150',
                 'order_type' => 'nullable|in:dine_in,takeaway,delivery',
                 'table_reference' => 'nullable|string|max:64',
                 'customer_name' => 'nullable|string|max:255',
@@ -1443,7 +1446,7 @@ class POSController extends Controller
                     }
                 }
 
-                $modifiers = $this->normalizeLineModifiers($product, $item['modifiers'] ?? null);
+                $modifiers = $this->normalizeLineModifiers($product, $item['modifiers'] ?? null, $item['notes'] ?? null);
                 $modifierUnitSum = 0.0;
                 foreach ($modifiers as $m) {
                     $modifierUnitSum += (float) $m['price'];
@@ -2286,37 +2289,9 @@ class POSController extends Controller
         ]);
     }
 
-    private function normalizeLineModifiers(Product $product, ?array $raw): array
+    private function normalizeLineModifiers(Product $product, ?array $raw, ?string $note = null): array
     {
-        if ($raw === null || $raw === []) {
-            return [];
-        }
-
-        if ($product->is_bundle) {
-            return [];
-        }
-
-        $options = collect($product->modifier_options ?? []);
-        $byKey = $options->keyBy(fn ($o) => (string) ($o['key'] ?? ''));
-
-        $out = [];
-        foreach ($raw as $m) {
-            if (! is_array($m)) {
-                continue;
-            }
-            $key = (string) ($m['key'] ?? '');
-            if ($key === '' || ! $byKey->has($key)) {
-                continue;
-            }
-            $opt = $byKey->get($key);
-            $out[] = [
-                'key' => $key,
-                'label' => (string) ($opt['label'] ?? $key),
-                'price' => round(max(0.0, (float) ($opt['price'] ?? 0)), 2),
-            ];
-        }
-
-        return $out;
+        return \App\Support\ModifierOptions::resolveLine($product, $raw, $note);
     }
 
     private function ensureBatchStockAlignedWithProduct(Product $product): void

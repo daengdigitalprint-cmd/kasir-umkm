@@ -31,6 +31,8 @@ class StoreDataSnapshot
         'product_variants' => 'store',
         'product_bundle_items' => ['bundle_product_id', 'products'],
         'product_batches' => 'store',
+        'modifier_groups' => 'store',
+        'modifier_group_product' => ['modifier_group_id', 'modifier_groups'],
         'customers' => 'store',
         'suppliers' => 'store',
         'discounts' => 'store',

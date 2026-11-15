@@ -331,12 +331,14 @@ class ProductController extends Controller
 
         return Inertia::render('Products/Create', [
             'store' => $store,
+            'wholesaleEnabled' => (bool) ($store->settings['wholesale_enabled'] ?? false),
             'productCategories' => $productCategories,
             'catalogPresets' => BusinessTypePresets::catalog($store->business_type ?? 'general'),
             'inventoryTypes' => InventoryType::LABELS,
             'baseUnits' => BaseUnit::LABELS,
             'batchTrackingEnabled' => BatchTracking::enabled($store),
             'fnbModifierEnabled' => ($store->business_type ?? '') === 'fnb',
+            'modifierGroups' => ModifierGroupController::groupsForStore($store),
             'pharmacyFieldsEnabled' => PharmacyFeatures::enabled($store),
             'barbershopEnabled' => BarbershopFeatures::enabled($store),
             'bundleCatalogProducts' => $bundleCatalogProducts,
@@ -465,6 +467,7 @@ class ProductController extends Controller
             'bundles_json' => 'nullable|string|max:65500',
             'sale_consumptions_json' => 'nullable|string|max:65500',
             'modifier_options_json' => 'nullable|string|max:65535',
+            'modifier_group_ids_json' => 'nullable|string|max:2000',
             'service_duration_minutes' => 'nullable|integer|min:1|max:1440',
             'barber_commission_mode' => 'sometimes|nullable|string|in:percent,fixed',
             'barber_commission_value' => 'sometimes|nullable|numeric|min:0|max:100000000',
@@ -619,6 +622,8 @@ class ProductController extends Controller
             $product->update(['stock_quantity' => ProductQuantity::normalizeStorageAmount($product, $sum)]);
         }
 
+        $this->syncModifierGroups($product, $request->input('modifier_group_ids_json'));
+
         if (! $product->has_variants && ! $product->is_bundle) {
             $this->replaceSaleConsumptions($product, $normalizedSaleConsumptions);
         }
@@ -724,6 +729,7 @@ class ProductController extends Controller
             'images' => $product->images ?? [],
             'image_url' => $product->getImageUrlAttribute(),
             'modifier_options' => $product->modifier_options ?? [],
+            'modifier_group_ids' => $product->modifierGroups()->pluck('modifier_groups.id')->all(),
             'pharmacy_sale_class' => $product->pharmacy_sale_class ?? 'otc',
             'pharmacy_registration_no' => $product->pharmacy_registration_no ?? '',
             'service_duration_minutes' => $product->service_duration_minutes,
@@ -821,6 +827,7 @@ class ProductController extends Controller
             'baseUnits' => BaseUnit::LABELS,
             'batchTrackingEnabled' => BatchTracking::enabled($store),
             'fnbModifierEnabled' => ($store->business_type ?? '') === 'fnb',
+            'modifierGroups' => ModifierGroupController::groupsForStore($store),
             'pharmacyFieldsEnabled' => PharmacyFeatures::enabled($store),
             'barbershopEnabled' => BarbershopFeatures::enabled($store),
             'batches' => $batches,
@@ -912,6 +919,7 @@ class ProductController extends Controller
             'bundles_json' => 'nullable|string|max:65500',
             'sale_consumptions_json' => 'nullable|string|max:65500',
             'modifier_options_json' => 'nullable|string|max:65535',
+            'modifier_group_ids_json' => 'nullable|string|max:2000',
             'service_duration_minutes' => 'nullable|integer|min:1|max:1440',
             'barber_commission_mode' => 'sometimes|nullable|string|in:percent,fixed',
             'barber_commission_value' => 'sometimes|nullable|numeric|min:0|max:100000000',
@@ -1120,9 +1128,11 @@ class ProductController extends Controller
             'is_dirty' => $product->isDirty('unlimited_stock'),
         ]);
 
-        $updateSuccess = DB::transaction(function () use ($product, $dataToUpdate, $normalizedSaleConsumptions) {
+        $modifierGroupIdsJson = $request->input('modifier_group_ids_json');
+        $updateSuccess = DB::transaction(function () use ($product, $dataToUpdate, $normalizedSaleConsumptions, $modifierGroupIdsJson) {
             $updated = $product->update($dataToUpdate);
             $this->replaceSaleConsumptions($product, $normalizedSaleConsumptions);
+            $this->syncModifierGroups($product, $modifierGroupIdsJson);
 
             return $updated;
         });
@@ -1351,6 +1361,41 @@ class ProductController extends Controller
     /**
      * @return array<int, array{key: string, label: string, price: float}>|null
      */
+    /**
+     * Tempel grup pilihan tambahan ke produk. Null = form tidak mengirim field ini
+     * (mis. klien lama) sehingga tautan yang ada dibiarkan. Paket tidak memakai pilihan.
+     */
+    private function syncModifierGroups(Product $product, ?string $raw): void
+    {
+        if ($raw === null) {
+            return;
+        }
+
+        $ids = json_decode($raw, true);
+        $ids = is_array($ids) ? array_values(array_unique(array_map('intval', $ids))) : [];
+
+        if ($product->is_bundle || $ids === []) {
+            $product->modifierGroups()->detach();
+
+            return;
+        }
+
+        $valid = \App\Models\ModifierGroup::query()
+            ->where('store_id', $product->store_id)
+            ->whereIn('id', $ids)
+            ->pluck('id')
+            ->all();
+
+        $sync = [];
+        foreach ($ids as $order => $id) {
+            if (in_array($id, $valid, true)) {
+                $sync[$id] = ['sort_order' => $order];
+            }
+        }
+
+        $product->modifierGroups()->sync($sync);
+    }
+
     private function decodeModifierOptionsJson(?string $raw): ?array
     {
         if ($raw === null || trim((string) $raw) === '') {
