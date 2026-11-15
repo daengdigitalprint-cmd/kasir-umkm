@@ -1235,13 +1235,19 @@ const salesChannel = ref<'walk_in' | 'dine_in' | 'takeaway' | 'delivery' | 'gofo
 /** Komisi pesanan online (otomatis terisi saat pilih gofood/grabfood/shopeefood, bisa edit). */
 const commissionPercent = ref(0);
 /** Daftar sumber pesanan untuk dropdown, dikelompokkan Penjualan Langsung / Pesanan Online.
- *  Pesanan Online (aggregator) hanya tampil jika modul online aktif di pengaturan toko. */
+ *  Pesanan Online (aggregator) hanya tampil jika modul online aktif di pengaturan toko.
+ *  Take Away / Delivery mengikuti saklar "Tampilkan pilihan tipe pesanan" toko F&B. */
+const orderTypeChoicesEnabled = computed(() => props.store?.fnb_enabled === true && props.store?.fnb_order_types_enabled !== false);
 const channelOptions = computed(() => {
     const onlineEnabled = props.store?.online_sales_enabled === true;
     const langsung = [
         { value: 'walk_in', label: 'Walk In' },
-        { value: 'takeaway', label: 'Take Away' },
-        { value: 'delivery', label: 'Delivery' },
+        ...(orderTypeChoicesEnabled.value
+            ? [
+                  { value: 'takeaway', label: 'Take Away' },
+                  { value: 'delivery', label: 'Delivery' },
+              ]
+            : []),
     ];
     const online = [
         { value: 'gofood', label: 'GoFood' },
@@ -1251,6 +1257,8 @@ const channelOptions = computed(() => {
     return [{ group: 'Direct', items: langsung }, ...(onlineEnabled ? [{ group: 'Online', items: online }] : [])];
 });
 /** Komisi default per aggregator — diambil dari pengaturan toko, fallback ke nilai bawaan. */
+/** Blok Sumber Pesanan hanya berguna bila ada lebih dari satu pilihan (bukan hanya Walk In). */
+const showSalesChannelPicker = computed(() => channelOptions.value.reduce((n, g) => n + g.items.length, 0) > 1);
 const defaultCommissionByChannel = computed<Record<string, number>>(() => ({
     gofood: props.store?.online_commission_gofood ?? 20,
     grabfood: props.store?.online_commission_grabfood ?? 20,
@@ -4876,7 +4884,7 @@ const sendWhatsAppInvoice = () => {
                                         </div>
 
                                         <!-- Sumber Pesanan -->
-                                        <div v-if="props.store?.online_sales_enabled === true || props.store?.fnb_enabled" class="space-y-2">
+                                        <div v-if="showSalesChannelPicker" class="space-y-2">
                                             <Label class="text-sm font-medium text-gray-700">Sumber Pesanan</Label>
                                             <div class="space-y-2">
                                                 <div v-for="grp in channelOptions" :key="grp.group" class="space-y-1.5">
@@ -5714,7 +5722,7 @@ const sendWhatsAppInvoice = () => {
                                         maxlength="255"
                                     />
                                 </div>
-                                <div v-if="store?.fnb_enabled">
+                                <div v-if="orderTypeChoicesEnabled">
                                     <Label for="so-type" class="text-xs font-medium">Tipe Pesanan</Label>
                                     <select
                                         id="so-type"
