@@ -4017,7 +4017,7 @@ const sendWhatsAppInvoice = () => {
                                     <Card
                                         v-for="product in visibleProducts"
                                         :key="product.id"
-                                        class="cursor-pointer border border-gray-200 py-0 shadow-none transition-all duration-200 hover:border-blue-300 hover:shadow-sm"
+                                        class="cursor-pointer rounded-2xl border border-gray-200 py-0 shadow-none transition-all duration-200 hover:border-blue-300 hover:shadow-sm"
                                         @click="requestAddToCart(product)"
                                     >
                                         <CardContent class="p-2 md:p-2.5">
@@ -4042,7 +4042,7 @@ const sendWhatsAppInvoice = () => {
                                                 </div>
 
                                                 <div class="min-w-0 flex-1">
-                                                    <h3 class="mb-0.5 truncate text-base font-semibold text-gray-900">
+                                                    <h3 class="mb-0.5 truncate text-lg font-semibold text-gray-900">
                                                         {{ product.name }}
                                                     </h3>
                                                     <Badge
@@ -4059,11 +4059,11 @@ const sendWhatsAppInvoice = () => {
                                                             {{ pharmacySaleLabel(product.pharmacy_sale_class) }}
                                                         </Badge>
                                                     </div>
-                                                    <p v-if="product.inventory_type !== 'production_output' && productCardPrice(product)" class="text-base font-bold text-primary">
-                                                        <span v-if="productCardPrice(product)!.fromVariant" class="text-xs font-normal text-slate-400">Mulai </span>{{ formatCurrency(productCardPrice(product)!.price) }}
+                                                    <p v-if="product.inventory_type !== 'production_output' && productCardPrice(product)" class="text-lg font-bold text-primary">
+                                                        <span v-if="productCardPrice(product)!.fromVariant" class="text-sm font-normal text-slate-400">Mulai </span>{{ formatCurrency(productCardPrice(product)!.price) }}
                                                     </p>
-                                                    <p v-else-if="product.inventory_type !== 'production_output'" class="text-xs text-slate-400">Pilih varian</p>
-                                                    <p v-else class="text-xs text-gray-400">Stok cair</p>
+                                                    <p v-else-if="product.inventory_type !== 'production_output'" class="text-sm text-slate-400">Pilih varian</p>
+                                                    <p v-else class="text-sm text-gray-400">Stok cair</p>
                                                     <Badge
                                                         v-if="product.unlimited_stock"
                                                         class="mt-0.5 border-emerald-200 bg-emerald-100 text-xs text-emerald-700"
@@ -4106,7 +4106,7 @@ const sendWhatsAppInvoice = () => {
                                                     </div>
                                                 </div>
 
-                                                <h3 class="mb-0.5 line-clamp-2 min-h-[2em] text-base leading-tight font-semibold text-gray-900">
+                                                <h3 class="mb-0.5 line-clamp-2 min-h-[2em] text-lg leading-tight font-semibold text-gray-900">
                                                     {{ product.name }}
                                                 </h3>
 
@@ -4128,24 +4128,24 @@ const sendWhatsAppInvoice = () => {
 
                                                 <p
                                                     v-if="product.inventory_type !== 'production_output' && productCardPrice(product)"
-                                                    class="mb-1.5 text-xs font-bold text-primary"
+                                                    class="mb-1.5 text-sm font-bold text-primary"
                                                 >
                                                     <span v-if="productCardPrice(product)!.fromVariant" class="font-normal text-slate-400">Mulai </span>{{ formatCurrency(productCardPrice(product)!.price) }}
                                                 </p>
-                                                <p v-else-if="product.inventory_type !== 'production_output'" class="mb-1.5 text-[10px] text-slate-400">Pilih varian</p>
-                                                <p v-else class="mb-1.5 text-[10px] text-gray-400">Stok cair</p>
+                                                <p v-else-if="product.inventory_type !== 'production_output'" class="mb-1.5 text-xs text-slate-400">Pilih varian</p>
+                                                <p v-else class="mb-1.5 text-xs text-gray-400">Stok cair</p>
 
                                                 <div class="flex items-center justify-between gap-1">
                                                     <Badge
                                                         v-if="product.unlimited_stock"
-                                                        class="border-emerald-200 bg-emerald-100 px-1 py-0 text-[9px] text-emerald-700"
+                                                        class="border-emerald-200 bg-emerald-100 px-1 py-0 text-[10px] text-emerald-700"
                                                     >
                                                         Stok: Unlimited
                                                     </Badge>
                                                     <Badge
                                                         v-else
                                                         :class="stockInfo(product).colorClass"
-                                                        class="max-w-[calc(100%-2.25rem)] truncate border px-1 py-0 text-[9px]"
+                                                        class="max-w-[calc(100%-2.25rem)] truncate border px-1 py-0 text-[10px]"
                                                     >
                                                         {{ stockInfo(product).text }}
                                                     </Badge>
