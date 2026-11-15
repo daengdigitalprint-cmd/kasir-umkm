@@ -34,11 +34,13 @@ import {
     ScanQrCode,
     Settings,
     ShoppingCart,
+    Split,
     Tag,
     Trash2,
     Undo2,
     Upload,
     User,
+    UtensilsCrossed,
     Warehouse as WarehouseIcon,
 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
@@ -1102,21 +1104,103 @@ async function toggleAccounting() {
                                     {{ storeForm.errors.default_service_charge_percent }}
                                 </div>
                             </div>
-                            <div class="space-y-2 border-t border-emerald-200 pt-2">
-                                <label class="flex cursor-pointer items-center gap-2 text-sm select-none">
-                                    <input v-model="storeForm.fnb_order_types_enabled" type="checkbox" class="rounded border-gray-300" />
-                                    Tampilkan pilihan tipe pesanan
-                                </label>
-                                <p class="ml-6 text-xs text-slate-500">
-                                    Tombol Makan di tempat / Bungkus / Antar di kasir. Nonaktifkan jika tidak diperlukan.
-                                </p>
-                                <label class="flex cursor-pointer items-center gap-2 text-sm select-none">
-                                    <input v-model="storeForm.fnb_split_bill_enabled" type="checkbox" class="rounded border-gray-300" />
-                                    Aktifkan bagi tagihan (split bill)
-                                </label>
-                                <p class="ml-6 text-xs text-slate-500">
-                                    Membagi total tagihan ke beberapa bagian (patungan tamu). 1 = tidak dibagi, 2–20 = dibagi rata.
-                                </p>
+                            <div class="grid gap-2.5 border-t border-emerald-200 pt-3 sm:grid-cols-2">
+                                <div
+                                    class="group relative rounded-xl border p-3.5 transition-all duration-200"
+                                    :class="
+                                        storeForm.fnb_order_types_enabled
+                                            ? 'border-emerald-300 bg-emerald-50/80'
+                                            : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                                    "
+                                >
+                                    <button
+                                        type="button"
+                                        role="switch"
+                                        :aria-checked="storeForm.fnb_order_types_enabled"
+                                        class="flex w-full cursor-pointer items-start gap-3 text-left"
+                                        @click="storeForm.fnb_order_types_enabled = !storeForm.fnb_order_types_enabled"
+                                    >
+                                        <div
+                                            class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors"
+                                            :class="
+                                                storeForm.fnb_order_types_enabled
+                                                    ? 'bg-emerald-500 text-white'
+                                                    : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'
+                                            "
+                                        >
+                                            <UtensilsCrossed class="h-5 w-5" />
+                                        </div>
+                                        <div class="min-w-0 flex-1">
+                                            <div class="flex items-center justify-between gap-2">
+                                                <span
+                                                    class="text-sm font-semibold"
+                                                    :class="storeForm.fnb_order_types_enabled ? 'text-emerald-900' : 'text-slate-700'"
+                                                    >Pilihan tipe pesanan</span
+                                                >
+                                                <span
+                                                    class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors"
+                                                    :class="storeForm.fnb_order_types_enabled ? 'bg-emerald-500' : 'bg-slate-300'"
+                                                >
+                                                    <span
+                                                        class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+                                                        :class="storeForm.fnb_order_types_enabled ? 'translate-x-[18px]' : 'translate-x-0.5'"
+                                                    />
+                                                </span>
+                                            </div>
+                                            <p class="mt-0.5 text-xs leading-snug text-slate-500">
+                                                Tombol Makan di tempat / Bungkus / Antar di kasir. Nonaktifkan jika tidak diperlukan.
+                                            </p>
+                                        </div>
+                                    </button>
+                                </div>
+                                <div
+                                    class="group relative rounded-xl border p-3.5 transition-all duration-200"
+                                    :class="
+                                        storeForm.fnb_split_bill_enabled
+                                            ? 'border-emerald-300 bg-emerald-50/80'
+                                            : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                                    "
+                                >
+                                    <button
+                                        type="button"
+                                        role="switch"
+                                        :aria-checked="storeForm.fnb_split_bill_enabled"
+                                        class="flex w-full cursor-pointer items-start gap-3 text-left"
+                                        @click="storeForm.fnb_split_bill_enabled = !storeForm.fnb_split_bill_enabled"
+                                    >
+                                        <div
+                                            class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors"
+                                            :class="
+                                                storeForm.fnb_split_bill_enabled
+                                                    ? 'bg-emerald-500 text-white'
+                                                    : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'
+                                            "
+                                        >
+                                            <Split class="h-5 w-5" />
+                                        </div>
+                                        <div class="min-w-0 flex-1">
+                                            <div class="flex items-center justify-between gap-2">
+                                                <span
+                                                    class="text-sm font-semibold"
+                                                    :class="storeForm.fnb_split_bill_enabled ? 'text-emerald-900' : 'text-slate-700'"
+                                                    >Bagi tagihan (split bill)</span
+                                                >
+                                                <span
+                                                    class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors"
+                                                    :class="storeForm.fnb_split_bill_enabled ? 'bg-emerald-500' : 'bg-slate-300'"
+                                                >
+                                                    <span
+                                                        class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+                                                        :class="storeForm.fnb_split_bill_enabled ? 'translate-x-[18px]' : 'translate-x-0.5'"
+                                                    />
+                                                </span>
+                                            </div>
+                                            <p class="mt-0.5 text-xs leading-snug text-slate-500">
+                                                Membagi total tagihan ke beberapa bagian (patungan tamu). 1 = tidak dibagi, 2–20 = dibagi rata.
+                                            </p>
+                                        </div>
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
