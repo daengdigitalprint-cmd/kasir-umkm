@@ -35,7 +35,7 @@ const daysUntilExpiry = (dateString: string) => {
 </script>
 
 <template>
-    <Card v-if="batches && batches.length > 0" class="shadow-lg border border-amber-100">
+    <Card v-if="batches && batches.length > 0" class="rounded-[16px] shadow-lg border border-amber-100">
         <CardHeader class="pb-4">
             <div class="flex items-center justify-between gap-2">
                 <div>

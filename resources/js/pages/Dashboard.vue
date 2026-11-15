@@ -470,21 +470,21 @@ const daysUntilExpiry = (dateString: string) => {
                     <p class="mt-1 text-sm text-slate-600">Kelola pesanan masuk dan perbarui status produksi dari satu tempat.</p>
                 </div>
                 <div class="grid gap-4 sm:grid-cols-3">
-                    <Card>
+                    <Card class="rounded-[16px]">
                         <CardContent class="p-5">
                             <p class="text-sm text-slate-500">Pesanan menunggu</p>
                             <p class="mt-2 text-3xl font-bold text-orange-600">{{ pendingKitchenCount }}</p>
                             <p class="mt-1 text-xs text-slate-500">Siap diproses dapur</p>
                         </CardContent>
                     </Card>
-                    <Card>
+                    <Card class="rounded-[16px]">
                         <CardContent class="p-5">
                             <p class="text-sm text-slate-500">Status kerja</p>
                             <p class="mt-2 text-xl font-bold text-emerald-600">Dapur aktif</p>
                             <p class="mt-1 text-xs text-slate-500">Pantau antrian secara real-time</p>
                         </CardContent>
                     </Card>
-                    <Card>
+                    <Card class="rounded-[16px]">
                         <CardContent class="flex h-full flex-col justify-between gap-3 p-5">
                             <div>
                                 <p class="text-sm text-slate-500">Aksi cepat</p>
@@ -738,9 +738,9 @@ const daysUntilExpiry = (dateString: string) => {
                 >
                     <!-- Stok Masuk Hari Ini -->
                     <div
-                        class="rounded-[2.2rem] bg-gradient-to-br from-green-400/80 to-emerald-400/60 p-[2px] shadow-lg transition-all duration-300 hover:shadow-xl"
+                        class="rounded-[18px] bg-gradient-to-br from-green-400/80 to-emerald-400/60 p-[2px] shadow-lg transition-all duration-300 hover:shadow-xl"
                     >
-                        <Card class="h-full rounded-[2rem] border-0 bg-gradient-to-br from-green-50 to-white">
+                        <Card class="h-full rounded-[16px] border-0 bg-gradient-to-br from-green-50 to-white">
                             <CardContent class="px-3 py-2 md:px-4 md:py-3">
                                 <div class="mb-3 flex items-start gap-3">
                                     <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-green-500/15 md:h-10 md:w-10">
@@ -765,9 +765,9 @@ const daysUntilExpiry = (dateString: string) => {
 
                     <!-- Transfer Menunggu Diterima -->
                     <div
-                        class="rounded-[2.2rem] bg-gradient-to-br from-amber-400/70 to-white/10 p-[2px] shadow-lg transition-all duration-300 hover:shadow-xl"
+                        class="rounded-[18px] bg-gradient-to-br from-amber-400/70 to-white/10 p-[2px] shadow-lg transition-all duration-300 hover:shadow-xl"
                     >
-                        <Card class="h-full rounded-[2rem] border-0 bg-white">
+                        <Card class="h-full rounded-[16px] border-0 bg-white">
                             <CardContent class="px-3 py-2 md:px-4 md:py-3">
                                 <div class="mb-3 flex items-start gap-3">
                                     <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/10 md:h-10 md:w-10">
@@ -792,9 +792,9 @@ const daysUntilExpiry = (dateString: string) => {
 
                     <!-- Transfer Keluar Hari Ini -->
                     <div
-                        class="rounded-[2.2rem] bg-gradient-to-br from-red-400/70 to-white/10 p-[2px] shadow-lg transition-all duration-300 hover:shadow-xl"
+                        class="rounded-[18px] bg-gradient-to-br from-red-400/70 to-white/10 p-[2px] shadow-lg transition-all duration-300 hover:shadow-xl"
                     >
-                        <Card class="h-full rounded-[2rem] border-0 bg-white">
+                        <Card class="h-full rounded-[16px] border-0 bg-white">
                             <CardContent class="p-4 md:p-6">
                                 <div class="mb-3 flex items-start gap-3">
                                     <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-500/10 md:h-10 md:w-10">
@@ -819,9 +819,9 @@ const daysUntilExpiry = (dateString: string) => {
 
                     <!-- Total Produk -->
                     <div
-                        class="rounded-[2.2rem] bg-gradient-to-br from-purple-400/70 to-white/10 p-[2px] shadow-lg transition-all duration-300 hover:shadow-xl"
+                        class="rounded-[18px] bg-gradient-to-br from-purple-400/70 to-white/10 p-[2px] shadow-lg transition-all duration-300 hover:shadow-xl"
                     >
-                        <Card class="h-full rounded-[2rem] border-0 bg-white">
+                        <Card class="h-full rounded-[16px] border-0 bg-white">
                             <CardContent class="px-3 py-2 md:px-4 md:py-3">
                                 <div class="mb-3 flex items-start gap-3">
                                     <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-purple-500/10 md:h-10 md:w-10">
@@ -852,9 +852,9 @@ const daysUntilExpiry = (dateString: string) => {
                 >
                     <!-- Total Pendapatan -->
                     <div
-                        class="rounded-[2.2rem] bg-gradient-to-br from-emerald-400/80 to-cyan-400/60 p-[2px] shadow-lg transition-all duration-300 hover:shadow-xl lg:col-span-1"
+                        class="rounded-[18px] bg-gradient-to-br from-emerald-400/80 to-cyan-400/60 p-[2px] shadow-lg transition-all duration-300 hover:shadow-xl lg:col-span-1"
                     >
-                        <Card class="relative h-full overflow-hidden rounded-[2rem] border-0 bg-gradient-to-br from-emerald-50 to-white">
+                        <Card class="relative h-full overflow-hidden rounded-[16px] border-0 bg-gradient-to-br from-emerald-50 to-white">
                             <div
                                 class="pointer-events-none absolute -top-4 -right-4 flex h-24 w-24 items-center justify-center rounded-full bg-emerald-500/[.03] md:h-32 md:w-32"
                             >
@@ -879,9 +879,9 @@ const daysUntilExpiry = (dateString: string) => {
 
                     <!-- Today's Sales -->
                     <div
-                        class="rounded-[2.2rem] bg-gradient-to-br from-green-400/70 to-white/10 p-[2px] shadow-lg transition-all duration-300 hover:shadow-xl"
+                        class="rounded-[18px] bg-gradient-to-br from-green-400/70 to-white/10 p-[2px] shadow-lg transition-all duration-300 hover:shadow-xl"
                     >
-                        <Card class="relative h-full overflow-hidden rounded-[2rem] border-0 bg-white">
+                        <Card class="relative h-full overflow-hidden rounded-[16px] border-0 bg-white">
                             <div
                                 class="pointer-events-none absolute -top-4 -right-4 flex h-24 w-24 items-center justify-center rounded-full bg-green-500/[.03] md:h-32 md:w-32"
                             >
@@ -914,9 +914,9 @@ const daysUntilExpiry = (dateString: string) => {
 
                     <!-- Today's Transactions -->
                     <div
-                        class="rounded-[2.2rem] bg-gradient-to-br from-cyan-400/70 to-white/10 p-[2px] shadow-lg transition-all duration-300 hover:shadow-xl"
+                        class="rounded-[18px] bg-gradient-to-br from-cyan-400/70 to-white/10 p-[2px] shadow-lg transition-all duration-300 hover:shadow-xl"
                     >
-                        <Card class="relative h-full overflow-hidden rounded-[2rem] border-0 bg-white">
+                        <Card class="relative h-full overflow-hidden rounded-[16px] border-0 bg-white">
                             <div
                                 class="pointer-events-none absolute -top-4 -right-4 flex h-24 w-24 items-center justify-center rounded-full bg-cyan-500/[.03] md:h-32 md:w-32"
                             >
@@ -949,9 +949,9 @@ const daysUntilExpiry = (dateString: string) => {
 
                     <!-- Low Stock Alert -->
                     <div
-                        class="rounded-[2.2rem] bg-gradient-to-br from-orange-400/70 to-white/10 p-[2px] shadow-lg transition-all duration-300 hover:shadow-xl"
+                        class="rounded-[18px] bg-gradient-to-br from-orange-400/70 to-white/10 p-[2px] shadow-lg transition-all duration-300 hover:shadow-xl"
                     >
-                        <Card class="relative h-full overflow-hidden rounded-[2rem] border-0 bg-white">
+                        <Card class="relative h-full overflow-hidden rounded-[16px] border-0 bg-white">
                             <div
                                 class="pointer-events-none absolute -top-4 -right-4 flex h-24 w-24 items-center justify-center rounded-full bg-orange-500/[.03] md:h-32 md:w-32"
                             >
@@ -978,7 +978,7 @@ const daysUntilExpiry = (dateString: string) => {
                 <!-- Main Content Grid — Gudang -->
                 <div v-if="isWarehouse" class="grid grid-cols-1 gap-8 lg:grid-cols-3">
                     <div class="lg:col-span-2">
-                        <Card class="border-0 shadow-lg">
+                        <Card class="rounded-[16px] border-0 shadow-lg">
                             <CardHeader class="pb-4">
                                 <div class="flex items-center justify-between">
                                     <div>
@@ -1058,7 +1058,7 @@ const daysUntilExpiry = (dateString: string) => {
                 <div v-if="!isWarehouse" class="grid grid-cols-1 gap-8 lg:grid-cols-3">
                     <!-- Recent Transactions -->
                     <div class="lg:col-span-2">
-                        <Card class="border-0 shadow-lg">
+                        <Card class="rounded-[16px] border-0 shadow-lg">
                             <CardHeader class="pb-4">
                                 <div class="flex items-center justify-between">
                                     <div>

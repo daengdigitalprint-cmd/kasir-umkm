@@ -4017,7 +4017,7 @@ const sendWhatsAppInvoice = () => {
                                     <Card
                                         v-for="product in visibleProducts"
                                         :key="product.id"
-                                        class="cursor-pointer rounded-2xl border border-gray-200 py-0 shadow-none transition-all duration-200 hover:border-blue-300 hover:shadow-sm"
+                                        class="cursor-pointer rounded-[16px] border border-gray-200 py-0 shadow-none transition-all duration-200 hover:border-blue-300 hover:shadow-sm"
                                         @click="requestAddToCart(product)"
                                     >
                                         <CardContent class="p-2 md:p-2.5">

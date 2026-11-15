@@ -45,7 +45,7 @@ function barWidth(count: number): string {
 </script>
 
 <template>
-    <Card class="border-0 shadow-lg">
+    <Card class="rounded-[16px] border-0 shadow-lg">
         <CardHeader class="pb-4">
             <div class="flex items-center justify-between">
                 <div>

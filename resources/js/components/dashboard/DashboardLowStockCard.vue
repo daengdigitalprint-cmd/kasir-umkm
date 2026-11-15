@@ -29,7 +29,7 @@ const hiddenCount = computed(() => {
 </script>
 
 <template>
-    <Card class="border-0 shadow-lg">
+    <Card class="rounded-[16px] border-0 shadow-lg">
         <CardHeader class="pb-3">
             <div class="flex items-center gap-3">
                 <div class="flex items-center justify-center w-10 h-10 bg-orange-500/10 rounded-full shrink-0">
