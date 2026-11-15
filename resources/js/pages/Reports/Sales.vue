@@ -722,7 +722,7 @@ async function saveEditTransaction() {
                     <Button
                         type="button"
                         variant="destructive"
-                        class="rounded-xl bg-amber-600 hover:bg-amber-700 text-white"
+                        class="rounded-xl"
                         @click="submitVoid"
                         :disabled="voidSaving || !voidForm.reason.trim()"
                     >
