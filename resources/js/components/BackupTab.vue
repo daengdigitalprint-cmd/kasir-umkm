@@ -17,6 +17,7 @@ import {
     ChevronLeft,
     ChevronRight,
     AlertTriangle,
+    Crown,
     Database,
     Upload,
 } from 'lucide-vue-next';
@@ -49,6 +50,7 @@ interface BackupHistoryItem {
 
 interface HistoryResponse {
     success: boolean;
+    auto_backup_enabled?: boolean;
     data: BackupHistoryItem[];
     meta: {
         current_page: number;
@@ -61,6 +63,8 @@ interface HistoryResponse {
 // State
 const history = ref<BackupHistoryItem[]>([]);
 const meta = ref({ current_page: 1, last_page: 1, per_page: 20, total: 0 });
+/** null = belum diketahui (riwayat belum dimuat). Backup otomatis khusus paket berbayar. */
+const autoBackupEnabled = ref<boolean | null>(null);
 const isLoading = ref(false);
 const isCreating = ref(false);
 const searchQuery = ref('');
@@ -182,6 +186,7 @@ async function fetchHistory(page = 1) {
         if (json.success) {
             history.value = json.data;
             meta.value = json.meta;
+            autoBackupEnabled.value = json.auto_backup_enabled ?? null;
         }
     } catch (e) {
         console.error('Failed to fetch backup history:', e);
@@ -375,6 +380,37 @@ onMounted(() => fetchHistory());
         </div>
 
         <template v-else>
+            <!-- Status backup otomatis (khusus paket berbayar) -->
+            <div
+                v-if="autoBackupEnabled === false"
+                class="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between"
+            >
+                <div class="flex items-start gap-3">
+                    <Crown class="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+                    <div>
+                        <p class="text-sm font-semibold text-amber-900">Backup otomatis harian khusus paket premium</p>
+                        <p class="mt-0.5 text-sm text-amber-800">
+                            Paket Anda saat ini tidak dicadangkan otomatis. Anda tetap bisa membuat backup manual kapan saja.
+                        </p>
+                    </div>
+                </div>
+                <a
+                    href="/subscription"
+                    class="inline-flex shrink-0 items-center justify-center rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700"
+                >
+                    Upgrade Paket
+                </a>
+            </div>
+            <div
+                v-else-if="autoBackupEnabled === true"
+                class="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4"
+            >
+                <CheckCircle2 class="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+                <p class="text-sm text-emerald-900">
+                    <strong>Backup otomatis aktif.</strong> Data toko dicadangkan setiap hari jam 02:00.
+                </p>
+            </div>
+
             <!-- Tombol Buat Backup -->
             <div class="rounded-lg border border-slate-200 bg-white p-6">
                 <div class="flex items-start justify-between">
@@ -626,7 +662,7 @@ onMounted(() => fetchHistory());
                 <p class="text-sm text-blue-900">
                     <strong>Catatan:</strong> Backup mencakup data penjualan, produk, pelanggan,
                     supplier, pembelian, stok, diskon, cash shifts, dan jurnal akunting.
-                    Backup otomatis berjalan setiap jam 02:00 dan menyimpan 7 backup terakhir.
+                    Backup otomatis (paket premium) berjalan setiap jam 02:00.
                 </p>
             </div>
 

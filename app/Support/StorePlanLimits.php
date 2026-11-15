@@ -175,6 +175,15 @@ final class StorePlanLimits
         return ! in_array($slug, ['starter', 'starter-tahunan'], true);
     }
 
+    /**
+     * Backup otomatis harian hanya untuk paket berbayar (GrowUp / promo), sama
+     * dengan gerbang fitur lanjutan. Backup manual tetap tersedia untuk semua paket.
+     */
+    public static function allowsAutoBackup(Store $store): bool
+    {
+        return self::allowsAdvancedRetailFeatures($store);
+    }
+
     public static function assertAdvancedRetail(Store $store, string $message): void
     {
         if (! self::allowsAdvancedRetailFeatures($store)) {

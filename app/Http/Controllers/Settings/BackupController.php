@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Settings;
 use App\Http\Controllers\Controller;
 use App\Models\BackupHistory;
 use App\Services\StoreBackupService;
+use App\Support\StorePlanLimits;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -46,6 +47,7 @@ class BackupController extends Controller
                 'name' => $store->name,
             ] : null,
             'scheduled_backups' => $scheduledBackups,
+            'auto_backup_enabled' => $store ? StorePlanLimits::allowsAutoBackup($store) : false,
         ]);
     }
 
@@ -83,6 +85,7 @@ class BackupController extends Controller
 
         return response()->json([
             'success' => true,
+            'auto_backup_enabled' => StorePlanLimits::allowsAutoBackup($store),
             'data' => $histories->items(),
             'meta' => [
                 'current_page' => $histories->currentPage(),

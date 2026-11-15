@@ -39,6 +39,7 @@ class SubscriptionPlanSeeder extends Seeder
             'Produk paket (bundle) & komponen',
             'Multi-peran: kasir, gudang, manajer, admin toko',
             'Antrian dapur / kitchen (mode F&B)',
+            'Backup data otomatis harian',
         ];
     }
 

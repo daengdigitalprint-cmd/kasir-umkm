@@ -21,6 +21,8 @@ interface Props {
         name: string;
     } | null;
     scheduled_backups: ScheduledBackup[];
+    /** Backup otomatis harian khusus paket berbayar (premium). */
+    auto_backup_enabled: boolean;
 }
 
 const props = defineProps<Props>();
@@ -116,7 +118,7 @@ function deleteScheduled(filename: string) {
             <div class="space-y-6">
                 <HeadingSmall 
                     title="Backup Data" 
-                    description="Backup otomatis harian (jam 02:00) dan unduh manual kapan saja. Data mencakup transaksi, produk, pelanggan, pembelian, stok, dan jurnal akunting." 
+                    description="Backup otomatis harian (jam 02:00, paket premium) dan unduh manual kapan saja. Data mencakup transaksi, produk, pelanggan, pembelian, stok, dan jurnal akunting." 
                 />
 
                 <div v-if="!store" class="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-800">
@@ -153,14 +155,28 @@ function deleteScheduled(filename: string) {
                             <Clock class="h-5 w-5 text-slate-600" />
                             <h3 class="text-lg font-semibold text-slate-900">Backup Otomatis Harian</h3>
                         </div>
-                        <p class="mb-4 text-sm text-slate-600">
+                        <p v-if="auto_backup_enabled" class="mb-4 text-sm text-slate-600">
                             Backup otomatis berjalan setiap hari jam 02:00 WIB. Sistem menyimpan 7 backup terakhir.
                         </p>
+                        <div
+                            v-else
+                            class="mb-4 flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                            <p class="text-sm text-amber-900">
+                                <strong>Khusus paket premium.</strong> Paket Anda saat ini tidak dicadangkan otomatis; backup manual tetap tersedia.
+                            </p>
+                            <a
+                                href="/subscription"
+                                class="inline-flex shrink-0 items-center justify-center rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700"
+                            >
+                                Upgrade Paket
+                            </a>
+                        </div>
 
                         <div v-if="scheduled_backups.length === 0" class="rounded-lg bg-slate-50 p-8 text-center">
                             <HardDrive class="mx-auto h-12 w-12 text-slate-400" />
                             <p class="mt-2 text-sm text-slate-600">Belum ada backup terjadwal tersimpan.</p>
-                            <p class="mt-1 text-xs text-slate-500">Backup pertama akan dibuat besok jam 02:00.</p>
+                            <p v-if="auto_backup_enabled" class="mt-1 text-xs text-slate-500">Backup pertama akan dibuat besok jam 02:00.</p>
                         </div>
 
                         <div v-else class="space-y-2">

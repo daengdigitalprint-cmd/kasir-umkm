@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Store;
 use App\Services\StoreBackupService;
+use App\Support\StorePlanLimits;
 use Illuminate\Console\Command;
 
 class BackupStoresCommand extends Command
@@ -37,8 +38,17 @@ class BackupStoresCommand extends Command
 
         $successCount = 0;
         $failCount = 0;
+        $skippedCount = 0;
 
         foreach ($stores as $store) {
+            // Backup otomatis khusus paket berbayar; paket gratis tetap bisa backup manual.
+            if (! StorePlanLimits::allowsAutoBackup($store)) {
+                $skippedCount++;
+                $this->line("  - Lewati {$store->name} (ID: {$store->id}): paket tidak mencakup backup otomatis.");
+
+                continue;
+            }
+
             try {
                 $this->info("  → Backup toko: {$store->name} (ID: {$store->id})");
 
@@ -56,7 +66,7 @@ class BackupStoresCommand extends Command
         }
 
         $this->newLine();
-        $this->info("Selesai. Berhasil: {$successCount}, Gagal: {$failCount}");
+        $this->info("Selesai. Berhasil: {$successCount}, Gagal: {$failCount}, Dilewati (paket gratis): {$skippedCount}");
 
         return $failCount > 0 ? self::FAILURE : self::SUCCESS;
     }
