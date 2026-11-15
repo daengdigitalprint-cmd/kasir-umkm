@@ -915,6 +915,20 @@ function removeSplitLine(index: number) {
     splitNonCashLines.value.splice(index, 1);
 }
 
+/** Nominal dengan pemisah ribuan (20000 → "20.000") agar kasir tidak salah baca jumlah nol. */
+function formatNominalInput(value: number): string {
+    return value > 0 ? Math.round(value).toLocaleString('id-ID') : '';
+}
+
+/** Ketikan nominal split: ambil digitnya saja, lalu tampilkan ulang berpemisah ribuan. */
+function onSplitAmountInput(line: SplitPaymentLine, event: Event) {
+    const el = event.target as HTMLInputElement;
+    const digits = el.value.replace(/\D/g, '');
+    line.amount = digits === '' ? 0 : Number(digits);
+    // Tulis ulang langsung agar tetap berformat walau nilai reaktifnya tidak berubah (mis. ketik huruf).
+    el.value = formatNominalInput(line.amount);
+}
+
 /** Field pembayaran untuk payload server: tunggal atau rincian split. */
 function buildPaymentFields(): Record<string, unknown> {
     if (!isSplitPayment.value) {
@@ -2481,7 +2495,8 @@ const numpadInput = (digit: string): void => {
 const cashInputTyping = ref(false);
 const cashInputDisplay = computed(() => {
     if (cashInputTyping.value) {
-        return amountPaid.value > 0 ? String(Math.round(amountPaid.value)) : '';
+        // Saat mengetik pun tampil berpemisah ribuan (20.000), bukan 20000.
+        return amountPaid.value > 0 ? Math.round(amountPaid.value).toLocaleString('id-ID') : '';
     }
     return amountPaid.value > 0 ? formatCurrency(amountPaid.value) : '—';
 });
@@ -5013,14 +5028,19 @@ const sendWhatsAppInvoice = () => {
                                                                 {{ method.label }}
                                                             </option>
                                                         </select>
-                                                        <input
-                                                            v-model.number="line.amount"
-                                                            type="number"
-                                                            min="0"
-                                                            inputmode="numeric"
-                                                            class="h-9 w-32 rounded-md border border-gray-300 px-2 text-right text-sm tabular-nums"
-                                                            :aria-label="`Nominal pembayaran ${index + 1}`"
-                                                        />
+                                                        <div class="relative w-36">
+                                                            <span class="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-xs text-gray-400">Rp</span>
+                                                            <input
+                                                                :value="formatNominalInput(line.amount)"
+                                                                type="text"
+                                                                inputmode="numeric"
+                                                                autocomplete="off"
+                                                                placeholder="0"
+                                                                class="h-9 w-full rounded-md border border-gray-300 pr-2 pl-8 text-right text-sm tabular-nums"
+                                                                :aria-label="`Nominal pembayaran ${index + 1}`"
+                                                                @input="onSplitAmountInput(line, $event)"
+                                                            />
+                                                        </div>
                                                         <button
                                                             type="button"
                                                             class="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-red-500 hover:bg-red-50"
