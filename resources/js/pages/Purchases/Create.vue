@@ -327,6 +327,20 @@ function variantsForProduct(productId: number | ''): ProductVariantOpt[] {
     return productById(productId)?.variants ?? [];
 }
 
+/** Label tipe barang di saran pencarian (selaras InventoryType::LABELS di server). */
+function inventoryTypeLabel(type: string | undefined): string {
+    switch (type) {
+        case 'raw_material':
+            return 'Bahan mentah';
+        case 'packaging':
+            return 'Kemasan';
+        case 'production_output':
+            return 'Hasil produksi';
+        default:
+            return 'Produk jual';
+    }
+}
+
 function unitOptions(row: LineDraft): string[] {
     if (row.kind === 'manual') {
         return BaseUnitOptions[row.new_product.base_unit] ?? [row.new_product.base_unit];
@@ -683,16 +697,28 @@ function buildServerLines():
     return out;
 }
 
+/**
+ * Satuan beli besar yang dikonversi ke gram/ml. Belanja bahan seperti 0,5 kg cabai
+ * atau 1,5 liter minyak tetap menghasilkan jumlah dasar bulat (500 gram, 1500 ml),
+ * jadi boleh desimal hingga 3 angka walau produknya tidak diizinkan desimal.
+ */
+const WHOLE_BASE_DECIMAL_UNITS = new Set(['kg', 'kilogram', 'liter', 'l']);
+
+function rowAllowsDecimal(row: LineDraft): boolean {
+    if (row.kind === 'manual') return row.new_product.allows_decimal;
+    return Boolean(productById(row.product_id)?.allows_decimal);
+}
+
 function lineQtyStep(row: LineDraft): string {
-    if (row.kind === 'manual') return row.new_product.allows_decimal ? '0.0001' : '1';
-    const product = productById(row.product_id);
-    return product?.allows_decimal ? '0.0001' : '1';
+    if (rowAllowsDecimal(row)) return '0.0001';
+    if (WHOLE_BASE_DECIMAL_UNITS.has(String(row.input_unit).toLowerCase())) return '0.001';
+    return '1';
 }
 
 function lineQtyMin(row: LineDraft): number {
-    if (row.kind === 'manual') return row.new_product.allows_decimal ? 0.0001 : 1;
-    const product = productById(row.product_id);
-    return product?.allows_decimal ? 0.0001 : 1;
+    if (rowAllowsDecimal(row)) return 0.0001;
+    if (WHOLE_BASE_DECIMAL_UNITS.has(String(row.input_unit).toLowerCase())) return 0.001;
+    return 1;
 }
 
 function buildServerCharges(): Array<{ name: string; amount: number; notes: string | null }> | null {
@@ -993,7 +1019,7 @@ function submit() {
                                         </div>
                                         <div class="pl-6 text-xs text-slate-500">
                                             Barang ·
-                                            {{ s.product.inventory_type === 'packaging' ? 'Kemasan' : 'Bahan mentah' }}
+                                            {{ inventoryTypeLabel(s.product.inventory_type) }}
                                             <span v-if="s.product.sku"> · {{ s.product.sku }}</span>
                                         </div>
                                     </template>

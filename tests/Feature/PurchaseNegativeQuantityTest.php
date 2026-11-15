@@ -133,6 +133,35 @@ it('menerima pembelian dengan kuantitas positif', function () {
         ->and($product->stock_quantity)->toBe('5000.0000');
 });
 
+it('menerima belanja bahan 0,5 kg untuk bahan bersatuan dasar gram tanpa desimal', function () {
+    $store = makeNegStore();
+    $user = makeNegUser($store);
+    $product = makeNegProduct($store);
+
+    $this->actingAs($user)
+        ->withSession(['_token' => 'csrf-token'])
+        ->post(route('purchases.store'), [
+            '_token' => 'csrf-token',
+            'purchased_at' => now()->format('Y-m-d'),
+            'lines' => [[
+                'product_id' => $product->id,
+                'quantity' => '0.5',
+                'input_unit' => 'kg',
+                'unit_cost' => '60000',
+            ]],
+        ])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    $product->refresh();
+    $line = PurchaseLine::query()->sole();
+
+    // 0,5 kg × Rp60.000/kg = Rp30.000; stok bertambah 500 gram, harga modal Rp60/gram.
+    expect($product->stock_quantity)->toBe('500.0000')
+        ->and((float) $line->subtotal)->toBe(30000.0)
+        ->and((float) $product->cost_price)->toBe(60.0);
+});
+
 // ---------------------------------------------------------------------------
 // Constraint DB: penulisan langsung kuantitas negatif ditolak
 // ---------------------------------------------------------------------------
