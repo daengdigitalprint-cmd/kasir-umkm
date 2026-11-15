@@ -16,7 +16,8 @@ class EnsureBackOfficeRole
             return redirect()->route('login');
         }
 
-        if (! $user->canAccessBackOffice()) {
+        if (! $user->canAccessBackOffice()
+            && ! \App\Support\MenuRouteAccess::allows($user, $request->route()?->getName(), \App\Support\MenuRouteAccess::BACK_OFFICE)) {
             return redirect()->route('dashboard')
                 ->with('error', 'Akses ditolak. Hanya admin atau manajer toko yang dapat membuka halaman ini.');
         }

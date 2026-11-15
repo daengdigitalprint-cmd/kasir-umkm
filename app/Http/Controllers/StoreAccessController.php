@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\RoleMenuPermission;
 use App\Models\Store;
 use App\Models\User;
+use App\Services\ActivityLogger;
+use App\Support\MenuCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -312,34 +314,9 @@ class StoreAccessController extends Controller
         return back()->with('success', 'Anggota dihapus: '.$user->email);
     }
 
-    /** Semua menu_key yang tersedia di sistem. */
-    private const ALL_MENU_KEYS = [
-        'cashier',
-        'shift',
-        'transactions',
-        'customers',
-        'stock_overview',
-        'products',
-        'product_categories',
-        'stock_movements',
-        'stock_adjustment',
-        'stock_opnames',
-        'recipes',
-        'productions',
-        'purchases',
-        'purchase_returns',
-        'sales_returns',
-        'pre_orders',
-        'stock_transfers',
-        'reports',
-        'expenses',
-        'kitchen_queue',
-        'queue_module',
-        'manage_products',
-        'manage_staff',
-    ];
+    private const PERMISSION_ROLES = ['admin', 'manager', 'cashier', 'kitchen', 'warehouse', 'owner', 'barber'];
 
-    /** Ambil semua menu_key yang tersedia dan akses per role. */
+    /** Daftar menu dan hak akses per role untuk toko aktif. */
     public function menuPermissions()
     {
         $actor = request()->user();
@@ -347,21 +324,29 @@ class StoreAccessController extends Controller
             abort(403);
         }
 
-        $roles = ['admin', 'manager', 'cashier', 'kitchen', 'warehouse', 'owner', 'barber'];
+        $store = $actor->store;
 
         $permissions = [];
-        foreach ($roles as $role) {
-            $permissions[$role] = RoleMenuPermission::allowedMenus($role);
+        $customized = [];
+        foreach (self::PERMISSION_ROLES as $role) {
+            $permissions[$role] = RoleMenuPermission::allowedMenus($role, $store);
+            $customized[$role] = RoleMenuPermission::storeOverride($role, $store) !== null;
         }
 
         return response()->json([
-            'roles' => $roles,
-            'all_menus' => self::ALL_MENU_KEYS,
+            'roles' => self::PERMISSION_ROLES,
+            'menus' => MenuCatalog::ITEMS,
+            'all_menus' => MenuCatalog::keys(),
             'permissions' => $permissions,
+            'customized' => $customized,
         ]);
     }
 
-    /** Simpan ulang menu permissions untuk satu role. */
+    /**
+     * Simpan hak akses menu satu role untuk toko aktif saja (di stores.settings).
+     * Default sistem di tabel role_menu_permissions dipakai bersama semua toko,
+     * sehingga tidak boleh diubah dari halaman toko.
+     */
     public function updateMenuPermissions(Request $request)
     {
         $actor = $request->user();
@@ -369,24 +354,42 @@ class StoreAccessController extends Controller
             abort(403);
         }
 
+        $store = $actor->store;
+        if (! $store) {
+            abort(422, 'Tidak ada toko aktif.');
+        }
+
         $validated = $request->validate([
-            'role' => ['required', 'string', 'in:admin,manager,cashier,warehouse,owner,kitchen,barber'],
-            'menus' => ['required', 'array'],
+            'role' => ['required', 'string', Rule::in(self::PERMISSION_ROLES)],
+            'menus' => ['present', 'array'],
             'menus.*' => ['required', 'string', 'max:64'],
         ]);
 
         $role = $validated['role'];
-        $menus = $validated['menus'];
 
-        // Hapus semua yang lama, insert yang baru
-        RoleMenuPermission::where('role', $role)->delete();
-        foreach ($menus as $menuKey) {
-            RoleMenuPermission::create([
-                'role' => $role,
-                'menu_key' => $menuKey,
-            ]);
+        // Menu di luar daftar (mis. menu khusus admin atau modul yang sedang mati)
+        // tidak tampil di form, jadi nilainya dipertahankan dari pengaturan
+        // sebelumnya agar tidak hilang diam-diam.
+        $editable = MenuCatalog::keys();
+        $chosen = array_values(array_intersect($editable, $validated['menus']));
+        $kept = array_values(array_diff(RoleMenuPermission::allowedMenus($role, $store), $editable));
+        $menus = array_values(array_unique([...$chosen, ...$kept]));
+
+        $settings = $store->settings ?? [];
+        $settings[RoleMenuPermission::STORE_SETTINGS_KEY][$role] = $menus;
+        $store->settings = $settings;
+        $store->save();
+
+        ActivityLogger::log(
+            store: $store,
+            action: 'menu_permissions.updated',
+            description: "Mengubah hak akses menu peran {$role}",
+            metadata: ['role' => $role, 'menus' => $menus],
+        );
+
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'role' => $role, 'menus' => $menus]);
         }
-        RoleMenuPermission::flushMenuCache();
 
         return back()->with('success', 'Hak akses menu untuk role '.$role.' berhasil diperbarui.');
     }

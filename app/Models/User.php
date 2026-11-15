@@ -230,9 +230,7 @@ class User extends Authenticatable
         // Gunakan role dari store yang sedang aktif jika ada
         $effectiveRole = $this->getRoleForActiveStore();
 
-        $menus = RoleMenuPermission::allowedMenus($effectiveRole);
-
-        return $menus;
+        return RoleMenuPermission::allowedMenus($effectiveRole, $this->store);
     }
 
     /**

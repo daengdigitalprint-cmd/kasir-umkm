@@ -128,46 +128,42 @@ async function deleteMember(m: TeamMember) {
 }
 
 // --- Menu Permissions ---
-const allMenuKeys = ref<string[]>([]);
+interface MenuCatalogItem {
+    key: string;
+    label: string;
+    group: string;
+    /** Nama prop Inertia penanda modul aktif; kosong = selalu tersedia. */
+    module?: string;
+}
+
+const menuCatalog = ref<MenuCatalogItem[]>([]);
 const menuPermissions = ref<Record<string, string[]>>({});
+const customizedRoles = ref<Record<string, boolean>>({});
 const selectedPermRole = ref<string>('cashier');
 const permLoading = ref(false);
 const permSaving = ref(false);
-
-const menuLabels: Record<string, string> = {
-    dashboard: 'Dashboard',
-    pos: 'Point of Sale (POS)',
-    pos_transactions: 'Riwayat Transaksi',
-    cash_shifts: 'Shift Kasir',
-    cash_transactions: 'Uang Masuk/Keluar',
-    kitchen_queue: 'Antrian Dapur',
-    queues: 'Papan Pesanan',
-    laundry_orders: 'Order Laundry',
-    stock_overview: 'Lihat Stok',
-    products: 'Produk',
-    product_categories: 'Kategori Produk',
-    stock_movements: 'Riwayat Stok',
-    stock_adjustment: 'Penyesuaian Stok',
-    stock_opnames: 'Stok Opname',
-    recipes: 'Resep',
-    productions: 'Produksi',
-    stock_transfers: 'Transfer Stok',
-    purchases: 'Pembelian',
-    purchase_returns: 'Retur Pembelian',
-    sales_returns: 'Retur Penjualan',
-    pre_orders: 'Pre-order',
-    discounts: 'Diskon',
-    customers: 'Pelanggan',
-    loyalty: 'Loyalitas',
-    reports: 'Laporan',
-    expenses: 'Biaya Usaha',
-    manage_stores: 'Tambah Outlet/Gudang',
-    manage_products: 'Kelola Produk',
-    manage_staff: 'Tim & Akses',
-    settings: 'Pengaturan',
-};
-
 const selectedPermMenus = ref<string[]>([]);
+
+/** Menu modul yang sedang mati tidak ditampilkan (izinnya tetap tersimpan). */
+const visibleMenus = computed(() =>
+    menuCatalog.value.filter((m) => !m.module || Boolean((page.props as Record<string, unknown>)[m.module])),
+);
+const hiddenModuleCount = computed(() => menuCatalog.value.length - visibleMenus.value.length);
+
+const menuGroups = computed(() => {
+    const groups: Array<{ name: string; items: MenuCatalogItem[] }> = [];
+    for (const item of visibleMenus.value) {
+        let group = groups.find((g) => g.name === item.group);
+        if (!group) {
+            group = { name: item.group, items: [] };
+            groups.push(group);
+        }
+        group.items.push(item);
+    }
+    return groups;
+});
+
+const selectedVisibleCount = computed(() => visibleMenus.value.filter((m) => selectedPermMenus.value.includes(m.key)).length);
 
 watch(selectedPermRole, (role) => {
     selectedPermMenus.value = [...(menuPermissions.value[role] ?? [])];
@@ -182,17 +178,22 @@ const fetchPermissions = async () => {
         });
         if (res.ok) {
             const data = await res.json();
-            allMenuKeys.value = data.all_menus;
-            menuPermissions.value = data.permissions;
-            selectedPermMenus.value = [...(data.permissions[selectedPermRole.value] ?? [])];
+            menuCatalog.value = data.menus ?? [];
+            menuPermissions.value = data.permissions ?? {};
+            customizedRoles.value = data.customized ?? {};
+            selectedPermMenus.value = [...(data.permissions?.[selectedPermRole.value] ?? [])];
+        } else {
+            toastError('Gagal memuat hak akses.');
         }
+    } catch {
+        toastError('Gagal memuat hak akses.');
     } finally {
         permLoading.value = false;
     }
 };
 
 const savePermissions = async () => {
-    if (!(await confirmDialog('Simpan hak akses?', `Menu yang diizinkan untuk role ${roleLabel(selectedPermRole.value)} akan diperbarui.`, { confirmText: 'Simpan', icon: 'question' }))) return;
+    if (!(await confirmDialog('Simpan hak akses?', `Menu yang diizinkan untuk peran ${roleLabel(selectedPermRole.value)} di toko ini akan diperbarui.`, { confirmText: 'Simpan', icon: 'question' }))) return;
     permSaving.value = true;
     try {
         const res = await fetch('/menu-permissions', {
@@ -207,7 +208,7 @@ const savePermissions = async () => {
             body: JSON.stringify({ role: selectedPermRole.value, menus: selectedPermMenus.value }),
         });
         if (res.ok) {
-            toastSuccess('Hak akses menu berhasil disimpan. User akan melihat perubahan setelah refresh.');
+            toastSuccess('Hak akses menu tersimpan. Pengguna melihat perubahan setelah memuat ulang halaman.');
             await fetchPermissions();
         } else {
             toastError('Gagal menyimpan hak akses.');
@@ -230,7 +231,7 @@ const togglePermMenu = (menuKey: string) => {
 
 // Fetch permissions saat tab izin dipilih
 watch(activeTab, (tab) => {
-    if (tab === 'izin' && allMenuKeys.value.length === 0) {
+    if (tab === 'izin' && menuCatalog.value.length === 0) {
         fetchPermissions();
     }
 });
@@ -487,8 +488,8 @@ watch(activeTab, (tab) => {
                         <div>
                             <CardTitle class="text-base font-bold text-gray-900">Hak Akses Menu</CardTitle>
                             <CardDescription class="text-xs">
-                                Atur menu mana saja yang bisa diakses oleh setiap peran.
-                                Perubahan berlaku setelah user refresh halaman.
+                                Atur menu yang bisa dibuka setiap peran di toko <strong>{{ store.name }}</strong>.
+                                Berlaku hanya untuk toko ini, setelah pengguna memuat ulang halaman.
                             </CardDescription>
                         </div>
                     </div>
@@ -519,38 +520,49 @@ watch(activeTab, (tab) => {
                     </div>
 
                     <!-- Menu toggles -->
-                    <div v-else class="space-y-1">
-                        <div class="flex items-center justify-between mb-2">
+                    <div v-else class="space-y-4">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
                             <p class="text-xs text-slate-500">
-                                Centang menu yang ingin diizinkan untuk role <strong>{{ roleLabel(selectedPermRole) }}</strong>
+                                Centang menu yang boleh dibuka peran <strong>{{ roleLabel(selectedPermRole) }}</strong>.
+                                <span v-if="!customizedRoles[selectedPermRole]" class="text-slate-400">(masih memakai pengaturan bawaan)</span>
                             </p>
                             <span class="text-[10px] font-bold text-slate-400">
-                                {{ selectedPermMenus.length }}/{{ allMenuKeys.length }} aktif
+                                {{ selectedVisibleCount }}/{{ visibleMenus.length }} aktif
                             </span>
                         </div>
 
-                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                            <label
-                                v-for="key in allMenuKeys"
-                                :key="key"
-                                :class="[
-                                    'flex items-center gap-3 rounded-xl border px-3 py-2.5 cursor-pointer transition-all text-sm',
-                                    selectedPermMenus.includes(key)
-                                        ? 'border-amber-300 bg-amber-50'
-                                        : 'border-slate-200 bg-white hover:bg-slate-50',
-                                ]"
-                            >
-                                <input
-                                    type="checkbox"
-                                    :checked="selectedPermMenus.includes(key)"
-                                    @change="togglePermMenu(key)"
-                                    class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
-                                />
-                                <span :class="['font-medium', selectedPermMenus.includes(key) ? 'text-amber-800' : 'text-slate-600']">
-                                    {{ menuLabels[key] ?? key }}
-                                </span>
-                            </label>
+                        <div v-for="group in menuGroups" :key="group.name" class="space-y-2">
+                            <p class="text-[11px] font-bold tracking-wide text-slate-500 uppercase">{{ group.name }}</p>
+                            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                                <label
+                                    v-for="item in group.items"
+                                    :key="item.key"
+                                    :class="[
+                                        'flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 text-sm transition-all',
+                                        selectedPermMenus.includes(item.key)
+                                            ? 'border-amber-300 bg-amber-50'
+                                            : 'border-slate-200 bg-white hover:bg-slate-50',
+                                    ]"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        :checked="selectedPermMenus.includes(item.key)"
+                                        @change="togglePermMenu(item.key)"
+                                        class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                                    />
+                                    <span :class="['font-medium', selectedPermMenus.includes(item.key) ? 'text-amber-800' : 'text-slate-600']">
+                                        {{ item.label }}
+                                    </span>
+                                </label>
+                            </div>
                         </div>
+
+                        <p v-if="hiddenModuleCount > 0" class="text-xs text-slate-400">
+                            {{ hiddenModuleCount }} menu modul tidak ditampilkan karena modulnya belum aktif di Pengaturan.
+                        </p>
+                        <p class="text-xs text-slate-400">
+                            Pengaturan toko, Tim &amp; Akses, outlet, KPI, dan login kasir selalu khusus Admin/Pemilik.
+                        </p>
 
                         <!-- Save button -->
                         <div class="flex justify-end pt-4">

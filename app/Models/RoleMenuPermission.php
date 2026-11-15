@@ -35,11 +35,37 @@ class RoleMenuPermission extends Model
         }
     }
 
+    /** Kunci di stores.settings untuk hak akses menu khusus toko: [role => [menu_key, ...]]. */
+    public const STORE_SETTINGS_KEY = 'role_menu_permissions';
+
     /**
-     * Dapatkan semua menu_key yang diizinkan untuk role tertentu.
+     * Menu yang diizinkan untuk role. Bila toko menyimpan pengaturan sendiri di
+     * "Tim & Akses", itu yang dipakai; selain itu default sistem (tabel ini).
+     * Default ini dipakai bersama semua toko, jadi jangan diubah dari halaman toko.
+     */
+    public static function allowedMenus(string $role, ?Store $store = null): array
+    {
+        $custom = self::storeOverride($role, $store);
+        if ($custom !== null) {
+            return $custom;
+        }
+
+        return self::defaultMenus($role);
+    }
+
+    /** Pengaturan khusus toko untuk role, atau null bila toko memakai default. */
+    public static function storeOverride(string $role, ?Store $store): ?array
+    {
+        $saved = $store?->settings[self::STORE_SETTINGS_KEY][$role] ?? null;
+
+        return is_array($saved) ? array_values(array_filter($saved, 'is_string')) : null;
+    }
+
+    /**
+     * Default sistem untuk role.
      * Di-cache 10 menit karena dibaca di setiap request (shared props Inertia).
      */
-    public static function allowedMenus(string $role): array
+    public static function defaultMenus(string $role): array
     {
         return Cache::memo()->remember(
             self::cacheKey($role),

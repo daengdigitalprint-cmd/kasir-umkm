@@ -16,7 +16,8 @@ class EnsurePointOfSaleAccess
             return redirect()->route('login');
         }
 
-        if (! $user->canUsePointOfSale()) {
+        if (! $user->canUsePointOfSale()
+            && ! \App\Support\MenuRouteAccess::allows($user, $request->route()?->getName(), \App\Support\MenuRouteAccess::POINT_OF_SALE)) {
             return redirect()->route('dashboard')
                 ->with('error', 'Akses POS dan shift kasir hanya untuk kasir, manajer, atau admin toko.');
         }
