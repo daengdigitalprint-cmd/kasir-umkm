@@ -1293,11 +1293,14 @@ const filteredProducts = computed(() => {
         result = result.filter((p) => p.product_category_id === activeCategoryId.value);
     }
 
-    // Bahan produksi hanya info stok (tidak bisa dijual), jadi selalu di urutan
-    // paling belakang; urutan produk lain tidak berubah (sort stabil).
-    result = [...result].sort(
-        (a, b) => Number(a.inventory_type === 'production_output') - Number(b.inventory_type === 'production_output'),
-    );
+    // Bahan produksi ditaruh paling depan agar kasir langsung melihat stok bahan
+    // yang dipakai; urutan produk lain tidak berubah (sort stabil). Tab Populer
+    // tetap murni menurut frekuensi transaksi.
+    if (activeCategoryId.value !== -1) {
+        result = [...result].sort(
+            (a, b) => Number(b.inventory_type === 'production_output') - Number(a.inventory_type === 'production_output'),
+        );
+    }
 
     // Filter by search query
     if (!searchQueryDebounced.value) return result;
