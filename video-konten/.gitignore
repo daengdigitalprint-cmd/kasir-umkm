@@ -1,0 +1,6 @@
+_tools/node_modules/
+_tools/package-lock.json
+_tools/out/
+_tools/*.png
+_profile/
+_sheet*.png

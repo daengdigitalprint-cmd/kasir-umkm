@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="id">
+<!-- Made with the Bang Motion skill by Bang Tutorial (https://youtube.com/bangtutorial) - MIT -->
+<head>
+<meta charset="utf-8">
+<title>01 — Laku banyak tapi uangnya ke mana? (v2)</title>
+<!--
+  STYLE BRIEF v2 — ritme mengikuti video referensi user (satu objek + satu frasa per panggung, ±2 dtk, cut di ketukan,
+  latar berganti tiap panggung, kata kunci berlabel). Kulit TIDAK disalin: palet, font, objek, label dari brand MaccaPOS.
+  Tema        : Kasir UMKM by MaccaPOS — "uang usaha & pribadi tercampur". Hangat, jujur, lega.
+  Konsep      : angka omzet yang bocor · 15 panggung pendek · objek tiap panggung: laci, struk, pulsa, jajan, bensin, arisan,
+                angka sisa, warung, laci campur, laci bersekat, ponsel kasir, maskot+logo · pembuka hujan koin · penutup maskot
+  Palet       : ungu #7943e5 (--color-primary) · hijau #a0ea71 (--color-secondary) · krem #FBEFD5 (turunan: kertas struk)
+                koin #FFC83D & oranye #f97316 (maskot rubah) · ungu malam #24104f (turunan ungu brand)
+  Font        : Outfit (display situs MaccaPOS) / Plus Jakarta Sans (UI aplikasi)
+  Sorotan kata: label struk bergerigi (bentuk struk di logo MaccaPOS) yang "tercetak" dari atas ke bawah
+  Bahasa latar: ungu malam bersorot · krem · hijau · ungu brand, berganti tiap cut
+  Tanda tangan: koin terbang masuk/keluar objek
+  Gerak latar : sorot cahaya bergeser + butiran + push pelan tiap panggung
+  Momen istimewa: sekat jatuh, koin emas dan oranye memisah
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800;900&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+<style>
+:root{--pri:#7943e5;--pri-d:#5b21b6;--night:#24104f;--grn:#a0ea71;--gold:#FFC83D;--gold-d:#E39A12;--org:#f97316;--org-d:#c2410c;--ink:#22104F;--line:#3B1F12;--cream:#FBEFD5}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:"Outfit",sans-serif}
+#stage{position:fixed;left:50%;top:50%;width:1080px;height:1920px;transform:translate(-50%,-50%);overflow:hidden;background:#0f0626}
+.st{position:absolute;inset:0;overflow:hidden;visibility:hidden;opacity:0}
+.st.dark{background:radial-gradient(1000px 1000px at 50% 58%,#5330ad 0%,#2b1466 42%,#0f0626 100%);--tx:#fff;--lb:var(--gold);--lt:#3a1d00}
+.st.cream{background:radial-gradient(1100px 1100px at 50% 55%,#FFFBF0 0%,#FBEFD5 55%,#E9CF9C 100%);--tx:var(--ink);--lb:var(--pri);--lt:#fff}
+.st.green{background:radial-gradient(1100px 1100px at 50% 55%,#E2FAC9 0%,#A9E77D 55%,#72C143 100%);--tx:#16300a;--lb:var(--pri);--lt:#fff}
+.st.purple{background:radial-gradient(1100px 1100px at 50% 55%,#A27AF7 0%,#7943e5 52%,#4a1fa8 100%);--tx:#fff;--lb:var(--gold);--lt:#3a1d00}
+.st.orange{background:radial-gradient(1100px 1100px at 50% 55%,#FFC48F 0%,#f98d3c 55%,#d95f0e 100%);--tx:#3a1500;--lb:#fff;--lt:var(--org-d)}
+.spot{position:absolute;left:-160px;top:300px;width:1400px;height:1400px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.34),transparent 62%);mix-blend-mode:soft-light;will-change:transform}
+.in{position:absolute;inset:0;transform-origin:540px 1050px;will-change:transform}
+.a{position:absolute}
+/* teks: baris kecil + kata kunci berlabel struk */
+.cap{position:absolute;left:0;top:215px;width:1080px;text-align:center;z-index:3}
+.sm{font:600 70px/1.1 "Outfit";color:var(--tx);white-space:nowrap}
+.w{display:inline-block;will-change:transform,opacity,filter}
+.kwW{display:inline-block;margin-top:14px;filter:drop-shadow(0 12px 0 rgba(0,0,0,.22));transform:rotate(-2deg)}
+.kw{display:inline-block;padding:14px 46px 44px;background:var(--lb);color:var(--lt);font:900 112px/1 "Outfit";letter-spacing:.005em;white-space:nowrap;text-transform:uppercase;
+  -webkit-mask:conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) 50%/44px 100%;mask:conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) 50%/44px 100%}
+/* laci kasir */
+.dr{position:absolute;width:0;height:0}
+.dB{position:absolute;left:-370px;top:-210px;width:740px;height:200px;border-radius:36px 36px 0 0;background:linear-gradient(180deg,#160942,#35197F);border:9px solid var(--line)}
+.dF{position:absolute;left:-390px;top:-50px;width:780px;height:220px;border-radius:26px 26px 44px 44px;background:linear-gradient(180deg,#9466F3 0%,var(--pri) 45%,#6431cf 100%);border:9px solid var(--line);box-shadow:0 30px 0 rgba(0,0,0,.18)}
+.dF::before{content:"";position:absolute;left:18px;right:18px;top:14px;height:22px;border-radius:12px;background:rgba(255,255,255,.28)}
+.dH{position:absolute;left:50%;bottom:32px;width:230px;height:40px;margin-left:-115px;border-radius:20px;background:#fff;border:7px solid var(--line)}
+.dl{position:absolute;top:56px;width:330px;text-align:center;font:800 58px/1 "Outfit";color:#fff;opacity:0}.dl.l{left:22px}.dl.r{right:22px}
+.dV{position:absolute;left:-13px;top:-250px;width:26px;height:240px;border-radius:13px 13px 0 0;background:#fff;border:7px solid var(--line);opacity:0}
+.coin{position:absolute;left:0;top:0;width:84px;height:84px;margin:-42px 0 0 -42px;border-radius:50%;background:radial-gradient(circle at 34% 30%,#FFE58A 0%,var(--gold) 46%,var(--gold-d) 100%);border:6px solid var(--line);
+  display:flex;align-items:center;justify-content:center;font:800 30px/1 "Outfit";color:#9A5B00;will-change:transform;opacity:0}
+.coin.o{background:radial-gradient(circle at 34% 30%,#FFC08A 0%,var(--org) 50%,var(--org-d) 100%);color:#7A2500}
+.coin.xl{width:130px;height:130px;margin:-65px 0 0 -65px;font-size:46px;border-width:8px}
+.q{position:absolute;font:900 300px/1 "Outfit";color:var(--pri);-webkit-text-stroke:10px var(--line);paint-order:stroke fill;opacity:0}
+/* struk */
+.slot{position:absolute;left:190px;top:640px;width:700px;height:64px;border-radius:32px;background:#16300a;border:9px solid var(--line)}
+.paperW{position:absolute;left:250px;top:672px;width:580px;height:0;overflow:hidden}
+.paper{position:absolute;left:0;bottom:0;width:580px;height:800px;background:#fff;padding:60px 44px 0;font-family:"Plus Jakarta Sans";color:#1e293b;
+  -webkit-mask:conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) 50%/40px 100%;mask:conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) 50%/40px 100%}
+.paper h4{font:800 50px/1.1 "Plus Jakarta Sans";text-align:center;color:var(--pri);margin-bottom:26px}
+.prow{display:flex;justify-content:space-between;white-space:nowrap;font:600 38px/1.2 "Plus Jakarta Sans";margin-top:26px;font-variant-numeric:tabular-nums;opacity:0}
+.ptot{margin-top:38px;padding-top:30px;border-top:6px dashed #94a3b8;text-align:center;opacity:0}
+.ptot small{display:block;font:700 42px/1 "Plus Jakarta Sans";color:#64748b}
+.ptot b{display:block;margin-top:12px;font:800 80px/1 "Outfit";color:var(--ink);font-variant-numeric:tabular-nums}
+/* objek pengeluaran */
+.big{position:absolute;left:230px;top:770px;width:620px;height:620px;border-radius:50%;background:#fff;border:11px solid var(--line);box-shadow:0 26px 0 rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center;opacity:0}
+.big svg{width:400px;height:400px}
+.amt{position:absolute;left:0;top:1460px;width:1080px;text-align:center;opacity:0}
+.amt span{display:inline-block;padding:14px 44px 18px;border-radius:70px;background:#fff;border:9px solid var(--line);font:900 104px/1 "Outfit";color:var(--org-d);font-variant-numeric:tabular-nums}
+#chip{position:absolute;left:0;top:1700px;width:1080px;text-align:center;opacity:0;z-index:5}
+#chip span{display:inline-flex;align-items:baseline;gap:22px;padding:16px 46px 20px;border-radius:70px;background:#fff;border:8px solid var(--line);box-shadow:0 14px 0 rgba(0,0,0,.2)}
+#chip i{font:700 normal 52px/1 "Outfit";color:#64748b}#chip b{font:800 80px/1 "Outfit";color:var(--ink);font-variant-numeric:tabular-nums;min-width:6.6ch;text-align:right}
+#bigNum{position:absolute;left:0;top:700px;width:1080px;text-align:center;font:900 168px/1 "Outfit";color:#fff;letter-spacing:-.02em;font-variant-numeric:tabular-nums;opacity:0}
+.tag{position:absolute;padding:10px 34px 14px;border-radius:60px;font:800 64px/1.1 "Outfit";border:8px solid var(--line);white-space:nowrap;opacity:0}
+.stall{position:absolute;left:140px;top:700px;width:800px;height:800px;opacity:0}
+.spark{position:absolute;width:70px;height:70px;opacity:0}
+/* ponsel kasir */
+.phone{position:absolute;left:230px;top:640px;width:620px;height:1060px;border-radius:84px;background:#fff;border:14px solid var(--line);box-shadow:0 30px 0 rgba(0,0,0,.18);padding:96px 44px 0;font-family:"Plus Jakarta Sans";color:#0f172a;opacity:0}
+.phone::before{content:"";position:absolute;left:50%;top:26px;width:170px;height:34px;margin-left:-85px;border-radius:17px;background:var(--line)}
+.phone .hd{font:800 52px/1.15 "Plus Jakarta Sans";color:var(--pri)}
+.phone .row{display:flex;justify-content:space-between;align-items:center;white-space:nowrap;margin-top:26px;padding:26px 24px;border-radius:26px;background:#f1f5f9;font:700 38px/1.1 "Plus Jakarta Sans";font-variant-numeric:tabular-nums;opacity:0}
+.phone .row em{font-style:normal;color:#16a34a;font-weight:800}
+.phone .tot{display:flex;justify-content:space-between;margin-top:36px;padding-top:30px;border-top:6px dashed #cbd5e1;font:800 56px/1.1 "Plus Jakarta Sans";color:var(--pri);font-variant-numeric:tabular-nums;opacity:0}
+.phone .ok{margin:40px auto 0;width:fit-content;padding:18px 46px 20px;border-radius:50px;background:var(--grn);color:#1a3a0a;font:800 54px/1 "Plus Jakarta Sans";border:7px solid var(--line);opacity:0}
+/* penutup */
+.logoC{position:absolute;left:130px;top:250px;width:820px;padding:48px 50px 44px;border-radius:60px;background:#fff;border:11px solid var(--line);box-shadow:0 26px 0 rgba(0,0,0,.2);opacity:0}
+.logoC img{display:block;width:100%}
+.fox{position:absolute;left:150px;top:820px;width:780px;height:auto;transform-origin:50% 100%;opacity:0}
+#vig{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse 80% 70% at 50% 52%,transparent 52%,rgba(8,2,24,.34) 100%);z-index:8}
+#grain{position:absolute;inset:-60px;opacity:.16;mix-blend-mode:multiply;pointer-events:none;z-index:9;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .9 0'/></filter><rect width='300' height='300' filter='url(%23n)'/></svg>")}
+#ui{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);display:none;align-items:center;gap:12px;padding:10px 16px;border-radius:14px;background:rgba(14,16,22,.9);font:13px system-ui;color:#A0A6B4;z-index:50}
+#ui.on{display:flex}#ui button{background:#262A34;color:#fff;border:none;padding:7px 14px;border-radius:8px;font:inherit;cursor:pointer}
+#scrub{width:320px}#clock{font-variant-numeric:tabular-nums;min-width:5.2ch;text-align:right}
+</style>
+</head>
+<body>
+<div id="stage"><div id="chip"><span><i>Kas</i><b id="chipN">Rp0</b></span></div><div id="vig"></div><div id="grain"></div></div>
+<audio id="vo" src="vo.wav" preload="auto"></audio>
+<div id="ui"><button id="btn-play">Pause</button><button id="btn-restart">Restart</button><input id="scrub" type="range" min="0" max="1000" value="0"><span id="clock">0.00s</span></div>
+
+<script>
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const Q=new URLSearchParams(location.search), W=1080, H=1920;
+let _s=20261115; const rnd=()=>{_s|=0;_s=_s+0x6D2B79F5|0;let t=Math.imul(_s^_s>>>15,1|_s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};
+const clamp=(v,a=0,b=1)=>Math.min(b,Math.max(a,v));
+const fmt=v=>'Rp'+Math.round(v).toLocaleString('id-ID');
+const el=(cls,html='',tag='div')=>{const e=document.createElement(tag);e.className=cls;e.innerHTML=html;return e;};
+const tl=gsap.timeline({paused:true}), stageEl=$('#stage'), chip=$('#chip');
+
+/* ---------- batas panggung (dtk) — disetel ulang saat VO masuk ---------- */
+/* disinkronkan ke vo.wav (jeda terdeteksi: 1.90 3.56 6.39 8.44 11.34 12.47 15.25 17.09 19.04 21.83 24.93 26.51 29.61) */
+const C=[0,2.1,4.25,8.85,10.5,11.45,12.65,13.75,15.8,19.7,22.15,25.35,26.95,28.5,30.6];
+const DURATION=C[C.length-1];
+const SPOTS=[], BOBS=[];
+
+/* ---------- panggung: cut + geser 96 px, lalu push pelan sampai cut berikutnya ---------- */
+function stage(i,bg){const t0=C[i],t1=C[i+1],st=el('st '+bg),spot=el('spot'),inn=el('in');st.append(spot,inn);stageEl.insertBefore(st,chip);
+  SPOTS.push({spot,ph:i*1.3});
+  tl.set(st,{autoAlpha:1},t0); if(i<C.length-2)tl.set(st,{autoAlpha:0},t1);
+  const dir=i%2?1:-1;
+  tl.fromTo(inn,{x:dir*96,scale:1.1},{x:0,scale:1,duration:.5,ease:'power3.out',immediateRender:false},t0);
+  tl.fromTo(inn,{scale:1},{scale:1.06,duration:t1-t0-.5,ease:'none',immediateRender:false},t0+.5);
+  return {st,inn,t0,t1};}
+/* ---------- teks: baris kecil per kata + label struk yang tercetak ---------- */
+function cap(S,at,small,key,{kwAt=.28,out=null}={}){const c=el('cap'),sm=el('sm'),kwW=el('kwW',`<span class="kw">${key}</span>`);
+  small.split(' ').forEach((p,i,a)=>{const w=el('w',p,'span');sm.append(w);if(i<a.length-1)sm.append(' ');});
+  c.append(sm,el('',''),kwW);S.st.append(c);
+  const ws=$$('.w',sm); gsap.set(ws,{opacity:0}); gsap.set(kwW,{opacity:0});
+  tl.fromTo(ws,{opacity:0,y:46,filter:'blur(12px)'},{opacity:1,y:0,filter:'blur(0px)',duration:.5,ease:'power4.out',stagger:.07,immediateRender:false},at);
+  tl.set(kwW,{opacity:1},at+kwAt);
+  tl.fromTo(kwW,{clipPath:'inset(0% 0% 100% 0%)',y:-40},{clipPath:'inset(0% 0% -20% 0%)',y:0,duration:.42,ease:'power3.out',immediateRender:false},at+kwAt);
+  tl.fromTo(kwW,{scale:1},{scale:1.07,duration:.12,ease:'power2.out',yoyo:true,repeat:1,immediateRender:false},at+kwAt+.42);
+  if(out!=null){tl.to(ws,{opacity:0,y:-40,duration:.25,ease:'power2.in'},out);tl.to(kwW,{opacity:0,y:-50,duration:.25,ease:'power2.in'},out+.03);}
+  return c;}
+/* ---------- laci & koin ---------- */
+function drawer(par,cx,cy){const g=el('dr','<div class="dB"></div><div class="dC a"></div><div class="dV"></div><div class="dF"><div class="dl l">Usaha</div><div class="dl r">Pribadi</div><div class="dH"></div></div>');
+  g.style.left=cx+'px';g.style.top=cy+'px';par.append(g);return {g,c:$('.dC',g),v:$('.dV',g),f:$('.dF',g)};}
+const coin=(par,cls='')=>{const c=el('coin '+cls,'Rp');par.append(c);return c;};
+const spot=(r,c,j=1)=>({x:-286+c*52+(r%2)*26+(rnd()-.5)*10*j,y:-78-r*34+(rnd()-.5)*6*j});
+const spots=(rows,j=1)=>{const a=[];for(let r=0;r<rows;r++)for(let c=0;c<11+(r%2?0:1);c++)a.push(spot(r,c,j));return a;};
+const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
+function rain(par,list,t0,gap,{cls=()=>'',fromX=p=>p.x+(rnd()-.5)*240,fromY=-1500,dur=.55}={}){return list.map((p,i)=>{const c=coin(par,cls(i)),t=t0+i*gap;
+  tl.set(c,{opacity:1,x:fromX(p,i),y:fromY,rotation:(rnd()-.5)*200,scale:1},t);
+  tl.to(c,{x:p.x,duration:dur,ease:'sine.out'},t); tl.to(c,{y:p.y,rotation:(rnd()-.5)*30,duration:dur,ease:'power2.in'},t);
+  tl.fromTo(c,{scaleY:.7},{scaleY:1,duration:.3,ease:'back.out(3)',immediateRender:false},t+dur); return c;});}
+const still=(par,list,cls=()=>'')=>list.map((p,i)=>{const c=coin(par,cls(i));gsap.set(c,{opacity:1,x:p.x,y:p.y,rotation:(rnd()-.5)*30});return c;});
+const pop=(e,at,{dur=.5,from=.3,rot=0,ease='back.out(1.9)'}={})=>tl.fromTo(e,{opacity:0,scale:from,rotation:rot},{opacity:1,scale:1,rotation:0,duration:dur,ease,immediateRender:false},at);
+
+/* ---------- angka kas: fungsi murni dari waktu ---------- */
+const KQ=i=>Math.min(1,(C[i+1]-C[i])/1.3);            // panggung pendek: animasi dipercepat
+const LEAK=[[C[4]+.72*KQ(4),100000],[C[5]+.72*KQ(5),250000],[C[6]+.72*KQ(6),300000],[C[7]+.72*KQ(7),1000000]];
+function kas(t){let v=2e6;for(const [a,amt] of LEAK){const q=clamp((t-a)/.4);v-=q>=1?amt:Math.round(amt*q/5000)*5000;}return v;}
+
+/* ================= PANGGUNG ================= */
+/* 0 — hujan koin ke laci: jualan LAKU BANYAK */
+{const S=stage(0,'dark'),D=drawer(S.inn,540,1180);
+  rain(D.c,shuffle(spots(3)).slice(0,30),.05,.068);
+  cap(S,.15,'jualan','laku banyak');}
+/* 1 — koin melesat pergi: tapi uangnya KE MANA? */
+{const S=stage(1,'cream'),D=drawer(S.inn,540,1220),cs=still(D.c,spots(3,1).slice(0,30));
+  cs.forEach((c,i)=>{if(i<2)return;const t=S.t0+.1+i*.022,a=-Math.PI/2+(rnd()-.5)*2.2;
+    tl.to(c,{x:'+='+Math.cos(a)*1500,y:'+='+Math.sin(a)*1700,rotation:'+=400',duration:.6,ease:'power2.in'},t);});
+  [[230,700,-14],[470,570,6],[690,720,16]].forEach(([x,y,r],i)=>{const q=el('q','?');q.style.left=x+'px';q.style.top=y+'px';S.inn.append(q);
+    pop(q,S.t0+.75+i*.16,{rot:r*3,dur:.55});BOBS.push({e:q,a:16,f:2.2,ph:i*1.9,r});});
+  cap(S,S.t0+.12,'tapi uangnya','ke mana?');}
+/* 2 — struk tercetak: omzet hari ini 2 JUTA */
+let totEl,totT;
+{const S=stage(2,'green');const pw=el('paperW'),p=el('paper','<h4>Penjualan hari ini</h4><div class="prow"><span>Es teh ×40</span><span>200.000</span></div><div class="prow"><span>Nasi goreng ×60</span><span>900.000</span></div><div class="prow"><span>Mie ayam ×75</span><span>900.000</span></div><div class="ptot"><small>Total omzet</small><b>Rp0</b></div>');
+  pw.append(p);S.inn.append(pw,el('slot'));
+  tl.fromTo(pw,{height:0},{height:800,duration:1.15,ease:'steps(12)',immediateRender:false},S.t0+.15);
+  tl.fromTo($$('.prow',p),{opacity:0,x:-30},{opacity:1,x:0,duration:.3,ease:'power3.out',stagger:.2,immediateRender:false},S.t0+.9);
+  tl.fromTo($('.ptot',p),{opacity:0,y:20},{opacity:1,y:0,duration:.35,ease:'back.out(2)',immediateRender:false},S.t0+1.5);
+  tl.fromTo($('.ptot b',p),{scale:1},{scale:1.14,duration:.14,ease:'power2.out',yoyo:true,repeat:1,immediateRender:false},S.t0+2.4);
+  totEl=$('.ptot b',p);totT=S.t0+1.55;
+  cap(S,S.t0+.12,'omzet hari ini','2 juta',{kwAt:1.6});}
+/* 3 — koin keluar dari laci: tapi laci kasir DIPAKAI JUGA */
+{const S=stage(3,'dark'),D=drawer(S.inn,540,1180),cs=still(D.c,spots(3,1).slice(0,30));
+  cs.slice(8).reverse().forEach((c,i)=>{const t=S.t0+.35+i*.05,sx=(i%2?1:-1)*(500+rnd()*500);
+    tl.to(c,{y:'-=320',duration:.3,ease:'power2.out'},t);tl.to(c,{y:'+=1500',duration:.6,ease:'power2.in'},t+.3);
+    tl.to(c,{x:'+='+sx,rotation:'+='+(sx>0?360:-360),duration:.9,ease:'none'},t);});
+  cap(S,S.t0+.12,'tapi laci kasir','dipakai juga');
+  tl.fromTo(chip,{opacity:0,y:80},{opacity:1,y:0,duration:.45,ease:'back.out(1.8)',immediateRender:false},S.t0+.5);}
+/* 4–7 — pengeluaran pribadi, satu objek per ketukan */
+const ICON={
+ pulsa:'<rect x="30" y="8" width="40" height="84" rx="9" fill="#7943e5" stroke="#3B1F12" stroke-width="5"/><rect x="36" y="18" width="28" height="52" rx="3" fill="#fff"/><circle cx="50" cy="81" r="4.5" fill="#fff"/><path d="M42 58v-8M50 58V42M58 58V34" stroke="#57b01c" stroke-width="6" stroke-linecap="round"/>',
+ jajan:'<path d="M26 34h48l-7 56H33z" fill="#FFE3B8" stroke="#3B1F12" stroke-width="5" stroke-linejoin="round"/><path d="M20 34h60" stroke="#3B1F12" stroke-width="7" stroke-linecap="round"/><path d="M60 34L70 8" stroke="#f97316" stroke-width="7" stroke-linecap="round"/><circle cx="41" cy="76" r="5.5" fill="#3B1F12"/><circle cx="55" cy="80" r="5.5" fill="#3B1F12"/><circle cx="48" cy="64" r="5.5" fill="#3B1F12"/><circle cx="60" cy="67" r="5.5" fill="#3B1F12"/>',
+ bensin:'<rect x="18" y="14" width="44" height="74" rx="7" fill="#f97316" stroke="#3B1F12" stroke-width="5"/><rect x="26" y="23" width="28" height="22" rx="3" fill="#fff" stroke="#3B1F12" stroke-width="4"/><path d="M12 88h56" stroke="#3B1F12" stroke-width="7" stroke-linecap="round"/><path d="M62 40h10q8 0 8 8v24q0 7-7 7t-7-7V60" fill="none" stroke="#3B1F12" stroke-width="5" stroke-linecap="round"/><path d="M40 56c-6 8-6 14 0 16c6-2 6-8 0-16z" fill="#fff"/>',
+ arisan:'<rect x="12" y="34" width="76" height="52" rx="7" fill="#a0ea71" stroke="#3B1F12" stroke-width="5"/><path d="M14 38l36 28l36-28" fill="none" stroke="#3B1F12" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/><circle cx="50" cy="30" r="16" fill="#FFC83D" stroke="#3B1F12" stroke-width="5"/><text x="50" y="36" text-anchor="middle" font-family="Outfit" font-weight="800" font-size="16" fill="#9A5B00">Rp</text>'};
+[['purple','pulsa','buat','pulsa','−Rp100.000',3],['cream','jajan','buat','jajan anak','−Rp250.000',4],['orange','bensin','buat','bensin','−Rp300.000',4],['green','arisan','sampai','arisan','−Rp1.000.000',7]].forEach(([bg,ic,sm,kw,amt,n],k)=>{
+  const q=KQ(4+k),S=stage(4+k,bg),big=el('big',`<svg viewBox="0 0 100 100">${ICON[ic]}</svg>`),am=el('amt',`<span>${amt}</span>`);S.inn.append(big,am);
+  pop(big,S.t0+.02,{rot:k%2?14:-14,dur:.45});BOBS.push({e:big,a:10,f:3,ph:k,r:0});
+  for(let j=0;j<n;j++){const c=coin(S.inn,'xl'),t=S.t0+(.22+j*(.42/n))*q,sx=(j%2?1:-1)*(260+rnd()*380);
+    tl.set(c,{opacity:1,x:540+sx,y:-120,rotation:0,scale:1},t);
+    tl.to(c,{x:540,rotation:sx>0?-300:300,duration:.48*q,ease:'sine.in'},t);tl.to(c,{y:1080,duration:.48*q,ease:'power2.in'},t);
+    tl.to(c,{scale:.2,opacity:0,duration:.1},t+.44*q);}
+  tl.fromTo(big,{scale:1},{scale:1.14,duration:.11,ease:'power2.out',yoyo:true,repeat:n>4?5:3,immediateRender:false},S.t0+.7*q);
+  tl.fromTo(am,{opacity:0,y:-70,scale:.5},{opacity:1,y:0,scale:1,duration:.4,ease:'back.out(2.2)',immediateRender:false},S.t0+.72*q);
+  tl.fromTo('#chip span',{scale:1},{scale:1.12,duration:.12,ease:'power2.out',yoyo:true,repeat:1,immediateRender:false},S.t0+.78*q);
+  cap(S,S.t0+.08,sm,kw,{kwAt:.14});});
+/* 8 — laci nyaris kosong: kas tinggal SEGINI / padahal stok BELUM DIBELI */
+let bigNum;
+{const S=stage(8,'dark'),D=drawer(S.inn,540,1330);still(D.c,[spot(0,2),spot(0,3),spot(0,6),spot(0,9)]);
+  tl.to(chip,{opacity:0,duration:.01},S.t0);
+  bigNum=el('a');bigNum.id='bigNum';S.inn.append(bigNum);
+  tl.fromTo(bigNum,{opacity:0,scale:2.2,filter:'blur(18px)'},{opacity:1,scale:1,filter:'blur(0px)',duration:.6,ease:'expo.out',immediateRender:false},S.t0+.1);
+  cap(S,S.t0+.15,'kas tinggal','segini',{out:S.t0+1.6});
+  cap(S,S.t0+1.8,'padahal stok','belum dibeli');}
+/* 9 — warung ramai: masalahnya bukan DAGANGAN */
+{const S=stage(9,'cream');let aw='';for(let i=0;i<5;i++){const x=30+i*68,f=i%2?'#fff':'#7943e5';aw+=`<path d="M${x} 96h68v52a34 34 0 0 1-68 0z" fill="${f}" stroke="#3B1F12" stroke-width="6" stroke-linejoin="round"/>`;}
+  const stall=el('stall',`<svg viewBox="0 0 400 400" width="800" height="800"><rect x="58" y="150" width="16" height="200" fill="#3B1F12"/><rect x="326" y="150" width="16" height="200" fill="#3B1F12"/>${aw}<rect x="22" y="72" width="356" height="30" rx="10" fill="#3B1F12"/><rect x="38" y="250" width="324" height="116" rx="14" fill="#7943e5" stroke="#3B1F12" stroke-width="6"/><rect x="120" y="278" width="160" height="60" rx="12" fill="#fff" stroke="#3B1F12" stroke-width="5"/><text x="200" y="322" text-anchor="middle" font-family="Outfit" font-weight="900" font-size="38" fill="#c2410c">LARIS</text><circle cx="100" cy="232" r="22" fill="#FFC83D" stroke="#3B1F12" stroke-width="6"/><circle cx="150" cy="226" r="26" fill="#f97316" stroke="#3B1F12" stroke-width="6"/><circle cx="252" cy="228" r="24" fill="#FFC83D" stroke="#3B1F12" stroke-width="6"/><circle cx="302" cy="232" r="21" fill="#a0ea71" stroke="#3B1F12" stroke-width="6"/></svg>`);
+  S.inn.append(stall);gsap.set(stall,{transformOrigin:'50% 100%'});
+  tl.fromTo(stall,{opacity:1,y:900,scaleY:.7},{y:0,scaleY:1,duration:.6,ease:'back.out(1.5)',immediateRender:false},S.t0+.05);tl.set(stall,{opacity:1},S.t0+.05);
+  BOBS.push({e:stall,a:8,f:4,ph:0,r:0});
+  [[150,720],[860,790],[90,1150],[930,1230]].forEach(([x,y],i)=>{const sp=el('spark','<svg viewBox="0 0 40 40"><path d="M20 0c2 12 6 16 20 20c-14 4-18 8-20 20c-2-12-6-16-20-20c14-4 18-8 20-20z" fill="#FFC83D" stroke="#3B1F12" stroke-width="3"/></svg>');
+    sp.style.left=x+'px';sp.style.top=y+'px';S.inn.append(sp);
+    tl.fromTo(sp,{opacity:0,scale:0,rotation:-90},{opacity:1,scale:1.5,rotation:0,duration:.4,ease:'back.out(3)',immediateRender:false},S.t0+.55+i*.14);BOBS.push({e:sp,a:12,f:5,ph:i,r:0});});
+  cap(S,S.t0+.12,'masalahnya bukan','dagangan');}
+/* 10 & 11 — dua aliran koin masuk laci yang sama, lalu sekat memisahkannya */
+{const base=spots(3,0), rest=[base[2],base[4],base[7],base[10]], mixP=base.slice(12,34), isO=i=>i%2===1;
+  const S=stage(10,'dark'),D=drawer(S.inn,540,1220);still(D.c,rest);
+  const tU=el('tag','uang usaha'),tP=el('tag','uang pribadi');tU.style.cssText='left:60px;top:720px;background:var(--gold);color:#5A3200';tP.style.cssText='right:60px;top:850px;background:var(--org);color:#fff';S.inn.append(tU,tP);
+  pop(tU,S.t0+.25,{rot:-14});pop(tP,S.t0+.85,{rot:14});
+  mixP.forEach((p,i)=>{const o=isO(i),c=coin(D.c,o?'o':''),t=(o?S.t0+.95:S.t0+.35)+Math.floor(i/2)*.13;
+    tl.set(c,{opacity:1,x:(o?560:-560)+(rnd()-.5)*160,y:-1250,rotation:(rnd()-.5)*200,scale:1},t);
+    tl.to(c,{x:p.x,duration:.55,ease:'sine.out'},t);tl.to(c,{y:p.y,rotation:(rnd()-.5)*30,duration:.55,ease:'power2.in'},t);
+    tl.fromTo(c,{scaleY:.7},{scaleY:1,duration:.3,ease:'back.out(3)',immediateRender:false},t+.55);});
+  cap(S,S.t0+.12,'usaha dan pribadi','tercampur',{kwAt:1.95});
+  tl.fromTo(D.g,{x:0},{x:14,duration:.07,ease:'none',yoyo:true,repeat:7,immediateRender:false},S.t0+2.4);
+
+  const S2=stage(11,'green'),D2=drawer(S2.inn,540,1220);
+  const gold=[...still(D2.c,rest),...still(D2.c,mixP.filter((_,i)=>!isO(i)))], org=still(D2.c,mixP.filter((_,i)=>isO(i)),()=>'o');
+  const t=S2.t0+.12;
+  tl.set(D2.v,{opacity:1},t);tl.fromTo(D2.v,{y:-1300},{y:0,duration:.3,ease:'power3.in',immediateRender:false},t);
+  tl.fromTo(D2.f,{y:0},{y:18,duration:.09,ease:'power1.out',yoyo:true,repeat:1,immediateRender:false},t+.3);
+  const go=(c,i,x0)=>{const r=Math.floor(i/6),k=i%6,tt=t+.32+i*.014;
+    tl.to(c,{x:x0+k*50+(r%2)*10,duration:.46,ease:'power2.inOut'},tt);tl.to(c,{y:'-=170',duration:.23,ease:'power2.out'},tt);tl.to(c,{y:-78-r*34,rotation:0,duration:.23,ease:'power2.in'},tt+.23);};
+  gold.forEach((c,i)=>go(c,i,-308));org.forEach((c,i)=>go(c,i,52));
+  tl.fromTo($$('.dl',D2.g),{opacity:0,y:20},{opacity:1,y:0,duration:.4,ease:'back.out(2)',stagger:.1,immediateRender:false},t+.55);
+  cap(S2,S2.t0+.1,'pisahkan','dari sekarang',{kwAt:.35});}
+/* 12 — ponsel kasir: catat tiap TRANSAKSI */
+{const S=stage(12,'cream'),ph=el('phone','<div class="hd">Penjualan hari ini</div><div class="row"><span>Es teh ×2</span><span>10.000 <em>✓</em></span></div><div class="row"><span>Nasi goreng</span><span>15.000 <em>✓</em></span></div><div class="row"><span>Mie ayam</span><span>12.000 <em>✓</em></span></div><div class="tot"><span>Total</span><span>Rp37.000</span></div><div class="ok">Tercatat</div>');
+  S.inn.append(ph);gsap.set(ph,{transformOrigin:'50% 100%'});
+  tl.fromTo(ph,{opacity:1,y:1300,rotation:8},{y:0,rotation:-2,duration:.6,ease:'back.out(1.3)',immediateRender:false},S.t0+.02);tl.set(ph,{opacity:1},S.t0+.02);
+  tl.fromTo($$('.row',ph),{opacity:0,x:-60},{opacity:1,x:0,duration:.3,ease:'power3.out',stagger:.17,immediateRender:false},S.t0+.42);
+  tl.fromTo($('.tot',ph),{opacity:0,y:20},{opacity:1,y:0,duration:.35,ease:'back.out(2)',immediateRender:false},S.t0+.95);
+  tl.fromTo($('.ok',ph),{opacity:0,scale:.3},{opacity:1,scale:1,duration:.45,ease:'back.out(2.6)',immediateRender:false},S.t0+1.15);
+  cap(S,S.t0+.12,'catat tiap','transaksi');}
+/* 13 — maskot + logo */
+const RISE=[];
+{const S=stage(13,'purple');
+  for(let i=0;i<12;i++){const c=coin(S.inn,i%3?'':'xl');RISE.push({c,x:70+rnd()*940,y0:rnd()*2300,v:150+rnd()*160,ph:rnd()*6.28});}
+  const lg=el('logoC','<img src="assets/logo-macca.png" alt="MaccaPOS">'),fox=el('fox','','img');fox.src='assets/maskot.webp';S.inn.append(lg,fox);
+  tl.fromTo(fox,{opacity:1,y:1200,rotation:8},{y:0,rotation:0,duration:.65,ease:'back.out(1.5)',immediateRender:false},S.t0+.08);tl.set(fox,{opacity:1},S.t0+.08);
+  tl.fromTo(lg,{opacity:0,scale:.5,rotation:-8,y:-80},{opacity:1,scale:1,rotation:-2,y:0,duration:.6,ease:'back.out(1.8)',immediateRender:false},S.t0+.5);
+  BOBS.push({e:fox,a:14,f:2.6,ph:0,r:0});}
+tl.to({},{duration:.01},DURATION);
+
+/* ---------- semua yang bergerak terus: fungsi waktu ---------- */
+const chipN=$('#chipN');
+function tick(t){
+  chipN.textContent=fmt(kas(t)); bigNum.textContent=fmt(kas(t));
+  const sh=clamp((t-C[8]-.6)/.3)*clamp((C[9]-t)/.2);
+  bigNum.style.marginLeft=(Math.sin(t*43)*6*sh)+'px'; bigNum.style.marginTop=(Math.cos(t*37)*4*sh)+'px';
+  const p=clamp((t-totT)/.8); totEl.textContent=fmt(p>=1?2e6:Math.round(2e6*(1-Math.pow(1-p,2.2))/5000)*5000);
+  SPOTS.forEach(o=>{o.spot.style.transform=`translate(${Math.sin(t*.7+o.ph)*150}px,${Math.cos(t*.55+o.ph)*190}px)`;});
+  BOBS.forEach(o=>{o.e.style.marginTop=(Math.sin(t*o.f+o.ph)*o.a)+'px';});
+  RISE.forEach(o=>{if(t<C[13])return;const y=2100-((o.y0+(t-C[13])*o.v)%2300);o.c.style.opacity=.85;o.c.style.transform=`translate(${o.x+Math.sin(t*1.3+o.ph)*40}px,${y}px) rotate(${t*60+o.ph*57}deg)`;});
+}
+
+/* ============ PEREKAT ============ */
+const fit=()=>{const s=Math.min(innerWidth/W,innerHeight/H);stageEl.style.transform=`translate(-50%,-50%) scale(${s})`;};
+addEventListener('resize',fit);fit();
+const clock=$('#clock'),scrub=$('#scrub'),btn=$('#btn-play');let scrubbing=false;
+gsap.ticker.add(()=>{const t=tl.time();tick(t);clock.textContent=t.toFixed(2)+'s';if(!scrubbing)scrub.value=String(t/DURATION*1000);});
+const vo=$('#vo');
+const voSync=()=>{if(Math.abs(vo.currentTime-tl.time())>.12)vo.currentTime=Math.min(tl.time(),vo.duration||1e9);};
+const go=(from)=>{if(from!=null)tl.time(from);voSync();const pr=tl.time()<(vo.duration||0)?vo.play():null;tl.play();btn.textContent='Pause';return pr;};
+const halt=()=>{tl.pause();vo.pause();btn.textContent='Play';};
+const toggle=()=>{tl.paused()?go():halt();};
+btn.onclick=toggle;$('#btn-restart').onclick=()=>go(0);
+scrub.addEventListener('pointerdown',()=>{scrubbing=true;halt();});
+addEventListener('pointerup',()=>scrubbing=false);
+scrub.addEventListener('input',()=>{tl.pause();tl.time(scrub.value/1000*DURATION);});
+addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();toggle();}if(/^[rR]$/.test(e.key))go(0);});
+if(Q.has('debug'))$('#ui').classList.add('on');
+tl.eventCallback('onComplete',()=>{go(0);});
+const seek=t=>{tl.pause();tl.time(t,false);tick(t);};
+window.OPENER={W,H,tl,DURATION,seek,ready:false};
+Promise.all([document.fonts.ready,...$$('img').map(i=>i.decode().catch(()=>{}))]).then(()=>{
+  $$('.kw').forEach(k=>{const w=k.offsetWidth;if(w>860)k.style.fontSize=Math.floor(112*860/w)+'px';});   // label terlalu lebar: kecilkan
+  window.OPENER.ready=true;tick(0);if(Q.has('clean'))return;
+  /* suara: coba putar langsung; bila diblokir browser, tahan di frame 0 dan mulai pada klik/tombol pertama */
+  const pr=go(0);if(pr)pr.catch(()=>{halt();tl.time(0);const st=()=>{removeEventListener('pointerdown',st);removeEventListener('keydown',st);go(0);};addEventListener('pointerdown',st);addEventListener('keydown',st);});});
+</script>
+</body>
+</html>

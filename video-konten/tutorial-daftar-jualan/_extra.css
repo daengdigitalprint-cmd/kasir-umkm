@@ -1,0 +1,20 @@
+/* ---- tambahan tutorial "dari daftar sampai jualan" ---- */
+/* jendela di bawah teks: layar HP boleh di-zoom tanpa menutupi baris teks */
+.vw{position:absolute;left:0;top:470px;width:1080px;height:1450px;overflow:hidden;-webkit-mask:linear-gradient(180deg,transparent 0,#000 46px);mask:linear-gradient(180deg,transparent 0,#000 46px)}
+.cam{position:absolute;left:0;top:0;width:1080px;height:1450px;transform-origin:0 0;will-change:transform}
+/* HP berisi tangkapan layar asli (390×844 css px, dipotret 3×) */
+.sp{position:absolute;width:630px;padding:16px;border-radius:72px;background:#1b1036;border:12px solid var(--line);box-shadow:0 30px 0 rgba(0,0,0,.2)}
+.scr{position:relative;width:574px;height:1242px;border-radius:56px;overflow:hidden;background:#fff}
+.scr img{position:absolute;left:0;top:0;width:574px;height:1242px;display:block}
+.cov{position:absolute;background:#f6f8fa;transform-origin:100% 50%}
+.cov.wh{background:#fff}
+/* tanda tangan: cincin kuning di bagian yang sedang dibahas + jari mengetuk */
+.ring{position:absolute;border:7px solid var(--gold);border-radius:22px;box-shadow:0 0 0 6px rgba(59,31,18,.85),0 0 36px 8px rgba(255,200,61,.55);opacity:0;pointer-events:none}
+.tap{position:absolute;width:74px;height:74px;margin:-37px 0 0 -37px;border-radius:50%;background:rgba(255,200,61,.5);border:7px solid #FFC83D;box-shadow:0 0 0 5px rgba(59,31,18,.8);opacity:0;z-index:5}
+.tap::after{content:"";position:absolute;inset:-26px;border-radius:50%;border:6px solid #FFC83D;opacity:var(--ripple,0);transform:scale(var(--rs,.6))}
+/* nomor langkah besar di sudut — penanda tutorial */
+.stepn{position:absolute;right:56px;top:470px;width:150px;height:150px;border-radius:50%;background:var(--gold);border:10px solid var(--line);box-shadow:0 12px 0 rgba(0,0,0,.22);font:900 92px/132px "Outfit";color:var(--line);text-align:center;opacity:0;z-index:4}
+.url{position:absolute;left:0;top:1720px;width:1080px;text-align:center;opacity:0}
+.url span{display:inline-block;padding:16px 46px 20px;border-radius:70px;background:#fff;border:9px solid var(--line);box-shadow:0 12px 0 rgba(0,0,0,.2);font:800 64px/1 "Outfit";color:var(--pri)}
+.logoC{top:200px}
+.fox{top:640px;width:700px;left:190px}
