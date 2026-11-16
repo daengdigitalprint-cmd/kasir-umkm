@@ -2,7 +2,7 @@
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { logout } from '@/routes';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { Bot, Building2, CreditCard, Crown, History, Landmark, LogOut, Menu, Newspaper, Settings2, Shield, Ticket } from 'lucide-vue-next';
+import { Bot, Building2, CreditCard, Crown, History, Landmark, LogOut, Megaphone, Menu, Newspaper, Settings2, Shield, Ticket } from 'lucide-vue-next';
 import { computed, ref, type Component } from 'vue';
 
 interface Props {
@@ -59,8 +59,11 @@ const navGroups = computed<{ label: string; items: NavItem[] }[]>(() => [
         ],
     },
     {
-        label: 'Konten & SEO',
-        items: [{ id: 'articles', label: 'Artikel SEO', icon: Newspaper, url: '/superadmin/articles' }],
+        label: 'Pemasaran',
+        items: [
+            { id: 'leads', label: 'Lead Iklan', icon: Megaphone, url: '/superadmin/leads' },
+            { id: 'articles', label: 'Artikel SEO', icon: Newspaper, url: '/superadmin/articles' },
+        ],
     },
     {
         label: 'Pemantauan & AI',

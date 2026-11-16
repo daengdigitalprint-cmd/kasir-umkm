@@ -88,3 +88,6 @@ node_modules/
 
 # Data barang/stok pelanggan (jangan masuk repo & jangan di folder public)
 /public/*.xlsx
+
+# Video yang dipakai halaman situs (sudah dikompres untuk web)
+!public/videos/*.mp4

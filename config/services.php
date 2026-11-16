@@ -42,4 +42,19 @@ return [
         'site_verification' => env('GOOGLE_SITE_VERIFICATION'),
     ],
 
+    /*
+    | Meta (Facebook/Instagram) Ads — landing page iklan /mulai.
+    | Cadangan saja: nilai utama diisi di Super Admin > Lead Iklan dan
+    | didahulukan dari nilai .env ini (lihat App\Models\AdLandingSetting).
+    | pixel_id        : ID Pixel/Dataset dari Events Manager. Kosong = Pixel tidak dimuat.
+    | capi_token      : token Conversions API (opsional). Diisi = event Lead juga dikirim dari server.
+    | test_event_code : kode dari tab "Test Events" saat menguji; kosongkan di produksi.
+    */
+    'meta' => [
+        'pixel_id' => env('META_PIXEL_ID'),
+        'capi_token' => env('META_CAPI_TOKEN'),
+        'test_event_code' => env('META_TEST_EVENT_CODE'),
+        'graph_version' => env('META_GRAPH_VERSION', 'v24.0'),
+    ],
+
 ];

@@ -81,6 +81,11 @@ Route::get('/sitemap.xml', function () {
 Route::get('/blog', [App\Http\Controllers\BlogController::class, 'index'])->name('blog.index');
 Route::get('/blog/{slug}', [App\Http\Controllers\BlogController::class, 'show'])->name('blog.show');
 
+// ── Landing page iklan Meta — Blade murni, tidak diindeks, satu tujuan: form penyaring ──
+Route::get('/mulai', [App\Http\Controllers\AdLandingController::class, 'show'])->name('ads.landing');
+Route::post('/mulai', [App\Http\Controllers\AdLandingController::class, 'store'])->middleware('throttle:8,1')->name('ads.lead.store');
+Route::get('/mulai/terima-kasih', [App\Http\Controllers\AdLandingController::class, 'thanks'])->name('ads.thanks');
+
 Route::get('/', function () {
     if (auth()->check()) {
         if (auth()->user()?->isSuperAdmin()) {
@@ -709,6 +714,12 @@ Route::prefix('superadmin')->name('superadmin.')->middleware(['auth', 'superadmi
     Route::post('/ai-auditor/analyze', [App\Http\Controllers\AiAuditorController::class, 'analyze'])->name('ai-auditor.analyze');
 
     // Artikel SEO (blog) + generate AI
+    // Lead dari landing page iklan (/mulai)
+    Route::get('/leads', [App\Http\Controllers\SuperAdmin\AdLeadController::class, 'index'])->name('leads.index');
+    Route::get('/leads/export', [App\Http\Controllers\SuperAdmin\AdLeadController::class, 'export'])->name('leads.export');
+    Route::put('/leads/settings', [App\Http\Controllers\SuperAdmin\AdLeadController::class, 'updateSettings'])->name('leads.settings');
+    Route::patch('/leads/{lead}', [App\Http\Controllers\SuperAdmin\AdLeadController::class, 'update'])->name('leads.update');
+
     Route::get('/articles', [App\Http\Controllers\SuperAdmin\ArticleController::class, 'index'])->name('articles.index');
     Route::get('/articles/create', [App\Http\Controllers\SuperAdmin\ArticleController::class, 'create'])->name('articles.create');
     Route::post('/articles', [App\Http\Controllers\SuperAdmin\ArticleController::class, 'store'])->name('articles.store');
