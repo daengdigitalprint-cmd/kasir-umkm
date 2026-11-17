@@ -73,6 +73,12 @@ final class PlanModules
             'menus' => ['kpi'],
             'routes' => ['kpi.*'],
         ],
+        'upsell' => [
+            'label' => 'Saran Tambahan Menu',
+            'setting' => 'upsell_enabled',
+            'menus' => ['upsell'],
+            'routes' => ['upsell-rules.*'],
+        ],
         'ai_chat' => [
             'label' => 'Asisten AI',
             'setting' => 'ai_chat_enabled',

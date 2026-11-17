@@ -50,6 +50,7 @@ final class MenuCatalog
         ['key' => 'receivables', 'label' => 'Piutang', 'group' => 'Pelanggan & Promo', 'module' => 'receivables_enabled'],
         ['key' => 'loyalty', 'label' => 'Loyalitas', 'group' => 'Pelanggan & Promo'],
         ['key' => 'discounts', 'label' => 'Diskon', 'group' => 'Pelanggan & Promo'],
+        ['key' => 'upsell', 'label' => 'Saran Menu', 'group' => 'Pelanggan & Promo'],
 
         ['key' => 'reports', 'label' => 'Laporan', 'group' => 'Laporan & Keuangan'],
         ['key' => 'expenses', 'label' => 'Biaya Usaha', 'group' => 'Laporan & Keuangan'],

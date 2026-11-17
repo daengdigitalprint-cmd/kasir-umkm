@@ -310,6 +310,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('customers/quick-store', [App\Http\Controllers\CustomerController::class, 'quickStore'])->middleware(['store.active']);
     Route::resource('customers', App\Http\Controllers\CustomerController::class)->middleware(['store.active', 'role.backoffice']);
 
+    // F8 Saran tambahan menu (upsell)
+    Route::middleware(['store.active', 'role.backoffice'])->group(function () {
+        Route::get('upsell-rules', [App\Http\Controllers\UpsellRuleController::class, 'index'])->name('upsell-rules.index');
+        Route::post('upsell-rules', [App\Http\Controllers\UpsellRuleController::class, 'store'])->name('upsell-rules.store');
+        Route::post('upsell-rules/settings', [App\Http\Controllers\UpsellRuleController::class, 'settings'])->name('upsell-rules.settings');
+        Route::patch('upsell-rules/{upsellRule}', [App\Http\Controllers\UpsellRuleController::class, 'update'])->name('upsell-rules.update');
+        Route::delete('upsell-rules/{upsellRule}', [App\Http\Controllers\UpsellRuleController::class, 'destroy'])->name('upsell-rules.destroy');
+    });
+
     Route::resource('discounts', App\Http\Controllers\DiscountController::class)
         ->only(['index', 'store', 'update', 'destroy'])
         ->middleware(['store.active', 'role.backoffice']);

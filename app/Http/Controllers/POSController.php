@@ -208,6 +208,8 @@ class POSController extends Controller
 
         return Inertia::render('POS/Index', [
             'products' => $products,
+            // F8: saran tambahan menu (pemicu → yang ditawarkan); kosong bila modul mati.
+            'upsellMap' => \App\Support\UpsellSuggestions::map($store),
             'saleComponents' => $saleComponents,
             'popularProductIds' => $popularProductIds,
             'categories' => ProductCategory::where('store_id', $store->id)

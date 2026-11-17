@@ -115,6 +115,8 @@ class GuestMenuController extends Controller
             'categories' => $categories,
             'bestSelling' => $bestSelling,
             'paymentMethods' => $paymentMethods,
+            // F8: saran tambahan menu untuk tamu; kosong bila modul mati.
+            'upsellMap' => \App\Support\UpsellSuggestions::map($store),
         ]);
     }
 

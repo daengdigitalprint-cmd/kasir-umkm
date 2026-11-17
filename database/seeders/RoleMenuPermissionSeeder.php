@@ -20,7 +20,7 @@ class RoleMenuPermissionSeeder extends Seeder
                 'stock_overview', 'products', 'product_categories', 'stock_movements',
                 'stock_adjustment', 'stock_opnames', 'recipes', 'productions',
                 'stock_transfers', 'stock_requests', 'shopping_list', 'purchases', 'purchase_returns', 'pre_orders',
-                'discounts', 'customers', 'receivables', 'loyalty', 'reports', 'expenses',
+                'discounts', 'upsell', 'customers', 'receivables', 'loyalty', 'reports', 'expenses',
                 'activity_logs', 'manage_stores', 'manage_products', 'manage_staff', 'settings',
                 'attendance', 'payroll',
             ],
@@ -30,7 +30,7 @@ class RoleMenuPermissionSeeder extends Seeder
                 'stock_overview', 'products', 'product_categories', 'stock_movements',
                 'stock_adjustment', 'stock_opnames', 'recipes', 'productions',
                 'stock_transfers', 'stock_requests', 'shopping_list', 'purchases', 'purchase_returns', 'pre_orders',
-                'discounts', 'customers', 'receivables', 'loyalty', 'reports', 'expenses', 'settings',
+                'discounts', 'upsell', 'customers', 'receivables', 'loyalty', 'reports', 'expenses', 'settings',
                 'attendance', 'payroll',
             ],
             'cashier' => [

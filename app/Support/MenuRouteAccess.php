@@ -18,6 +18,7 @@ final class MenuRouteAccess
     public const BACK_OFFICE = [
         'customers.' => 'customers',
         'discounts.' => 'discounts',
+        'upsell-rules.' => 'upsell',
         'expenses.' => 'expenses',
         'loyalty.' => 'loyalty',
         'receivables.' => 'receivables',

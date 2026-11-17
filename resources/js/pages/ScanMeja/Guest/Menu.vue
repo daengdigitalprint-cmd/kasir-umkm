@@ -41,7 +41,31 @@ const props = defineProps<{
     categories: Category[];
     bestSelling?: Product[];
     paymentMethods?: PaymentMethod[];
+    /** F8: produk pemicu → produk yang ditawarkan (kosong bila modul Saran Menu mati). */
+    upsellMap?: Record<string, number[]> | number[];
 }>();
+
+// ── F8 Saran tambahan menu ──
+const upsellTriggerId = ref<number | null>(null);
+const allProducts = computed(() => {
+    const byId = new Map<number, Product>();
+    for (const category of props.categories) {
+        for (const product of category.products) byId.set(product.id, product);
+    }
+    return byId;
+});
+const upsellSuggestions = computed<Product[]>(() => {
+    const map = props.upsellMap;
+    if (upsellTriggerId.value === null || !map || Array.isArray(map)) return [];
+    const inCart = new Set(cart.value.map((item) => item.product.id));
+    return (map[String(upsellTriggerId.value)] ?? [])
+        .map((id) => allProducts.value.get(id))
+        .filter((p): p is Product => !!p && !inCart.has(p.id) && !p.has_variants);
+});
+const acceptUpsell = (product: Product) => {
+    cart.value.push({ product, quantity: 1, notes: '' });
+    upsellTriggerId.value = product.id;
+};
 
 const cart = ref<CartItem[]>([]);
 const cartOpen = ref(false);
@@ -105,6 +129,7 @@ const addToCart = (product: Product) => {
     } else {
         cart.value.push({ product, quantity: 1, notes: '' });
     }
+    upsellTriggerId.value = product.id;
 };
 
 const removeFromCart = (productId: number) => {
@@ -149,6 +174,7 @@ const confirmAddFromDetail = () => {
             notes: selectedNotes.value,
         });
     }
+    upsellTriggerId.value = selectedProduct.value.id;
     closeProduct();
 };
 
@@ -380,6 +406,30 @@ const submitOrder = async () => {
             class="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-100 shadow-lg p-4"
         >
             <div class="max-w-3xl mx-auto">
+                <!-- F8: saran tambahan menu -->
+                <div v-if="upsellSuggestions.length > 0" class="mb-3 rounded-2xl border border-amber-200 bg-amber-50 p-3">
+                    <div class="mb-2 flex items-center justify-between">
+                        <p class="text-xs font-bold text-amber-900">Biasanya dipesan bersama</p>
+                        <button type="button" class="text-amber-700" aria-label="Tutup saran" @click="upsellTriggerId = null">
+                            <X class="h-4 w-4" />
+                        </button>
+                    </div>
+                    <div class="flex gap-2 overflow-x-auto">
+                        <button
+                            v-for="s in upsellSuggestions"
+                            :key="s.id"
+                            type="button"
+                            class="flex shrink-0 items-center gap-2 rounded-xl border border-amber-300 bg-white px-3 py-2 text-left"
+                            @click="acceptUpsell(s)"
+                        >
+                            <span>
+                                <span class="block text-sm font-semibold text-slate-900">{{ s.name }}</span>
+                                <span class="block text-xs text-slate-500">{{ formatPrice(s.price) }}</span>
+                            </span>
+                            <Plus class="h-4 w-4 text-violet-600" />
+                        </button>
+                    </div>
+                </div>
                 <button
                     @click="cartOpen = true"
                     class="w-full flex items-center justify-between rounded-2xl bg-violet-600 px-5 py-4 text-white font-bold"

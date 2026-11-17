@@ -345,6 +345,8 @@ interface Props {
     /** Bahan/komponen yang dipakai komponen menu, dikirim sekali lalu dipasangkan di klien. */
     saleComponents?: SaleConsumptionComponent[];
     popularProductIds: number[];
+    /** F8: produk pemicu → produk yang ditawarkan (kosong bila modul Saran Menu mati). */
+    upsellMap?: Record<string, number[]> | number[];
     categories: ProductCategory[];
     store: {
         id: number;
@@ -1985,6 +1987,27 @@ async function showComponentStockIssuesModal(product: Product, issues: Component
     return result.isConfirmed;
 }
 
+// ── F8 Saran tambahan menu ──
+// Setelah produk pemicu masuk keranjang, tampilkan hingga 3 menu yang biasa dipesan bersamanya.
+const upsellTriggerId = ref<number | null>(null);
+const upsellSuggestions = computed<Product[]>(() => {
+    const map = props.upsellMap;
+    if (upsellTriggerId.value === null || !map || Array.isArray(map)) return [];
+    const ids = map[String(upsellTriggerId.value)] ?? [];
+    const inCart = new Set(cart.value.map((item) => item.product.id));
+    return ids
+        .map((id) => (localProducts.value as Product[]).find((p) => p.id === id))
+        .filter((p): p is Product => !!p && !inCart.has(p.id) && addToCartBlockReason(p) === null);
+});
+
+function acceptUpsell(product: Product) {
+    requestAddToCart(product);
+}
+
+function dismissUpsell() {
+    upsellTriggerId.value = null;
+}
+
 function addToCartInternal(product: Product, variant: ProductVariant | null, selectedModifiers: ProductModifierOption[], note = '') {
     if (product.has_variants) {
         if (!variant) {
@@ -2012,6 +2035,7 @@ function addToCartInternal(product: Product, variant: ProductVariant | null, sel
         if (product.allow_negative_stock || lteStock(next, stk, !!product.allows_decimal)) {
             existingItem.quantity = next;
             recalcLine(existingItem);
+            upsellTriggerId.value = product.id;
         }
     } else {
         const start = roundCartQty(1, product);
@@ -2029,6 +2053,7 @@ function addToCartInternal(product: Product, variant: ProductVariant | null, sel
         };
         recalcLine(item);
         cart.value.push(item);
+        upsellTriggerId.value = product.id;
     }
 }
 
@@ -4259,6 +4284,32 @@ const sendWhatsAppInvoice = () => {
                         </CardHeader>
 
                         <CardContent class="flex-1 space-y-4 lg:flex lg:flex-col lg:overflow-hidden">
+                            <!-- F8: saran tambahan menu -->
+                            <div
+                                v-if="upsellSuggestions.length > 0"
+                                class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2"
+                                data-testid="upsell-strip"
+                            >
+                                <div class="mb-1.5 flex items-center justify-between">
+                                    <p class="text-xs font-semibold text-amber-900">Tawarkan juga:</p>
+                                    <button type="button" class="rounded p-0.5 text-amber-700 hover:bg-amber-100" aria-label="Tutup saran" @click="dismissUpsell">
+                                        <X class="h-3.5 w-3.5" />
+                                    </button>
+                                </div>
+                                <div class="flex flex-wrap gap-1.5">
+                                    <button
+                                        v-for="s in upsellSuggestions"
+                                        :key="s.id"
+                                        type="button"
+                                        class="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+                                        @click="acceptUpsell(s)"
+                                    >
+                                        + {{ s.name }}
+                                        <span v-if="!s.has_variants" class="font-normal text-amber-700">{{ formatCurrency(Number(s.price)) }}</span>
+                                    </button>
+                                </div>
+                            </div>
+
                             <!-- Cart Items -->
                             <div class="max-h-[28rem] space-y-3 lg:max-h-none lg:flex-1 lg:overflow-y-auto">
                                 <div v-if="cart.length === 0" class="py-8 text-center text-gray-500">
