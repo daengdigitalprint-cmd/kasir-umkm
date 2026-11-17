@@ -377,7 +377,7 @@
                                     <span class="text-slate-400">{{ formatDateTime(payment.created_at) }}</span>
                                 </div>
                                 <div
-                                    v-if="payment.type === 'outlet_addon' || payment.type === 'attendance_payroll_addon'"
+                                    v-if="payment.type === 'outlet_addon' || payment.type === 'attendance_payroll_addon' || payment.type === 'central_kitchen_addon'"
                                     class="mt-2 flex flex-wrap gap-1.5"
                                 >
                                     <span
@@ -391,6 +391,12 @@
                                         class="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200 ring-inset"
                                     >
                                         Absensi + Payroll
+                                    </span>
+                                    <span
+                                        v-if="payment.type === 'central_kitchen_addon'"
+                                        class="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 ring-1 ring-indigo-200 ring-inset"
+                                    >
+                                        Modul Central Kitchen
                                     </span>
                                 </div>
                                 <p v-if="payment.notes" class="mt-2 text-xs text-slate-500 italic">“{{ payment.notes }}”</p>
@@ -565,6 +571,35 @@
                         @click="submitAttendancePayrollPricing"
                     >
                         {{ attendancePayrollPricingForm.processing ? 'Menyimpan…' : 'Simpan harga add-on' }}
+                    </Button>
+                </div>
+            </div>
+
+            <div class="rounded-xl border border-slate-200 bg-white">
+                <div class="border-b border-slate-100 px-5 py-4">
+                    <h2 class="flex items-center gap-2 text-base font-semibold text-slate-900">
+                        <DollarSign class="h-4 w-4 text-slate-400" /> Harga Modul Central Kitchen
+                    </h2>
+                    <p class="mt-0.5 text-xs text-slate-500">Per grup usaha. Membuka Permintaan Stok dan Pantau Stok Semua Lokasi.</p>
+                </div>
+                <div class="grid gap-4 p-5 sm:grid-cols-2">
+                    <div class="space-y-1.5">
+                        <Label for="ck-monthly">Harga bulanan (Rp)</Label>
+                        <Input id="ck-monthly" v-model.number="centralKitchenPricingForm.monthly_price" type="number" min="0" step="1000" class="rounded-lg" />
+                    </div>
+                    <div class="space-y-1.5">
+                        <Label for="ck-yearly">Harga tahunan (Rp)</Label>
+                        <Input id="ck-yearly" v-model.number="centralKitchenPricingForm.yearly_price" type="number" min="0" step="1000" class="rounded-lg" />
+                    </div>
+                </div>
+                <div class="flex justify-end border-t border-slate-100 px-5 py-3">
+                    <Button
+                        type="button"
+                        class="rounded-lg bg-slate-900 px-5 font-semibold text-white hover:bg-slate-800"
+                        :disabled="centralKitchenPricingForm.processing"
+                        @click="submitCentralKitchenPricing"
+                    >
+                        {{ centralKitchenPricingForm.processing ? 'Menyimpan…' : 'Simpan harga modul' }}
                     </Button>
                 </div>
             </div>
@@ -1349,6 +1384,7 @@ interface Props {
     recentPayments: Payment[];
     transferSettings?: TransferSettings;
     attendancePayrollPricing?: { monthly_price: number; yearly_price: number };
+    centralKitchenPricing?: { monthly_price: number; yearly_price: number };
     user: { name: string };
 }
 
@@ -1531,6 +1567,37 @@ const submitAttendancePayrollPricing = () => {
             },
             onFinish: () => {
                 attendancePayrollPricingForm.value.processing = false;
+            },
+        },
+    );
+};
+
+const centralKitchenPricingForm = ref({ monthly_price: 199000, yearly_price: 1990000, processing: false });
+
+watch(
+    () => props.centralKitchenPricing,
+    (p) => {
+        if (!p) return;
+        centralKitchenPricingForm.value.monthly_price = p.monthly_price;
+        centralKitchenPricingForm.value.yearly_price = p.yearly_price;
+    },
+    { immediate: true },
+);
+
+const submitCentralKitchenPricing = () => {
+    centralKitchenPricingForm.value.processing = true;
+    router.post(
+        '/superadmin/central-kitchen-pricing',
+        {
+            monthly_price: centralKitchenPricingForm.value.monthly_price,
+            yearly_price: centralKitchenPricingForm.value.yearly_price,
+        },
+        {
+            preserveScroll: true,
+            onSuccess: () => void toastSuccess('Harga Modul Central Kitchen disimpan.'),
+            onError: () => void toastError('Periksa isian harga.'),
+            onFinish: () => {
+                centralKitchenPricingForm.value.processing = false;
             },
         },
     );

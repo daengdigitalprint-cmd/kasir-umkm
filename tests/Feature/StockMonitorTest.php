@@ -153,7 +153,7 @@ it('kasir dan manajer ditolak', function (string $role) {
 it('owner tanpa modul Central Kitchen diarahkan ke dashboard', function () {
     $g = monitorGroup(moduleActive: false);
 
-    $this->actingAs($g['owner'])->get('/owner/stock-monitor')->assertRedirect(route('dashboard'));
+    $this->actingAs($g['owner'])->get('/owner/stock-monitor')->assertRedirect(route('subscription.index', ['tab' => 'central_kitchen']));
 });
 
 it('ekspor Excel berisi kolom per lokasi', function () {

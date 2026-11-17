@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\AttendancePayrollPricing;
+use App\Models\CentralKitchenPricing;
 use App\Models\Store;
 use App\Models\SubscriptionPayment;
 use App\Models\SubscriptionPlan;
@@ -11,6 +12,7 @@ use App\Models\TrialActivationLog;
 use App\Models\Voucher;
 use App\Models\VoucherUsage;
 use App\Services\AttendancePayrollAddOnService;
+use App\Services\CentralKitchenAddOnService;
 use App\Services\OutletAddOnService;
 use App\Services\TrialService;
 use Illuminate\Http\Request;
@@ -93,6 +95,7 @@ class SuperAdminController extends Controller
             'recentPayments' => $recentPayments,
             'transferSettings' => $transfer->toCheckoutPayload(),
             'attendancePayrollPricing' => AttendancePayrollPricing::current()->toPayload(),
+            'centralKitchenPricing' => CentralKitchenPricing::current()->toPayload(),
             'user' => [
                 'name' => auth()->user()->name,
             ],
@@ -154,6 +157,24 @@ class SuperAdminController extends Controller
         ]);
 
         return redirect()->back()->with('success', 'Harga paket Absensi + Payroll disimpan.');
+    }
+
+    /**
+     * R2 — Pengaturan harga add-on Modul Central Kitchen.
+     */
+    public function updateCentralKitchenPricing(Request $request)
+    {
+        $request->validate([
+            'monthly_price' => 'required|integer|min:0|max:100000000',
+            'yearly_price' => 'required|integer|min:0|max:100000000',
+        ]);
+
+        CentralKitchenPricing::current()->update([
+            'monthly_price' => $request->integer('monthly_price'),
+            'yearly_price' => $request->integer('yearly_price'),
+        ]);
+
+        return redirect()->back()->with('success', 'Harga Modul Central Kitchen disimpan.');
     }
 
     public function extendSubscription(Request $request, Store $store)
@@ -438,6 +459,16 @@ class SuperAdminController extends Controller
                 AttendancePayrollAddOnService::applyConfirmedAddOn($payment);
                 $store->is_active = true;
                 $store->subscription_notes = "Paket Absensi + Payroll dikonfirmasi via #{$payment->invoice_number}";
+                $store->save();
+
+                return;
+            }
+
+            // Modul Central Kitchen (per grup usaha)
+            if ($payment->type === CentralKitchenAddOnService::PAYMENT_TYPE) {
+                CentralKitchenAddOnService::applyConfirmedAddOn($payment);
+                $store->is_active = true;
+                $store->subscription_notes = "Modul Central Kitchen dikonfirmasi via #{$payment->invoice_number}";
                 $store->save();
 
                 return;

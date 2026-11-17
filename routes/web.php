@@ -204,6 +204,8 @@ Route::middleware(['auth', 'verified'])->prefix('subscription')->name('subscript
     Route::post('/pay-outlet', [SubscriptionController::class, 'submitPaymentOutlet'])->name('pay-outlet');
     Route::post('/buy-outlet-addon', [SubscriptionController::class, 'submitOutletAddOn'])->name('buy-outlet-addon');
     Route::post('/buy-attendance-payroll', [SubscriptionController::class, 'submitAttendancePayroll'])->name('buy-attendance-payroll');
+    Route::get('/checkout-central-kitchen', [SubscriptionController::class, 'checkoutCentralKitchen'])->name('checkout-central-kitchen');
+    Route::post('/buy-central-kitchen', [SubscriptionController::class, 'submitCentralKitchen'])->name('buy-central-kitchen');
     Route::post('/upload-proof/{payment}', [SubscriptionController::class, 'uploadProof'])->name('upload-proof');
 });
 
@@ -728,6 +730,7 @@ Route::prefix('superadmin')->name('superadmin.')->middleware(['auth', 'superadmi
     Route::get('/payments', [SuperAdminController::class, 'allPayments'])->name('payments.index');
     Route::post('/transfer-settings', [SuperAdminController::class, 'updateTransferSettings'])->name('transfer-settings.update');
     Route::post('/attendance-payroll-pricing', [SuperAdminController::class, 'updateAttendancePayrollPricing'])->name('attendance-payroll-pricing.update');
+    Route::post('/central-kitchen-pricing', [SuperAdminController::class, 'updateCentralKitchenPricing'])->name('central-kitchen-pricing.update');
 
     // Voucher management
     Route::post('/vouchers', [SuperAdminController::class, 'createVoucher'])->name('vouchers.create');

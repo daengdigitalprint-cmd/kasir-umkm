@@ -21,12 +21,12 @@ class EnsureCentralKitchenModule
             return $next($request);
         }
 
-        $message = 'Modul Central Kitchen belum aktif untuk grup usaha ini. Hubungi kami untuk mengaktifkannya.';
+        $message = 'Modul Central Kitchen belum aktif untuk grup usaha ini. Aktifkan di menu Langganan, tab Central Kitchen.';
 
         if ($request->expectsJson()) {
             abort(403, $message);
         }
 
-        return redirect()->route('dashboard')->with('warning', $message);
+        return redirect()->route('subscription.index', ['tab' => 'central_kitchen'])->with('warning', $message);
     }
 }

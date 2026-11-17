@@ -3,12 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\AttendancePayrollPricing;
+use App\Models\CentralKitchenPricing;
 use App\Models\Store;
 use App\Models\SubscriptionPayment;
 use App\Models\SubscriptionPlan;
 use App\Models\SubscriptionTransferSetting;
 use App\Models\Voucher;
 use App\Services\AttendancePayrollAddOnService;
+use App\Services\CentralKitchenAddOnService;
 use App\Services\OutletAddOnService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -111,6 +113,7 @@ class SubscriptionController extends Controller
                     ->where('status', 'pending')
                     ->exists(),
             ],
+            'centralKitchenInfo' => CentralKitchenAddOnService::info($store),
             'plans' => $planPayload,
             'yearlyDiscountPercentLabel' => $yearlyDiscountPercentLabel,
             'latestPayment' => $latestPayment,
@@ -561,6 +564,71 @@ class SubscriptionController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Pengajuan pembelian paket Absensi + Payroll berhasil diajukan! Silakan tunggu konfirmasi dari admin.',
+                'payment' => $payment,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 400);
+        }
+    }
+
+    /**
+     * R2 — Halaman pembelian Modul Central Kitchen.
+     */
+    public function checkoutCentralKitchen()
+    {
+        $store = auth()->user()->store;
+
+        if (! $store) {
+            return redirect()->route('dashboard');
+        }
+
+        if ($store->organization_id === null || CentralKitchenAddOnService::hasPending($store)) {
+            return redirect()->route('subscription.index');
+        }
+
+        return Inertia::render('Subscription/CentralKitchenCheckout', [
+            'pricing' => CentralKitchenPricing::current()->toPayload(),
+            'storeName' => $store->organization?->name ?? $store->name,
+            'transferSettings' => SubscriptionTransferSetting::current()->toCheckoutPayload(),
+        ]);
+    }
+
+    /**
+     * R2 — Ajukan pembayaran Modul Central Kitchen (dikonfirmasi Super Admin).
+     */
+    public function submitCentralKitchen(Request $request)
+    {
+        $request->validate([
+            'billing_cycle' => 'required|string|in:monthly,yearly',
+            'payment_method' => 'required|in:bank_transfer,qris',
+            'payment_proof' => 'nullable|image|max:5120',
+            'notes' => 'nullable|string|max:500',
+        ]);
+
+        $user = auth()->user();
+        $store = $user->store;
+
+        if (! $store) {
+            return response()->json(['success' => false, 'message' => 'Toko tidak ditemukan.'], 404);
+        }
+
+        try {
+            $payment = CentralKitchenAddOnService::createPayment(
+                $store,
+                $request->payment_method,
+                $request->notes,
+                $user,
+                $request->billing_cycle,
+            );
+
+            if ($request->hasFile('payment_proof')) {
+                $path = $request->file('payment_proof')->store('payment-proofs', 'public');
+                $payment->update(['payment_proof' => $path]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Pengajuan Modul Central Kitchen berhasil dikirim. Modul aktif untuk semua lokasi grup setelah dikonfirmasi admin.',
                 'payment' => $payment,
             ]);
         } catch (\Exception $e) {

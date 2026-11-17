@@ -5,7 +5,7 @@ import { Head, usePage } from '@inertiajs/vue3';
 import {
     Crown, Check, Clock, Calendar, Shield,
     AlertCircle, CheckCircle, XCircle, Loader2, FileText,
-    Store, Plus, CalendarCheck,
+    Store, Plus, CalendarCheck, Warehouse,
 } from 'lucide-vue-next';
 import { ref, computed } from 'vue';
 import AdminLayout from '@/layouts/AdminLayout.vue';
@@ -77,13 +77,20 @@ interface Props {
     paymentHistory: Payment[];
     outletInfo?: OutletInfo;
     attendancePayrollInfo?: AttendancePayrollInfo;
+    centralKitchenInfo?: {
+        is_purchased: boolean;
+        expires_at: string | null;
+        pricing: { monthly_price: number; yearly_price: number };
+        has_pending_addon: boolean;
+        has_organization: boolean;
+    };
 }
 
 const props = withDefaults(defineProps<Props>(), {
     yearlyDiscountPercentLabel: '16,7',
 });
 
-const { store, plans, latestPayment, paymentHistory, yearlyDiscountPercentLabel, outletInfo, attendancePayrollInfo } = props;
+const { store, plans, latestPayment, paymentHistory, yearlyDiscountPercentLabel, outletInfo, attendancePayrollInfo, centralKitchenInfo } = props;
 
 const page = usePage();
 const sharedSubscription = computed(
@@ -102,7 +109,13 @@ const isStarterFreeUi = computed(() => {
 
 const showHistory = ref(false);
 const billingTab = ref<BillingCycle>('monthly');
-const activeTab = ref<'subscription' | 'outlet' | 'attendance'>('subscription');
+type SubscriptionTab = 'subscription' | 'outlet' | 'attendance' | 'central_kitchen';
+// ?tab=central_kitchen dsb. (mis. dari halaman modul yang belum aktif) langsung membuka tab itu.
+const initialTab = (() => {
+    const requested = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('tab') : null;
+    return (['subscription', 'outlet', 'attendance', 'central_kitchen'] as const).find((t) => t === requested) ?? 'subscription';
+})();
+const activeTab = ref<SubscriptionTab>(initialTab);
 const showAllFeatures = ref<Record<number, boolean>>({});
 const FEATURES_COLLAPSE_COUNT = 5;
 
@@ -128,6 +141,10 @@ const goToOutletCheckout = () => {
 
 const goToAttendancePayrollCheckout = () => {
     window.location.href = '/subscription/checkout-attendance-payroll';
+};
+
+const goToCentralKitchenCheckout = () => {
+    window.location.href = '/subscription/checkout-central-kitchen';
 };
 
 const visiblePlans = computed(() =>
@@ -338,6 +355,18 @@ const hasPendingPayment = computed(() => latestPayment?.status === 'pending');
                     <div class="flex items-center justify-center gap-2">
                         <CalendarCheck class="h-4 w-4" />
                         Absensi + Payroll
+                    </div>
+                </button>
+                <button
+                    @click="activeTab = 'central_kitchen'"
+                    class="flex-1 rounded-xl px-5 py-3 text-sm font-bold transition-all border-2"
+                    :class="activeTab === 'central_kitchen'
+                        ? 'bg-violet-600 text-white border-violet-600 shadow-md'
+                        : 'bg-white text-slate-600 border-slate-200 hover:border-violet-300 hover:text-violet-600'"
+                >
+                    <div class="flex items-center justify-center gap-2">
+                        <Warehouse class="h-4 w-4" />
+                        Central Kitchen
                     </div>
                 </button>
             </div>
@@ -683,6 +712,59 @@ const hasPendingPayment = computed(() => latestPayment?.status === 'pending');
                     >
                         <Plus class="h-4 w-4" />
                         {{ attendancePayrollInfo?.is_purchased ? 'Perpanjang Paket' : 'Beli Paket' }}
+                    </button>
+                </div>
+            </template>
+
+            <template v-if="activeTab === 'central_kitchen'">
+                <div class="rounded-2xl border border-slate-200 bg-white p-6">
+                    <div class="flex items-start gap-4 mb-5">
+                        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-violet-100">
+                            <Warehouse class="h-6 w-6 text-violet-600" />
+                        </div>
+                        <div class="flex-1">
+                            <h3 class="text-lg font-bold text-slate-900">Modul Central Kitchen</h3>
+                            <p class="text-sm text-slate-500">
+                                Untuk usaha dengan Gudang Pusat / dapur pusat dan beberapa outlet. Satu kali bayar untuk seluruh grup usaha.
+                            </p>
+                        </div>
+                    </div>
+
+                    <ul class="mb-5 space-y-1.5 text-sm text-slate-700">
+                        <li>• Permintaan Stok: outlet minta barang, gudang revisi jumlah lalu kirim (jadi Transfer Stok otomatis)</li>
+                        <li>• Notifikasi permintaan baru langsung muncul di layar gudang</li>
+                        <li>• Pantau Stok Semua Lokasi untuk owner + ekspor Excel</li>
+                    </ul>
+
+                    <div class="grid gap-4 sm:grid-cols-2 mb-5">
+                        <div class="rounded-xl border border-slate-100 p-4">
+                            <p class="text-sm text-slate-500">Bulanan</p>
+                            <p class="text-xl font-bold text-slate-900">Rp {{ centralKitchenInfo?.pricing.monthly_price.toLocaleString('id-ID') }}</p>
+                        </div>
+                        <div class="rounded-xl border border-slate-100 p-4">
+                            <p class="text-sm text-slate-500">Tahunan</p>
+                            <p class="text-xl font-bold text-slate-900">Rp {{ centralKitchenInfo?.pricing.yearly_price.toLocaleString('id-ID') }}</p>
+                        </div>
+                    </div>
+
+                    <p v-if="!centralKitchenInfo?.has_organization" class="text-sm text-slate-600 mb-4">
+                        Modul ini butuh grup usaha dengan lebih dari satu lokasi. Tambahkan outlet atau Gudang Pusat dulu.
+                    </p>
+                    <p v-else-if="centralKitchenInfo?.is_purchased" class="text-sm text-emerald-700 font-medium mb-4">
+                        Modul aktif sampai {{ formatDate(centralKitchenInfo.expires_at!) }}.
+                    </p>
+                    <p v-else-if="centralKitchenInfo?.has_pending_addon" class="text-sm text-amber-600 font-medium mb-4">
+                        Pengajuan pembelian modul sedang diproses admin.
+                    </p>
+
+                    <button
+                        v-if="centralKitchenInfo?.has_organization && !centralKitchenInfo?.has_pending_addon"
+                        type="button"
+                        class="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-violet-700 transition-colors"
+                        @click="goToCentralKitchenCheckout"
+                    >
+                        <Plus class="h-4 w-4" />
+                        {{ centralKitchenInfo?.is_purchased ? 'Perpanjang Modul' : 'Beli Modul' }}
                     </button>
                 </div>
             </template>

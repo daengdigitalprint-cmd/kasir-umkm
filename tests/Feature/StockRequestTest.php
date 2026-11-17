@@ -264,11 +264,11 @@ it('menolak meminta ke toko di luar grup usaha', function () {
 it('toko tanpa modul Central Kitchen tidak bisa membuka Permintaan Stok', function () {
     $g = ckGroup(moduleActive: false);
 
-    $this->actingAs($g['outletAdmin'])->get('/stock-requests')->assertRedirect(route('dashboard'));
+    $this->actingAs($g['outletAdmin'])->get('/stock-requests')->assertRedirect(route('subscription.index', ['tab' => 'central_kitchen']));
     $this->actingAs($g['outletAdmin'])->post('/stock-requests', [
         'to_store_id' => $g['ck']->id,
         'items' => [['product_id' => $g['outletProduct']->id, 'quantity' => 3]],
-    ])->assertRedirect(route('dashboard'));
+    ])->assertRedirect(route('subscription.index', ['tab' => 'central_kitchen']));
 
     expect(StockRequest::query()->count())->toBe(0);
 });
@@ -277,7 +277,7 @@ it('modul kedaluwarsa menutup akses', function () {
     $g = ckGroup();
     $g['org']->update(['central_kitchen_until' => now()->subDay()]);
 
-    $this->actingAs($g['outletAdmin'])->get('/stock-requests')->assertRedirect(route('dashboard'));
+    $this->actingAs($g['outletAdmin'])->get('/stock-requests')->assertRedirect(route('subscription.index', ['tab' => 'central_kitchen']));
 });
 
 it('form permintaan menampilkan stok gudang dan isi awal dari Daftar Belanja', function () {
