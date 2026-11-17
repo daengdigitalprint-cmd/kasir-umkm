@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\DeliveryOrder;
 use App\Models\StockTransfer;
 use App\Models\Store;
 use Illuminate\Support\Facades\Cache;
@@ -51,6 +52,8 @@ class UiMode
         'queue_module_enabled' => ['queues'],
         'scan_meja_enabled' => ['tables', 'table_orders'],
         'attendance_enabled' => ['attendance', 'payroll'],
+        'upsell_enabled' => ['upsell'],
+        'delivery_enabled' => ['deliveries'],
     ];
 
     /** Toko tanpa nilai ui_mode dianggap Mode Lengkap (toko lama tidak berubah). */
@@ -143,6 +146,14 @@ class UiMode
                 ->exists();
             if ($hasTransferInProgress) {
                 $menus[] = 'stock_transfers';
+            }
+
+            $hasDeliveryInProgress = DeliveryOrder::query()
+                ->where('store_id', $store->id)
+                ->whereIn('status', [DeliveryOrder::STATUS_PREPARING, DeliveryOrder::STATUS_ON_THE_WAY])
+                ->exists();
+            if ($hasDeliveryInProgress) {
+                $menus[] = 'deliveries';
             }
 
             return $menus;

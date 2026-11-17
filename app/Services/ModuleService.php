@@ -23,6 +23,8 @@ class ModuleService
         'accounting_enabled' => 'Modul Akuntansi (Jurnal)',
         'receivables_enabled' => 'Modul Hutang Piutang',
         'product_discount_enabled' => 'Modul Diskon per Produk',
+        'upsell_enabled' => 'Saran Menu',
+        'delivery_enabled' => 'Pesanan Antar',
     ];
 
     /**

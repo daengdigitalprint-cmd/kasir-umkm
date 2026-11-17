@@ -93,8 +93,10 @@ type NavItem = {
     kitchenQueueOnly?: boolean;
     /** Modul Central Kitchen (add-on grup usaha) */
     centralKitchenOnly?: boolean;
-    /** F10: menu Pengantaran — tampil bila modul aktif, atau untuk admin toko (agar bisa menyalakannya). */
+    /** F10: menu Pengantaran — hanya tampil setelah modul Pesanan Antar dinyalakan (Fitur Tambahan). */
     deliveryMenu?: boolean;
+    /** F8: menu Saran menu — hanya tampil setelah modul Saran Menu dinyalakan (Fitur Tambahan). */
+    upsellMenu?: boolean;
     /** Wajib owner, juga saat role dikonfigurasi (mode strict). */
     requiresOwner?: boolean;
     /** Hanya tampil jika Modul Antrian diaktifkan di pengaturan toko. */
@@ -405,6 +407,7 @@ const navigationSource: NavItem[] = [
         href: '/upsell-rules',
         icon: Sparkles,
         menuKey: 'upsell',
+        upsellMenu: true,
         section: 'pelanggan_promo',
         backofficeOnly: true,
         advancedRetailOnly: true,
@@ -507,6 +510,7 @@ const navigationItems = computed((): ProcessedNavItem[] => {
     const payrollEnabled = Boolean((page.props as { payroll_enabled?: boolean }).payroll_enabled);
     const centralKitchenEnabled = Boolean((page.props as { central_kitchen_enabled?: boolean }).central_kitchen_enabled);
     const deliveryEnabled = Boolean((page.props as { delivery_enabled?: boolean }).delivery_enabled);
+    const upsellEnabled = Boolean((page.props as { upsell_enabled?: boolean }).upsell_enabled);
     const pendingStockRequests = Number((page.props as { pending_stock_requests?: number }).pending_stock_requests ?? 0);
     const cashierPinEnabled = String((page.props as { cashier_login_mode?: string }).cashier_login_mode ?? 'email') === 'pin';
     const accountingEnabled = Boolean((page.props as { accounting_enabled?: boolean }).accounting_enabled);
@@ -559,7 +563,8 @@ const navigationItems = computed((): ProcessedNavItem[] => {
         if (item.kitchenQueueOnly && !kitchenQueueEnabled && !isKitchen) return [];
         if (item.centralKitchenOnly && !centralKitchenEnabled) return [];
         if (item.requiresOwner && !isOwner) return [];
-        if (item.deliveryMenu && !deliveryEnabled && !manageStoreSettings) return [];
+        if (item.deliveryMenu && !deliveryEnabled) return [];
+        if (item.upsellMenu && !upsellEnabled) return [];
         if (item.queueModuleOnly && !queueModuleEnabled) return [];
         if (item.scanMejaOnly && !scanMejaEnabled) return [];
         if (item.attendanceOnly && !attendanceEnabled) return [];

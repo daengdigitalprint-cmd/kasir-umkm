@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alur Central Kitchen — Kasir UMKM</title>
+<style>
+    :root {
+        --ink: #0f172a; --muted: #64748b; --line: #cbd5e1;
+        --outlet: #0d9488; --outlet-bg: #f0fdfa;
+        --ck: #7c3aed; --ck-bg: #f5f3ff;
+        --owner: #d97706; --owner-bg: #fffbeb;
+        --sup: #475569; --sup-bg: #f8fafc;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; color: var(--ink); background: #f1f5f9; line-height: 1.45; }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 32px 20px 60px; }
+    h1 { margin: 0 0 4px; font-size: 28px; }
+    .lead { margin: 0 0 24px; color: var(--muted); }
+    .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 28px; }
+    .chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: #fff; border: 1px solid var(--line); font-size: 13px; font-weight: 600; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; }
+    section { background: #fff; border: 1px solid #e2e8f0; border-radius: 18px; padding: 22px 22px 26px; margin-bottom: 22px; }
+    section h2 { margin: 0 0 4px; font-size: 19px; }
+    section > p { margin: 0 0 18px; color: var(--muted); font-size: 14px; }
+    .flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 0; }
+    .step { flex: 1 1 150px; min-width: 150px; border-radius: 14px; padding: 12px 14px; border: 2px solid; font-size: 13.5px; position: relative; }
+    .step b { display: block; font-size: 14.5px; margin-bottom: 3px; }
+    .step small { display: block; margin-top: 6px; font-size: 11.5px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; opacity: .85; }
+    .arrow { flex: 0 0 34px; display: flex; align-items: center; justify-content: center; color: #94a3b8; font-size: 22px; font-weight: 700; }
+    .outlet { border-color: var(--outlet); background: var(--outlet-bg); } .outlet small { color: var(--outlet); }
+    .ck { border-color: var(--ck); background: var(--ck-bg); } .ck small { color: var(--ck); }
+    .owner { border-color: var(--owner); background: var(--owner-bg); } .owner small { color: var(--owner); }
+    .sup { border-color: var(--sup); background: var(--sup-bg); } .sup small { color: var(--sup); }
+    .branch { margin-top: 14px; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
+    .note { border-left: 4px solid; padding: 8px 12px; border-radius: 8px; font-size: 13px; background: #f8fafc; }
+    .note.ck { border-color: var(--ck); background: var(--ck-bg); }
+    .note.outlet { border-color: var(--outlet); background: var(--outlet-bg); }
+    .note.warn { border-color: #dc2626; background: #fef2f2; }
+    .num { display: inline-flex; width: 26px; height: 26px; border-radius: 50%; background: var(--ink); color: #fff; font-size: 13px; font-weight: 800; align-items: center; justify-content: center; margin-right: 8px; vertical-align: 2px; }
+    .menu { font-family: ui-monospace, Consolas, monospace; font-size: 12px; background: #e2e8f0; padding: 1px 6px; border-radius: 6px; white-space: nowrap; }
+    @media (max-width: 720px) { .arrow { transform: rotate(90deg); flex-basis: 100%; height: 26px; } .step { flex-basis: 100%; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+    <h1>Alur Central Kitchen</h1>
+    <p class="lead">Usaha F&amp;B dengan 1 Central Kitchen (Gudang Pusat) dan beberapa outlet: dari bahan dibeli sampai menu terjual dan dipantau owner.</p>
+
+    <div class="legend">
+        <span class="chip"><span class="dot" style="background:var(--sup)"></span>Supplier</span>
+        <span class="chip"><span class="dot" style="background:var(--ck)"></span>Central Kitchen</span>
+        <span class="chip"><span class="dot" style="background:var(--outlet)"></span>Outlet</span>
+        <span class="chip"><span class="dot" style="background:var(--owner)"></span>Owner</span>
+    </div>
+
+    <!-- 1 -->
+    <section>
+        <h2><span class="num">1</span>Belanja bahan ke supplier (hanya di Central Kitchen)</h2>
+        <p>Outlet tidak membeli sendiri ke supplier; semua bahan masuk lewat CK.</p>
+        <div class="flow">
+            <div class="step sup"><b>Supplier jual per karung / jerigen / karton</b>Contoh: 2 karung beras.<small>Supplier</small></div>
+            <div class="arrow">→</div>
+            <div class="step ck"><b>CK catat Pembelian</b>Pilih satuan "karung". Aplikasi menghitung: 2 karung = 50.000 gram.<small>Central Kitchen · <span class="menu">Pembelian</span></small></div>
+            <div class="arrow">→</div>
+            <div class="step ck"><b>Stok CK bertambah dalam gram</b>HPP per gram dihitung otomatis (harga karung ÷ isi).<small>Central Kitchen</small></div>
+        </div>
+        <div class="branch">
+            <div class="note ck">Satuan beli diatur sekali di <span class="menu">Edit Produk → Satuan beli</span>, mis. 1 karung = 25.000 gram, 1 karton cup = 1.000 pcs.</div>
+        </div>
+    </section>
+
+    <!-- 2 -->
+    <section>
+        <h2><span class="num">2</span>Outlet berjualan, bahan terpotong otomatis</h2>
+        <p>Setiap menu punya resep bahan per porsi (BOM). Kasir cukup menjual menu; stok bahan outlet turun sendiri.</p>
+        <div class="flow">
+            <div class="step outlet"><b>Kasir jual "Nasi Ayam Geprek"</b>Muncul saran "Tawarkan juga: Es Teh, Kerupuk".<small>Outlet · <span class="menu">Kasir</span></small></div>
+            <div class="arrow">→</div>
+            <div class="step outlet"><b>Bahan terpotong</b>150 g ayam, 150 g beras, 40 ml minyak, 1 box.<small>Outlet</small></div>
+            <div class="arrow">→</div>
+            <div class="step outlet"><b>Stok menipis?</b>Kartu menu menampilkan label kuning "Sisa N" saat bahan ≤ Stok Minimum.<small>Outlet</small></div>
+        </div>
+        <div class="branch">
+            <div class="note outlet">Pesanan antar: centang <b>"Antar ke alamat"</b> saat bayar → isi alamat, ongkir, kurir → kurir pantau di <span class="menu">Pengantaran</span> (Disiapkan → Diantar → Selesai).</div>
+            <div class="note outlet">Pelanggan dikelompokkan otomatis di <span class="menu">Segmen Pelanggan</span> (Setia / Baru / Lama tidak datang) lalu disapa lewat WhatsApp.</div>
+        </div>
+    </section>
+
+    <!-- 3 -->
+    <section>
+        <h2><span class="num">3</span>Outlet minta stok ke Central Kitchen</h2>
+        <p>Inti alur CK: tidak perlu chat atau ketik ulang. Satu permintaan otomatis menjadi Transfer Stok.</p>
+        <div class="flow">
+            <div class="step outlet"><b>Daftar Belanja</b>Barang di bawah Stok Minimum + saran jumlah.<small>Outlet · <span class="menu">Daftar Belanja</span></small></div>
+            <div class="arrow">→</div>
+            <div class="step outlet"><b>"Minta ke Gudang Pusat"</b>Permintaan terkirim, status <i>Diminta</i>.<small>Outlet · <span class="menu">Permintaan Stok</span></small></div>
+            <div class="arrow">→</div>
+            <div class="step ck"><b>CK menerima notifikasi</b>Lihat stok outlet &amp; stok CK, <b>revisi jumlah</b> bila perlu.<small>Central Kitchen</small></div>
+            <div class="arrow">→</div>
+            <div class="step ck"><b>"Setujui &amp; kirim"</b>Transfer Stok terbit otomatis, stok CK langsung berkurang. Cetak <b>surat jalan</b>.<small>Central Kitchen</small></div>
+        </div>
+        <div class="flow" style="margin-top:10px">
+            <div class="arrow" style="flex-basis:100%;justify-content:flex-end;padding-right:60px">↓</div>
+        </div>
+        <div class="flow">
+            <div class="step outlet"><b>Barang tiba → "Terima"</b>Cek jumlah per barang. Kurang/rusak? Isi jumlah yang tiba + alasan.<small>Outlet · <span class="menu">Transfer Stok</span></small></div>
+            <div class="arrow">→</div>
+            <div class="step outlet"><b>Stok outlet bertambah</b>Sesuai yang benar-benar tiba. HPP ikut harga dari CK.<small>Outlet</small></div>
+            <div class="arrow">→</div>
+            <div class="step outlet"><b>Permintaan "Selesai"</b>Selisih tercatat untuk laporan (filter "Ada selisih").<small>Outlet</small></div>
+        </div>
+        <div class="branch">
+            <div class="note warn"><b>Ditolak:</b> CK menolak dengan alasan → stok tidak berubah. <b>Dibatalkan:</b> outlet membatalkan sebelum disetujui, atau transfer dibatalkan → stok CK kembali.</div>
+        </div>
+    </section>
+
+    <!-- 4 -->
+    <section>
+        <h2><span class="num">4</span>Owner memantau semua lokasi</h2>
+        <p>Tanpa membuka outlet satu per satu.</p>
+        <div class="flow">
+            <div class="step owner"><b>Pantau Stok Semua Lokasi</b>Tabel barang × lokasi. Merah = habis, kuning = menipis. Ekspor Excel.<small>Owner</small></div>
+            <div class="arrow">→</div>
+            <div class="step owner"><b>Dashboard owner</b>Penjualan, laba kotor &amp; margin per outlet dan gabungan.<small>Owner</small></div>
+        </div>
+    </section>
+
+    <section>
+        <h2>Singkatnya</h2>
+        <p style="margin:0;color:var(--ink);font-size:15px">
+            <b>Supplier → Central Kitchen</b> (beli per karung, stok per gram) →
+            <b>Outlet minta stok</b> (dari Daftar Belanja) →
+            <b>CK revisi &amp; kirim</b> (jadi Transfer + surat jalan) →
+            <b>Outlet terima</b> (selisih tercatat) →
+            <b>Outlet jual menu</b> (bahan terpotong otomatis, stok menipis memicu permintaan berikutnya) →
+            <b>Owner pantau</b> semuanya.
+        </p>
+    </section>
+</div>
+</body>
+</html>

@@ -95,6 +95,22 @@ class OptionalFeatures
             'menus' => ['discounts'],
             'advanced' => true,
         ],
+        'upsell' => [
+            'label' => 'Saran Menu',
+            'description' => 'Kasir & Scan Meja menawarkan menu pasangan (mis. Nasi Goreng → Es Teh) untuk menaikkan nilai belanja.',
+            'group' => 'pelanggan',
+            'menus' => ['upsell'],
+            'setting' => 'upsell_enabled',
+            'advanced' => true,
+        ],
+        'delivery' => [
+            'label' => 'Pesanan Antar',
+            'description' => 'Antar pesanan dengan kurir sendiri: alamat, ongkir di struk, pilih kurir, dan pantau status pengantaran.',
+            'group' => 'dapur',
+            'menus' => ['deliveries'],
+            'setting' => 'delivery_enabled',
+            'advanced' => true,
+        ],
         'scan_meja' => [
             'label' => 'Scan Meja (Menu Digital)',
             'description' => 'Pelanggan memesan sendiri lewat QR di meja, pesanan masuk ke kasir.',
