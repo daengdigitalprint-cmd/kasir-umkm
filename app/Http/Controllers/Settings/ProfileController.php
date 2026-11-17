@@ -111,6 +111,8 @@ class ProfileController extends Controller
                 'recipes_enabled' => PlanModules::settingOn($store, 'recipes_enabled'),
                 'productions_enabled' => PlanModules::settingOn($store, 'productions_enabled'),
                 'kitchen_queue_enabled' => PlanModules::settingOn($store, 'kitchen_queue_enabled'),
+                'delivery_enabled' => PlanModules::settingOn($store, 'delivery_enabled'),
+                'delivery_default_fee' => \App\Support\DeliveryFeatures::defaultFee($store),
                 'queue_module_enabled' => (bool) ($store->settings['queue_module_enabled'] ?? false),
                 'fnb_order_types_enabled' => (bool) ($store->settings['fnb_order_types_enabled'] ?? true),
                 'fnb_split_bill_enabled' => (bool) ($store->settings['fnb_split_bill_enabled'] ?? true),

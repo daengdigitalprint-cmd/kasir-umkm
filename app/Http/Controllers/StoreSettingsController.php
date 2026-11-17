@@ -60,6 +60,9 @@ class StoreSettingsController extends Controller
             'recipes_enabled' => 'sometimes|boolean',
             'productions_enabled' => 'sometimes|boolean',
             'kitchen_queue_enabled' => 'sometimes|boolean',
+            // F10 Pesanan Antar: saklar per toko + ongkir bawaan
+            'delivery_enabled' => 'sometimes|boolean',
+            'delivery_default_fee' => 'sometimes|nullable|numeric|min:0|max:10000000',
             'fnb_order_types_enabled' => 'sometimes|boolean',
             'fnb_split_bill_enabled' => 'sometimes|boolean',
             'open_bill_enabled' => 'sometimes|boolean',
@@ -144,6 +147,26 @@ class StoreSettingsController extends Controller
             unset($validated['kitchen_queue_enabled']);
         } elseif (! isset($settings['kitchen_queue_enabled'])) {
             $settings['kitchen_queue_enabled'] = false;
+        }
+
+        // Pesanan Antar (kurir sendiri): default mati, dinyalakan per toko.
+        if (array_key_exists('delivery_enabled', $validated)) {
+            $turnOff = ! $validated['delivery_enabled'] && ($settings['delivery_enabled'] ?? false);
+            $inProgress = $turnOff && \App\Models\DeliveryOrder::query()
+                ->where('store_id', $store->id)
+                ->whereIn('status', [\App\Models\DeliveryOrder::STATUS_PREPARING, \App\Models\DeliveryOrder::STATUS_ON_THE_WAY])
+                ->exists();
+            if ($inProgress) {
+                // Pesanan yang sedang diantar tidak boleh "hilang" dari menu.
+                session()->flash('warning', 'Pesanan Antar belum bisa dimatikan karena masih ada pengantaran yang belum selesai.');
+            } else {
+                $settings['delivery_enabled'] = (bool) $validated['delivery_enabled'];
+            }
+            unset($validated['delivery_enabled']);
+        }
+        if (array_key_exists('delivery_default_fee', $validated)) {
+            $settings['delivery_default_fee'] = round(max(0, (float) ($validated['delivery_default_fee'] ?? 0)), 2);
+            unset($validated['delivery_default_fee']);
         }
 
         // F&B: tipe pesanan (dine_in/takeaway/delivery) — default on untuk fnb

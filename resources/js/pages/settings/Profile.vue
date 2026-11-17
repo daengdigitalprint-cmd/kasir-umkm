@@ -98,6 +98,8 @@ interface Props {
         recipes_enabled?: boolean;
         productions_enabled?: boolean;
         kitchen_queue_enabled?: boolean;
+        delivery_enabled?: boolean;
+        delivery_default_fee?: number;
         fnb_order_types_enabled?: boolean;
         fnb_split_bill_enabled?: boolean;
         open_bill_enabled?: boolean;
@@ -209,6 +211,7 @@ const activeModuleCount = computed(
             storeForm.recipes_enabled,
             storeForm.productions_enabled,
             storeForm.kitchen_queue_enabled,
+            storeForm.delivery_enabled,
             storeForm.queue_module_enabled,
             storeForm.wholesale_enabled,
             storeForm.attendance_enabled,
@@ -290,6 +293,8 @@ const storeForm = useForm({
     recipes_enabled: props.store?.recipes_enabled === true,
     productions_enabled: props.store?.productions_enabled === true,
     kitchen_queue_enabled: props.store?.kitchen_queue_enabled === true,
+    delivery_enabled: props.store?.delivery_enabled === true,
+    delivery_default_fee: Number(props.store?.delivery_default_fee ?? 0),
     fnb_order_types_enabled: props.store?.fnb_order_types_enabled !== false,
     fnb_split_bill_enabled: props.store?.fnb_split_bill_enabled !== false,
     open_bill_enabled: props.store?.open_bill_enabled === true,
@@ -1658,6 +1663,57 @@ async function toggleAccounting() {
                                         </p>
                                     </div>
                                 </button>
+
+                                <!-- Pesanan Antar (kurir sendiri) -->
+                                <div
+                                    class="rounded-xl border p-3.5 transition-all duration-200"
+                                    :class="storeForm.delivery_enabled ? 'border-emerald-300 bg-emerald-50/80' : 'border-slate-200 bg-white'"
+                                >
+                                    <button
+                                        type="button"
+                                        role="switch"
+                                        :aria-checked="storeForm.delivery_enabled"
+                                        class="group flex w-full cursor-pointer items-start gap-3 text-left"
+                                        @click="storeForm.delivery_enabled = !storeForm.delivery_enabled"
+                                    >
+                                        <div
+                                            class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors"
+                                            :class="storeForm.delivery_enabled ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'"
+                                        >
+                                            <Bike class="h-5 w-5" />
+                                        </div>
+                                        <div class="min-w-0 flex-1">
+                                            <div class="flex items-center justify-between gap-2">
+                                                <span class="text-sm font-semibold" :class="storeForm.delivery_enabled ? 'text-emerald-900' : 'text-slate-700'"
+                                                    >Pesanan Antar</span
+                                                >
+                                                <span
+                                                    class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors"
+                                                    :class="storeForm.delivery_enabled ? 'bg-emerald-500' : 'bg-slate-300'"
+                                                >
+                                                    <span
+                                                        class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+                                                        :class="storeForm.delivery_enabled ? 'translate-x-[18px]' : 'translate-x-0.5'"
+                                                    />
+                                                </span>
+                                            </div>
+                                            <p class="mt-0.5 text-xs leading-snug text-slate-500">
+                                                Antar dengan kurir sendiri: isi alamat, ongkir &amp; kurir di kasir, pantau di menu Pengantaran.
+                                            </p>
+                                        </div>
+                                    </button>
+                                    <label v-if="storeForm.delivery_enabled" class="mt-3 flex items-center justify-between gap-3 border-t border-emerald-200/70 pt-3 text-xs text-slate-700">
+                                        <span>Ongkir bawaan (Rp)</span>
+                                        <input
+                                            v-model.number="storeForm.delivery_default_fee"
+                                            type="number"
+                                            min="0"
+                                            step="500"
+                                            class="h-8 w-32 rounded-lg border border-slate-200 bg-white px-2 text-right text-sm"
+                                            aria-label="Ongkir bawaan"
+                                        />
+                                    </label>
+                                </div>
 
                                 <!-- Stiker Cup / Label Pesanan -->
                                 <button
