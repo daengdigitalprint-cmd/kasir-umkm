@@ -72,7 +72,7 @@ class POSController extends Controller
             ->select([
                 'id', 'store_id', 'name', 'sku', 'barcode', 'price', 'wholesale_price', 'stock_quantity',
                 'category', 'product_category_id', 'inventory_type', 'unit', 'is_active', 'images', 'modifier_options', 'allows_decimal', 'has_variants', 'is_bundle',
-                'track_stock', 'unlimited_stock', 'allow_negative_stock', 'pharmacy_sale_class',
+                'track_stock', 'unlimited_stock', 'allow_negative_stock', 'pharmacy_sale_class', 'min_stock_level',
             ])
             ->with([
                 'variants' => fn ($q) => $q->where('is_active', true)->orderBy('sort_order')->orderBy('id'),

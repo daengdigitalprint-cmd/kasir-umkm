@@ -30,6 +30,9 @@ interface ProductOpt {
     unit: string | null;
     base_unit: string;
     input_units: string[];
+    /** Satuan beli produk (F3): nama → isi dalam satuan dasar. Kosong = tidak ada. */
+    unit_factors?: Record<string, number> | [];
+    default_input_unit?: string | null;
     stock_quantity: number;
     cost_price?: number | null;
     average_cost?: number | null;
@@ -223,6 +226,11 @@ const props = defineProps<{
     chargeSuggestions: string[];
     batchTrackingEnabled: boolean;
     store: { id: number; name: string; currency: string };
+    /** Isi awal dari Daftar Belanja ("Jadikan Pembelian"). */
+    prefill?: {
+        supplier_id: number | null;
+        lines: { product_id: number; product_variant_id: number | null; quantity: number }[];
+    } | null;
 }>();
 
 const supplierList = ref<SupplierOpt[]>([...props.suppliers]);
@@ -264,15 +272,27 @@ function emptyNewProduct(): NewProductDraft {
     return { name: '', sku: '', barcode: '', inventory_type: 'raw_material', base_unit: 'pcs', allows_decimal: false };
 }
 
-function catalogLine(product: ProductOpt, variantId: number | '' = ''): LineDraft {
+/** Isi satu satuan beli dalam satuan dasar, atau null bila bukan satuan beli produk. */
+function unitFactor(product: ProductOpt | undefined, unit: string): number | null {
+    const factors = product?.unit_factors;
+    if (!factors || Array.isArray(factors)) return null;
+    const f = factors[unit];
+    return f && f > 0 ? f : null;
+}
+
+function catalogLine(product: ProductOpt, variantId: number | '' = '', useDefaultUnit = true): LineDraft {
+    // Satuan beli bawaan produk (mis. karton) dipakai sebagai pilihan awal; harga ikut dikali isinya.
+    const defaultUnit = useDefaultUnit ? product.default_input_unit : null;
+    const factor = defaultUnit ? unitFactor(product, defaultUnit) : null;
+    const baseCost = cleanNumber(product.average_cost ?? product.cost_price ?? '');
     return {
         kind: 'catalog',
         product_id: product.id,
         product_variant_id: variantId,
         label: product.name,
         quantity: 1,
-        input_unit: product.base_unit ?? 'pcs',
-        unit_cost: cleanNumber(product.average_cost ?? product.cost_price ?? ''),
+        input_unit: factor && defaultUnit ? defaultUnit : product.base_unit ?? 'pcs',
+        unit_cost: factor && baseCost !== '' ? Math.round(Number(baseCost) * factor) : baseCost,
         batch_expiry_date: '',
         batch_code: '',
         new_product: emptyNewProduct(),
@@ -304,6 +324,19 @@ const form = useForm({
     ppn_amount: 0,
     supplier_tax_invoice_no: '',
 });
+
+// Daftar Belanja → form terisi: tiap barang jadi satu baris dengan jumlah saran.
+if (props.prefill) {
+    for (const item of props.prefill.lines) {
+        const product = props.products.find((p) => p.id === item.product_id);
+        if (!product) continue;
+        // Jumlah dari Daftar Belanja dalam satuan dasar, jadi baris memakai satuan dasar.
+        lineDrafts.value.push({ ...catalogLine(product, item.product_variant_id ?? '', false), quantity: item.quantity });
+    }
+    if (props.prefill.supplier_id) {
+        form.supplier_id = props.prefill.supplier_id;
+    }
+}
 
 function onManualBaseUnitChange(row: LineDraft) {
     const bu = row.new_product.base_unit;
@@ -339,6 +372,17 @@ function inventoryTypeLabel(type: string | undefined): string {
         default:
             return 'Produk jual';
     }
+}
+
+/** Teks konversi satuan beli, mis. "2 karton = 48 pcs". */
+function purchaseUnitHint(row: LineDraft): string | null {
+    if (row.kind !== 'catalog') return null;
+    const product = productById(row.product_id);
+    const factor = unitFactor(product, row.input_unit);
+    if (!product || !factor) return null;
+    const qty = Number(row.quantity) || 0;
+    const fmt = (n: number) => new Intl.NumberFormat('id-ID', { maximumFractionDigits: 4 }).format(n);
+    return `${fmt(qty)} ${row.input_unit} = ${fmt(qty * factor)} ${product.base_unit}`;
 }
 
 function unitOptions(row: LineDraft): string[] {
@@ -1151,6 +1195,7 @@ function submit() {
                                             >
                                                 <option v-for="u in unitOptions(row)" :key="u" :value="u">{{ u }}</option>
                                             </select>
+                                            <p v-if="purchaseUnitHint(row)" class="mt-1 text-xs text-teal-700">{{ purchaseUnitHint(row) }}</p>
                                         </td>
                                         <td class="p-2">
                                             <input

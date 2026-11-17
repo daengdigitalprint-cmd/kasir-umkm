@@ -22,6 +22,7 @@ use App\Support\BatchTracking;
 use App\Support\InventoryCosting;
 use App\Support\InventoryType;
 use App\Support\ProductQuantity;
+use App\Support\PurchaseUnitResolver;
 use App\Support\StoreLocationType;
 use App\Support\StorePlanLimits;
 use Illuminate\Http\Request;
@@ -36,7 +37,7 @@ class PurchaseController extends Controller
      * Pembelian lokal diizinkan saat toko adalah outlet (bukan Gudang Pusat),
      * sistem gudang aktif, dan pengaturan is_allow_local_purchase diaktifkan.
      */
-    private static function allowsLocalPurchase(Store $store): bool
+    public static function allowsLocalPurchase(Store $store): bool
     {
         return StoreLocationType::mustRoutePurchaseThroughCentralWarehouse($store)
             && (bool) ($store->settings['is_allow_local_purchase'] ?? false);
@@ -123,7 +124,10 @@ class PurchaseController extends Controller
             ->where('is_active', true)
             ->where('track_stock', true)
             ->where('is_bundle', false)
-            ->with(['variants' => fn ($q) => $q->where('is_active', true)->orderBy('sort_order')->orderBy('id')])
+            ->with([
+                'variants' => fn ($q) => $q->where('is_active', true)->orderBy('sort_order')->orderBy('id'),
+                'units',
+            ])
             ->orderBy('name')
             ->get([
                 'id', 'name', 'sku', 'barcode', 'unit', 'base_unit', 'stock_quantity', 'cost_price',
@@ -132,7 +136,11 @@ class PurchaseController extends Controller
             ->map(function (Product $product) {
                 $data = $product->toArray();
                 $data['base_unit'] = $product->baseUnit();
-                $data['input_units'] = BaseUnit::inputUnitsFor($product->baseUnit());
+                $data['input_units'] = PurchaseUnitResolver::inputUnitsFor($product);
+                // Satuan beli (F3): isi per satuan dalam satuan dasar, untuk teks "2 karton = 48 pcs".
+                $data['unit_factors'] = $product->units->mapWithKeys(fn ($u) => [$u->name => (float) $u->factor])->all();
+                $data['default_input_unit'] = $product->units->firstWhere('is_purchase_default', true)?->name;
+                unset($data['units']);
                 $data['inventory_type'] = InventoryType::of($product);
 
                 return $data;
@@ -141,10 +149,62 @@ class PurchaseController extends Controller
         return Inertia::render('Purchases/Create', [
             'suppliers' => $suppliers,
             'products' => $products,
+            'prefill' => $this->prefillFromShoppingList($products, $suppliers),
             'chargeSuggestions' => $this->chargeSuggestions($store),
             'batchTrackingEnabled' => BatchTracking::enabled($store),
             'store' => $this->storePayload($store),
         ]);
+    }
+
+    /**
+     * Isi awal form dari Daftar Belanja (?items[]=produk:varian:jumlah&supplier_id=..).
+     * Hanya produk/varian milik toko ini yang ada di daftar produk form yang diterima.
+     *
+     * @return array{supplier_id: int|null, lines: list<array{product_id: int, product_variant_id: int|null, quantity: float}>}|null
+     */
+    private function prefillFromShoppingList($products, $suppliers): ?array
+    {
+        $raw = request()->query('items');
+        if (! is_array($raw) || $raw === []) {
+            return null;
+        }
+
+        $byId = $products->keyBy('id');
+        $lines = [];
+
+        foreach (array_slice($raw, 0, 200) as $item) {
+            if (! is_string($item) || ! preg_match('/^(\d+):(\d*):(\d+(?:\.\d+)?)$/', $item, $m)) {
+                continue;
+            }
+            $product = $byId->get((int) $m[1]);
+            $quantity = (float) $m[3];
+            if (! $product || $quantity <= 0) {
+                continue;
+            }
+
+            $variantId = $m[2] !== '' && (int) $m[2] > 0 ? (int) $m[2] : null;
+            if ($product['has_variants']) {
+                $ownsVariant = collect($product['variants'] ?? [])->contains(fn ($v) => (int) $v['id'] === $variantId);
+                if (! $ownsVariant) {
+                    continue;
+                }
+            } else {
+                $variantId = null;
+            }
+
+            $lines[] = ['product_id' => (int) $product['id'], 'product_variant_id' => $variantId, 'quantity' => $quantity];
+        }
+
+        if ($lines === []) {
+            return null;
+        }
+
+        $supplierId = (int) request()->query('supplier_id');
+
+        return [
+            'supplier_id' => $suppliers->contains('id', $supplierId) ? $supplierId : null,
+            'lines' => $lines,
+        ];
     }
 
     /**
@@ -310,6 +370,7 @@ class PurchaseController extends Controller
                     ->whereIn('id', $productIds)
                     ->orderBy('id')
                     ->lockForUpdate()
+                    ->with('units')
                     ->get()
                     ->keyBy('id');
 
@@ -375,7 +436,7 @@ class PurchaseController extends Controller
                     $inputUnit = mb_strtolower(trim((string) $row['input_unit']));
                     $baseUnit = $product->baseUnit();
                     try {
-                        $qtyBase = BaseUnit::toBaseQuantity($row['quantity'], $inputUnit, $baseUnit);
+                        $qtyBase = PurchaseUnitResolver::toBaseQuantity($product, $row['quantity'], $inputUnit);
                     } catch (\InvalidArgumentException $e) {
                         throw new \RuntimeException("Satuan untuk «{$product->name}» tidak valid: {$e->getMessage()}");
                     }
@@ -389,7 +450,7 @@ class PurchaseController extends Controller
                     $subtotal = null;
                     if (array_key_exists('unit_cost', $row) && $row['unit_cost'] !== null) {
                         $unitCostInput = number_format(round((float) $row['unit_cost'], 2), 2, '.', '');
-                        $unitCostBase = BaseUnit::toBaseUnitCost($unitCostInput, $inputUnit, $baseUnit);
+                        $unitCostBase = PurchaseUnitResolver::toBaseUnitCost($product, $unitCostInput, $inputUnit);
                         $subtotal = InventoryCosting::extendedCost($qtyBase, $unitCostBase, 2);
                         $dppCalc = bcadd($dppCalc, $subtotal, 2);
 

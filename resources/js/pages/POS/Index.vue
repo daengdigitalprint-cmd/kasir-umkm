@@ -159,6 +159,8 @@ interface Product {
     track_stock?: boolean;
     unlimited_stock?: boolean;
     allow_negative_stock?: boolean;
+    /** Stok Minimum produk; bila diisi, kasir menandai "Sisa N" saat stok mencapai batas ini. */
+    min_stock_level?: number | string | null;
     bundle_items?: ProductBundleItemRow[];
     variants?: ProductVariant[];
     sale_consumptions?: SaleConsumption[];
@@ -238,6 +240,16 @@ function stockDisplay(product: Product, variant: ProductVariant | null): { text:
     // Track stock biasa
     if (stock <= 0) {
         return { text: 'Stok: Habis', colorClass: 'bg-red-100 text-red-700 border-red-200' };
+    }
+
+    // Stok Minimum diatur pemilik → patokan menipis memakai angka itu, bukan ambang tetap.
+    // Hanya untuk produk tanpa varian: stok varian dihitung sendiri-sendiri.
+    const minLevel = variant ? 0 : Number(product.min_stock_level ?? 0);
+    if (minLevel > 0) {
+        const qty = `${formatCartQty(stock, product)}${product.unit ? ' ' + product.unit : ''}`;
+        return stock <= minLevel
+            ? { text: `Sisa ${qty}`, colorClass: 'bg-amber-100 text-amber-800 border-amber-300' }
+            : { text: `Stok: ${qty}`, colorClass: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
     }
     if (stock <= 5) {
         return {

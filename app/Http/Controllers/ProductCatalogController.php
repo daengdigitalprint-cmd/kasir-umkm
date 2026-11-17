@@ -25,7 +25,7 @@ class ProductCatalogController extends Controller
             ->select([
                 'id', 'store_id', 'name', 'sku', 'barcode', 'price', 'stock_quantity',
                 'category', 'unit', 'is_active', 'images', 'modifier_options', 'allows_decimal',
-                'has_variants', 'is_bundle', 'track_stock', 'unlimited_stock', 'pharmacy_sale_class', 'updated_at',
+                'has_variants', 'is_bundle', 'track_stock', 'unlimited_stock', 'pharmacy_sale_class', 'min_stock_level', 'updated_at',
             ])
             ->with([
                 'variants' => fn ($q) => $q->where('is_active', true)->orderBy('sort_order')->orderBy('id'),
@@ -64,6 +64,8 @@ class ProductCatalogController extends Controller
                 'is_bundle' => (bool) $product->is_bundle,
                 'track_stock' => (bool) $product->track_stock,
                 'unlimited_stock' => (bool) $product->unlimited_stock,
+                // Penanda "Sisa N" di kasir saat stok <= Stok Minimum (0 = tidak diatur).
+                'min_stock_level' => (float) $product->min_stock_level,
                 'pharmacy_sale_class' => $product->pharmacy_sale_class,
                 'image_url' => $product->image_url,
                 'variants' => $product->variants,

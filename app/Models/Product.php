@@ -104,6 +104,12 @@ class Product extends Model
         return $this->hasMany(ProductVariant::class);
     }
 
+    /** Satuan beli tambahan (F3), mis. karton = 24 pcs. */
+    public function units(): HasMany
+    {
+        return $this->hasMany(ProductUnit::class)->orderBy('factor');
+    }
+
     public function bundleItems(): HasMany
     {
         return $this->hasMany(ProductBundleItem::class, 'bundle_product_id')

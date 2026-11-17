@@ -815,6 +815,9 @@ class ProductController extends Controller
 
         return Inertia::render('Products/Edit', [
             'product' => $productData,
+            'purchaseUnits' => $product->units()->get(['id', 'name', 'factor', 'is_purchase_default'])
+                ->map(fn ($u) => ['name' => $u->name, 'factor' => (float) $u->factor, 'is_purchase_default' => $u->is_purchase_default])
+                ->values(),
             'store' => [
                 'id' => $store->id,
                 'name' => $store->name,
@@ -1130,7 +1133,12 @@ class ProductController extends Controller
 
         $modifierGroupIdsJson = $request->input('modifier_group_ids_json');
         $updateSuccess = DB::transaction(function () use ($product, $dataToUpdate, $normalizedSaleConsumptions, $modifierGroupIdsJson) {
+            $baseUnitChanged = BaseUnit::normalizeBaseUnit($dataToUpdate['base_unit'] ?? $product->base_unit) !== $product->baseUnit();
             $updated = $product->update($dataToUpdate);
+            if ($baseUnitChanged) {
+                // Isi satuan beli (F3) dihitung dalam satuan dasar lama, jadi tidak berlaku lagi.
+                $product->units()->delete();
+            }
             $this->replaceSaleConsumptions($product, $normalizedSaleConsumptions);
             $this->syncModifierGroups($product, $modifierGroupIdsJson);
 

@@ -5,8 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, ArrowRightLeft, Send, CheckCircle, XCircle } from 'lucide-vue-next';
-import { ref } from 'vue';
+import { ArrowLeft, ArrowRightLeft, Send, CheckCircle, XCircle, FileText } from 'lucide-vue-next';
+import { computed, ref } from 'vue';
 import { modalError } from '@/lib/swal';
 
 interface ProductTiny {
@@ -20,6 +20,8 @@ interface ProductTiny {
 interface Line {
     id: number;
     quantity: string;
+    quantity_received: string | null;
+    discrepancy_reason: string | null;
     base_unit: string | null;
     unit_cost_snapshot: string | null;
     total_cost_snapshot: string | null;
@@ -90,11 +92,36 @@ function sendTransfer() {
     );
 }
 
+// F5: jumlah diterima per baris (default = jumlah dikirim) + alasan bila kurang.
+const showReceiveForm = ref(false);
+const receivedQty = ref<Record<number, number>>(
+    Object.fromEntries(props.transfer.lines.map((ln) => [ln.id, Number(ln.quantity)])),
+);
+const receivedReason = ref<Record<number, string>>(Object.fromEntries(props.transfer.lines.map((ln) => [ln.id, ''])));
+
+const isShort = (ln: Line) => (receivedQty.value[ln.id] ?? Number(ln.quantity)) < Number(ln.quantity);
+const isReceiveFormValid = computed(() =>
+    props.transfer.lines.every((ln) => {
+        const q = receivedQty.value[ln.id];
+        if (q === undefined || q === null || Number.isNaN(Number(q)) || q < 0 || q > Number(ln.quantity)) return false;
+        return !isShort(ln) || (receivedReason.value[ln.id] ?? '').trim().length > 0;
+    }),
+);
+
+const lineShort = (ln: Line) => ln.quantity_received !== null && Number(ln.quantity_received) < Number(ln.quantity);
+const hasDiscrepancy = computed(() => props.transfer.lines.some(lineShort));
+
 function receiveTransfer() {
     processing.value = true;
     router.post(
         `/stock-transfers/${props.transfer.id}/receive`,
-        {},
+        {
+            lines: props.transfer.lines.map((ln) => ({
+                id: ln.id,
+                quantity_received: receivedQty.value[ln.id],
+                discrepancy_reason: isShort(ln) ? receivedReason.value[ln.id] : null,
+            })),
+        },
         {
             preserveScroll: true,
             onFinish: () => { processing.value = false; },
@@ -156,12 +183,27 @@ const fmtQty = (val: string | number) => {
 
     <AdminLayout title="Detail transfer">
         <div class="mx-auto space-y-6 pb-8" style="max-width: 90rem">
-            <Button as-child variant="outline" size="sm" class="gap-2 rounded-xl">
-                <Link href="/stock-transfers">
-                    <ArrowLeft class="h-4 w-4" />
-                    Kembali
-                </Link>
-            </Button>
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <Button as-child variant="outline" size="sm" class="gap-2 rounded-xl">
+                    <Link href="/stock-transfers">
+                        <ArrowLeft class="h-4 w-4" />
+                        Kembali
+                    </Link>
+                </Button>
+                <!-- F4: surat jalan untuk transfer yang sudah dikirim/diterima (unduhan file, bukan navigasi Inertia) -->
+                <Button
+                    v-if="transfer.status === 'sent' || transfer.status === 'received'"
+                    as-child
+                    variant="outline"
+                    size="sm"
+                    class="gap-2 rounded-xl"
+                >
+                    <a :href="`/stock-transfers/${transfer.id}/delivery-note`">
+                        <FileText class="h-4 w-4" />
+                        Cetak surat jalan
+                    </a>
+                </Button>
+            </div>
 
             <Card class="rounded-2xl border-slate-200 shadow-sm">
                 <CardHeader>
@@ -227,10 +269,10 @@ const fmtQty = (val: string | number) => {
                             Kirim
                         </Button>
                         <Button
-                            v-if="canReceive"
+                            v-if="canReceive && !showReceiveForm"
                             class="rounded-xl gap-1"
                             :disabled="processing"
-                            @click="receiveTransfer"
+                            @click="showReceiveForm = true"
                         >
                             <CheckCircle class="h-4 w-4" />
                             Terima
@@ -244,6 +286,67 @@ const fmtQty = (val: string | number) => {
                             <XCircle class="h-4 w-4" />
                             Batalkan
                         </Button>
+                    </div>
+
+                    <!-- F5: form terima — cek jumlah yang benar-benar tiba -->
+                    <div v-if="canReceive && showReceiveForm" class="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+                        <div>
+                            <p class="text-sm font-semibold text-emerald-900">Cek barang yang tiba</p>
+                            <p class="text-xs text-emerald-800">
+                                Ubah jumlah bila barang datang kurang atau rusak. Stok bertambah sesuai jumlah diterima; selisihnya dicatat.
+                            </p>
+                        </div>
+                        <div class="overflow-x-auto rounded-lg border border-emerald-100 bg-white">
+                            <table class="w-full text-sm">
+                                <thead class="bg-slate-50 text-left text-xs font-bold uppercase text-slate-500">
+                                    <tr>
+                                        <th class="px-3 py-2">Barang</th>
+                                        <th class="px-3 py-2 text-right">Dikirim</th>
+                                        <th class="px-3 py-2">Diterima</th>
+                                        <th class="px-3 py-2">Alasan selisih</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    <tr v-for="ln in transfer.lines" :key="ln.id">
+                                        <td class="px-3 py-2 font-medium text-slate-900">{{ ln.to_product.name }}</td>
+                                        <td class="px-3 py-2 text-right font-mono">{{ fmtQty(ln.quantity) }} {{ ln.base_unit ?? '' }}</td>
+                                        <td class="px-3 py-2">
+                                            <input
+                                                v-model.number="receivedQty[ln.id]"
+                                                type="number"
+                                                min="0"
+                                                :max="Number(ln.quantity)"
+                                                step="any"
+                                                class="h-9 w-28 rounded-md border px-2 text-right"
+                                                :class="isShort(ln) ? 'border-amber-400 bg-amber-50' : 'border-slate-200'"
+                                                :aria-label="`Jumlah diterima ${ln.to_product.name}`"
+                                            />
+                                        </td>
+                                        <td class="px-3 py-2">
+                                            <input
+                                                v-if="isShort(ln)"
+                                                v-model="receivedReason[ln.id]"
+                                                type="text"
+                                                maxlength="255"
+                                                placeholder="Rusak, tumpah, kurang dari gudang…"
+                                                class="h-9 w-full min-w-48 rounded-md border border-slate-200 px-2"
+                                                :aria-label="`Alasan selisih ${ln.to_product.name}`"
+                                            />
+                                            <span v-else class="text-xs text-slate-400">Sesuai</span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="flex gap-2">
+                            <Button class="rounded-xl gap-1" :disabled="processing || !isReceiveFormValid" @click="receiveTransfer">
+                                <CheckCircle class="h-4 w-4" />
+                                Simpan penerimaan
+                            </Button>
+                            <Button variant="outline" class="rounded-xl" :disabled="processing" @click="showReceiveForm = false">
+                                Batal
+                            </Button>
+                        </div>
                     </div>
 
                     <!-- Cancel form -->
@@ -274,6 +377,7 @@ const fmtQty = (val: string | number) => {
                                     <th class="px-3 py-2">Produk asal</th>
                                     <th class="px-3 py-2">Produk tujuan</th>
                                     <th class="px-3 py-2 text-right">Qty</th>
+                                    <th v-if="hasDiscrepancy" class="px-3 py-2 text-right">Diterima</th>
                                     <th class="px-3 py-2 text-right">HPP/unit</th>
                                     <th class="px-3 py-2 text-right">Total</th>
                                 </tr>
@@ -296,6 +400,17 @@ const fmtQty = (val: string | number) => {
                                     </td>
                                     <td class="px-3 py-2 text-right font-mono font-semibold">
                                         {{ fmtQty(ln.quantity) }} {{ ln.base_unit ?? '' }}
+                                    </td>
+                                    <td v-if="hasDiscrepancy" class="px-3 py-2 text-right">
+                                        <template v-if="lineShort(ln)">
+                                            <div class="font-mono font-semibold text-red-700">
+                                                {{ fmtQty(ln.quantity_received!) }} {{ ln.base_unit ?? '' }}
+                                            </div>
+                                            <div class="text-xs text-red-600">
+                                                Selisih {{ fmtQty(String(Number(ln.quantity) - Number(ln.quantity_received))) }}: {{ ln.discrepancy_reason }}
+                                            </div>
+                                        </template>
+                                        <span v-else class="text-xs text-slate-400">Sesuai</span>
                                     </td>
                                     <td class="px-3 py-2 text-right font-mono text-xs text-slate-600">
                                         {{ ln.unit_cost_snapshot ? `Rp${Number(ln.unit_cost_snapshot).toLocaleString('id-ID')}` : '—' }}

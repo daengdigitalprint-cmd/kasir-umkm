@@ -38,6 +38,7 @@ final class MenuCatalog
         ['key' => 'recipes', 'label' => 'Resep', 'group' => 'Produk & Stok', 'module' => 'recipes_enabled'],
         ['key' => 'productions', 'label' => 'Produksi', 'group' => 'Produk & Stok', 'module' => 'productions_enabled'],
 
+        ['key' => 'shopping_list', 'label' => 'Daftar Belanja', 'group' => 'Pembelian & Distribusi'],
         ['key' => 'purchases', 'label' => 'Pembelian', 'group' => 'Pembelian & Distribusi'],
         ['key' => 'purchase_returns', 'label' => 'Retur Pembelian', 'group' => 'Pembelian & Distribusi'],
         ['key' => 'sales_returns', 'label' => 'Retur Penjualan', 'group' => 'Pembelian & Distribusi'],

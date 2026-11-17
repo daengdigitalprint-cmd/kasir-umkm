@@ -14,6 +14,7 @@ import {
     ChefHat,
     ClipboardCheck,
     ClipboardList,
+    ListChecks,
     Clock,
     CreditCard,
     Crown,
@@ -275,6 +276,15 @@ const navigationSource: NavItem[] = [
     { name: 'Resep', href: '/recipes', icon: ChefHat, menuKey: 'recipes', section: 'produk_stok', recipesOnly: true },
     { name: 'Produksi', href: '/productions', icon: Layers, menuKey: 'productions', section: 'produk_stok', productionsOnly: true },
     // ── Pembelian & Distribusi ──
+    {
+        name: 'Daftar Belanja',
+        href: '/shopping-list',
+        icon: ListChecks,
+        menuKey: 'shopping_list',
+        section: 'pembelian',
+        inventoryItem: true,
+        advancedRetailOnly: true,
+    },
     { name: 'Pembelian', href: '/purchases', icon: Truck, menuKey: 'purchases', section: 'pembelian', inventoryItem: true, advancedRetailOnly: true },
     {
         name: 'Retur pembelian',

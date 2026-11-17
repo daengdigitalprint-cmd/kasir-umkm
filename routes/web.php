@@ -263,6 +263,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('products.sample-services');
     });
 
+    Route::put('products/{product}/purchase-units', [App\Http\Controllers\ProductUnitController::class, 'update'])
+        ->name('products.purchase-units.update')
+        ->middleware(['store.active', 'role.inventory']);
     Route::resource('products', App\Http\Controllers\ProductController::class)->middleware(['store.active', 'role.inventory']);
 
     Route::post('product-batches/{product_batch}/destroy', [App\Http\Controllers\ProductBatchController::class, 'destroy'])
@@ -384,6 +387,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('stock-transfers/match', [App\Http\Controllers\StockTransferController::class, 'match'])
         ->name('stock-transfers.match')
         ->middleware(['store.active', 'role.inventory']);
+    Route::get('stock-transfers/{stock_transfer}/delivery-note', [App\Http\Controllers\StockTransferController::class, 'deliveryNote'])
+        ->name('stock-transfers.delivery-note')
+        ->middleware(['store.active', 'role.inventory', 'plan.advanced']);
     Route::post('stock-transfers/{stock_transfer}/send', [App\Http\Controllers\StockTransferController::class, 'send'])
         ->name('stock-transfers.send')
         ->middleware(['store.active', 'role.inventory']);
@@ -418,6 +424,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::post('purchases/suppliers', [App\Http\Controllers\PurchaseController::class, 'storeSupplier'])
         ->name('purchases.suppliers.store')
+        ->middleware(['store.active', 'role.inventory']);
+
+    Route::get('shopping-list', [App\Http\Controllers\ShoppingListController::class, 'index'])
+        ->name('shopping-list.index')
         ->middleware(['store.active', 'role.inventory']);
 
     Route::resource('purchases', App\Http\Controllers\PurchaseController::class)

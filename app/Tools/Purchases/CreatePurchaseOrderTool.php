@@ -13,8 +13,8 @@ use App\Models\Supplier;
 use App\Models\User;
 use App\Services\ActivityLogger;
 use App\Support\Accounting\JournalPoster;
-use App\Support\BaseUnit;
 use App\Support\InventoryCosting;
+use App\Support\PurchaseUnitResolver;
 use App\Support\StoreLocationType;
 use App\Support\StorePlanLimits;
 use App\Tools\AiTool;
@@ -141,7 +141,7 @@ class CreatePurchaseOrderTool extends AiTool
                     $subtotal = null;
 
                     if ($unitCostInput !== null) {
-                        $unitCostBase = BaseUnit::toBaseUnitCost($unitCostInput, $inputUnit, $baseUnit);
+                        $unitCostBase = PurchaseUnitResolver::toBaseUnitCost($product, $unitCostInput, $inputUnit);
                         $subtotal = InventoryCosting::extendedCost($qtyBase, $unitCostBase, 2);
                         $dppCalc = bcadd($dppCalc, $subtotal, 2);
 
@@ -300,7 +300,7 @@ class CreatePurchaseOrderTool extends AiTool
             }
 
             $baseUnit = $product->baseUnit();
-            $qtyBase = BaseUnit::toBaseQuantity($quantity, $inputUnit, $baseUnit);
+            $qtyBase = PurchaseUnitResolver::toBaseQuantity($product, $quantity, $inputUnit);
             if (bccomp($qtyBase, '0', 4) <= 0) {
                 throw new \RuntimeException("{$label}: jumlah dasar untuk \"{$product->name}\" harus lebih dari 0.");
             }

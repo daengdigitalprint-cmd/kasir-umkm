@@ -11,6 +11,7 @@ use App\Support\InventoryCosting;
 use App\Support\ProductQuantity;
 use App\Support\StorePlanLimits;
 use App\Support\TransferStockOperations;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,6 +19,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 class StockTransferController extends Controller
 {
@@ -35,7 +37,15 @@ class StockTransferController extends Controller
                 $q->where('from_store_id', $store->id)->orWhere('to_store_id', $store->id);
             })
             ->with(['fromStore:id,name', 'toStore:id,name', 'user:id,name'])
-            ->withCount('lines');
+            ->withCount('lines')
+            // F5: jumlah barang yang diterima kurang dari yang dikirim.
+            ->withCount(['lines as discrepancy_lines_count' => fn ($q) => $q->whereNotNull('quantity_received')
+                ->whereColumn('quantity_received', '<', 'quantity')]);
+
+        if ($request->boolean('discrepancy')) {
+            $query->whereHas('lines', fn ($q) => $q->whereNotNull('quantity_received')
+                ->whereColumn('quantity_received', '<', 'quantity'));
+        }
 
         if ($request->filled('status') && in_array($request->input('status'), ['draft', 'sent', 'received', 'cancelled'], true)) {
             $query->where('status', $request->input('status'));
@@ -48,6 +58,7 @@ class StockTransferController extends Controller
             'currentStore' => ['id' => $store->id, 'name' => $store->name],
             'canCreateTransfer' => StorePlanLimits::allowsAdvancedRetailFeatures($store),
             'statusFilter' => $request->input('status'),
+            'discrepancyFilter' => $request->boolean('discrepancy'),
         ]);
     }
 
@@ -292,10 +303,8 @@ class StockTransferController extends Controller
             return redirect()->route('stores.create')->with('error', 'Anda perlu membuat toko terlebih dahulu.');
         }
 
-        if (! $user->isMemberOfStore($stockTransfer->from_store_id) && ! $user->isMemberOfStore($stockTransfer->to_store_id)) {
-            if (! $user->isSuperAdmin() && ! $user->isOwner() && ! $user->isAdmin() && ! $user->isManager() && ! $user->isWarehouseStaff()) {
-                abort(403);
-            }
+        if (! $this->canAccessTransfer($user, $stockTransfer)) {
+            abort(403);
         }
 
         $stockTransfer->load([
@@ -329,6 +338,41 @@ class StockTransferController extends Controller
     }
 
     /**
+     * F4 — Surat jalan (PDF) untuk transfer yang sudah dikirim atau diterima.
+     * Hanya anggota lokasi asal/tujuan (owner grup otomatis anggota semua outlet).
+     */
+    public function deliveryNote(Request $request, StockTransfer $stockTransfer): SymfonyResponse|RedirectResponse
+    {
+        $user = $request->user();
+
+        if (! $this->canAccessTransfer($user, $stockTransfer)) {
+            abort(403);
+        }
+
+        if (! $stockTransfer->isSent() && $stockTransfer->status !== StockTransfer::STATUS_RECEIVED) {
+            return back()->with('error', 'Surat jalan baru bisa dicetak setelah transfer dikirim.');
+        }
+
+        $stockTransfer->load([
+            'fromStore:id,name,address,phone,timezone',
+            'toStore:id,name,address,phone',
+            'user:id,name',
+            'sentBy:id,name',
+            'receivedBy:id,name',
+            'lines.fromProduct:id,name,sku,base_unit',
+            'lines.toProduct:id,name,sku,base_unit',
+        ]);
+
+        $pdf = Pdf::loadView('pdf.delivery-note', [
+            'transfer' => $stockTransfer,
+            'statusLabel' => $stockTransfer->isSent() ? 'Dikirim' : 'Diterima',
+            'timezone' => $stockTransfer->fromStore?->timezone ?: config('app.timezone'),
+        ])->setPaper('a4');
+
+        return $pdf->download('surat-jalan-'.$stockTransfer->transfer_number.'.pdf');
+    }
+
+    /**
      * Kirim draft — kurangi stok sumber sekali.
      */
     public function send(Request $request, StockTransfer $stockTransfer): RedirectResponse
@@ -339,10 +383,8 @@ class StockTransferController extends Controller
             return redirect()->route('stores.create')->with('error', 'Anda perlu membuat toko terlebih dahulu.');
         }
 
-        if (! $user->isMemberOfStore($stockTransfer->from_store_id)) {
-            if (! $user->isSuperAdmin() && ! $user->isOwner() && ! $user->isAdmin() && ! $user->isManager() && ! $user->isWarehouseStaff()) {
-                abort(403, 'Hanya anggota toko asal yang dapat mengirim transfer.');
-            }
+        if (! $this->canAccessTransfer($user, $stockTransfer, 'from')) {
+            abort(403, 'Hanya anggota toko asal yang dapat mengirim transfer.');
         }
 
         // Hanya admin atau manager yang dapat mengirim transfer
@@ -414,10 +456,8 @@ class StockTransferController extends Controller
             return redirect()->route('stores.create')->with('error', 'Anda perlu membuat toko terlebih dahulu.');
         }
 
-        if (! $user->isMemberOfStore($stockTransfer->to_store_id)) {
-            if (! $user->isSuperAdmin() && ! $user->isOwner() && ! $user->isAdmin() && ! $user->isManager() && ! $user->isWarehouseStaff()) {
-                abort(403, 'Hanya anggota toko tujuan yang dapat menerima transfer.');
-            }
+        if (! $this->canAccessTransfer($user, $stockTransfer, 'to')) {
+            abort(403, 'Hanya anggota toko tujuan yang dapat menerima transfer.');
         }
 
         // Hanya admin atau manager yang dapat menerima transfer
@@ -425,13 +465,32 @@ class StockTransferController extends Controller
             abort(403, 'Hanya admin atau manager yang dapat menerima transfer.');
         }
 
+        // F5: jumlah diterima per baris (opsional). Tanpa isian = diterima penuh (perilaku lama).
+        $validated = $request->validate([
+            'lines' => ['sometimes', 'array'],
+            'lines.*.id' => ['required', 'integer'],
+            'lines.*.quantity_received' => ['required', 'numeric', 'min:0'],
+            'lines.*.discrepancy_reason' => ['nullable', 'string', 'max:255'],
+        ], [
+            'lines.*.quantity_received.min' => 'Jumlah diterima tidak boleh negatif.',
+        ]);
+        $receivedInput = collect($validated['lines'] ?? [])->keyBy(fn ($row) => (int) $row['id']);
+
+        $discrepancyCount = 0;
+
         try {
-            DB::transaction(function () use ($user, $stockTransfer) {
-                $stockTransfer->lockForUpdate();
+            DB::transaction(function () use ($user, $stockTransfer, $receivedInput, &$discrepancyCount) {
+                // Kunci baris transfer sungguhan supaya tidak bisa diterima dua kali bersamaan.
+                $stockTransfer = StockTransfer::query()->whereKey($stockTransfer->id)->lockForUpdate()->firstOrFail();
                 $stockTransfer->assertCanTransitionTo(StockTransfer::STATUS_RECEIVED);
 
                 $toStore = $stockTransfer->toStore;
                 $lines = $stockTransfer->lines()->with('toProduct')->get();
+
+                $unknownIds = $receivedInput->keys()->diff($lines->pluck('id'));
+                if ($unknownIds->isNotEmpty()) {
+                    throw ValidationException::withMessages(['lines' => 'Ada baris yang bukan bagian dari transfer ini.']);
+                }
 
                 // Kunci seluruh produk tujuan secara berurutan.
                 $toIds = $lines->pluck('to_product_id')->sort()->values();
@@ -440,11 +499,57 @@ class StockTransferController extends Controller
                 foreach ($lines as $line) {
                     $product = $line->toProduct;
                     $product->refresh();
-                    $qty = (string) $line->quantity;
+                    $sentQty = (string) $line->quantity;
+                    $qty = $sentQty;
+                    $notes = null;
+
+                    $input = $receivedInput->get($line->id);
+                    if ($input !== null) {
+                        $qty = ProductQuantity::normalizeStorageAmount($product, $input['quantity_received']);
+                        if (ProductQuantity::cmp($qty, $sentQty) > 0) {
+                            throw ValidationException::withMessages([
+                                'lines' => "Jumlah diterima «{$product->name}» melebihi jumlah yang dikirim.",
+                            ]);
+                        }
+
+                        $reason = trim((string) ($input['discrepancy_reason'] ?? ''));
+                        $isShort = ProductQuantity::cmp($qty, $sentQty) < 0;
+                        if ($isShort && $reason === '') {
+                            throw ValidationException::withMessages([
+                                'lines' => "Tulis alasan selisih untuk «{$product->name}» (mis. rusak, tumpah, kurang dari gudang).",
+                            ]);
+                        }
+                        if ($isShort && TransferStockOperations::hasBatchAllocations($toStore, $line)) {
+                            throw ValidationException::withMessages([
+                                'lines' => "«{$product->name}» memakai batch/ED, jadi harus diterima penuh. Catat kerusakan lewat Penyesuaian Stok.",
+                            ]);
+                        }
+
+                        $line->update([
+                            'quantity_received' => $qty,
+                            'discrepancy_reason' => $isShort ? mb_substr($reason, 0, 255) : null,
+                        ]);
+
+                        if ($isShort) {
+                            $discrepancyCount++;
+                            $short = ProductQuantity::sub($sentQty, $qty);
+                            $notes = mb_substr(
+                                "{$stockTransfer->transfer_number} · diterima {$qty} dari {$sentQty}, selisih {$short}: {$reason}",
+                                0,
+                                255,
+                            );
+                        }
+                    }
+
+                    // Seluruh barang hilang/rusak: tidak ada stok yang masuk.
+                    if (ProductQuantity::cmp($qty, '0') <= 0) {
+                        continue;
+                    }
+
                     $unitCostSource = (string) ($line->unit_cost_snapshot ?? InventoryCosting::currentAverageCost($product));
 
                     // Tambah stok tujuan.
-                    TransferStockOperations::addAtDestination($toStore, $user, $product, $qty, $line);
+                    TransferStockOperations::addAtDestination($toStore, $user, $product, $qty, $line, $notes);
 
                     // Update average cost tujuan menggunakan weighted average.
                     $product->refresh();
@@ -466,6 +571,8 @@ class StockTransferController extends Controller
                     'received_by' => $user->id,
                 ]);
             });
+        } catch (ValidationException $e) {
+            throw $e;
         } catch (\Throwable $e) {
             report($e);
 
@@ -473,7 +580,9 @@ class StockTransferController extends Controller
         }
 
         return redirect()->route('stock-transfers.show', $stockTransfer)
-            ->with('success', 'Transfer berhasil diterima. Stok outlet telah bertambah.');
+            ->with('success', $discrepancyCount > 0
+                ? "Transfer diterima dengan selisih pada {$discrepancyCount} barang. Stok bertambah sesuai jumlah yang benar-benar tiba."
+                : 'Transfer berhasil diterima. Stok outlet telah bertambah.');
     }
 
     /**
@@ -495,10 +604,7 @@ class StockTransferController extends Controller
 
         // Draft: dibatalkan oleh anggota sisi manapun.
         // Sent: dibatalkan oleh anggota sisi asal atau tujuan.
-        $isFromMember = $user->isMemberOfStore($stockTransfer->from_store_id);
-        $isToMember = $user->isMemberOfStore($stockTransfer->to_store_id);
-        $hasOrgAccess = $user->isSuperAdmin() || $user->isOwner() || $user->isAdmin() || $user->isManager() || $user->isWarehouseStaff();
-        if (! $isFromMember && ! $isToMember && ! $hasOrgAccess) {
+        if (! $this->canAccessTransfer($user, $stockTransfer)) {
             abort(403, 'Anda tidak punya akses ke transfer ini.');
         }
 
@@ -618,6 +724,41 @@ class StockTransferController extends Controller
         }
 
         return $user->isAdmin() || $user->isManager() || $user->isWarehouseStaff();
+    }
+
+    /**
+     * Akses ke transfer yang sudah ada. Anggota toko di sisi yang relevan selalu boleh.
+     * Selain itu hanya owner/admin/manajer/staf gudang yang toko aktifnya berada
+     * dalam grup usaha yang sama dengan KEDUA toko transfer — bukan admin toko mana pun.
+     *
+     * @param  'from'|'to'|'any'  $side
+     */
+    private function canAccessTransfer(User $user, StockTransfer $transfer, string $side = 'any'): bool
+    {
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        $isFromMember = $user->isMemberOfStore($transfer->from_store_id);
+        $isToMember = $user->isMemberOfStore($transfer->to_store_id);
+        if (match ($side) {
+            'from' => $isFromMember,
+            'to' => $isToMember,
+            default => $isFromMember || $isToMember,
+        }) {
+            return true;
+        }
+
+        $active = $user->store;
+        $from = $transfer->fromStore()->first(['id', 'organization_id']);
+        $to = $transfer->toStore()->first(['id', 'organization_id']);
+        if (! $active || ! $from || ! $to
+            || ! $this->storesShareOrganization($active, $from)
+            || ! $this->storesShareOrganization($active, $to)) {
+            return false;
+        }
+
+        return $user->isOwner() || $user->isAdmin() || $user->isManager() || $user->isWarehouseStaff();
     }
 
     /** Fase F1: stok hanya mengalir dalam satu `organization_id`. */

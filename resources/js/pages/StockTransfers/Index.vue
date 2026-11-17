@@ -20,6 +20,7 @@ interface TransferRow {
     cancelled_at: string | null;
     notes: string | null;
     lines_count: number;
+    discrepancy_lines_count?: number;
     from_store: StoreTiny;
     to_store: StoreTiny;
     user: { id: number; name: string } | null;
@@ -37,8 +38,9 @@ const props = withDefaults(
         currentStore: { id: number; name: string };
         canCreateTransfer?: boolean;
         statusFilter?: string | null;
+        discrepancyFilter?: boolean;
     }>(),
-    { canCreateTransfer: true, statusFilter: null },
+    { canCreateTransfer: true, statusFilter: null, discrepancyFilter: false },
 );
 
 const formatWhen = (iso: string) =>
@@ -71,10 +73,16 @@ const statusFilters = [
     { value: 'cancelled', label: 'Dibatalkan' },
 ];
 
-function filterByStatus(status: string) {
+function filterByStatus(status: string, discrepancy = props.discrepancyFilter) {
     const params: Record<string, string> = {};
     if (status) params.status = status;
+    if (discrepancy) params.discrepancy = '1';
     router.get('/stock-transfers', params, { preserveState: true, replace: true });
+}
+
+// F5: tampilkan hanya transfer yang barangnya tiba kurang dari yang dikirim.
+function toggleDiscrepancy() {
+    filterByStatus(props.statusFilter ?? '', !props.discrepancyFilter);
 }
 </script>
 
@@ -136,6 +144,13 @@ function filterByStatus(status: string) {
                         >
                             {{ f.label }}
                         </button>
+                        <button
+                            class="rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors"
+                            :class="discrepancyFilter ? 'bg-red-100 text-red-800' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
+                            @click="toggleDiscrepancy"
+                        >
+                            Ada selisih
+                        </button>
                     </div>
 
                     <div v-if="transfers.data.length === 0" class="text-center py-12 text-slate-500">
@@ -194,7 +209,15 @@ function filterByStatus(status: string) {
                                             {{ roleLabel(t) }}
                                         </span>
                                     </td>
-                                    <td class="p-3">{{ t.lines_count }}</td>
+                                    <td class="p-3">
+                                        {{ t.lines_count }}
+                                        <span
+                                            v-if="t.discrepancy_lines_count"
+                                            class="ml-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700"
+                                        >
+                                            {{ t.discrepancy_lines_count }} selisih
+                                        </span>
+                                    </td>
                                     <td class="p-3 text-slate-600">{{ t.user?.name ?? '—' }}</td>
                                 </tr>
                             </tbody>

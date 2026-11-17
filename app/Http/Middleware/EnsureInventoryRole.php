@@ -23,6 +23,7 @@ class EnsureInventoryRole
         'stock-adjustments',
         'suppliers',
         'stock-overview',
+        'shopping-list',
     ];
 
     /**
@@ -43,6 +44,7 @@ class EnsureInventoryRole
         'stock-overview' => 'stock_overview',
         'recipes' => 'recipes',
         'productions' => 'productions',
+        'shopping-list' => 'shopping_list',
     ];
 
     public function handle(Request $request, Closure $next): Response

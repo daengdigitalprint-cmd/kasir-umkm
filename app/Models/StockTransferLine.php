@@ -13,6 +13,8 @@ class StockTransferLine extends Model
         'from_product_id',
         'to_product_id',
         'quantity',
+        'quantity_received',
+        'discrepancy_reason',
         'base_unit',
         'unit_cost_snapshot',
         'total_cost_snapshot',
@@ -22,6 +24,7 @@ class StockTransferLine extends Model
     {
         return [
             'quantity' => 'decimal:4',
+            'quantity_received' => 'decimal:4',
             'unit_cost_snapshot' => 'decimal:6',
             'total_cost_snapshot' => 'decimal:2',
         ];

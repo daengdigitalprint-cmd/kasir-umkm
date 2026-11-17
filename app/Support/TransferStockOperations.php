@@ -100,7 +100,18 @@ final class TransferStockOperations
         StockMovement::create(['store_id' => $store->id, 'product_id' => $product->id, 'product_variant_id' => null, 'user_id' => $user->id, 'quantity_change' => $qty, 'type' => StockMovement::TYPE_TRANSFER_REVERSAL, 'reference_type' => StockTransferLine::class, 'reference_id' => $line->id, 'balance_after' => (string) $product->fresh()->stock_quantity, 'notes' => $line->transfer->transfer_number]);
     }
 
-    public static function addAtDestination(Store $store, User $user, Product $product, string $qty, StockTransferLine $line): void
+    /**
+     * Transfer apotek membawa alokasi batch/ED per baris; jumlahnya tidak bisa
+     * dikurangi sebagian tanpa tahu batch mana yang hilang (F5).
+     */
+    public static function hasBatchAllocations(Store $store, StockTransferLine $line): bool
+    {
+        return BatchTracking::enabled($store)
+            && PharmacyFeatures::enabled($store)
+            && $line->batchAllocations()->exists();
+    }
+
+    public static function addAtDestination(Store $store, User $user, Product $product, string $qty, StockTransferLine $line, ?string $notes = null): void
     {
         if (! $product->track_stock) {
             throw new \InvalidArgumentException('Produk tujuan tidak men-track stok.');
@@ -129,6 +140,6 @@ final class TransferStockOperations
             $product->increment('stock_quantity', $qty);
         }
 
-        StockMovement::create(['store_id' => $store->id, 'product_id' => $product->id, 'product_variant_id' => null, 'user_id' => $user->id, 'quantity_change' => $qty, 'type' => StockMovement::TYPE_TRANSFER_IN, 'reference_type' => StockTransferLine::class, 'reference_id' => $line->id, 'balance_after' => (string) $product->fresh()->stock_quantity, 'notes' => $line->transfer->transfer_number]);
+        StockMovement::create(['store_id' => $store->id, 'product_id' => $product->id, 'product_variant_id' => null, 'user_id' => $user->id, 'quantity_change' => $qty, 'type' => StockMovement::TYPE_TRANSFER_IN, 'reference_type' => StockTransferLine::class, 'reference_id' => $line->id, 'balance_after' => (string) $product->fresh()->stock_quantity, 'notes' => $notes ?? $line->transfer->transfer_number]);
     }
 }

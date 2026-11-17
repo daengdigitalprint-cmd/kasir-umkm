@@ -12,6 +12,7 @@ import BarcodeScanner from '@/components/BarcodeScanner.vue';
 import BarcodeGenerator from '@/components/BarcodeGenerator.vue';
 import OptionGroupsPicker from '@/components/products/OptionGroupsPicker.vue';
 import ProductFormModeToggle from '@/components/products/ProductFormModeToggle.vue';
+import PurchaseUnitsEditor, { type PurchaseUnitRow } from '@/components/products/PurchaseUnitsEditor.vue';
 import { useProductFormMode } from '@/composables/useProductFormMode';
 import type { OptionGroup } from '@/types/optionGroups';
 import { toastWarning } from '@/lib/swal';
@@ -122,6 +123,7 @@ interface Props {
     productCategories?: ProductCategoryOption[];
     inventoryTypes?: Record<string, string>;
     baseUnits?: Record<string, string>;
+    purchaseUnits?: PurchaseUnitRow[];
     variants?: Array<{
         id: number;
         name: string;
@@ -153,6 +155,7 @@ const props = withDefaults(defineProps<Props>(), {
     variants: () => [],
     inventoryTypes: () => ({}),
     baseUnits: () => ({}),
+    purchaseUnits: () => [],
 });
 
 const { product, store } = props;
@@ -1489,6 +1492,15 @@ const submit = () => {
                                 <div v-if="form.errors.base_unit" class="text-sm text-red-600">{{ form.errors.base_unit }}</div>
                             </div>
                         </div>
+
+                        <PurchaseUnitsEditor
+                            v-if="allowsAdvancedRetail && form.track_stock && !form.is_bundle"
+                            v-show="showAdvanced"
+                            :product-id="product.id"
+                            :base-unit="product.base_unit || 'pcs'"
+                            :initial-units="purchaseUnits"
+                            :base-unit-dirty="(form.base_unit || 'pcs') !== (product.base_unit || 'pcs')"
+                        />
 
                         <div class="grid gap-6 md:grid-cols-2">
                             <div class="space-y-2">
