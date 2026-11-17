@@ -160,7 +160,7 @@ class SuperAdminController extends Controller
     }
 
     /**
-     * R2 — Pengaturan harga add-on Modul Central Kitchen.
+     * R2 — Pengaturan harga add-on Gudang Pusat Pro.
      */
     public function updateCentralKitchenPricing(Request $request)
     {
@@ -174,7 +174,7 @@ class SuperAdminController extends Controller
             'yearly_price' => $request->integer('yearly_price'),
         ]);
 
-        return redirect()->back()->with('success', 'Harga Modul Central Kitchen disimpan.');
+        return redirect()->back()->with('success', 'Harga Gudang Pusat Pro disimpan.');
     }
 
     public function extendSubscription(Request $request, Store $store)
@@ -464,11 +464,11 @@ class SuperAdminController extends Controller
                 return;
             }
 
-            // Modul Central Kitchen (per grup usaha)
+            // Gudang Pusat Pro (per grup usaha)
             if ($payment->type === CentralKitchenAddOnService::PAYMENT_TYPE) {
                 CentralKitchenAddOnService::applyConfirmedAddOn($payment);
                 $store->is_active = true;
-                $store->subscription_notes = "Modul Central Kitchen dikonfirmasi via #{$payment->invoice_number}";
+                $store->subscription_notes = "Gudang Pusat Pro dikonfirmasi via #{$payment->invoice_number}";
                 $store->save();
 
                 return;

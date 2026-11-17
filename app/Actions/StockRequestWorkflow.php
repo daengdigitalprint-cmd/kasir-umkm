@@ -29,7 +29,7 @@ final class StockRequestWorkflow
     /**
      * @param  list<array{product_id: int|string, quantity: int|float|string}>  $items
      */
-    public function create(User $user, Store $requester, Store $supplier, array $items, ?string $notes = null): StockRequest
+    public function create(?User $user, Store $requester, Store $supplier, array $items, ?string $notes = null, bool $automatic = false): StockRequest
     {
         if ((int) $requester->id === (int) $supplier->id) {
             throw ValidationException::withMessages(['to_store_id' => 'Pilih lokasi pemasok yang berbeda.']);
@@ -70,14 +70,15 @@ final class StockRequestWorkflow
             $resolved[] = compact('product', 'quantity', 'match');
         }
 
-        $request = DB::transaction(function () use ($user, $requester, $supplier, $resolved, $notes) {
+        $request = DB::transaction(function () use ($user, $requester, $supplier, $resolved, $notes, $automatic) {
             $request = StockRequest::create([
                 'organization_id' => $requester->organization_id,
                 'from_store_id' => $requester->id,
                 'to_store_id' => $supplier->id,
                 'status' => StockRequest::STATUS_REQUESTED,
+                'is_automatic' => $automatic,
                 'notes' => $notes,
-                'requested_by' => $user->id,
+                'requested_by' => $user?->id,
             ]);
 
             foreach ($resolved as $row) {

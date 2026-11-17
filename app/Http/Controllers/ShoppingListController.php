@@ -36,7 +36,7 @@ class ShoppingListController extends Controller
         return Inertia::render('ShoppingList/Index', [
             'items' => ShoppingList::items($store),
             'canPurchase' => ! $routedToWarehouse,
-            // F6: minta ke lokasi lain dalam grup (Modul Central Kitchen).
+            // F6: minta ke lokasi lain dalam grup (Gudang Pusat Pro).
             'canRequestStock' => CentralKitchenModule::enabled($store) && CentralKitchenModule::siblingStores($store)->isNotEmpty(),
             'store' => [
                 'id' => $store->id,

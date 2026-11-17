@@ -18,7 +18,7 @@ class CentralKitchenPricing extends Model
         'yearly_price' => 'integer',
     ];
 
-    /** Satu baris harga add-on Modul Central Kitchen (semua grup usaha memakai yang sama). */
+    /** Satu baris harga add-on Gudang Pusat Pro (semua grup usaha memakai yang sama). */
     public static function current(): self
     {
         return static::query()->firstOrCreate([], [

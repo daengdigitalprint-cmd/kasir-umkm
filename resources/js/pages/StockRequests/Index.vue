@@ -3,8 +3,8 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Inbox, Plus, Send } from 'lucide-vue-next';
-import { onBeforeUnmount, onMounted } from 'vue';
+import { CalendarClock, Inbox, Plus, Send } from 'lucide-vue-next';
+import { onBeforeUnmount, onMounted, ref } from 'vue';
 
 interface RequestRow {
     id: number;
@@ -14,6 +14,7 @@ interface RequestRow {
     from_store: { id: number; name: string } | null;
     to_store: { id: number; name: string } | null;
     requester: string | null;
+    is_automatic?: boolean;
     lines_count: number;
     transfer: { id: number; transfer_number: string; status: string } | null;
     created_at: string | null;
@@ -25,7 +26,34 @@ const props = defineProps<{
     store: { id: number; name: string; is_central_warehouse: boolean };
     pendingIncoming: number;
     canCreate: boolean;
+    /** Order otomatis ke CK (hanya outlet). */
+    autoRequest?: {
+        enabled: boolean;
+        time: string;
+        supplier_store_id: number | null;
+        supplier_name: string | null;
+        last_run_date: string | null;
+        pending_items: number;
+        timezone: string;
+        can_manage: boolean;
+    } | null;
 }>();
+
+// ── Order otomatis ──
+const autoEnabled = ref(props.autoRequest?.enabled ?? false);
+const autoTime = ref(props.autoRequest?.time ?? '21:00');
+const savingAuto = ref(false);
+function saveAuto(enabled = autoEnabled.value) {
+    savingAuto.value = true;
+    router.put(
+        '/stock-requests/auto-settings',
+        { enabled, time: autoTime.value, supplier_store_id: props.autoRequest?.supplier_store_id ?? null },
+        { preserveScroll: true, onFinish: () => (savingAuto.value = false) },
+    );
+}
+function runAutoNow() {
+    router.post('/stock-requests/auto-run', {}, { preserveScroll: true });
+}
 
 const statusClass: Record<string, string> = {
     requested: 'bg-amber-100 text-amber-800',
@@ -92,6 +120,52 @@ onBeforeUnmount(() => {
                 </Button>
             </div>
 
+            <!-- Order otomatis ke Gudang Pusat -->
+            <div v-if="autoRequest" class="rounded-2xl border border-violet-200 bg-violet-50/60 p-4">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div class="flex items-start gap-3">
+                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white">
+                            <CalendarClock class="h-5 w-5" />
+                        </div>
+                        <div>
+                            <p class="font-bold text-slate-900">Permintaan otomatis ke {{ autoRequest.supplier_name ?? 'Gudang Pusat' }}</p>
+                            <p class="text-sm text-slate-600">
+                                Setiap hari pada jam di bawah, barang di Daftar Belanja (di bawah Stok Minimum) dikirim sebagai permintaan.
+                                Barang yang masih ada di permintaan terbuka tidak dikirim ulang.
+                            </p>
+                            <p class="mt-1 text-xs text-slate-500">
+                                Saat ini {{ autoRequest.pending_items }} barang siap diminta
+                                <span v-if="autoRequest.last_run_date"> · terakhir jalan {{ autoRequest.last_run_date }}</span>
+                                · zona waktu {{ autoRequest.timezone }}
+                            </p>
+                        </div>
+                    </div>
+                    <label v-if="autoRequest.can_manage" class="inline-flex items-center gap-2 text-sm font-semibold text-slate-800">
+                        <input
+                            v-model="autoEnabled"
+                            type="checkbox"
+                            class="h-5 w-5 rounded"
+                            :disabled="savingAuto || !autoRequest.supplier_name"
+                            @change="saveAuto(autoEnabled)"
+                        />
+                        Aktif
+                    </label>
+                    <span v-else class="rounded-full px-3 py-1 text-xs font-semibold" :class="autoRequest.enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'">
+                        {{ autoRequest.enabled ? 'Aktif jam ' + autoRequest.time : 'Tidak aktif' }}
+                    </span>
+                </div>
+                <div v-if="autoRequest.can_manage" class="mt-3 flex flex-wrap items-center gap-2 border-t border-violet-200/70 pt-3">
+                    <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+                        Jam kirim
+                        <input v-model="autoTime" type="time" class="h-9 rounded-lg border border-slate-200 bg-white px-2 text-sm" aria-label="Jam kirim otomatis" />
+                    </label>
+                    <Button size="sm" variant="outline" class="rounded-lg" :disabled="savingAuto" @click="saveAuto()">Simpan jam</Button>
+                    <Button size="sm" class="ml-auto rounded-lg" :disabled="!autoRequest.supplier_name" @click="runAutoNow">
+                        <Send class="mr-1 h-4 w-4" /> Buat sekarang
+                    </Button>
+                </div>
+            </div>
+
             <div class="inline-flex rounded-xl bg-slate-100 p-1">
                 <button
                     class="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold"
@@ -149,7 +223,8 @@ onBeforeUnmount(() => {
                                     <td class="p-3">{{ r.lines_count }}</td>
                                     <td class="p-3 text-slate-600">
                                         {{ formatWhen(r.created_at) }}
-                                        <span v-if="r.requester" class="block text-xs text-slate-400">{{ r.requester }}</span>
+                                        <span v-if="r.is_automatic" class="mt-0.5 inline-block rounded bg-violet-100 px-1.5 text-[11px] font-semibold text-violet-700">Otomatis</span>
+                                        <span v-else-if="r.requester" class="block text-xs text-slate-400">{{ r.requester }}</span>
                                     </td>
                                     <td class="p-3">
                                         <Link v-if="r.transfer" :href="`/stock-transfers/${r.transfer.id}`" class="font-mono text-xs text-violet-700 hover:underline">

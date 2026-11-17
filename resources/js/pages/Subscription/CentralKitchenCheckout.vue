@@ -136,8 +136,8 @@ const goBack = () => { window.location.href = '/subscription'; };
 </script>
 
 <template>
-    <Head title="Beli Modul Central Kitchen" />
-    <AdminLayout title="Beli Modul Central Kitchen">
+    <Head title="Beli Gudang Pusat Pro" />
+    <AdminLayout title="Beli Gudang Pusat Pro">
         <div class="pb-6 space-y-6 max-w-3xl mx-auto">
 
             <button
@@ -156,7 +156,7 @@ const goBack = () => { window.location.href = '/subscription'; };
                 </div>
                 <h2 class="text-xl font-bold text-slate-900">Pengajuan berhasil dikirim!</h2>
                 <p class="mt-2 text-sm text-slate-500">
-                    Admin akan mengonfirmasi dalam 1×24 jam. Modul Central Kitchen aktif untuk semua lokasi grup setelah dikonfirmasi.
+                    Admin akan mengonfirmasi dalam 1×24 jam. Gudang Pusat Pro aktif untuk semua lokasi grup setelah dikonfirmasi.
                 </p>
                 <div class="mt-6 flex justify-center gap-3">
                     <button type="button" class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50" @click="goBack">
@@ -177,10 +177,10 @@ const goBack = () => { window.location.href = '/subscription'; };
                             <Warehouse class="h-6 w-6 text-emerald-600" />
                         </div>
                         <div class="flex-1 min-w-0">
-                            <h3 class="text-lg font-bold text-slate-900">Modul Central Kitchen</h3>
+                            <h3 class="text-lg font-bold text-slate-900">Gudang Pusat Pro</h3>
                             <p class="text-sm text-slate-500">{{ storeName }}</p>
                             <p class="mt-1 text-sm text-slate-500">
-                                Permintaan Stok antar lokasi dan Pantau Stok Semua Lokasi untuk seluruh grup usaha.
+                                Permintaan Stok antar lokasi, order otomatis ke Gudang Pusat, dan Pantau Stok Semua Lokasi untuk seluruh grup usaha.
                             </p>
                         </div>
                     </div>
@@ -310,7 +310,7 @@ const goBack = () => { window.location.href = '/subscription'; };
                                 <div v-else-if="'qrisUrl' in method && method.qrisUrl" class="flex flex-col items-center gap-3 pt-1">
                                     <img
                                         :src="method.qrisUrl"
-                                        alt="QRIS pembayaran Modul Central Kitchen"
+                                        alt="QRIS pembayaran Gudang Pusat Pro"
                                         class="max-h-56 max-w-full rounded-xl border border-slate-200 bg-white object-contain"
                                     />
                                     <p class="text-[11px] text-slate-400">Scan dengan aplikasi bank / e-wallet Anda</p>
@@ -360,7 +360,7 @@ const goBack = () => { window.location.href = '/subscription'; };
                         <div class="space-y-2 text-sm">
                             <div class="flex justify-between">
                                 <span class="text-slate-400">Item</span>
-                                <span class="font-semibold">Modul Central Kitchen · {{ isYearly ? 'Tahunan' : 'Bulanan' }}</span>
+                                <span class="font-semibold">Gudang Pusat Pro · {{ isYearly ? 'Tahunan' : 'Bulanan' }}</span>
                             </div>
                             <div class="flex justify-between">
                                 <span class="text-slate-400">Metode</span>

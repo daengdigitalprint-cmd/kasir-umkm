@@ -6,7 +6,7 @@ use App\Models\Organization;
 use Illuminate\Console\Command;
 
 /**
- * Aktivasi manual Modul Central Kitchen per grup usaha, dipakai sampai alur
+ * Aktivasi manual Gudang Pusat Pro per grup usaha, dipakai sampai alur
  * pembayaran add-on (R2) tersedia. Contoh:
  *   php artisan central-kitchen:activate 12 --days=365
  *   php artisan central-kitchen:activate 12 --until=2027-11-30
@@ -20,7 +20,7 @@ class CentralKitchenActivateCommand extends Command
         {--until= : Tanggal akhir masa aktif (YYYY-MM-DD)}
         {--off : Matikan modul sekarang}';
 
-    protected $description = 'Aktifkan / perpanjang / matikan Modul Central Kitchen untuk satu grup usaha';
+    protected $description = 'Aktifkan / perpanjang / matikan Gudang Pusat Pro untuk satu grup usaha';
 
     public function handle(): int
     {
@@ -33,7 +33,7 @@ class CentralKitchenActivateCommand extends Command
 
         if ($this->option('off')) {
             $organization->update(['central_kitchen_until' => null]);
-            $this->info("Modul Central Kitchen dimatikan untuk «{$organization->name}».");
+            $this->info("Gudang Pusat Pro dimatikan untuk «{$organization->name}».");
 
             return self::SUCCESS;
         }
@@ -50,7 +50,7 @@ class CentralKitchenActivateCommand extends Command
         }
 
         $organization->update(['central_kitchen_until' => $date]);
-        $this->info("Modul Central Kitchen «{$organization->name}» aktif sampai {$date->format('d M Y')}.");
+        $this->info("Gudang Pusat Pro «{$organization->name}» aktif sampai {$date->format('d M Y')}.");
 
         return self::SUCCESS;
     }

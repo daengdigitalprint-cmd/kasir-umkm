@@ -366,7 +366,7 @@ const hasPendingPayment = computed(() => latestPayment?.status === 'pending');
                 >
                     <div class="flex items-center justify-center gap-2">
                         <Warehouse class="h-4 w-4" />
-                        Central Kitchen
+                        Gudang Pusat Pro
                     </div>
                 </button>
             </div>
@@ -723,15 +723,17 @@ const hasPendingPayment = computed(() => latestPayment?.status === 'pending');
                             <Warehouse class="h-6 w-6 text-violet-600" />
                         </div>
                         <div class="flex-1">
-                            <h3 class="text-lg font-bold text-slate-900">Modul Central Kitchen</h3>
+                            <h3 class="text-lg font-bold text-slate-900">Gudang Pusat Pro</h3>
                             <p class="text-sm text-slate-500">
-                                Untuk usaha dengan Gudang Pusat / dapur pusat dan beberapa outlet. Satu kali bayar untuk seluruh grup usaha.
+                                Untuk usaha dengan Gudang Pusat dan beberapa cabang/outlet: toko, minimarket, apotek, distributor, maupun
+                                F&amp;B dengan Central Kitchen. Satu kali bayar untuk seluruh grup usaha.
                             </p>
                         </div>
                     </div>
 
                     <ul class="mb-5 space-y-1.5 text-sm text-slate-700">
                         <li>• Permintaan Stok: outlet minta barang, gudang revisi jumlah lalu kirim (jadi Transfer Stok otomatis)</li>
+                        <li>• Order otomatis harian dari Daftar Belanja outlet ke Gudang Pusat</li>
                         <li>• Notifikasi permintaan baru langsung muncul di layar gudang</li>
                         <li>• Pantau Stok Semua Lokasi untuk owner + ekspor Excel</li>
                     </ul>

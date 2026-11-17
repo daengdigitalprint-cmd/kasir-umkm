@@ -84,6 +84,8 @@ class DemoCentralKitchenSeeder extends Seeder
                 'upsell_auto_enabled' => true,
                 'delivery_enabled' => true,
                 'delivery_default_fee' => 8000,
+                // Order otomatis ke CK setiap jam 21.00 (bisa dicoba lewat tombol "Buat sekarang").
+                'auto_stock_request' => ['enabled' => true, 'time' => '21:00'],
             ]);
             $outletB = $this->store($org, $plan, 'Demo Outlet Sudiang', StoreLocationType::OUTLET, 'Jl. Citra Sudiang Blok X4 No. 21, Makassar', [
                 'upsell_enabled' => true,

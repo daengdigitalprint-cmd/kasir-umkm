@@ -5,7 +5,7 @@ namespace App\Support;
 use App\Models\Store;
 
 /**
- * R2 — Modul Central Kitchen (add-on per grup usaha).
+ * R2 — Gudang Pusat Pro (add-on per grup usaha).
  *
  * Aktif bila grup usaha toko punya `central_kitchen_until` di masa depan.
  * Membuka Permintaan Stok (F6) dan Pantau Stok Semua Lokasi (F7).

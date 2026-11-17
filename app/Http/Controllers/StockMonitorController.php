@@ -13,7 +13,7 @@ use Maatwebsite\Excel\Facades\Excel;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
- * F7 — Pantau Stok Semua Lokasi (owner, Modul Central Kitchen).
+ * F7 — Pantau Stok Semua Lokasi (owner, Gudang Pusat Pro).
  */
 class StockMonitorController extends Controller
 {

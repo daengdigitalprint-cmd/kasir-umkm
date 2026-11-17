@@ -38,6 +38,7 @@ class StockRequest extends Model
         'from_store_id',
         'to_store_id',
         'status',
+        'is_automatic',
         'notes',
         'requested_by',
         'approved_by',
@@ -57,6 +58,7 @@ class StockRequest extends Model
             'rejected_at' => 'datetime',
             'cancelled_at' => 'datetime',
             'completed_at' => 'datetime',
+            'is_automatic' => 'boolean',
         ];
     }
 

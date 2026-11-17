@@ -82,6 +82,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('loyalty:expire-points')->dailyAt('03:00');
         $schedule->command('loyalty:bonus-daily')->dailyAt('03:10');
         $schedule->command('trial:expire')->hourly();
+        // Order otomatis ke Gudang Pusat (tiap outlet sekali sehari setelah jam pilihannya).
+        $schedule->command('stock-requests:auto')->everyFifteenMinutes()->withoutOverlapping();
         $schedule->command('kpi:snapshot')->dailyAt('00:30');
         $schedule->command('ai:proactive-alerts')->dailyAt('07:10');
         $schedule->command('ai:daily-digest')->dailyAt('08:00');

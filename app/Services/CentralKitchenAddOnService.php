@@ -9,7 +9,7 @@ use App\Models\User;
 use App\Support\CentralKitchenModule;
 
 /**
- * R2 — Pembelian add-on Modul Central Kitchen. Dibeli sekali per grup usaha;
+ * R2 — Pembelian add-on Gudang Pusat Pro. Dibeli sekali per grup usaha;
  * semua lokasi dalam grup ikut aktif (organizations.central_kitchen_until).
  */
 final class CentralKitchenAddOnService
@@ -61,13 +61,13 @@ final class CentralKitchenAddOnService
             throw new \Exception('Toko tidak aktif.');
         }
         if ($store->organization_id === null) {
-            throw new \Exception('Modul Central Kitchen butuh grup usaha dengan lebih dari satu lokasi. Buat grup usaha dan tambahkan outlet/Gudang Pusat dulu.');
+            throw new \Exception('Gudang Pusat Pro butuh grup usaha dengan lebih dari satu lokasi. Buat grup usaha dan tambahkan outlet/Gudang Pusat dulu.');
         }
         if (! in_array($billingCycle, ['monthly', 'yearly'], true)) {
             $billingCycle = 'monthly';
         }
         if (self::hasPending($store)) {
-            throw new \Exception('Grup usaha ini sudah memiliki pembayaran Modul Central Kitchen yang menunggu konfirmasi.');
+            throw new \Exception('Grup usaha ini sudah memiliki pembayaran Gudang Pusat Pro yang menunggu konfirmasi.');
         }
 
         return SubscriptionPayment::create([
@@ -78,7 +78,7 @@ final class CentralKitchenAddOnService
             'amount' => self::priceFor($billingCycle),
             'duration_days' => $billingCycle === 'yearly' ? 365 : 30,
             'payment_method' => $paymentMethod,
-            'notes' => $notes ?? "Pembelian Modul Central Kitchen ({$billingCycle})",
+            'notes' => $notes ?? "Pembelian Gudang Pusat Pro ({$billingCycle})",
             'status' => 'pending',
         ]);
     }
@@ -96,6 +96,6 @@ final class CentralKitchenAddOnService
         $until = $current && $current->isFuture() ? $current->copy()->addDays($days) : now()->addDays($days);
 
         $organization->update(['central_kitchen_until' => $until]);
-        \Log::info("Modul Central Kitchen dikonfirmasi: grup {$organization->name} aktif sampai {$until->toDateString()}.");
+        \Log::info("Gudang Pusat Pro dikonfirmasi: grup {$organization->name} aktif sampai {$until->toDateString()}.");
     }
 }

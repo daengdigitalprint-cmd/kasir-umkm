@@ -572,7 +572,7 @@ class SubscriptionController extends Controller
     }
 
     /**
-     * R2 — Halaman pembelian Modul Central Kitchen.
+     * R2 — Halaman pembelian Gudang Pusat Pro.
      */
     public function checkoutCentralKitchen()
     {
@@ -594,7 +594,7 @@ class SubscriptionController extends Controller
     }
 
     /**
-     * R2 — Ajukan pembayaran Modul Central Kitchen (dikonfirmasi Super Admin).
+     * R2 — Ajukan pembayaran Gudang Pusat Pro (dikonfirmasi Super Admin).
      */
     public function submitCentralKitchen(Request $request)
     {
@@ -628,7 +628,7 @@ class SubscriptionController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Pengajuan Modul Central Kitchen berhasil dikirim. Modul aktif untuk semua lokasi grup setelah dikonfirmasi admin.',
+                'message' => 'Pengajuan Gudang Pusat Pro berhasil dikirim. Modul aktif untuk semua lokasi grup setelah dikonfirmasi admin.',
                 'payment' => $payment,
             ]);
         } catch (\Exception $e) {

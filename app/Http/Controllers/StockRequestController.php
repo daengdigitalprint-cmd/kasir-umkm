@@ -7,6 +7,7 @@ use App\Models\Product;
 use App\Models\StockRequest;
 use App\Models\Store;
 use App\Models\User;
+use App\Support\AutoStockRequest;
 use App\Support\CentralKitchenModule;
 use App\Support\StoreLocationType;
 use Illuminate\Http\RedirectResponse;
@@ -15,7 +16,7 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * F6 — Permintaan Stok antar lokasi (Modul Central Kitchen).
+ * F6 — Permintaan Stok antar lokasi (Gudang Pusat Pro).
  * Outlet meminta → Gudang Pusat merevisi & menyetujui → Transfer Stok terkirim.
  */
 class StockRequestController extends Controller
@@ -44,7 +45,8 @@ class StockRequestController extends Controller
                 'status_label' => $r->statusLabel(),
                 'from_store' => $r->fromStore?->only(['id', 'name']),
                 'to_store' => $r->toStore?->only(['id', 'name']),
-                'requester' => $r->requester?->name,
+                'requester' => $r->is_automatic ? 'Otomatis' : $r->requester?->name,
+                'is_automatic' => $r->is_automatic,
                 'lines_count' => $r->lines_count,
                 'transfer' => $r->transfer?->only(['id', 'transfer_number', 'status']),
                 'created_at' => $r->created_at?->toIso8601String(),
@@ -59,6 +61,7 @@ class StockRequestController extends Controller
                 ->where('status', StockRequest::STATUS_REQUESTED)
                 ->count(),
             'canCreate' => CentralKitchenModule::siblingStores($store)->isNotEmpty(),
+            'autoRequest' => $this->autoRequestPayload($request->user(), $store),
         ]);
     }
 
@@ -154,7 +157,8 @@ class StockRequestController extends Controller
                 'notes' => $stockRequest->notes,
                 'from_store' => $stockRequest->fromStore?->only(['id', 'name']),
                 'to_store' => $stockRequest->toStore?->only(['id', 'name']),
-                'requester' => $stockRequest->requester?->name,
+                'requester' => $stockRequest->is_automatic ? 'Otomatis (jadwal harian)' : $stockRequest->requester?->name,
+                'is_automatic' => $stockRequest->is_automatic,
                 'approver' => $stockRequest->approver?->name,
                 'rejecter' => $stockRequest->rejecter?->name,
                 'rejected_reason' => $stockRequest->rejected_reason,
@@ -221,6 +225,82 @@ class StockRequestController extends Controller
         $this->workflow->cancel($stockRequest);
 
         return redirect()->route('stock-requests.show', $stockRequest)->with('success', 'Permintaan dibatalkan.');
+    }
+
+    // ── Order otomatis ke Gudang Pusat ──
+
+    public function updateAutoSettings(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        $store = $user->store;
+        abort_unless($this->canManageAuto($user) && ! StoreLocationType::isCentralWarehouse($store), 403);
+
+        $validated = $request->validate([
+            'enabled' => ['required', 'boolean'],
+            'time' => ['required', 'date_format:H:i'],
+            'supplier_store_id' => ['nullable', 'integer'],
+        ], ['time.date_format' => 'Format jam HH:MM, mis. 21:00.']);
+
+        $supplierId = $validated['supplier_store_id'] ?? null;
+        if ($supplierId !== null && ! CentralKitchenModule::siblingStores($store)->contains('id', (int) $supplierId)) {
+            return back()->withErrors(['supplier_store_id' => 'Pilih lokasi dalam grup usaha yang sama.']);
+        }
+
+        $changes = [
+            'enabled' => (bool) $validated['enabled'],
+            'time' => $validated['time'],
+            'supplier_store_id' => $supplierId !== null ? (int) $supplierId : null,
+        ];
+        // Jam diubah ke waktu yang belum lewat hari ini → izinkan jalan lagi hari ini.
+        if ($changes['time'] !== AutoStockRequest::settings($store)['time']) {
+            $changes['last_run_date'] = null;
+        }
+        AutoStockRequest::saveSettings($store, $changes);
+
+        return back()->with('success', $changes['enabled']
+            ? "Permintaan otomatis aktif setiap hari jam {$changes['time']}."
+            : 'Permintaan otomatis dimatikan.');
+    }
+
+    /** Buat permintaan otomatis sekarang (uji coba / demo). */
+    public function runAuto(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        $store = $user->store;
+        abort_unless($this->canManageAuto($user) && ! StoreLocationType::isCentralWarehouse($store), 403);
+
+        $created = AutoStockRequest::run($store);
+
+        return $created
+            ? redirect()->route('stock-requests.show', $created)->with('success', "Permintaan otomatis {$created->request_number} terkirim ke {$created->toStore?->name}.")
+            : back()->with('warning', 'Tidak ada barang yang perlu diminta: semua stok di atas Stok Minimum, sudah ada di permintaan yang masih terbuka, atau tidak dipunyai lokasi pemasok.');
+    }
+
+    private function canManageAuto(User $user): bool
+    {
+        return $user->isSuperAdmin() || $user->isOwner() || $user->isAdmin() || $user->isManager();
+    }
+
+    /** @return array<string, mixed>|null */
+    private function autoRequestPayload(User $user, Store $store): ?array
+    {
+        if (StoreLocationType::isCentralWarehouse($store)) {
+            return null;
+        }
+
+        $settings = AutoStockRequest::settings($store);
+        $supplier = AutoStockRequest::supplierFor($store);
+
+        return [
+            'enabled' => $settings['enabled'],
+            'time' => $settings['time'],
+            'supplier_store_id' => $supplier?->id,
+            'supplier_name' => $supplier?->name,
+            'last_run_date' => $settings['last_run_date'],
+            'pending_items' => $supplier ? count(AutoStockRequest::items($store, $supplier)) : 0,
+            'timezone' => $store->timezone ?: config('app.timezone'),
+            'can_manage' => $this->canManageAuto($user),
+        ];
     }
 
     // ── Hak akses ──

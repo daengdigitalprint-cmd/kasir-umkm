@@ -400,11 +400,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->only(['index', 'create', 'store', 'show'])
         ->middleware(['store.active', 'role.inventory', 'plan.advanced']);
 
-    // F6 Permintaan Stok (Modul Central Kitchen)
+    // F6 Permintaan Stok (Gudang Pusat Pro)
     Route::middleware(['store.active', 'role.inventory', 'central_kitchen.enabled'])->group(function () {
         Route::get('stock-requests', [App\Http\Controllers\StockRequestController::class, 'index'])->name('stock-requests.index');
         Route::get('stock-requests/create', [App\Http\Controllers\StockRequestController::class, 'create'])->name('stock-requests.create');
         Route::post('stock-requests', [App\Http\Controllers\StockRequestController::class, 'store'])->name('stock-requests.store');
+        Route::put('stock-requests/auto-settings', [App\Http\Controllers\StockRequestController::class, 'updateAutoSettings'])->name('stock-requests.auto-settings');
+        Route::post('stock-requests/auto-run', [App\Http\Controllers\StockRequestController::class, 'runAuto'])->name('stock-requests.auto-run');
         Route::get('stock-requests/{stockRequest}', [App\Http\Controllers\StockRequestController::class, 'show'])->name('stock-requests.show');
         Route::post('stock-requests/{stockRequest}/approve', [App\Http\Controllers\StockRequestController::class, 'approve'])->name('stock-requests.approve');
         Route::post('stock-requests/{stockRequest}/reject', [App\Http\Controllers\StockRequestController::class, 'reject'])->name('stock-requests.reject');
@@ -721,7 +723,7 @@ Route::prefix('owner')->name('owner.')->middleware(['auth', 'owner'])->group(fun
     Route::get('/dashboard/revenue', [App\Http\Controllers\OwnerDashboardController::class, 'revenue'])->name('dashboard.revenue');
     Route::get('/dashboard/export', [App\Http\Controllers\OwnerDashboardController::class, 'exportExcel'])->name('dashboard.export');
 
-    // F7 Pantau Stok Semua Lokasi (Modul Central Kitchen)
+    // F7 Pantau Stok Semua Lokasi (Gudang Pusat Pro)
     Route::middleware('central_kitchen.enabled')->group(function () {
         Route::get('/stock-monitor', [App\Http\Controllers\StockMonitorController::class, 'index'])->name('stock-monitor.index');
         Route::get('/stock-monitor/export', [App\Http\Controllers\StockMonitorController::class, 'export'])->name('stock-monitor.export');

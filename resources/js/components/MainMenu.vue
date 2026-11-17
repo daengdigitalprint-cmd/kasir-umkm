@@ -91,7 +91,7 @@ type NavItem = {
     productionsOnly?: boolean;
     /** Hanya tampil jika menu Antrian Dapur diaktifkan di pengaturan toko. */
     kitchenQueueOnly?: boolean;
-    /** Modul Central Kitchen (add-on grup usaha) */
+    /** Gudang Pusat Pro (add-on grup usaha) */
     centralKitchenOnly?: boolean;
     /** F10: menu Pengantaran — hanya tampil setelah modul Pesanan Antar dinyalakan (Fitur Tambahan). */
     deliveryMenu?: boolean;

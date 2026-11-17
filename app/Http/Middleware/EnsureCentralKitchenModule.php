@@ -7,7 +7,7 @@ use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-/** Halaman Modul Central Kitchen (Permintaan Stok, Pantau Stok) hanya untuk grup yang berlangganan. */
+/** Halaman Gudang Pusat Pro (Permintaan Stok, Pantau Stok) hanya untuk grup yang berlangganan. */
 class EnsureCentralKitchenModule
 {
     public function handle(Request $request, Closure $next): Response
@@ -21,7 +21,7 @@ class EnsureCentralKitchenModule
             return $next($request);
         }
 
-        $message = 'Modul Central Kitchen belum aktif untuk grup usaha ini. Aktifkan di menu Langganan, tab Central Kitchen.';
+        $message = 'Gudang Pusat Pro belum aktif untuk grup usaha ini. Aktifkan di menu Langganan, tab Gudang Pusat Pro.';
 
         if ($request->expectsJson()) {
             abort(403, $message);

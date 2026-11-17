@@ -396,7 +396,7 @@
                                         v-if="payment.type === 'central_kitchen_addon'"
                                         class="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 ring-1 ring-indigo-200 ring-inset"
                                     >
-                                        Modul Central Kitchen
+                                        Gudang Pusat Pro
                                     </span>
                                 </div>
                                 <p v-if="payment.notes" class="mt-2 text-xs text-slate-500 italic">“{{ payment.notes }}”</p>
@@ -578,7 +578,7 @@
             <div class="rounded-xl border border-slate-200 bg-white">
                 <div class="border-b border-slate-100 px-5 py-4">
                     <h2 class="flex items-center gap-2 text-base font-semibold text-slate-900">
-                        <DollarSign class="h-4 w-4 text-slate-400" /> Harga Modul Central Kitchen
+                        <DollarSign class="h-4 w-4 text-slate-400" /> Harga Gudang Pusat Pro
                     </h2>
                     <p class="mt-0.5 text-xs text-slate-500">Per grup usaha. Membuka Permintaan Stok dan Pantau Stok Semua Lokasi.</p>
                 </div>
@@ -1594,7 +1594,7 @@ const submitCentralKitchenPricing = () => {
         },
         {
             preserveScroll: true,
-            onSuccess: () => void toastSuccess('Harga Modul Central Kitchen disimpan.'),
+            onSuccess: () => void toastSuccess('Harga Gudang Pusat Pro disimpan.'),
             onError: () => void toastError('Periksa isian harga.'),
             onFinish: () => {
                 centralKitchenPricingForm.value.processing = false;
