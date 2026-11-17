@@ -13,10 +13,12 @@ class Organization extends Model
         'slug',
         'owner_user_id',
         'attendance_payroll_until',
+        'central_kitchen_until',
     ];
 
     protected $casts = [
         'attendance_payroll_until' => 'datetime',
+        'central_kitchen_until' => 'datetime',
     ];
 
     public function owner(): BelongsTo

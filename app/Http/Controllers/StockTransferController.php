@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\StockRequestWorkflow;
 use App\Models\Product;
 use App\Models\StockTransfer;
 use App\Models\StockTransferLine;
@@ -394,7 +395,8 @@ class StockTransferController extends Controller
 
         try {
             DB::transaction(function () use ($user, $stockTransfer) {
-                $stockTransfer->lockForUpdate();
+                // Kunci baris transfer sungguhan (status dibaca ulang) supaya aksi ganda tidak memotong stok dua kali.
+                $stockTransfer = StockTransfer::query()->whereKey($stockTransfer->id)->lockForUpdate()->firstOrFail();
                 $stockTransfer->assertCanTransitionTo(StockTransfer::STATUS_SENT);
 
                 $fromStore = $stockTransfer->fromStore;
@@ -570,6 +572,9 @@ class StockTransferController extends Controller
                     'received_at' => now(),
                     'received_by' => $user->id,
                 ]);
+
+                // F6: permintaan stok asal transfer ini menjadi Selesai.
+                StockRequestWorkflow::syncFromTransfer($stockTransfer);
             });
         } catch (ValidationException $e) {
             throw $e;
@@ -615,7 +620,8 @@ class StockTransferController extends Controller
 
         try {
             DB::transaction(function () use ($user, $stockTransfer, $validated) {
-                $stockTransfer->lockForUpdate();
+                // Kunci baris transfer sungguhan (status dibaca ulang) supaya aksi ganda tidak memotong stok dua kali.
+                $stockTransfer = StockTransfer::query()->whereKey($stockTransfer->id)->lockForUpdate()->firstOrFail();
                 $stockTransfer->assertCanTransitionTo(StockTransfer::STATUS_CANCELLED);
 
                 if ($stockTransfer->isDraft()) {
@@ -626,6 +632,7 @@ class StockTransferController extends Controller
                         'cancelled_by' => $user->id,
                         'cancellation_reason' => $validated['cancellation_reason'],
                     ]);
+                    StockRequestWorkflow::syncFromTransfer($stockTransfer);
 
                     return;
                 }
@@ -650,6 +657,9 @@ class StockTransferController extends Controller
                     'cancelled_by' => $user->id,
                     'cancellation_reason' => $validated['cancellation_reason'],
                 ]);
+
+                // F6: permintaan stok asal transfer ini ikut Dibatalkan.
+                StockRequestWorkflow::syncFromTransfer($stockTransfer);
             });
         } catch (\Throwable $e) {
             report($e);

@@ -44,6 +44,7 @@ final class MenuCatalog
         ['key' => 'sales_returns', 'label' => 'Retur Penjualan', 'group' => 'Pembelian & Distribusi'],
         ['key' => 'pre_orders', 'label' => 'Pre-order', 'group' => 'Pembelian & Distribusi'],
         ['key' => 'stock_transfers', 'label' => 'Transfer Stok', 'group' => 'Pembelian & Distribusi'],
+        ['key' => 'stock_requests', 'label' => 'Permintaan Stok', 'group' => 'Pembelian & Distribusi', 'module' => 'central_kitchen_enabled'],
 
         ['key' => 'customers', 'label' => 'Pelanggan', 'group' => 'Pelanggan & Promo'],
         ['key' => 'receivables', 'label' => 'Piutang', 'group' => 'Pelanggan & Promo', 'module' => 'receivables_enabled'],

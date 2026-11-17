@@ -28,6 +28,7 @@ interface ShoppingItem {
 const props = defineProps<{
     items: ShoppingItem[];
     canPurchase: boolean;
+    canRequestStock?: boolean;
     store: { id: number; name: string; currency: string; location_label?: string };
 }>();
 
@@ -90,6 +91,15 @@ function makePurchase() {
     router.get('/purchases/create', { items, ...(supplierId ? { supplier_id: supplierId } : {}) });
 }
 
+// F6: daftar yang sama dikirim sebagai Permintaan Stok ke Gudang Pusat / lokasi lain.
+function requestStock() {
+    if (!props.canRequestStock || chosenItems.value.length === 0) return;
+    const items = chosenItems.value
+        .filter((i) => i.product_variant_id === null)
+        .map((i) => `${i.product_id}::${quantities.value[i.key]}`);
+    router.get('/stock-requests/create', { items });
+}
+
 async function copyList() {
     if (chosenItems.value.length === 0) return;
     const lines = chosenItems.value.map((i, idx) => `${idx + 1}. ${itemLabel(i)}: ${fmtQty(quantities.value[i.key])} ${i.unit}`);
@@ -130,7 +140,8 @@ async function copyList() {
                 <Warehouse class="mt-0.5 h-5 w-5 shrink-0" />
                 <p>
                     Pembelian outlet ini dialihkan ke Gudang Pusat, jadi daftar ini tidak bisa langsung dijadikan Pembelian.
-                    Salin daftarnya lalu kirim ke Gudang Pusat, atau buat Transfer Stok dari Gudang Pusat.
+                    <template v-if="canRequestStock">Pakai tombol "Minta ke Gudang Pusat" di bawah.</template>
+                    <template v-else>Salin daftarnya lalu kirim ke Gudang Pusat, atau buat Transfer Stok dari Gudang Pusat.</template>
                 </p>
             </div>
 
@@ -262,6 +273,16 @@ async function copyList() {
                     <Button variant="outline" class="rounded-xl" :disabled="chosenItems.length === 0" @click="copyList">
                         <Copy class="mr-2 h-4 w-4" />
                         Salin daftar
+                    </Button>
+                    <Button
+                        v-if="canRequestStock"
+                        :variant="canPurchase ? 'outline' : 'default'"
+                        class="rounded-xl"
+                        :disabled="chosenItems.length === 0"
+                        @click="requestStock"
+                    >
+                        <Warehouse class="mr-2 h-4 w-4" />
+                        Minta ke Gudang Pusat
                     </Button>
                     <Button v-if="canPurchase" class="rounded-xl" :disabled="chosenItems.length === 0" @click="makePurchase">
                         Jadikan Pembelian

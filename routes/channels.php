@@ -27,3 +27,19 @@ Broadcast::channel('kitchen-store.{storeId}', function ($user, int $storeId): bo
         ->where('store_id', $storeId)
         ->exists();
 });
+
+// F6 Permintaan Stok: hanya anggota lokasi yang bisa mendengar perubahan permintaannya.
+Broadcast::channel('stock-requests.{storeId}', function ($user, int $storeId): bool {
+    if (! $user) {
+        return false;
+    }
+
+    if ((int) ($user->store_id ?? 0) === $storeId) {
+        return true;
+    }
+
+    return \Illuminate\Support\Facades\DB::table('store_user')
+        ->where('user_id', $user->id)
+        ->where('store_id', $storeId)
+        ->exists();
+});

@@ -14,6 +14,7 @@ import {
     ChefHat,
     ClipboardCheck,
     ClipboardList,
+    Inbox,
     ListChecks,
     Clock,
     CreditCard,
@@ -87,6 +88,8 @@ type NavItem = {
     productionsOnly?: boolean;
     /** Hanya tampil jika menu Antrian Dapur diaktifkan di pengaturan toko. */
     kitchenQueueOnly?: boolean;
+    /** Modul Central Kitchen (add-on grup usaha) */
+    centralKitchenOnly?: boolean;
     /** Hanya tampil jika Modul Antrian diaktifkan di pengaturan toko. */
     queueModuleOnly?: boolean;
     /** Disembunyikan jika toko mengaktifkan direct_stock_edit (koreksi via form produk). */
@@ -322,6 +325,16 @@ const navigationSource: NavItem[] = [
         inventoryItem: true,
         advancedRetailOnly: true,
     },
+    {
+        name: 'Permintaan stok',
+        href: '/stock-requests',
+        icon: Inbox,
+        menuKey: 'stock_requests',
+        section: 'pembelian',
+        inventoryItem: true,
+        advancedRetailOnly: true,
+        centralKitchenOnly: true,
+    },
     // ── Pelanggan & Promo ──
     {
         name: 'Pelanggan',
@@ -457,6 +470,8 @@ const navigationItems = computed((): ProcessedNavItem[] => {
     const scanMejaEnabled = Boolean((page.props as { scan_meja_enabled?: boolean }).scan_meja_enabled);
     const attendanceEnabled = Boolean((page.props as { attendance_enabled?: boolean }).attendance_enabled);
     const payrollEnabled = Boolean((page.props as { payroll_enabled?: boolean }).payroll_enabled);
+    const centralKitchenEnabled = Boolean((page.props as { central_kitchen_enabled?: boolean }).central_kitchen_enabled);
+    const pendingStockRequests = Number((page.props as { pending_stock_requests?: number }).pending_stock_requests ?? 0);
     const cashierPinEnabled = String((page.props as { cashier_login_mode?: string }).cashier_login_mode ?? 'email') === 'pin';
     const accountingEnabled = Boolean((page.props as { accounting_enabled?: boolean }).accounting_enabled);
     const receivablesEnabled = Boolean((page.props as { receivables_enabled?: boolean }).receivables_enabled);
@@ -506,6 +521,7 @@ const navigationItems = computed((): ProcessedNavItem[] => {
         if (item.pharmacyOnly && !pharmacy) return [];
         if (item.productionsOnly && !productionsEnabled) return [];
         if (item.kitchenQueueOnly && !kitchenQueueEnabled && !isKitchen) return [];
+        if (item.centralKitchenOnly && !centralKitchenEnabled) return [];
         if (item.queueModuleOnly && !queueModuleEnabled) return [];
         if (item.scanMejaOnly && !scanMejaEnabled) return [];
         if (item.attendanceOnly && !attendanceEnabled) return [];
@@ -562,6 +578,9 @@ const navigationItems = computed((): ProcessedNavItem[] => {
         }
 
         // Badge antrian dapur
+        if (item.menuKey === 'stock_requests' && pendingStockRequests > 0) {
+            return [{ ...item, pendingCount: pendingStockRequests }];
+        }
         if (item.menuKey === 'kitchen_queue' && pendingKitchenOrderCount > 0) {
             return [{ ...item, pendingCount: pendingKitchenOrderCount }];
         }

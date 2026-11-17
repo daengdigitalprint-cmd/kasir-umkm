@@ -171,6 +171,12 @@ class HandleInertiaRequests extends Middleware
             'attendance_enabled' => $activeStore ? AttendanceSettings::enabled($activeStore) : false,
             'attendance_settings' => $activeStore ? AttendanceSettings::forFrontend($activeStore) : null,
             'payroll_enabled' => $activeStore ? AttendancePayrollAddOnService::isPurchased($activeStore) : false,
+            // Modul Central Kitchen (Permintaan Stok, Pantau Stok) — add-on per grup usaha.
+            'central_kitchen_enabled' => \App\Support\CentralKitchenModule::enabled($activeStore),
+            // Badge menu Permintaan Stok: permintaan masuk yang menunggu disetujui.
+            'pending_stock_requests' => fn () => $activeStore && \App\Support\CentralKitchenModule::enabled($activeStore)
+                ? \App\Models\StockRequest::query()->where('to_store_id', $activeStore->id)->where('status', 'requested')->count()
+                : 0,
             // Badge menu SDM: pengajuan cuti/lembur yang menunggu persetujuan (hanya untuk back-office).
             'pending_hr_requests' => fn () => $this->pendingHrRequests($user, $activeStore),
             // Saklar modul berbayar selalu lewat PlanModules::settingOn (mati bila dikunci paket Gratis).

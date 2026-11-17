@@ -338,13 +338,15 @@ Urutan di bawah sudah menyesuaikan prioritas klien perintis (Inventory + permint
 | Fitur | Status |
 |---|---|
 | R1 Harga per outlet | Menunggu keputusan pelanggan lama & harga tahunan |
-| R2 Modul Central Kitchen | Harga diusulkan; belum dikerjakan |
+| R2 Modul Central Kitchen | 🟡 Sebagian (17 Nov 2026): gating sudah jalan (`organizations.central_kitchen_until`, middleware `central_kitchen.enabled`, prop `central_kitchen_enabled`). Aktivasi sementara lewat `php artisan central-kitchen:activate {id_grup} --days=365` (atau `--until=`, `--off`). **Belum:** pembayaran add-on lewat `SubscriptionPayment`, harga di halaman Fitur Tambahan, tombol aktivasi di Super Admin |
 | F1 Penanda stok menipis di kasir | ✅ Selesai 17 Nov 2026 (branch `feat/stok-dan-central-kitchen`, `PosLowStockMarkerTest`) |
 | F2 Daftar Belanja | ✅ Selesai 17 Nov 2026 (`ShoppingListTest`). `reorder_target` belum dibuat — saran memakai 2 × Stok Minimum. Outlet yang dialihkan ke Gudang Pusat hanya bisa "Salin daftar"; tombol "Minta ke Gudang Pusat" menyusul di F6 |
 | F3 Satuan beli & isi | ✅ Selesai 17 Nov 2026 (`PurchaseUnitTest`). Diatur di Edit Produk → pengaturan lanjutan (disimpan terpisah dari form produk). Dipakai di Pembelian & tool AI pembelian; belum di Transfer Stok. Satuan beli terhapus otomatis bila satuan dasar diganti |
 | F4 Surat jalan | ✅ Selesai 17 Nov 2026 (`StockTransferDeliveryNoteTest`). Tombol "Cetak surat jalan" di detail transfer (status Dikirim/Diterima). Belum digating modul `central_kitchen` — diputuskan saat R2 dibuat |
 | Keamanan Transfer Stok | ✅ Diperbaiki 17 Nov 2026 (`StockTransferAccessTest`). Sebelumnya admin/manajer toko mana pun bisa melihat, mengirim, menerima, dan membatalkan transfer grup lain lewat ID. Kini akses lintas toko hanya untuk grup usaha yang sama; terima transfer juga dikunci dari dobel-terima |
 | F5 Terima sebagian & selisih | ✅ Selesai 17 Nov 2026 (`StockTransferPartialReceiptTest`). Selisih dicatat di baris transfer + catatan pergerakan "transfer masuk" (tanpa jenis pergerakan baru). Filter "Ada selisih" di daftar transfer. Transfer apotek dengan batch/ED wajib diterima penuh |
-| F6–F7 | Belum dikerjakan — prioritas klien perintis |
+| F6 Permintaan Stok | ✅ Selesai 17 Nov 2026 (`StockRequestTest`). Outlet meminta → pemasok merevisi jumlah & "Setujui & kirim" → Transfer Stok langsung Dikirim → diterima outlet = Selesai. Transfer hasil permintaan yang dibatalkan ikut membatalkan permintaan. Realtime lewat channel privat `stock-requests.{storeId}` (cadangan: muat ulang 30 detik). Badge jumlah permintaan masuk di menu. Tombol "Minta ke Gudang Pusat" di Daftar Belanja. Varian belum didukung (sama seperti Transfer Stok) |
+| Kunci transfer | ✅ Kirim & batal transfer kini mengunci baris sungguhan (sebelumnya klik ganda bisa memotong/mengembalikan stok dua kali) |
+| F7 | Belum dikerjakan — prioritas klien perintis |
 | F8–F11 | Belum dikerjakan |
 | HPP FIFO | Menunggu jawaban klien (wajib atau tidak) |

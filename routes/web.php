@@ -384,6 +384,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->only(['index', 'create', 'store', 'show'])
         ->middleware(['store.active', 'role.inventory', 'plan.advanced']);
 
+    // F6 Permintaan Stok (Modul Central Kitchen)
+    Route::middleware(['store.active', 'role.inventory', 'central_kitchen.enabled'])->group(function () {
+        Route::get('stock-requests', [App\Http\Controllers\StockRequestController::class, 'index'])->name('stock-requests.index');
+        Route::get('stock-requests/create', [App\Http\Controllers\StockRequestController::class, 'create'])->name('stock-requests.create');
+        Route::post('stock-requests', [App\Http\Controllers\StockRequestController::class, 'store'])->name('stock-requests.store');
+        Route::get('stock-requests/{stockRequest}', [App\Http\Controllers\StockRequestController::class, 'show'])->name('stock-requests.show');
+        Route::post('stock-requests/{stockRequest}/approve', [App\Http\Controllers\StockRequestController::class, 'approve'])->name('stock-requests.approve');
+        Route::post('stock-requests/{stockRequest}/reject', [App\Http\Controllers\StockRequestController::class, 'reject'])->name('stock-requests.reject');
+        Route::post('stock-requests/{stockRequest}/cancel', [App\Http\Controllers\StockRequestController::class, 'cancel'])->name('stock-requests.cancel');
+    });
+
     Route::get('stock-transfers/match', [App\Http\Controllers\StockTransferController::class, 'match'])
         ->name('stock-transfers.match')
         ->middleware(['store.active', 'role.inventory']);

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\CentralKitchenModule;
 use App\Support\ShoppingList;
 use App\Support\StoreLocationType;
 use App\Support\StorePlanLimits;
@@ -35,6 +36,8 @@ class ShoppingListController extends Controller
         return Inertia::render('ShoppingList/Index', [
             'items' => ShoppingList::items($store),
             'canPurchase' => ! $routedToWarehouse,
+            // F6: minta ke lokasi lain dalam grup (Modul Central Kitchen).
+            'canRequestStock' => CentralKitchenModule::enabled($store) && CentralKitchenModule::siblingStores($store)->isNotEmpty(),
             'store' => [
                 'id' => $store->id,
                 'name' => $store->name,

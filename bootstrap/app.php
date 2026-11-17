@@ -70,6 +70,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'attendance.enabled' => EnsureAttendanceEnabled::class,
             'payroll.enabled' => EnsurePayrollEnabled::class,
             'scan_meja.enabled' => EnsureScanMejaEnabled::class,
+            'central_kitchen.enabled' => \App\Http\Middleware\EnsureCentralKitchenModule::class,
         ]);
     })
     ->withSchedule(function (Schedule $schedule) {
