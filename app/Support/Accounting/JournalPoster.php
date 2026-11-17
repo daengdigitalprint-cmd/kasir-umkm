@@ -75,7 +75,8 @@ class JournalPoster
         $subtotal = (float) $transaction->subtotal;
         $discount = (float) $transaction->discount_amount;
         $service = (float) ($transaction->service_charge_amount ?? 0);
-        $revenueExclTax = round(max(0, $subtotal - $discount + $service), 2);
+        $deliveryFee = round((float) ($transaction->delivery_fee ?? 0), 2);
+        $revenueExclTax = round(max(0, $subtotal - $discount + $service) + $deliveryFee, 2);
         $taxAmount = round((float) $transaction->tax_amount, 2);
         $tipAmount = round((float) ($transaction->tip_amount ?? 0), 2);
         $totalAmount = round((float) $transaction->total_amount, 2);

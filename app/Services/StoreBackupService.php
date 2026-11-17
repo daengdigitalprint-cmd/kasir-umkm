@@ -489,6 +489,7 @@ class StoreBackupService
                 'service_charge_amount' => $t->service_charge_amount,
                 'service_charge_percent' => $t->service_charge_percent,
                 'tip_amount' => $t->tip_amount,
+                'delivery_fee' => $t->delivery_fee,
                 'total_amount' => $t->total_amount,
                 'amount_paid' => $t->amount_paid,
                 'change_amount' => $t->change_amount,

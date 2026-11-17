@@ -28,6 +28,7 @@ final class MenuCatalog
         ['key' => 'tables', 'label' => 'Manajemen Meja', 'group' => 'Kasir', 'module' => 'scan_meja_enabled'],
         ['key' => 'kitchen_queue', 'label' => 'Antrian Dapur', 'group' => 'Kasir', 'module' => 'kitchen_queue_enabled'],
         ['key' => 'queues', 'label' => 'Antrian', 'group' => 'Kasir', 'module' => 'queue_module_enabled'],
+        ['key' => 'deliveries', 'label' => 'Pengantaran', 'group' => 'Kasir'],
 
         ['key' => 'stock_overview', 'label' => 'Lihat Stok', 'group' => 'Produk & Stok'],
         ['key' => 'products', 'label' => 'Produk', 'group' => 'Produk & Stok'],

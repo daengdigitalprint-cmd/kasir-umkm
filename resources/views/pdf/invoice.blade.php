@@ -116,6 +116,12 @@
             <td class="text-right">Rp {{ number_format($transaction->tax_amount, 0, ',', '.') }}</td>
         </tr>
         @endif
+        @if($transaction->delivery_fee > 0)
+        <tr>
+            <td>Ongkir</td>
+            <td class="text-right">Rp {{ number_format($transaction->delivery_fee, 0, ',', '.') }}</td>
+        </tr>
+        @endif
         @if($transaction->tip_amount > 0)
         <tr>
             <td>Tip</td>

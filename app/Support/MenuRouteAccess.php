@@ -35,6 +35,7 @@ final class MenuRouteAccess
         'laundry-orders.' => 'laundry_orders',
         'table-orders.' => 'table_orders',
         'tables.' => 'tables',
+        'deliveries.' => 'deliveries',
     ];
 
     /** @param  array<string, string>  $map */

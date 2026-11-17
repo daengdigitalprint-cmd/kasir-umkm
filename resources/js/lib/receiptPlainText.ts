@@ -195,6 +195,9 @@ export function buildReceiptPlainLinesFromPosResponse(
     if (Number(tx.tip_amount) > 0) {
         lines.push(rowLR('Tip', formatCurrencyId(Number(tx.tip_amount)), w));
     }
+    if (Number(tx.delivery_fee) > 0) {
+        lines.push(rowLR('Ongkir', formatCurrencyId(Number(tx.delivery_fee)), w));
+    }
     lines.push(rowLR('TOTAL', formatCurrencyId(Number(tx.total_amount ?? 0)), w));
 
     const pdRaw = tx.payment_details as
@@ -353,6 +356,7 @@ export function buildReceiptPlainLinesFromInvoicePage(
     service_charge_amount?: number;
     service_charge_percent?: number | null;
     tip_amount?: number;
+    delivery_fee?: number | string;
     total_amount: number;
     amount_paid: number;
     change_amount: number;
@@ -462,6 +466,9 @@ export function buildReceiptPlainLinesFromInvoicePage(
     }
     if (Number(tx.tip_amount) > 0) {
         lines.push(rowLR('Tip', formatCurrencyId(Number(tx.tip_amount)), w));
+    }
+    if (Number(tx.delivery_fee) > 0) {
+        lines.push(rowLR('Ongkir', formatCurrencyId(Number(tx.delivery_fee)), w));
     }
     lines.push(rowLR('TOTAL', formatCurrencyId(tx.total_amount), w));
 

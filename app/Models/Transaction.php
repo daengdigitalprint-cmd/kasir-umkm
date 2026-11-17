@@ -37,6 +37,7 @@ class Transaction extends Model
         'order_type',
         'table_reference',
         'tip_amount',
+        'delivery_fee',
         'sales_channel',
         'commission_percent',
         'commission_amount',
@@ -58,6 +59,7 @@ class Transaction extends Model
         'service_charge_percent' => 'decimal:2',
         'service_charge_amount' => 'decimal:2',
         'tip_amount' => 'decimal:2',
+        'delivery_fee' => 'decimal:2',
         'total_amount' => 'decimal:2',
         'amount_paid' => 'decimal:2',
         'cash_amount' => 'decimal:2',
@@ -154,6 +156,12 @@ class Transaction extends Model
     public function barber(): BelongsTo
     {
         return $this->belongsTo(User::class, 'barber_user_id');
+    }
+
+    /** F10 — data pengantaran bila pesanan diantar kurir sendiri. */
+    public function deliveryOrder(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(DeliveryOrder::class);
     }
 
     public function items(): HasMany

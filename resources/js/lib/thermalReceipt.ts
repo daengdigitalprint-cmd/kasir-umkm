@@ -209,6 +209,9 @@ export function buildThermalReceiptInnerHtml(
     if (Number(tx.tip_amount) > 0) {
         tipBlock = `<div class="struk-row"><span>Tip</span><span>${formatCurrency(Number(tx.tip_amount))}</span></div>`;
     }
+    if (Number(tx.delivery_fee) > 0) {
+        tipBlock += `<div class="struk-row"><span>Ongkir</span><span>${formatCurrency(Number(tx.delivery_fee))}</span></div>`;
+    }
 
     let splitBillBlock = '';
     const pdRaw = tx.payment_details as {

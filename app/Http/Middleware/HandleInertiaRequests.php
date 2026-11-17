@@ -171,6 +171,8 @@ class HandleInertiaRequests extends Middleware
             'attendance_enabled' => $activeStore ? AttendanceSettings::enabled($activeStore) : false,
             'attendance_settings' => $activeStore ? AttendanceSettings::forFrontend($activeStore) : null,
             'payroll_enabled' => $activeStore ? AttendancePayrollAddOnService::isPurchased($activeStore) : false,
+            // F10 Pesanan Antar mandiri (menu Pengantaran).
+            'delivery_enabled' => \App\Support\DeliveryFeatures::enabled($activeStore),
             // Modul Central Kitchen (Permintaan Stok, Pantau Stok) — add-on per grup usaha.
             'central_kitchen_enabled' => \App\Support\CentralKitchenModule::enabled($activeStore),
             // Badge menu Permintaan Stok: permintaan masuk yang menunggu disetujui.

@@ -359,7 +359,7 @@ function setQuickRange(days: number) {
                             <p class="text-xs font-medium text-gray-500">Penjualan Bersih</p>
                             <p class="text-2xl font-bold text-gray-900 mt-1">Rp {{ formatCurrency(totalAllOutlets) }}</p>
                             <p v-if="totals && totals.collected_not_revenue > 0" class="text-xs text-gray-400 mt-1">
-                                Di luar pajak Rp {{ formatCurrency(totals.collected_not_revenue) }}
+                                Di luar pajak, biaya layanan, tip &amp; ongkir Rp {{ formatCurrency(totals.collected_not_revenue) }}
                             </p>
                             <p v-else class="text-xs text-gray-400 mt-1">Semua outlet dipilih</p>
                         </div>

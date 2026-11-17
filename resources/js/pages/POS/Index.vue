@@ -345,6 +345,8 @@ interface Props {
     /** Bahan/komponen yang dipakai komponen menu, dikirim sekali lalu dipasangkan di klien. */
     saleComponents?: SaleConsumptionComponent[];
     popularProductIds: number[];
+    /** F10: Pesanan Antar mandiri (kurir sendiri). */
+    delivery?: { enabled: boolean; default_fee: number; couriers: { id: number; name: string }[] };
     /** F8: produk pemicu → produk yang ditawarkan (kosong bila modul Saran Menu mati). */
     upsellMap?: Record<string, number[]> | number[];
     categories: ProductCategory[];
@@ -1254,6 +1256,37 @@ const variantPickerProduct = ref<Product | null>(null);
 
 const serviceChargePercent = ref(0);
 const tipAmount = ref(0);
+// ── F10 Pesanan Antar mandiri ──
+// Open bill / pre-order dibayar lewat jalur lain yang belum membawa data antar → panel disembunyikan.
+const deliveryEnabled = computed(() => props.delivery?.enabled === true && activePreOrderId.value === null);
+const deliveryOn = ref(false);
+const deliveryForm = ref({ recipient_name: '', phone: '', address: '', fee: 0, courier_user_id: '' as number | '', notes: '' });
+const deliveryFee = computed(() => (deliveryEnabled.value && deliveryOn.value ? Math.max(0, Number(deliveryForm.value.fee) || 0) : 0));
+function toggleDelivery(on: boolean) {
+    deliveryOn.value = on;
+    if (on) {
+        deliveryForm.value.fee = Number(props.delivery?.default_fee) || 0;
+        if (!deliveryForm.value.recipient_name && customerName.value) deliveryForm.value.recipient_name = customerName.value;
+        if (props.store?.fnb_enabled) orderType.value = 'delivery';
+    }
+}
+function resetDelivery() {
+    deliveryOn.value = false;
+    deliveryForm.value = { recipient_name: '', phone: '', address: '', fee: 0, courier_user_id: '', notes: '' };
+}
+/** Data antar untuk server (null bila tidak diantar). */
+function deliveryPayload(): Record<string, unknown> | null {
+    if (!deliveryEnabled.value || !deliveryOn.value) return null;
+    const d = deliveryForm.value;
+    return {
+        recipient_name: d.recipient_name.trim() || null,
+        phone: d.phone.trim() || null,
+        address: d.address.trim(),
+        fee: deliveryFee.value,
+        courier_user_id: d.courier_user_id === '' ? null : d.courier_user_id,
+        notes: d.notes.trim() || null,
+    };
+}
 const orderType = ref<'dine_in' | 'takeaway' | 'delivery'>('dine_in');
 const tableReference = ref('');
 /** Teknisi (barbershop) yang melayani transaksi ini. */
@@ -2414,7 +2447,7 @@ const taxAmount = computed(() => {
 
 const totalAmount = computed(() => {
     const tip = props.store?.fnb_enabled ? Math.max(0, Number(tipAmount.value) || 0) : 0;
-    return Math.round((afterVoucher.value + serviceChargeAmount.value + taxAmount.value + tip) * 100) / 100;
+    return Math.round((afterVoucher.value + serviceChargeAmount.value + taxAmount.value + tip + deliveryFee.value) * 100) / 100;
 });
 
 /** DP yang benar-benar mengurangi tagihan (tidak melebihi total). */
@@ -2576,6 +2609,7 @@ function resetCartState() {
     discountError.value = '';
     removeLoyaltyVoucher();
     tipAmount.value = 0;
+    resetDelivery();
     tableReference.value = '';
     orderType.value = 'dine_in';
     salesChannel.value = 'walk_in';
@@ -2946,6 +2980,10 @@ const processPayment = async () => {
         await modalError('Pembayaran belum lengkap', splitPaymentError.value);
         return;
     }
+    if (deliveryEnabled.value && deliveryOn.value && !deliveryForm.value.address.trim()) {
+        await modalError('Alamat antar kosong', 'Isi alamat pengantaran, atau matikan pilihan "Antar ke alamat".');
+        return;
+    }
     if (isCredit.value && !creditCustomerId.value) {
         await modalError(
             'Pelanggan wajib dipilih',
@@ -3023,6 +3061,11 @@ const processPayment = async () => {
         paymentData.tip_amount = tipAmount.value;
         const sb = Math.max(1, Math.min(20, Math.round(Number(splitBillCount.value) || 1)));
         if (sb >= 2) paymentData.split_bill_count = sb;
+    }
+    const delivery = deliveryPayload();
+    if (delivery) {
+        paymentData.delivery = delivery;
+        paymentData.delivery_fee = deliveryFee.value; // untuk struk offline
     }
     // Sumber pesanan & komisi online berlaku untuk semua jenis toko.
     paymentData.sales_channel = salesChannel.value;
@@ -3299,6 +3342,7 @@ const clearCart = async () => {
     discountError.value = '';
     removeLoyaltyVoucher();
     tipAmount.value = 0;
+    resetDelivery();
     tableReference.value = '';
     orderType.value = 'dine_in';
     if (props.store?.fnb_enabled) {
@@ -3657,6 +3701,10 @@ const sendWhatsAppInvoice = () => {
 
         if (Number(tx.tip_amount) > 0) {
             lines.push(`Tip      : ${fmt(Number(tx.tip_amount))}`);
+        }
+
+        if (Number(tx.delivery_fee) > 0) {
+            lines.push(`Ongkir   : ${fmt(Number(tx.delivery_fee))}`);
         }
 
         lines.push(`*TOTAL    : ${fmt(Number(tx.total_amount ?? 0))}*`);
@@ -4853,6 +4901,48 @@ const sendWhatsAppInvoice = () => {
 
                                         <Separator />
 
+                                        <!-- F10: Pesanan Antar mandiri -->
+                                        <div v-if="deliveryEnabled" class="space-y-3 rounded-xl border border-blue-200 bg-blue-50/50 p-4" data-testid="delivery-panel">
+                                            <label class="flex items-center justify-between gap-3">
+                                                <span class="text-xs font-bold tracking-wide text-blue-900 uppercase">Antar ke alamat</span>
+                                                <input
+                                                    type="checkbox"
+                                                    class="h-5 w-5 rounded"
+                                                    :checked="deliveryOn"
+                                                    @change="toggleDelivery(($event.target as HTMLInputElement).checked)"
+                                                />
+                                            </label>
+                                            <template v-if="deliveryOn">
+                                                <div class="grid grid-cols-2 gap-2">
+                                                    <Input v-model="deliveryForm.recipient_name" class="h-9 text-sm" placeholder="Nama penerima" aria-label="Nama penerima" />
+                                                    <Input v-model="deliveryForm.phone" class="h-9 text-sm" inputmode="tel" placeholder="No. HP" aria-label="Nomor HP penerima" />
+                                                </div>
+                                                <textarea
+                                                    v-model="deliveryForm.address"
+                                                    rows="2"
+                                                    maxlength="500"
+                                                    class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                                    placeholder="Alamat lengkap (wajib)"
+                                                    aria-label="Alamat antar"
+                                                />
+                                                <div class="grid grid-cols-2 gap-2">
+                                                    <div class="space-y-1">
+                                                        <Label class="text-xs">Ongkir (Rp)</Label>
+                                                        <Input v-model.number="deliveryForm.fee" type="number" min="0" step="500" class="h-9 text-sm" />
+                                                    </div>
+                                                    <div class="space-y-1">
+                                                        <Label class="text-xs">Kurir</Label>
+                                                        <select v-model="deliveryForm.courier_user_id" class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
+                                                            <option value="">Nanti saja</option>
+                                                            <option v-for="c in delivery?.couriers ?? []" :key="c.id" :value="c.id">{{ c.name }}</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <Input v-model="deliveryForm.notes" class="h-9 text-sm" placeholder="Catatan untuk kurir (opsional)" aria-label="Catatan kurir" />
+                                                <p v-if="!deliveryForm.address.trim()" class="text-xs text-blue-900/80">Isi alamat sebelum membayar.</p>
+                                            </template>
+                                        </div>
+
                                         <!-- F&B -->
                                         <div
                                             v-if="store && store.fnb_enabled"
@@ -4949,6 +5039,10 @@ const sendWhatsAppInvoice = () => {
                                             <div v-if="store && store.fnb_enabled && tipAmount > 0" class="flex justify-between text-sm">
                                                 <span class="text-gray-600">Tip:</span>
                                                 <span class="font-medium">{{ formatCurrency(tipAmount) }}</span>
+                                            </div>
+                                            <div v-if="deliveryFee > 0" class="flex justify-between text-sm">
+                                                <span class="text-gray-600">Ongkir:</span>
+                                                <span class="font-medium">{{ formatCurrency(deliveryFee) }}</span>
                                             </div>
                                             <Separator />
                                             <div class="flex justify-between text-lg font-bold">

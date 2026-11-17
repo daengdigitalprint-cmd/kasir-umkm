@@ -107,6 +107,7 @@ async function syncPending() {
                 ...(rest.table_reference !== undefined ? { table_reference: rest.table_reference } : {}),
                 ...(rest.service_charge_percent !== undefined ? { service_charge_percent: rest.service_charge_percent } : {}),
                 ...(rest.tip_amount !== undefined ? { tip_amount: rest.tip_amount } : {}),
+                ...(rest.delivery ? { delivery: rest.delivery } : {}),
                 ...(rest.split_bill_count !== undefined ? { split_bill_count: rest.split_bill_count } : {}),
                 ...(rest.pre_order_id ? { pre_order_id: rest.pre_order_id } : {}),
                 ...(rest.pharmacy_sale_reference ? { pharmacy_sale_reference: rest.pharmacy_sale_reference } : {}),

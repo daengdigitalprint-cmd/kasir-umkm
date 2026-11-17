@@ -7,6 +7,7 @@ use App\Exceptions\ComponentStockInsufficientException;
 use App\Models\CashShift;
 use App\Models\CashTransaction;
 use App\Models\Customer;
+use App\Models\DeliveryOrder;
 use App\Models\Discount;
 use App\Models\PreOrder;
 use App\Models\Product;
@@ -26,6 +27,7 @@ use App\Support\Accounting\JournalPoster;
 use App\Support\BarbershopFeatures;
 use App\Support\BatchTracking;
 use App\Support\BusinessTypePresets;
+use App\Support\DeliveryFeatures;
 use App\Support\FnBFeatures;
 use App\Support\InventoryCosting;
 use App\Support\InventoryType;
@@ -208,6 +210,12 @@ class POSController extends Controller
 
         return Inertia::render('POS/Index', [
             'products' => $products,
+            // F10: Pesanan Antar mandiri — saklar, ongkir bawaan, daftar kurir.
+            'delivery' => DeliveryFeatures::enabled($store) ? [
+                'enabled' => true,
+                'default_fee' => DeliveryFeatures::defaultFee($store),
+                'couriers' => DeliveryFeatures::couriers($store),
+            ] : ['enabled' => false, 'default_fee' => 0, 'couriers' => []],
             // F8: saran tambahan menu (pemicu → yang ditawarkan); kosong bila modul mati.
             'upsellMap' => \App\Support\UpsellSuggestions::map($store),
             'saleComponents' => $saleComponents,
@@ -460,6 +468,14 @@ class POSController extends Controller
                 'table_reference' => 'nullable|string|max:64',
                 'service_charge_percent' => 'nullable|numeric|min:0|max:100',
                 'tip_amount' => 'nullable|numeric|min:0',
+                // F10 Pesanan Antar mandiri (kurir sendiri)
+                'delivery' => 'nullable|array',
+                'delivery.recipient_name' => 'nullable|string|max:120',
+                'delivery.phone' => 'nullable|string|max:30',
+                'delivery.address' => 'required_with:delivery|string|max:500',
+                'delivery.fee' => 'nullable|numeric|min:0|max:10000000',
+                'delivery.courier_user_id' => 'nullable|integer',
+                'delivery.notes' => 'nullable|string|max:500',
                 'pre_order_id' => 'nullable|integer|exists:pre_orders,id',
                 'split_bill_count' => 'nullable|integer|min:1|max:20',
                 'pharmacy_sale_reference' => 'nullable|string|max:512',
@@ -896,11 +912,32 @@ class POSController extends Controller
 
             $tipAmount = $fnb ? max(0.0, round((float) $request->input('tip_amount', 0), 2)) : 0.0;
 
-            $totalAmount = round($afterDiscount + $serviceChargeAmount + $taxAmount + $tipAmount, 2);
+            // F10: ongkir kurir sendiri — di luar pajak, masuk total sebagai komponen terpisah.
+            $deliveryInput = $request->input('delivery');
+            $deliveryFee = 0.0;
+            if (is_array($deliveryInput) && $deliveryInput !== []) {
+                if (! DeliveryFeatures::enabled($store)) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'delivery' => 'Modul Pesanan Antar belum aktif. Aktifkan di menu Pengantaran.',
+                    ]);
+                }
+                $courierId = $deliveryInput['courier_user_id'] ?? null;
+                if ($courierId !== null && ! DeliveryFeatures::isCourierOf($store, (int) $courierId)) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'delivery.courier_user_id' => 'Kurir harus karyawan toko ini.',
+                    ]);
+                }
+                $deliveryFee = max(0.0, round((float) ($deliveryInput['fee'] ?? 0), 2));
+            }
+
+            $totalAmount = round($afterDiscount + $serviceChargeAmount + $taxAmount + $tipAmount + $deliveryFee, 2);
 
             $orderType = $fnb ? $request->input('order_type') : null;
             if (! is_string($orderType) || $orderType === '' || ! in_array($orderType, ['dine_in', 'takeaway', 'delivery'], true)) {
                 $orderType = null;
+            }
+            if (is_array($deliveryInput) && $deliveryInput !== []) {
+                $orderType = 'delivery';
             }
             $tableRef = $fnb ? mb_substr((string) $request->input('table_reference', ''), 0, 64) : null;
             if ($tableRef === '') {
@@ -1108,6 +1145,7 @@ class POSController extends Controller
                 'service_charge_percent' => $fnb && $svcPct > 0 ? round($svcPct, 2) : null,
                 'service_charge_amount' => $serviceChargeAmount,
                 'tip_amount' => $tipAmount,
+                'delivery_fee' => $deliveryFee,
                 'total_amount' => $totalAmount,
                 'amount_paid' => $amountPaid,
                 'cash_amount' => $this->cashPortion($paymentLines, $request->payment_method, $amountPaid, $balanceDue, $isCredit),
@@ -1119,6 +1157,20 @@ class POSController extends Controller
             ]);
 
             $this->storePaymentLines($transaction, $paymentLines, $amountPaid, $balanceDue);
+
+            if (is_array($deliveryInput) && $deliveryInput !== []) {
+                DeliveryOrder::create([
+                    'store_id' => $store->id,
+                    'transaction_id' => $transaction->id,
+                    'recipient_name' => mb_substr(trim((string) ($deliveryInput['recipient_name'] ?? $customer?->name ?? '')), 0, 120) ?: null,
+                    'phone' => mb_substr(trim((string) ($deliveryInput['phone'] ?? '')), 0, 30) ?: null,
+                    'address' => trim((string) $deliveryInput['address']),
+                    'delivery_fee' => $deliveryFee,
+                    'courier_user_id' => $deliveryInput['courier_user_id'] ?? null,
+                    'status' => DeliveryOrder::STATUS_PREPARING,
+                    'notes' => mb_substr(trim((string) ($deliveryInput['notes'] ?? '')), 0, 500) ?: null,
+                ]);
+            }
 
             // Tandai voucher sudah dipakai (atomik dengan pembuatan transaksi).
             if ($voucherRedemption) {

@@ -48,6 +48,9 @@ export interface OfflineSale {
     table_reference?: string | null;
     service_charge_percent?: number;
     tip_amount?: number;
+    /** F10: data antar & ongkir (ikut disinkronkan saat online). */
+    delivery?: Record<string, unknown> | null;
+    delivery_fee?: number;
     split_bill_count?: number;
     pre_order_id?: number | null;
     pharmacy_sale_reference?: string | null;

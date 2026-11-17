@@ -26,6 +26,7 @@ interface Transaction {
     service_charge_amount?: number;
     service_charge_percent?: number | null;
     tip_amount?: number;
+    delivery_fee?: number | string;
     total_amount: number;
     amount_paid: number;
     change_amount: number;
@@ -192,6 +193,10 @@ const getStatusName = (status: string) => {
                     <div v-if="transaction.tip_amount && transaction.tip_amount > 0" class="flex justify-between text-sm">
                         <span class="text-slate-600">Tip</span>
                         <span class="font-medium">{{ formatCurrency(transaction.tip_amount) }}</span>
+                    </div>
+                    <div v-if="Number(transaction.delivery_fee) > 0" class="flex justify-between text-sm">
+                        <span class="text-gray-600">Ongkir:</span>
+                        <span class="font-medium">{{ formatCurrency(Number(transaction.delivery_fee)) }}</span>
                     </div>
                     <Separator />
                     <div class="flex justify-between text-base font-bold">

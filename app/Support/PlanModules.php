@@ -73,6 +73,12 @@ final class PlanModules
             'menus' => ['kpi'],
             'routes' => ['kpi.*'],
         ],
+        'delivery' => [
+            'label' => 'Pesanan Antar',
+            'setting' => 'delivery_enabled',
+            'menus' => ['deliveries'],
+            'routes' => ['deliveries.*'],
+        ],
         'upsell' => [
             'label' => 'Saran Tambahan Menu',
             'setting' => 'upsell_enabled',

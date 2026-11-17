@@ -15,7 +15,7 @@ class RoleMenuPermissionSeeder extends Seeder
     {
         $defaults = [
             'admin' => [
-                'dashboard', 'pos', 'pos_transactions', 'cash_shifts', 'cash_transactions',
+                'dashboard', 'pos', 'pos_transactions', 'deliveries', 'cash_shifts', 'cash_transactions',
                 'kitchen_queue', 'queues', 'tables', 'table_orders', 'laundry_orders',
                 'stock_overview', 'products', 'product_categories', 'stock_movements',
                 'stock_adjustment', 'stock_opnames', 'recipes', 'productions',
@@ -25,7 +25,7 @@ class RoleMenuPermissionSeeder extends Seeder
                 'attendance', 'payroll',
             ],
             'manager' => [
-                'dashboard', 'pos', 'pos_transactions', 'cash_shifts', 'cash_transactions',
+                'dashboard', 'pos', 'pos_transactions', 'deliveries', 'cash_shifts', 'cash_transactions',
                 'kitchen_queue', 'queues', 'tables', 'table_orders', 'laundry_orders',
                 'stock_overview', 'products', 'product_categories', 'stock_movements',
                 'stock_adjustment', 'stock_opnames', 'recipes', 'productions',
@@ -34,7 +34,7 @@ class RoleMenuPermissionSeeder extends Seeder
                 'attendance', 'payroll',
             ],
             'cashier' => [
-                'dashboard', 'pos', 'pos_transactions', 'cash_shifts', 'cash_transactions',
+                'dashboard', 'pos', 'pos_transactions', 'deliveries', 'cash_shifts', 'cash_transactions',
                 'kitchen_queue', 'queues', 'tables', 'table_orders', 'laundry_orders',
                 'stock_overview', 'stock_adjustment', 'productions', 'settings',
                 'attendance',

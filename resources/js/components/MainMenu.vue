@@ -15,6 +15,7 @@ import {
     ClipboardCheck,
     ClipboardList,
     Inbox,
+    Bike,
     Sparkles,
     LayoutGrid,
     ListChecks,
@@ -92,6 +93,8 @@ type NavItem = {
     kitchenQueueOnly?: boolean;
     /** Modul Central Kitchen (add-on grup usaha) */
     centralKitchenOnly?: boolean;
+    /** F10: menu Pengantaran — tampil bila modul aktif, atau untuk admin toko (agar bisa menyalakannya). */
+    deliveryMenu?: boolean;
     /** Wajib owner, juga saat role dikonfigurasi (mode strict). */
     requiresOwner?: boolean;
     /** Hanya tampil jika Modul Antrian diaktifkan di pengaturan toko. */
@@ -180,6 +183,16 @@ const navigationSource: NavItem[] = [
         menuKey: 'kitchen_queue',
         section: 'kasir',
         kitchenQueueOnly: true,
+        hideOnWarehouse: true,
+        hideOnOwner: true,
+    },
+    {
+        name: 'Pengantaran',
+        href: '/deliveries',
+        icon: Bike,
+        menuKey: 'deliveries',
+        section: 'kasir',
+        deliveryMenu: true,
         hideOnWarehouse: true,
         hideOnOwner: true,
     },
@@ -493,6 +506,7 @@ const navigationItems = computed((): ProcessedNavItem[] => {
     const attendanceEnabled = Boolean((page.props as { attendance_enabled?: boolean }).attendance_enabled);
     const payrollEnabled = Boolean((page.props as { payroll_enabled?: boolean }).payroll_enabled);
     const centralKitchenEnabled = Boolean((page.props as { central_kitchen_enabled?: boolean }).central_kitchen_enabled);
+    const deliveryEnabled = Boolean((page.props as { delivery_enabled?: boolean }).delivery_enabled);
     const pendingStockRequests = Number((page.props as { pending_stock_requests?: number }).pending_stock_requests ?? 0);
     const cashierPinEnabled = String((page.props as { cashier_login_mode?: string }).cashier_login_mode ?? 'email') === 'pin';
     const accountingEnabled = Boolean((page.props as { accounting_enabled?: boolean }).accounting_enabled);
@@ -545,6 +559,7 @@ const navigationItems = computed((): ProcessedNavItem[] => {
         if (item.kitchenQueueOnly && !kitchenQueueEnabled && !isKitchen) return [];
         if (item.centralKitchenOnly && !centralKitchenEnabled) return [];
         if (item.requiresOwner && !isOwner) return [];
+        if (item.deliveryMenu && !deliveryEnabled && !manageStoreSettings) return [];
         if (item.queueModuleOnly && !queueModuleEnabled) return [];
         if (item.scanMejaOnly && !scanMejaEnabled) return [];
         if (item.attendanceOnly && !attendanceEnabled) return [];

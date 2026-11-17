@@ -507,6 +507,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('laundry-orders.cancel')
         ->middleware(['store.active', 'role.pos']);
 
+    // F10 Pengantaran (Pesanan Antar mandiri)
+    Route::middleware(['store.active', 'role.pos'])->group(function () {
+        Route::get('deliveries', [App\Http\Controllers\DeliveryOrderController::class, 'index'])->name('deliveries.index');
+        Route::post('deliveries/settings', [App\Http\Controllers\DeliveryOrderController::class, 'settings'])->name('deliveries.settings');
+        Route::patch('deliveries/{deliveryOrder}/status', [App\Http\Controllers\DeliveryOrderController::class, 'updateStatus'])->name('deliveries.status');
+        Route::patch('deliveries/{deliveryOrder}/courier', [App\Http\Controllers\DeliveryOrderController::class, 'assignCourier'])->name('deliveries.courier');
+    });
+
     Route::prefix('cash-shifts')->name('cash-shifts.')->middleware(['store.active', 'role.pos'])->group(function () {
         Route::get('/', [App\Http\Controllers\CashShiftController::class, 'index'])->name('index');
         Route::post('/open', [App\Http\Controllers\CashShiftController::class, 'open'])->name('open');

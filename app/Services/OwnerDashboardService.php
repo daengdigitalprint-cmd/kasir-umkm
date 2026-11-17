@@ -245,7 +245,7 @@ class OwnerDashboardService
         return (float) Transaction::whereIn('store_id', $storeIds)
             ->whereBetween('created_at', [$start, $end])
             ->where('status', 'completed')
-            ->sum(DB::raw('tax_amount + service_charge_amount + tip_amount'));
+            ->sum(DB::raw('tax_amount + service_charge_amount + tip_amount + delivery_fee'));
     }
 
     /**
