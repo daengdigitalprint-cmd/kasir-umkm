@@ -1,0 +1,37 @@
+/* ---- tambahan F1 (kerangka v2) ---- */
+.qs{position:absolute;border-radius:50%;background:var(--gold);border:9px solid var(--line);box-shadow:0 12px 0 rgba(0,0,0,.22);font-family:"Outfit";font-weight:900;color:var(--line);text-align:center;opacity:0}
+.plate{position:absolute;width:480px;height:150px;border-radius:50%;background:radial-gradient(ellipse at 50% 40%,#fff 0%,#f1f5f9 60%,#cbd5e1 100%);border:9px solid var(--line);box-shadow:0 12px 0 rgba(0,0,0,.18);opacity:0}
+.plate i{position:absolute;left:110px;top:6px;width:250px;height:90px;border-radius:50%;background:radial-gradient(circle at 40% 30%,#ffd38a,#f5a524 55%,#c2410c);border:7px solid var(--line)}
+.cal.wk{top:640px}
+.cal.wk .cg{grid-template-columns:repeat(7,1fr);gap:10px}
+.cal.wk .cd{height:170px;font-size:32px;text-align:center;padding:16px 0}
+.cal.wk .cd em{top:72px;font-size:74px;color:var(--pri)}
+.ptag{position:absolute;left:190px;top:820px;width:700px;height:330px;border-radius:40px 150px 150px 40px;background:#fff;border:11px solid var(--line);box-shadow:0 22px 0 rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;opacity:0}
+.ptag i{position:absolute;right:70px;top:50%;width:56px;height:56px;margin-top:-28px;border-radius:50%;background:var(--pri);border:7px solid var(--line)}
+.ptag b{margin-right:120px;font:900 104px/1 "Outfit";color:var(--ink)}
+.arr{position:absolute;width:190px;height:190px;border-radius:50%;border:10px solid var(--line);font:900 110px/170px "Outfit";text-align:center;box-shadow:0 12px 0 rgba(0,0,0,.25);opacity:0}
+.arr.up{left:150px;top:1300px;background:var(--grn);color:#16300a}
+.arr.dn{left:740px;top:1300px;background:#FF8A65;color:#5a1300}
+.box{position:absolute;width:420px;height:180px;border-radius:22px;background:linear-gradient(180deg,#d9a066,#b77a3f);border:9px solid var(--line);display:flex;align-items:center;justify-content:center;font:900 70px/1 "Outfit";color:var(--line);box-shadow:0 10px 0 rgba(0,0,0,.18);opacity:0}
+.box i{position:absolute;left:0;right:0;top:52px;height:9px;background:var(--line);opacity:.35}
+.think{position:absolute;left:150px;top:620px;width:780px;height:340px;border-radius:180px;background:#fff;border:11px solid var(--line);box-shadow:0 18px 0 rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;opacity:0}
+.think .c1,.think .c2{position:absolute;border-radius:50%;background:#fff;border:9px solid var(--line)}
+.think .c1{left:380px;bottom:-90px;width:70px;height:70px}
+.think .c2{left:420px;bottom:-150px;width:44px;height:44px}
+.tq{font:900 120px/1 "Outfit";color:var(--pri)}
+.die{position:absolute;width:230px;height:230px;filter:drop-shadow(0 12px 0 rgba(0,0,0,.25))}
+.die svg{width:100%;height:100%;display:block}
+.bars2{position:absolute;left:190px;top:640px;width:700px;height:760px;display:flex;align-items:flex-end;gap:40px;padding:0 30px;border-bottom:12px solid var(--line);opacity:0}
+.bars2 i{flex:1;border:9px solid var(--line);border-bottom:none;border-radius:26px 26px 0 0;transform-origin:50% 100%;box-shadow:inset 14px 0 0 rgba(255,255,255,.3)}
+.bars2 .g1{height:30%;background:var(--grn)}.bars2 .g2{height:50%;background:var(--gold)}.bars2 .g3{height:72%;background:#C4A9FA}.bars2 .g4{height:100%;background:#fff}
+.tag{font-size:62px}
+.bigx{position:absolute;left:340px;top:740px;width:400px;height:400px;opacity:0}
+.bigx::before,.bigx::after{content:"";position:absolute;left:-20px;right:-20px;top:50%;height:46px;margin-top:-23px;border-radius:23px;background:#E0430E;border:8px solid var(--line)}
+.bigx::before{transform:rotate(45deg)}.bigx::after{transform:rotate(-45deg)}
+.phone.rep{top:640px;height:900px}
+.minib{display:flex;align-items:flex-end;gap:22px;height:420px;margin-top:40px;padding:0 10px;border-bottom:8px solid #cbd5e1}
+.minib i{flex:1;border-radius:18px 18px 0 0;background:var(--pri);transform-origin:50% 100%}
+.minib i:nth-child(1){height:35%;opacity:.45}.minib i:nth-child(2){height:55%;opacity:.6}.minib i:nth-child(3){height:75%;opacity:.8}.minib i:nth-child(4){height:100%}
+.phone.rep .tot{color:#2d8a12}
+.cta{position:absolute;left:0;top:1720px;width:1080px;text-align:center;opacity:0}
+.cta span{display:inline-block;padding:16px 50px 22px;border-radius:70px;background:var(--grn);border:9px solid var(--line);box-shadow:0 12px 0 rgba(0,0,0,.25);font:900 70px/1 "Outfit";color:#16300a}

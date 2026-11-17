@@ -16,7 +16,7 @@ Tujuan: jangkauan. Paling mudah viral karena penonton merasa "ini saya banget".
 | 2 | Selisih kas di akhir hari | Drama hitung laci yang kurang Rp20.000, lalu cara mencegahnya (fitur tutup shift). | selesai — MP4 dengan VO, siap diunggah ([folder](../video-konten/02-selisih-kas/)) |
 | 3 | Nota tulis tangan vs kasir digital | Adu cepat melayani 5 pembeli. | selesai — MP4 dengan VO, siap diunggah ([folder](../video-konten/03-nota-vs-kasir/)) |
 | 4 | Kesalahan kembalian saat ramai | Sketsa pendek, ditutup dengan fitur uang diterima dan kembalian otomatis. | selesai — MP4 dengan VO, siap diunggah ([folder](../video-konten/04-salah-kembalian/)) |
-| 5 | "Stok habis baru ketahuan pas pembeli datang" | Pentingnya mencatat stok bahan. | ide |
+| 5 | "Stok habis baru ketahuan pas pembeli datang" | Pentingnya mencatat stok bahan. | selesai — MP4 dengan VO, siap diunggah ([folder](../video-konten/05-stok-habis/)) |
 | 6 | HP rusak, catatan setahun hilang | Cerita pembuka untuk backup otomatis harian. | ide |
 
 ## 2. Edukasi keuangan UMKM
@@ -59,6 +59,7 @@ Tujuan: penjualan. Singkat, satu fitur per video.
 | 24 | Mode gelap untuk jualan malam | Cocok untuk angkringan dan warung malam. | ide |
 | 25 | Backup otomatis | Data aman walau HP hilang (paket premium). | ide |
 | 26 | "Sehari jualan pakai aplikasi ini" | Vlog mini dari buka sampai tutup. | ide |
+| T1 | Tutorial: dari daftar sampai jualan | 4 langkah dengan tampilan asli aplikasi; juga dipasang di landing iklan /mulai. | selesai — MP4 dengan VO ([folder](../video-konten/tutorial-daftar-jualan/)) |
 
 ## 5. Cerita dan hiburan
 

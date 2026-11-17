@@ -1,0 +1,43 @@
+/* ---- tambahan video 05 ---- */
+.bub{position:absolute;padding:16px 34px 20px;border-radius:44px;background:#fff;border:8px solid var(--line);font:800 60px/1 "Outfit";color:var(--ink);white-space:nowrap;box-shadow:0 10px 0 rgba(0,0,0,.2);opacity:0}
+.bub::after{content:"";position:absolute;left:46px;bottom:-30px;width:36px;height:36px;background:#fff;border-right:8px solid var(--line);border-bottom:8px solid var(--line);transform:rotate(45deg) skew(10deg,10deg)}
+.glassI{position:absolute;width:220px;opacity:0}.glassI svg,.glassF svg{width:100%;height:auto;display:block}
+.glassF{position:absolute;left:0;top:0;width:150px;z-index:4}
+.jar{position:absolute;left:290px;top:600px;width:500px;opacity:0}.jar svg{width:100%;height:auto;display:block}
+.emp{position:absolute;left:330px;top:1440px;padding:14px 46px 20px;border-radius:60px;background:#E0430E;color:#fff;border:9px solid var(--line);font:900 84px/1 "Outfit";box-shadow:0 12px 0 rgba(0,0,0,.2);opacity:0}
+.cal.wk{top:640px}
+.cal.wk .cg{grid-template-columns:repeat(7,1fr);gap:10px}
+.cal.wk .cd{height:170px;font-size:32px;text-align:center;padding:16px 0}
+.cal.wk .cd em{top:78px;font-size:70px}
+.mega2{position:absolute;left:0;top:1260px;width:1080px;text-align:center;font:900 130px/1 "Outfit";color:#FF7A4D;letter-spacing:-.02em;font-variant-numeric:tabular-nums;opacity:0}
+.eqm{position:absolute;left:110px;top:660px;width:860px;padding:56px 50px 60px;border-radius:50px;background:#fff;border:11px solid var(--line);box-shadow:0 24px 0 rgba(0,0,0,.2);text-align:center;opacity:0}
+.eqm .er{display:flex;justify-content:center;align-items:baseline;gap:20px;font:800 62px/1.2 "Outfit";color:var(--ink);white-space:nowrap}
+.eqm .er i{font-style:normal;color:var(--pri)}
+.eqm .eb{margin-top:40px;padding-top:36px;border-top:9px solid var(--line);font:900 118px/1 "Outfit";color:#E0430E;font-variant-numeric:tabular-nums;opacity:0}
+.think{position:absolute;left:110px;top:560px;width:860px;height:400px;border-radius:200px;background:#fff;border:11px solid var(--line);box-shadow:0 18px 0 rgba(0,0,0,.25);display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:0}
+.think .c1,.think .c2{position:absolute;border-radius:50%;background:#fff;border:9px solid var(--line)}
+.think .c1{left:420px;bottom:-90px;width:70px;height:70px}
+.think .c2{left:470px;bottom:-150px;width:44px;height:44px}
+.tq{font:800 70px/1 "Outfit";color:#64748b}
+.tv{margin-top:20px;font:900 110px/1 "Outfit";color:#E0430E}
+.phone .row{font-size:36px}
+.phone .row em{color:#16a34a;font-size:32px}
+.tile1{position:relative;margin-top:36px;padding:34px 30px;border-radius:30px;background:#f1f5f9;border:6px solid #e2e8f0;font:800 44px/1.2 "Plus Jakarta Sans"}
+.tile1 b{display:block;margin-top:14px;color:var(--pri);font-size:46px}
+.tile1 .pl{position:absolute;right:30px;top:50%;width:96px;height:96px;margin-top:-48px;border-radius:26px;background:var(--pri);color:#fff;font:800 normal 70px/92px "Outfit";text-align:center}
+.stk{margin-top:44px;padding:34px 20px;border-radius:34px;background:#DCF7C8;border:8px solid var(--line);text-align:center}
+.stk small{display:block;font:800 46px/1 "Plus Jakarta Sans";color:#1a3a0a}
+.stk b{display:block;margin-top:16px;font:900 120px/1 "Outfit";color:#16300a;font-variant-numeric:tabular-nums}
+.gauge{position:absolute;left:150px;top:620px;width:240px;height:960px;border-radius:120px;background:#fff;border:12px solid var(--line);overflow:hidden;box-shadow:0 22px 0 rgba(0,0,0,.2);opacity:0}
+.gauge .gf{position:absolute;left:0;right:0;bottom:0;height:60%;background:#57b01c}
+.gauge .gm{position:absolute;left:0;right:0;bottom:22%;height:10px;background:var(--line)}
+.gauge .gm span{position:absolute;left:250px;top:-28px;white-space:nowrap;font:800 40px/1 "Outfit";color:var(--line);background:#fff;padding:8px 18px;border-radius:30px;border:6px solid var(--line)}
+.gauge{overflow:visible}.gauge .gf{border-radius:0 0 108px 108px}
+.gauge .gv{position:absolute;left:0;right:0;top:70px;text-align:center;font:900 64px/1 "Outfit";color:var(--line);font-variant-numeric:tabular-nums}
+.gauge.g2{left:330px}
+.srcard{position:absolute;left:470px;top:860px;width:500px;padding:40px 44px 44px;border-radius:44px;background:#fff;border:11px solid var(--line);box-shadow:0 20px 0 rgba(0,0,0,.2);opacity:0}
+.srcard small{display:block;font:800 46px/1 "Plus Jakarta Sans";color:#64748b}
+.srcard b{display:block;margin-top:16px;font:900 150px/1 "Outfit";color:#E0430E}
+.srcard i{display:block;margin-top:16px;font:700 normal 40px/1 "Plus Jakarta Sans";color:#0f172a}
+.box{position:absolute;left:0;top:0;width:250px;height:170px;border-radius:20px;background:linear-gradient(180deg,#d9a066,#b77a3f);border:9px solid var(--line);display:flex;align-items:center;justify-content:center;font:900 54px/1 "Outfit";color:var(--line);opacity:0}
+.box i{position:absolute;left:0;right:0;top:44px;height:9px;background:var(--line);opacity:.35}

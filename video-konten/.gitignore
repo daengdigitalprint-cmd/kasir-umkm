@@ -4,3 +4,4 @@ _tools/out/
 _tools/*.png
 _profile/
 _sheet*.png
+_ref-*/

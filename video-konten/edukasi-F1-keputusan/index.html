@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="id">
+<!-- Made with the Bang Motion skill by Bang Tutorial (https://youtube.com/bangtutorial) - MIT -->
+<head>
+<meta charset="utf-8">
+<title>Edukasi F1 — Keputusan bukan karena hoki</title>
+<!--
+  STYLE BRIEF — kerangka v2 (sama dengan video 01–03): panggung pendek, satu objek + satu frasa, cut di ketukan,
+  label struk bergerigi, kulit brand MaccaPOS (ungu #7943e5, hijau #a0ea71, koin/oranye dari maskot).
+  Konsep F1 (seri edukasi, revisi ke kerangka v2 atas permintaan user): tahukah kamu — pemilik warung ambil puluhan keputusan
+                 (porsi, belanja, harga, stok) — kebanyakan pakai perasaan (dadu) — mulai dari catatan (struk) — lebih cepat/tepat/untung
+                 — bukan karena hoki tapi data (laporan) — mulai catat hari ini.
+  Tanda tangan : tanda tanya kuning yang bermunculan
+  Momen istimewa: dadu dicoret silang lalu ponsel Laporan naik di kata data
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@700&family=Outfit:wght@500;600;700;800;900&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+<style>
+:root{--pri:#7943e5;--pri-d:#5b21b6;--night:#24104f;--grn:#a0ea71;--gold:#FFC83D;--gold-d:#E39A12;--org:#f97316;--org-d:#c2410c;--ink:#22104F;--line:#3B1F12;--cream:#FBEFD5}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:"Outfit",sans-serif}
+#stage{position:fixed;left:50%;top:50%;width:1080px;height:1920px;transform:translate(-50%,-50%);overflow:hidden;background:#0f0626}
+.st{position:absolute;inset:0;overflow:hidden;visibility:hidden;opacity:0}
+.st.dark{background:radial-gradient(1000px 1000px at 50% 58%,#5330ad 0%,#2b1466 42%,#0f0626 100%);--tx:#fff;--lb:var(--gold);--lt:#3a1d00}
+.st.cream{background:radial-gradient(1100px 1100px at 50% 55%,#FFFBF0 0%,#FBEFD5 55%,#E9CF9C 100%);--tx:var(--ink);--lb:var(--pri);--lt:#fff}
+.st.green{background:radial-gradient(1100px 1100px at 50% 55%,#E2FAC9 0%,#A9E77D 55%,#72C143 100%);--tx:#16300a;--lb:var(--pri);--lt:#fff}
+.st.purple{background:radial-gradient(1100px 1100px at 50% 55%,#A27AF7 0%,#7943e5 52%,#4a1fa8 100%);--tx:#fff;--lb:var(--gold);--lt:#3a1d00}
+.st.orange{background:radial-gradient(1100px 1100px at 50% 55%,#FFC48F 0%,#f98d3c 55%,#d95f0e 100%);--tx:#3a1500;--lb:#fff;--lt:var(--org-d)}
+.spot{position:absolute;left:-160px;top:300px;width:1400px;height:1400px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.34),transparent 62%);mix-blend-mode:soft-light;will-change:transform}
+.in{position:absolute;inset:0;transform-origin:540px 1050px;will-change:transform}
+.a{position:absolute}
+/* teks: baris kecil + kata kunci berlabel struk */
+.cap{position:absolute;left:0;top:215px;width:1080px;text-align:center;z-index:3}
+.sm{font:600 70px/1.1 "Outfit";color:var(--tx);white-space:nowrap}
+.w{display:inline-block;will-change:transform,opacity,filter}
+.kwW{display:inline-block;margin-top:14px;filter:drop-shadow(0 12px 0 rgba(0,0,0,.22));transform:rotate(-2deg)}
+.kw{display:inline-block;padding:14px 46px 44px;background:var(--lb);color:var(--lt);font:900 112px/1 "Outfit";letter-spacing:.005em;white-space:nowrap;text-transform:uppercase;
+  -webkit-mask:conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) 50%/44px 100%;mask:conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) 50%/44px 100%}
+/* laci kasir */
+.dr{position:absolute;width:0;height:0}
+.dB{position:absolute;left:-370px;top:-210px;width:740px;height:200px;border-radius:36px 36px 0 0;background:linear-gradient(180deg,#160942,#35197F);border:9px solid var(--line)}
+.dF{position:absolute;left:-390px;top:-50px;width:780px;height:220px;border-radius:26px 26px 44px 44px;background:linear-gradient(180deg,#9466F3 0%,var(--pri) 45%,#6431cf 100%);border:9px solid var(--line);box-shadow:0 30px 0 rgba(0,0,0,.18)}
+.dF::before{content:"";position:absolute;left:18px;right:18px;top:14px;height:22px;border-radius:12px;background:rgba(255,255,255,.28)}
+.dH{position:absolute;left:50%;bottom:32px;width:230px;height:40px;margin-left:-115px;border-radius:20px;background:#fff;border:7px solid var(--line)}
+.dl{position:absolute;top:56px;width:330px;text-align:center;font:800 58px/1 "Outfit";color:#fff;opacity:0}.dl.l{left:22px}.dl.r{right:22px}
+.dV{position:absolute;left:-13px;top:-250px;width:26px;height:240px;border-radius:13px 13px 0 0;background:#fff;border:7px solid var(--line);opacity:0}
+.coin{position:absolute;left:0;top:0;width:84px;height:84px;margin:-42px 0 0 -42px;border-radius:50%;background:radial-gradient(circle at 34% 30%,#FFE58A 0%,var(--gold) 46%,var(--gold-d) 100%);border:6px solid var(--line);
+  display:flex;align-items:center;justify-content:center;font:800 30px/1 "Outfit";color:#9A5B00;will-change:transform;opacity:0}
+.coin.o{background:radial-gradient(circle at 34% 30%,#FFC08A 0%,var(--org) 50%,var(--org-d) 100%);color:#7A2500}
+.coin.xl{width:130px;height:130px;margin:-65px 0 0 -65px;font-size:46px;border-width:8px}
+.q{position:absolute;font:900 300px/1 "Outfit";color:var(--pri);-webkit-text-stroke:10px var(--line);paint-order:stroke fill;opacity:0}
+/* struk */
+.slot{position:absolute;left:190px;top:640px;width:700px;height:64px;border-radius:32px;background:#16300a;border:9px solid var(--line)}
+.paperW{position:absolute;left:250px;top:672px;width:580px;height:0;overflow:hidden}
+.paper{position:absolute;left:0;bottom:0;width:580px;height:800px;background:#fff;padding:60px 44px 0;font-family:"Plus Jakarta Sans";color:#1e293b;
+  -webkit-mask:conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) 50%/40px 100%;mask:conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) 50%/40px 100%}
+.paper h4{font:800 50px/1.1 "Plus Jakarta Sans";text-align:center;color:var(--pri);margin-bottom:26px}
+.prow{display:flex;justify-content:space-between;white-space:nowrap;font:600 38px/1.2 "Plus Jakarta Sans";margin-top:26px;font-variant-numeric:tabular-nums;opacity:0}
+.ptot{margin-top:38px;padding-top:30px;border-top:6px dashed #94a3b8;text-align:center;opacity:0}
+.ptot small{display:block;font:700 42px/1 "Plus Jakarta Sans";color:#64748b}
+.ptot b{display:block;margin-top:12px;font:800 80px/1 "Outfit";color:var(--ink);font-variant-numeric:tabular-nums}
+/* objek pengeluaran */
+.big{position:absolute;left:230px;top:770px;width:620px;height:620px;border-radius:50%;background:#fff;border:11px solid var(--line);box-shadow:0 26px 0 rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center;opacity:0}
+.big svg{width:400px;height:400px}
+.amt{position:absolute;left:0;top:1460px;width:1080px;text-align:center;opacity:0}
+.amt span{display:inline-block;padding:14px 44px 18px;border-radius:70px;background:#fff;border:9px solid var(--line);font:900 104px/1 "Outfit";color:var(--org-d);font-variant-numeric:tabular-nums}
+#chip{position:absolute;left:0;top:1700px;width:1080px;text-align:center;opacity:0;z-index:5}
+#chip span{display:inline-flex;align-items:baseline;gap:22px;padding:16px 46px 20px;border-radius:70px;background:#fff;border:8px solid var(--line);box-shadow:0 14px 0 rgba(0,0,0,.2)}
+#chip i{font:700 normal 52px/1 "Outfit";color:#64748b}#chip b{font:800 80px/1 "Outfit";color:var(--ink);font-variant-numeric:tabular-nums;min-width:6.6ch;text-align:right}
+#bigNum{position:absolute;left:0;top:700px;width:1080px;text-align:center;font:900 168px/1 "Outfit";color:#fff;letter-spacing:-.02em;font-variant-numeric:tabular-nums;opacity:0}
+.tag{position:absolute;padding:10px 34px 14px;border-radius:60px;font:800 64px/1.1 "Outfit";border:8px solid var(--line);white-space:nowrap;opacity:0}
+.stall{position:absolute;left:140px;top:700px;width:800px;height:800px;opacity:0}
+.spark{position:absolute;width:70px;height:70px;opacity:0}
+/* ponsel kasir */
+.phone{position:absolute;left:230px;top:640px;width:620px;height:1060px;border-radius:84px;background:#fff;border:14px solid var(--line);box-shadow:0 30px 0 rgba(0,0,0,.18);padding:96px 44px 0;font-family:"Plus Jakarta Sans";color:#0f172a;opacity:0}
+.phone::before{content:"";position:absolute;left:50%;top:26px;width:170px;height:34px;margin-left:-85px;border-radius:17px;background:var(--line)}
+.phone .hd{font:800 52px/1.15 "Plus Jakarta Sans";color:var(--pri)}
+.phone .row{display:flex;justify-content:space-between;align-items:center;white-space:nowrap;margin-top:26px;padding:26px 24px;border-radius:26px;background:#f1f5f9;font:700 38px/1.1 "Plus Jakarta Sans";font-variant-numeric:tabular-nums;opacity:0}
+.phone .row em{font-style:normal;color:#16a34a;font-weight:800}
+.phone .tot{display:flex;justify-content:space-between;margin-top:36px;padding-top:30px;border-top:6px dashed #cbd5e1;font:800 56px/1.1 "Plus Jakarta Sans";color:var(--pri);font-variant-numeric:tabular-nums;opacity:0}
+.phone .ok{margin:40px auto 0;width:fit-content;padding:18px 46px 20px;border-radius:50px;background:var(--grn);color:#1a3a0a;font:800 54px/1 "Plus Jakarta Sans";border:7px solid var(--line);opacity:0}
+/* penutup */
+.logoC{position:absolute;left:130px;top:250px;width:820px;padding:48px 50px 44px;border-radius:60px;background:#fff;border:11px solid var(--line);box-shadow:0 26px 0 rgba(0,0,0,.2);opacity:0}
+.logoC img{display:block;width:100%}
+.fox{position:absolute;left:150px;top:820px;width:780px;height:auto;transform-origin:50% 100%;opacity:0}
+#vig{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse 80% 70% at 50% 52%,transparent 52%,rgba(8,2,24,.34) 100%);z-index:8}
+#grain{position:absolute;inset:-60px;opacity:.16;mix-blend-mode:multiply;pointer-events:none;z-index:9;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .9 0'/></filter><rect width='300' height='300' filter='url(%23n)'/></svg>")}
+#ui{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);display:none;align-items:center;gap:12px;padding:10px 16px;border-radius:14px;background:rgba(14,16,22,.9);font:13px system-ui;color:#A0A6B4;z-index:50}
+#ui.on{display:flex}#ui button{background:#262A34;color:#fff;border:none;padding:7px 14px;border-radius:8px;font:inherit;cursor:pointer}
+#scrub{width:320px}#clock{font-variant-numeric:tabular-nums;min-width:5.2ch;text-align:right}
+
+/* ---- tambahan video 02 ---- */
+.clock{position:absolute;left:250px;top:620px;width:580px;height:580px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#fff,#F1E9FF);border:14px solid var(--line);box-shadow:0 26px 0 rgba(0,0,0,.25),inset 0 0 0 16px #7943e5;opacity:0}
+.clock .tk{position:absolute;inset:0}
+.clock .tk s{position:absolute;left:50%;top:44px;width:14px;height:44px;margin-left:-7px;border-radius:7px;background:var(--line);transform-origin:7px 246px}
+.clock .hh,.clock .mh{position:absolute;left:50%;bottom:50%;border-radius:14px;background:var(--line);transform-origin:50% 100%}
+.clock .hh{width:28px;height:150px;margin-left:-14px}
+.clock .mh{width:18px;height:210px;margin-left:-9px;background:#f97316}
+.clock .ctr{position:absolute;left:50%;top:50%;width:52px;height:52px;margin:-26px 0 0 -26px;border-radius:50%;background:#FFC83D;border:8px solid var(--line)}
+.digi{position:absolute;left:390px;top:1290px;width:300px;padding:14px 0 18px;text-align:center;border-radius:30px;background:#16300a;color:#a0ea71;font:800 96px/1 "Outfit";letter-spacing:.04em;border:9px solid var(--line);opacity:0}
+.pile{left:540px;top:1330px;width:0;height:0}
+.bill{position:absolute;left:-210px;top:-100px;width:420px;height:200px;border-radius:22px;background:linear-gradient(135deg,#C9F0A6 0%,#9BD86F 55%,#72C143 100%);border:8px solid var(--line);box-shadow:0 8px 0 rgba(0,0,0,.18)}
+.bill i{position:absolute;left:24px;right:24px;top:22px;bottom:22px;border-radius:14px;border:5px dashed rgba(22,48,10,.35)}
+.bill b{position:absolute;left:50%;top:50%;width:104px;height:104px;margin:-52px 0 0 -52px;border-radius:50%;background:#fff;border:6px solid var(--line);font:900 44px/92px "Outfit";color:#2d6b10;text-align:center}
+.mega{position:absolute;left:0;top:660px;width:1080px;text-align:center;font:900 138px/1 "Outfit";color:var(--tx);letter-spacing:-.02em;font-variant-numeric:tabular-nums;opacity:0}
+.neg{position:absolute;left:0;top:720px;width:1080px;text-align:center;font:900 168px/1 "Outfit";color:#FF7A4D;-webkit-text-stroke:10px var(--line);paint-order:stroke fill;letter-spacing:-.02em;opacity:0}
+.qm{position:absolute;left:760px;top:700px;width:200px;height:200px;border-radius:50%;background:#FFC83D;border:10px solid var(--line);font:900 150px/170px "Outfit";color:var(--line);text-align:center;opacity:0;box-shadow:0 14px 0 rgba(0,0,0,.2)}
+.cal{position:absolute;left:110px;top:560px;width:860px;padding:26px 30px 34px;border-radius:44px;background:#fff;border:11px solid var(--line);box-shadow:0 24px 0 rgba(0,0,0,.18);opacity:0}
+.cal .ch{margin:-26px -30px 24px;padding:20px 0 24px;border-radius:32px 32px 0 0;background:#7943e5;color:#fff;text-align:center;font:800 56px/1 "Outfit"}
+.cal .cg{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
+.cd{position:relative;height:118px;border-radius:18px;background:#F4EFFF;font:700 34px/1 "Plus Jakarta Sans";color:#64748b;padding:12px 14px}
+.cd em{position:absolute;left:4px;right:4px;top:46px;font:900 normal 40px/1 "Outfit";color:#E0430E;text-align:center;opacity:0}
+.mtot{position:absolute;left:0;top:1610px;width:1080px;text-align:center;font:900 132px/1 "Outfit";color:#E0430E;-webkit-text-stroke:8px var(--line);paint-order:stroke fill;font-variant-numeric:tabular-nums;opacity:0}
+.phone .row b{color:#E0430E;font-weight:800}
+.phone{height:860px;top:680px}
+.phone .tot.bad{color:#E0430E}
+
+/* ---- tambahan video 03 ---- */
+.vs{position:absolute;top:760px;width:420px;height:420px;border-radius:50%;background:#fff;border:11px solid var(--line);box-shadow:0 22px 0 rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;opacity:0}
+.vs svg{width:260px;height:260px}.vs.l{left:40px}.vs.r{right:40px}
+.vsb{position:absolute;left:430px;top:870px;width:220px;height:220px;border-radius:50%;background:var(--gold);border:11px solid var(--line);font:900 104px/196px "Outfit";color:var(--line);text-align:center;opacity:0;z-index:2}
+.person{position:absolute;width:170px;height:306px;transform-origin:50% 100%}
+.person svg{width:100%;height:100%}
+.nota{position:absolute;left:170px;top:600px;width:740px;padding:30px 54px 40px;background:#FFFDF4;border:10px solid var(--line);border-radius:18px;box-shadow:0 24px 0 rgba(0,0,0,.2);transform:rotate(-3deg);
+  background-image:repeating-linear-gradient(180deg,transparent 0 91px,#B9D3F5 91px 94px);background-position:0 46px;color:#1d3a8a}
+.nh{font:700 72px/1 "Caveat";color:#c2410c;margin-bottom:22px}
+.nl{display:flex;justify-content:space-between;font:700 66px/92px "Caveat"}
+.nt{position:relative;display:flex;justify-content:space-between;margin-top:6px;padding-top:10px;border-top:6px solid #1d3a8a;font:700 80px/100px "Caveat"}
+.ns{position:absolute;right:-10px;top:58px;width:240px;height:12px;border-radius:6px;background:#E0430E;transform-origin:0 50%;transform:scaleX(0)}
+.nfix{position:absolute;right:250px;top:4px;font:700 92px/1 "Caveat";color:#E0430E;opacity:0}
+.pen{position:absolute;left:0;top:0;width:44px;height:220px;margin:-205px 0 0 -6px;rotate:20deg;opacity:0;z-index:3}
+.calc{position:absolute;left:260px;top:600px;width:560px;padding:34px;border-radius:50px;background:#2b1466;border:11px solid var(--line);box-shadow:0 24px 0 rgba(0,0,0,.25);opacity:0}
+.cs{height:150px;border-radius:24px;background:#DDF3C4;border:7px solid var(--line);padding:0 26px;display:flex;align-items:center;justify-content:flex-end;overflow:hidden}
+.csv{font:800 64px/1 "Outfit";color:#16300a;white-space:nowrap;font-variant-numeric:tabular-nums}
+.ck{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:26px}
+.ck i{font:800 normal 54px/104px "Outfit";text-align:center;border-radius:22px;background:#fff;border:6px solid var(--line);color:var(--line)}
+.tmr{position:absolute;left:340px;top:1710px;width:400px;padding:16px 0 20px;border-radius:60px;background:#fff;border:9px solid var(--line);box-shadow:0 12px 0 rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center;gap:20px;z-index:4}
+.tmr i{width:56px;height:56px;border-radius:50%;border:8px solid #E0430E;position:relative}
+.tmr i::after{content:"";position:absolute;left:50%;top:4px;width:6px;height:20px;margin-left:-3px;border-radius:3px;background:#E0430E}
+.tmr b{font:900 80px/1 "Outfit";color:#E0430E;font-variant-numeric:tabular-nums;min-width:3.3ch}
+.tmr.g i{border-color:#2d8a12}.tmr.g i::after{background:#2d8a12}.tmr.g b{color:#2d8a12}
+.sw{position:absolute;left:230px;top:700px;width:620px;height:620px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#fff,#FFE3D6);border:16px solid var(--line);box-shadow:0 26px 0 rgba(0,0,0,.25),inset 0 0 0 20px #E0430E;opacity:0}
+.sw.g{background:radial-gradient(circle at 40% 35%,#fff,#E2FAC9);box-shadow:0 26px 0 rgba(0,0,0,.25),inset 0 0 0 20px #2d8a12}
+.sw .btn{position:absolute;left:50%;top:-110px;width:120px;height:100px;margin-left:-60px;border-radius:24px 24px 0 0;background:var(--line)}
+.sw .face{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+.swv{font:900 190px/1 "Outfit";color:#E0430E;font-variant-numeric:tabular-nums}
+.sw.g .swv{color:#2d8a12}
+.phone .tiles{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:28px}
+.tile{height:150px;border-radius:26px;background:#f1f5f9;border:5px solid #e2e8f0;padding:20px 22px;display:flex;flex-direction:column;justify-content:space-between;font:700 34px/1.1 "Plus Jakarta Sans"}
+.tile b{font:800 32px/1 "Plus Jakarta Sans";color:var(--pri)}
+.cart{display:flex;justify-content:space-between;margin-top:30px;padding:24px 28px;border-radius:26px;background:var(--pri);color:#fff;font:800 44px/1 "Plus Jakarta Sans"}
+.finger{position:absolute;left:0;top:0;width:90px;height:90px;margin:-45px 0 0 -45px;border-radius:50%;background:rgba(255,200,61,.55);border:8px solid #FFC83D;z-index:5}
+.half{position:absolute;top:0;width:540px;height:1920px;overflow:hidden}
+.half.l{left:0;background:linear-gradient(180deg,#FFC48F,#f98d3c);border-right:6px solid var(--line)}
+.half.r{right:0;background:linear-gradient(180deg,#E2FAC9,#8fd75f);border-left:6px solid var(--line)}
+.half .hh{position:absolute;left:0;top:560px;width:540px;text-align:center;font:900 72px/1 "Outfit";color:var(--line)}
+.half .tmr{left:60px;top:1420px;width:410px}
+.okc{position:absolute;display:block;margin:0;width:80px;height:80px;border-radius:50%;background:#2d8a12;color:#fff;font:900 54px/68px "Outfit";text-align:center;border:6px solid var(--line);opacity:0;z-index:2}
+.win{position:absolute;left:70px;top:1590px;padding:14px 30px 18px;border-radius:50px;background:var(--gold);border:8px solid var(--line);white-space:nowrap;font:900 50px/1 "Outfit";color:var(--line);opacity:0}
+.heart{position:absolute;width:80px;font:900 90px/1 "Outfit";color:#e2557a;-webkit-text-stroke:5px var(--line);paint-order:stroke fill;opacity:0}
+
+/* ---- tambahan F1 (kerangka v2) ---- */
+.qs{position:absolute;border-radius:50%;background:var(--gold);border:9px solid var(--line);box-shadow:0 12px 0 rgba(0,0,0,.22);font-family:"Outfit";font-weight:900;color:var(--line);text-align:center;opacity:0}
+.plate{position:absolute;width:480px;height:150px;border-radius:50%;background:radial-gradient(ellipse at 50% 40%,#fff 0%,#f1f5f9 60%,#cbd5e1 100%);border:9px solid var(--line);box-shadow:0 12px 0 rgba(0,0,0,.18);opacity:0}
+.plate i{position:absolute;left:110px;top:6px;width:250px;height:90px;border-radius:50%;background:radial-gradient(circle at 40% 30%,#ffd38a,#f5a524 55%,#c2410c);border:7px solid var(--line)}
+.cal.wk{top:640px}
+.cal.wk .cg{grid-template-columns:repeat(7,1fr);gap:10px}
+.cal.wk .cd{height:170px;font-size:32px;text-align:center;padding:16px 0}
+.cal.wk .cd em{top:72px;font-size:74px;color:var(--pri)}
+.ptag{position:absolute;left:190px;top:820px;width:700px;height:330px;border-radius:40px 150px 150px 40px;background:#fff;border:11px solid var(--line);box-shadow:0 22px 0 rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;opacity:0}
+.ptag i{position:absolute;right:70px;top:50%;width:56px;height:56px;margin-top:-28px;border-radius:50%;background:var(--pri);border:7px solid var(--line)}
+.ptag b{margin-right:120px;font:900 104px/1 "Outfit";color:var(--ink)}
+.arr{position:absolute;width:190px;height:190px;border-radius:50%;border:10px solid var(--line);font:900 110px/170px "Outfit";text-align:center;box-shadow:0 12px 0 rgba(0,0,0,.25);opacity:0}
+.arr.up{left:150px;top:1300px;background:var(--grn);color:#16300a}
+.arr.dn{left:740px;top:1300px;background:#FF8A65;color:#5a1300}
+.box{position:absolute;width:420px;height:180px;border-radius:22px;background:linear-gradient(180deg,#d9a066,#b77a3f);border:9px solid var(--line);display:flex;align-items:center;justify-content:center;font:900 70px/1 "Outfit";color:var(--line);box-shadow:0 10px 0 rgba(0,0,0,.18);opacity:0}
+.box i{position:absolute;left:0;right:0;top:52px;height:9px;background:var(--line);opacity:.35}
+.think{position:absolute;left:150px;top:620px;width:780px;height:340px;border-radius:180px;background:#fff;border:11px solid var(--line);box-shadow:0 18px 0 rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;opacity:0}
+.think .c1,.think .c2{position:absolute;border-radius:50%;background:#fff;border:9px solid var(--line)}
+.think .c1{left:380px;bottom:-90px;width:70px;height:70px}
+.think .c2{left:420px;bottom:-150px;width:44px;height:44px}
+.tq{font:900 120px/1 "Outfit";color:var(--pri)}
+.die{position:absolute;width:230px;height:230px;filter:drop-shadow(0 12px 0 rgba(0,0,0,.25))}
+.die svg{width:100%;height:100%;display:block}
+.bars2{position:absolute;left:190px;top:640px;width:700px;height:760px;display:flex;align-items:flex-end;gap:40px;padding:0 30px;border-bottom:12px solid var(--line);opacity:0}
+.bars2 i{flex:1;border:9px solid var(--line);border-bottom:none;border-radius:26px 26px 0 0;transform-origin:50% 100%;box-shadow:inset 14px 0 0 rgba(255,255,255,.3)}
+.bars2 .g1{height:30%;background:var(--grn)}.bars2 .g2{height:50%;background:var(--gold)}.bars2 .g3{height:72%;background:#C4A9FA}.bars2 .g4{height:100%;background:#fff}
+.tag{font-size:62px}
+.bigx{position:absolute;left:340px;top:740px;width:400px;height:400px;opacity:0}
+.bigx::before,.bigx::after{content:"";position:absolute;left:-20px;right:-20px;top:50%;height:46px;margin-top:-23px;border-radius:23px;background:#E0430E;border:8px solid var(--line)}
+.bigx::before{transform:rotate(45deg)}.bigx::after{transform:rotate(-45deg)}
+.phone.rep{top:640px;height:900px}
+.minib{display:flex;align-items:flex-end;gap:22px;height:420px;margin-top:40px;padding:0 10px;border-bottom:8px solid #cbd5e1}
+.minib i{flex:1;border-radius:18px 18px 0 0;background:var(--pri);transform-origin:50% 100%}
+.minib i:nth-child(1){height:35%;opacity:.45}.minib i:nth-child(2){height:55%;opacity:.6}.minib i:nth-child(3){height:75%;opacity:.8}.minib i:nth-child(4){height:100%}
+.phone.rep .tot{color:#2d8a12}
+.cta{position:absolute;left:0;top:1720px;width:1080px;text-align:center;opacity:0}
+.cta span{display:inline-block;padding:16px 50px 22px;border-radius:70px;background:var(--grn);border:9px solid var(--line);box-shadow:0 12px 0 rgba(0,0,0,.25);font:900 70px/1 "Outfit";color:#16300a}
+</style>
+</head>
+<body>
+<div id="stage"><div id="chip"><span><i>Kas</i><b id="chipN">Rp0</b></span></div><div id="vig"></div><div id="grain"></div></div>
+<audio id="vo" src="vo.wav" preload="auto"></audio>
+<div id="ui"><button id="btn-play">Pause</button><button id="btn-restart">Restart</button><input id="scrub" type="range" min="0" max="1000" value="0"><span id="clock">0.00s</span></div>
+
+<script>
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const Q=new URLSearchParams(location.search), W=1080, H=1920;
+let _s=20261115; const rnd=()=>{_s|=0;_s=_s+0x6D2B79F5|0;let t=Math.imul(_s^_s>>>15,1|_s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};
+const clamp=(v,a=0,b=1)=>Math.min(b,Math.max(a,v));
+const fmt=v=>'Rp'+Math.round(v).toLocaleString('id-ID');
+const el=(cls,html='',tag='div')=>{const e=document.createElement(tag);e.className=cls;e.innerHTML=html;return e;};
+const tl=gsap.timeline({paused:true}), stageEl=$('#stage'), chip=$('#chip');
+
+/* ---------- teks: baris kecil per kata + label struk yang tercetak ---------- */
+function cap(S,at,small,key,{kwAt=.28,out=null}={}){const c=el('cap'),sm=el('sm'),kwW=el('kwW',`<span class="kw">${key}</span>`);
+  small.split(' ').forEach((p,i,a)=>{const w=el('w',p,'span');sm.append(w);if(i<a.length-1)sm.append(' ');});
+  c.append(sm,el('',''),kwW);S.st.append(c);
+  const ws=$$('.w',sm); gsap.set(ws,{opacity:0}); gsap.set(kwW,{opacity:0});
+  tl.fromTo(ws,{opacity:0,y:46,filter:'blur(12px)'},{opacity:1,y:0,filter:'blur(0px)',duration:.5,ease:'power4.out',stagger:.07,immediateRender:false},at);
+  tl.set(kwW,{opacity:1},at+kwAt);
+  tl.fromTo(kwW,{clipPath:'inset(0% 0% 100% 0%)',y:-40},{clipPath:'inset(0% 0% -20% 0%)',y:0,duration:.42,ease:'power3.out',immediateRender:false},at+kwAt);
+  tl.fromTo(kwW,{scale:1},{scale:1.07,duration:.12,ease:'power2.out',yoyo:true,repeat:1,immediateRender:false},at+kwAt+.42);
+  if(out!=null){tl.to(ws,{opacity:0,y:-40,duration:.25,ease:'power2.in'},out);tl.to(kwW,{opacity:0,y:-50,duration:.25,ease:'power2.in'},out+.03);}
+  return c;}
+/* ---------- laci & koin ---------- */
+function drawer(par,cx,cy){const g=el('dr','<div class="dB"></div><div class="dC a"></div><div class="dV"></div><div class="dF"><div class="dl l">Usaha</div><div class="dl r">Pribadi</div><div class="dH"></div></div>');
+  g.style.left=cx+'px';g.style.top=cy+'px';par.append(g);return {g,c:$('.dC',g),v:$('.dV',g),f:$('.dF',g)};}
+const coin=(par,cls='')=>{const c=el('coin '+cls,'Rp');par.append(c);return c;};
+const spot=(r,c,j=1)=>({x:-286+c*52+(r%2)*26+(rnd()-.5)*10*j,y:-78-r*34+(rnd()-.5)*6*j});
+const spots=(rows,j=1)=>{const a=[];for(let r=0;r<rows;r++)for(let c=0;c<11+(r%2?0:1);c++)a.push(spot(r,c,j));return a;};
+const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
+function rain(par,list,t0,gap,{cls=()=>'',fromX=p=>p.x+(rnd()-.5)*240,fromY=-1500,dur=.55}={}){return list.map((p,i)=>{const c=coin(par,cls(i)),t=t0+i*gap;
+  tl.set(c,{opacity:1,x:fromX(p,i),y:fromY,rotation:(rnd()-.5)*200,scale:1},t);
+  tl.to(c,{x:p.x,duration:dur,ease:'sine.out'},t); tl.to(c,{y:p.y,rotation:(rnd()-.5)*30,duration:dur,ease:'power2.in'},t);
+  tl.fromTo(c,{scaleY:.7},{scaleY:1,duration:.3,ease:'back.out(3)',immediateRender:false},t+dur); return c;});}
+const still=(par,list,cls=()=>'')=>list.map((p,i)=>{const c=coin(par,cls(i));gsap.set(c,{opacity:1,x:p.x,y:p.y,rotation:(rnd()-.5)*30});return c;});
+const pop=(e,at,{dur=.5,from=.3,rot=0,ease='back.out(1.9)'}={})=>tl.fromTo(e,{opacity:0,scale:from,rotation:rot},{opacity:1,scale:1,rotation:0,duration:dur,ease,immediateRender:false},at);
+
+/* ---------- batas panggung (dtk) — disinkronkan ke vo.wav (25,88 dtk) lewat transkripsi per kata ---------- */
+/* kata pembuka: Tahukah 0 · pemilik 1.48 · Masak 5.02 · belanja 6.72 · harga 8.04 · stok 9.48 · Sayangnya 11.18 · Kalau 15.04 · keputusanmu 17.16 · Usaha 21.04 · Mulai 24.50 */
+const C=[0,1.35,4.9,6.6,7.95,9.4,11.0,14.9,17.0,20.85,24.35,26.9];
+const DURATION=C[C.length-1];
+const SPOTS=[], BOBS=[], NUMS=[];
+const SHIRT=['#7943e5','#f97316','#57b01c','#FFC83D','#e2557a'];
+const FACE={flat:'<path d="M40 68h20" stroke="#3B1F12" stroke-width="5" stroke-linecap="round"/>',happy:'<path d="M38 64q12 12 24 0" fill="none" stroke="#3B1F12" stroke-width="5" stroke-linecap="round"/>',
+  think:'<path d="M40 68q6-4 12 0t10 0" fill="none" stroke="#3B1F12" stroke-width="5" stroke-linecap="round"/><path d="M30 34l14 2M70 30l-14 4" stroke="#3B1F12" stroke-width="5" stroke-linecap="round"/>'};
+const person=(par,i,{x=0,y=0,mood='flat',s=1}={})=>{const p=el('person',`<svg viewBox="0 0 100 180"><rect x="18" y="86" width="64" height="94" rx="30" fill="${SHIRT[i%5]}" stroke="#3B1F12" stroke-width="6"/><circle cx="50" cy="48" r="34" fill="#FFD9B0" stroke="#3B1F12" stroke-width="6"/><path d="M18 40q32-38 64 0q-10-26-32-26t-32 26z" fill="#3B1F12"/><circle cx="38" cy="50" r="4.5" fill="#3B1F12"/><circle cx="62" cy="50" r="4.5" fill="#3B1F12"/>${FACE[mood]}</svg>`);
+  p.style.left=x+'px';p.style.top=y+'px';p.style.width=170*s+'px';p.style.height=306*s+'px';par.append(p);return p;};
+const qmark=(par,x,y,size=150)=>{const q=el('qs','?');q.style.cssText=`left:${x}px;top:${y}px;width:${size}px;height:${size}px;font-size:${size*.72}px;line-height:${size*.86}px`;par.append(q);return q;};
+const DIE=(p)=>{const pip={3:[[28,28],[50,50],[72,72]],5:[[28,28],[72,28],[50,50],[28,72],[72,72]],6:[[30,24],[70,24],[30,50],[70,50],[30,76],[70,76]]}[p];
+  return `<svg viewBox="0 0 100 100"><rect x="5" y="5" width="90" height="90" rx="20" fill="#fff" stroke="#3B1F12" stroke-width="6"/>${pip.map(([x,y])=>`<circle cx="${x}" cy="${y}" r="8.5" fill="#7943e5"/>`).join('')}</svg>`;};
+
+/* ---------- panggung: cut + geser 96 px, lalu push pelan sampai cut berikutnya ---------- */
+function stage(i,bg){const t0=C[i],t1=C[i+1],st=el('st '+bg),spot=el('spot'),inn=el('in');st.append(spot,inn);stageEl.insertBefore(st,chip);
+  SPOTS.push({spot,ph:i*1.3});
+  tl.set(st,{autoAlpha:1},t0); if(i<C.length-2)tl.set(st,{autoAlpha:0},t1);
+  const dir=i%2?1:-1;
+  tl.fromTo(inn,{x:dir*96,scale:1.1},{x:0,scale:1,duration:.5,ease:'power3.out',immediateRender:false},t0);
+  tl.fromTo(inn,{scale:1},{scale:1.06,duration:t1-t0-.5,ease:'none',immediateRender:false},t0+.5);
+  return {st,inn,t0,t1};}
+
+/* ================= PANGGUNG ================= */
+/* 0 — TAHUKAH KAMU? */
+{const S=stage(0,'dark'),q=qmark(S.inn,365,760,350);
+  pop(q,.12,{from:.2,rot:-40,dur:.5,ease:'back.out(2.4)'});BOBS.push({e:q,a:18,f:4,ph:0});
+  cap(S,.05,'tahukah','kamu?',{kwAt:.45});}
+
+/* 1 — pemilik warung ambil PULUHAN KEPUTUSAN: tanda tanya bermunculan di sekitar kepala */
+{const S=stage(1,'cream'),p=person(S.inn,0,{x:404,y:1060,mood:'think',s:1.6});
+  tl.fromTo(p,{opacity:0,y:300},{opacity:1,y:0,duration:.45,ease:'back.out(1.6)',immediateRender:false},S.t0+.05);
+  const SP=[[150,820],[760,800],[90,1180],[820,1160],[300,640],[620,620],[170,1500],[780,1480],[460,520],[40,960],[880,980],[600,1640]];
+  SP.forEach(([x,y],i)=>{const q=qmark(S.inn,x,y,120+(i%3)*30);pop(q,1.6+i*.24,{from:.2,rot:(i%2?1:-1)*40,dur:.35,ease:'back.out(2.6)'});BOBS.push({e:q,a:12,f:3+i%3,ph:i});});
+  BOBS.push({e:p,a:8,f:3,ph:1});
+  cap(S,S.t0+.08,'pemilik warung ambil','puluhan keputusan',{kwAt:1.23});}
+
+/* 2 — masak BERAPA PORSI? */
+{const S=stage(2,'green');
+  for(let i=0;i<4;i++){const pl=el('plate','<i></i>');S.inn.append(pl);gsap.set(pl,{left:300,top:1400-i*120,opacity:0});
+    tl.fromTo(pl,{opacity:1,y:-900,rotation:(i%2?1:-1)*20},{y:0,rotation:(i%2?1:-1)*3,duration:.4,ease:'bounce.out',immediateRender:false},S.t0+.15+i*.2);}
+  const q=qmark(S.inn,760,760,170);pop(q,S.t0+.6,{rot:30});BOBS.push({e:q,a:14,f:3.4,ph:0});
+  cap(S,S.t0+.08,'masak','berapa porsi?',{kwAt:.55});}
+
+/* 3 — belanja KAPAN? */
+{const S=stage(3,'orange'),days=['Sen','Sel','Rab','Kam','Jum','Sab','Min'];
+  const k=el('cal wk','<div class="ch">Belanja bahan</div><div class="cg">'+days.map(d=>`<div class="cd">${d}<em>?</em></div>`).join('')+'</div>');S.inn.append(k);
+  pop(k,S.t0+.02,{from:.6,rot:-6,dur:.35});
+  $$('.cd',k).forEach((c,i)=>{const e=$('em',c);tl.fromTo(e,{opacity:0,scale:2},{opacity:1,scale:1,duration:.18,ease:'back.out(2.5)',immediateRender:false},S.t0+.3+i*.1);});
+  cap(S,S.t0+.08,'belanja','kapan?',{kwAt:.3});}
+
+/* 4 — harga NAIK ATAU TIDAK? */
+{const S=stage(4,'purple'),tg=el('ptag','<i></i><b>Rp15.000</b>'),up=el('arr up','▲'),dn=el('arr dn','▼');S.inn.append(tg,up,dn);
+  pop(tg,S.t0+.02,{from:.5,rot:-14,dur:.4});
+  pop(up,S.t0+.3,{rot:-20});pop(dn,S.t0+.55,{rot:20});
+  tl.fromTo(tg,{rotation:-8},{rotation:8,duration:.22,yoyo:true,repeat:3,ease:'sine.inOut',immediateRender:false},S.t0+.6);
+  BOBS.push({e:up,a:20,f:5,ph:0},{e:dn,a:20,f:5,ph:3.14});
+  cap(S,S.t0+.08,'harga','naik atau tidak?',{kwAt:.25});}
+
+/* 5 — stok CUKUP? */
+{const S=stage(5,'cream');
+  for(let i=0;i<3;i++){const bx=el('box','<i></i>BAHAN');S.inn.append(bx);gsap.set(bx,{left:280+(i%2)*60,top:1380-i*190,opacity:0});
+    tl.fromTo(bx,{opacity:1,y:-900,rotation:-12+i*10},{y:0,rotation:-3+i*3,duration:.42,ease:'bounce.out',immediateRender:false},S.t0+.1+i*.15);}
+  const q=qmark(S.inn,760,900,170);pop(q,S.t0+.5,{rot:-30});BOBS.push({e:q,a:14,f:3.4,ph:1});
+  cap(S,S.t0+.08,'stok','cukup?',{kwAt:.3});}
+
+/* 6 — kebanyakan pakai PERASAAN: pikiran "kayaknya…" + dadu */
+{const S=stage(6,'dark'),p=person(S.inn,0,{x:404,y:1300,mood:'think',s:1.5}),th=el('think','<i class="c1"></i><i class="c2"></i><div class="tq">kayaknya…</div>');S.inn.append(th);
+  tl.fromTo(p,{opacity:0,y:300},{opacity:1,y:0,duration:.45,ease:'back.out(1.6)',immediateRender:false},S.t0+.05);
+  pop(th,S.t0+.5,{from:.4,rot:-6,dur:.45});
+  [[170,1460,6,-1],[740,1440,3,1]].forEach(([x,y,pp,s],i)=>{const d=el('die',DIE(pp));d.style.left=x+'px';d.style.top=y+'px';S.inn.append(d);gsap.set(d,{opacity:0});
+    tl.fromTo(d,{opacity:1,x:s*-600,y:-400,rotation:-360*s},{x:0,y:0,rotation:s*12,duration:.8,ease:'bounce.out',immediateRender:false},S.t0+1.4+i*.2);BOBS.push({e:d,a:10,f:2.6,ph:i*2});});
+  tl.fromTo(p,{rotation:-5},{rotation:5,duration:.5,yoyo:true,repeat:5,ease:'sine.inOut',immediateRender:false},S.t0+.6);
+  cap(S,S.t0+.08,'kebanyakan pakai','perasaan',{kwAt:2.42});}
+
+/* 7 — mulai dari CATATAN penjualan: struk tercetak */
+{const S=stage(7,'green'),pw=el('paperW'),p=el('paper','<h4>Penjualan hari ini</h4><div class="prow"><span>Nasi goreng ×18</span><span>270.000</span></div><div class="prow"><span>Es teh ×31</span><span>155.000</span></div><div class="prow"><span>Mie ayam ×12</span><span>144.000</span></div><div class="ptot"><small>Total</small><b>Rp569.000</b></div>');
+  pw.append(p);S.inn.append(pw,el('slot'));
+  tl.fromTo(pw,{height:0},{height:860,duration:1.0,ease:'steps(11)',immediateRender:false},S.t0+.15);
+  tl.fromTo($$('.prow',p),{opacity:0,x:-30},{opacity:1,x:0,duration:.25,ease:'power3.out',stagger:.15,immediateRender:false},S.t0+.5);
+  tl.fromTo($('.ptot',p),{opacity:0,y:20},{opacity:1,y:0,duration:.3,ease:'back.out(2)',immediateRender:false},S.t0+1.05);
+  cap(S,S.t0+.08,'mulai dari','catatan',{kwAt:.72});}
+
+/* 8 — keputusan jadi LEBIH UNTUNG: grafik naik + cepat / tepat / untung */
+{const S=stage(8,'purple'),ch=el('bars2','<i class="g1"></i><i class="g2"></i><i class="g3"></i><i class="g4"></i>');S.inn.append(ch);
+  pop(ch,S.t0+.02,{from:.7,dur:.35});
+  $$('i',ch).forEach((b,i)=>tl.fromTo(b,{scaleY:0},{scaleY:1,duration:.45,ease:'back.out(1.8)',immediateRender:false},S.t0+.2+i*.15));
+  [['cepat',18.0,-8,110,1450],['tepat',18.95,6,400,1590],['untung',19.95,-4,640,1450]].forEach(([w,t,r,x,y])=>{const g=el('tag','✓ '+w);g.style.cssText=`left:${x}px;top:${y}px;background:#fff;color:#2d8a12`;S.inn.append(g);pop(g,t,{rot:r*3});BOBS.push({e:g,a:10,f:3,ph:x});});
+  cap(S,S.t0+.08,'keputusan jadi','lebih untung',{kwAt:2.82});}
+
+/* 9 — bukan karena HOKI, tapi karena DATA */
+{const S=stage(9,'orange');
+  const ds=[[220,880,5,-1],[600,920,6,1]].map(([x,y,pp,s],i)=>{const d=el('die',DIE(pp));d.style.left=x+'px';d.style.top=y+'px';S.inn.append(d);gsap.set(d,{opacity:0});
+    tl.fromTo(d,{opacity:1,x:s*-600,y:-400,rotation:-360*s},{x:0,y:0,rotation:s*10,duration:.7,ease:'bounce.out',immediateRender:false},S.t0+.2+i*.15);return d;});
+  const x=el('bigx');S.inn.append(x);tl.fromTo(x,{opacity:0,scale:2.4,rotation:-30},{opacity:1,scale:1,rotation:-8,duration:.3,ease:'back.out(2.5)',immediateRender:false},22.7);
+  tl.to([...ds,x],{opacity:0,y:600,rotation:40,duration:.3,ease:'power2.in'},23.05);
+  const ph=el('phone rep','<div class="hd">Laporan</div><div class="minib"><i></i><i></i><i></i><i></i></div><div class="tot"><span>Untung</span><span>Rp2,4 jt</span></div>');S.inn.append(ph);gsap.set(ph,{transformOrigin:'50% 100%'});
+  tl.fromTo(ph,{opacity:1,y:1300,rotation:8},{y:0,rotation:-2,duration:.5,ease:'back.out(1.3)',immediateRender:false},23.2);tl.set(ph,{opacity:0},S.t0);tl.set(ph,{opacity:1},23.2);
+  $$('.minib i',ph).forEach((b,i)=>tl.fromTo(b,{scaleY:0},{scaleY:1,duration:.35,ease:'back.out(2)',immediateRender:false},23.45+i*.1));
+  tl.fromTo($('.tot',ph),{opacity:0},{opacity:1,duration:.25,immediateRender:false},23.9);
+  cap(S,S.t0+.08,'bukan karena','hoki',{kwAt:1.5,out:23.0});
+  cap(S,23.1,'tapi karena','data',{kwAt:.5});}
+
+/* 10 — maskot + logo + ajakan */
+const RISE=[];
+{const S=stage(10,'purple');
+  for(let i=0;i<12;i++){const c=coin(S.inn,i%3?'':'xl');gsap.set(c,{opacity:0});RISE.push({c,x:70+rnd()*940,y0:rnd()*2300,v:150+rnd()*160,ph:rnd()*6.28});}
+  const lg=el('logoC','<img src="assets/logo-macca.png" alt="MaccaPOS">'),fox=el('fox','','img');fox.src='assets/maskot.webp';fox.alt='';
+  const cta=el('cta','<span>Mulai catat hari ini</span>');S.inn.append(lg,fox,cta);
+  tl.fromTo(fox,{opacity:1,y:1200,rotation:8},{y:0,rotation:0,duration:.6,ease:'back.out(1.5)',immediateRender:false},S.t0+.05);tl.set(fox,{opacity:1},S.t0+.05);
+  tl.fromTo(lg,{opacity:0,scale:.5,rotation:-8,y:-80},{opacity:1,scale:1,rotation:-2,y:0,duration:.55,ease:'back.out(1.8)',immediateRender:false},S.t0+.3);
+  pop(cta,24.5,{from:.4,rot:-6});
+  BOBS.push({e:fox,a:14,f:2.6,ph:0});}
+tl.to({},{duration:.01},DURATION);
+
+/* ---------- semua yang bergerak terus: fungsi waktu ---------- */
+function tick(t){
+  NUMS.forEach(o=>{o.e.textContent=o.fm(o.f(t));});
+  SPOTS.forEach(o=>{o.spot.style.transform=`translate(${Math.sin(t*.7+o.ph)*150}px,${Math.cos(t*.55+o.ph)*190}px)`;});
+  BOBS.forEach(o=>{o.e.style.marginTop=(Math.sin(t*o.f+o.ph)*o.a)+'px';});
+  RISE.forEach(o=>{if(t<C[10])return;const y=2100-((o.y0+(t-C[10])*o.v)%2300);o.c.style.opacity=.85;o.c.style.transform=`translate(${o.x+Math.sin(t*1.3+o.ph)*40}px,${y}px) rotate(${t*60+o.ph*57}deg)`;});
+}
+
+/* ============ PEREKAT ============ */
+const fit=()=>{const s=Math.min(innerWidth/W,innerHeight/H);stageEl.style.transform=`translate(-50%,-50%) scale(${s})`;};
+addEventListener('resize',fit);fit();
+const clock=$('#clock'),scrub=$('#scrub'),btn=$('#btn-play');let scrubbing=false;
+gsap.ticker.add(()=>{const t=tl.time();tick(t);clock.textContent=t.toFixed(2)+'s';if(!scrubbing)scrub.value=String(t/DURATION*1000);});
+const vo=$('#vo');
+const voSync=()=>{if(Math.abs(vo.currentTime-tl.time())>.12)vo.currentTime=Math.min(tl.time(),vo.duration||1e9);};
+const go=(from)=>{if(from!=null)tl.time(from);voSync();const pr=tl.time()<(vo.duration||0)?vo.play():null;tl.play();btn.textContent='Pause';return pr;};
+const halt=()=>{tl.pause();vo.pause();btn.textContent='Play';};
+const toggle=()=>{tl.paused()?go():halt();};
+btn.onclick=toggle;$('#btn-restart').onclick=()=>go(0);
+scrub.addEventListener('pointerdown',()=>{scrubbing=true;halt();});
+addEventListener('pointerup',()=>scrubbing=false);
+scrub.addEventListener('input',()=>{tl.pause();tl.time(scrub.value/1000*DURATION);});
+addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();toggle();}if(/^[rR]$/.test(e.key))go(0);});
+if(Q.has('debug'))$('#ui').classList.add('on');
+tl.eventCallback('onComplete',()=>{go(0);});
+const seek=t=>{tl.pause();tl.time(t,false);tick(t);};
+window.OPENER={W,H,tl,DURATION,seek,ready:false};
+Promise.all([document.fonts.ready,...$$('img').map(i=>i.decode().catch(()=>{}))]).then(()=>{
+  $$('.kw').forEach(k=>{const w=k.offsetWidth;if(w>860)k.style.fontSize=Math.floor(112*860/w)+'px';});   // label terlalu lebar: kecilkan
+  window.OPENER.ready=true;tick(0);if(Q.has('clean'))return;
+  /* suara: coba putar langsung; bila diblokir browser, tahan di frame 0 dan mulai pada klik/tombol pertama */
+  const pr=go(0);if(pr)pr.catch(()=>{halt();tl.time(0);const st=()=>{removeEventListener('pointerdown',st);removeEventListener('keydown',st);go(0);};addEventListener('pointerdown',st);addEventListener('keydown',st);});});
+</script>
+</body>
+</html>
