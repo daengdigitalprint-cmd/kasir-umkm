@@ -126,6 +126,17 @@ import AdminLayout from '@/layouts/AdminLayout.vue';
 
 <template>
     <AdminLayout title="Manajemen Pelanggan">
+        <!-- F9: segmen pelanggan -->
+        <Link
+            href="/customers/segments"
+            class="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-gradient-to-r from-rose-50 to-amber-50 px-4 py-3 hover:border-rose-300 lg:mb-6"
+        >
+            <span>
+                <span class="block font-bold text-slate-900">Segmen Pelanggan</span>
+                <span class="block text-sm text-slate-600">Lihat siapa yang setia, yang baru, dan yang mulai jarang datang, lalu sapa lewat WhatsApp.</span>
+            </span>
+            <span class="shrink-0 rounded-lg bg-white px-3 py-1.5 text-sm font-semibold text-rose-700 shadow-sm">Buka →</span>
+        </Link>
         
         <!-- Search and Filters -->
                     <Card class="border-0 shadow-lg mb-4 lg:mb-6">

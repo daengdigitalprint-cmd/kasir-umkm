@@ -308,6 +308,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
     Route::get('customers/search', [App\Http\Controllers\CustomerController::class, 'search'])->middleware(['store.active']);
     Route::post('customers/quick-store', [App\Http\Controllers\CustomerController::class, 'quickStore'])->middleware(['store.active']);
+    // F9 Segmen pelanggan (sebelum resource agar tidak tertangkap customers/{customer})
+    Route::get('customers/segments', [App\Http\Controllers\CustomerSegmentController::class, 'index'])
+        ->name('customers.segments')->middleware(['store.active', 'role.backoffice']);
+    Route::put('customers/segments/settings', [App\Http\Controllers\CustomerSegmentController::class, 'updateSettings'])
+        ->name('customers.segments.settings')->middleware(['store.active', 'role.backoffice']);
     Route::resource('customers', App\Http\Controllers\CustomerController::class)->middleware(['store.active', 'role.backoffice']);
 
     // F8 Saran tambahan menu (upsell)
