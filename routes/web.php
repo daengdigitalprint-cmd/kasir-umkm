@@ -696,6 +696,12 @@ Route::prefix('owner')->name('owner.')->middleware(['auth', 'owner'])->group(fun
     Route::get('/dashboard', [App\Http\Controllers\OwnerDashboardController::class, 'index'])->name('dashboard');
     Route::get('/dashboard/revenue', [App\Http\Controllers\OwnerDashboardController::class, 'revenue'])->name('dashboard.revenue');
     Route::get('/dashboard/export', [App\Http\Controllers\OwnerDashboardController::class, 'exportExcel'])->name('dashboard.export');
+
+    // F7 Pantau Stok Semua Lokasi (Modul Central Kitchen)
+    Route::middleware('central_kitchen.enabled')->group(function () {
+        Route::get('/stock-monitor', [App\Http\Controllers\StockMonitorController::class, 'index'])->name('stock-monitor.index');
+        Route::get('/stock-monitor/export', [App\Http\Controllers\StockMonitorController::class, 'export'])->name('stock-monitor.export');
+    });
 });
 
 // Super Admin Routes

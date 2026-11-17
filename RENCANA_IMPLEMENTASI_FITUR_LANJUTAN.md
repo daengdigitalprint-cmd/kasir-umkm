@@ -347,6 +347,6 @@ Urutan di bawah sudah menyesuaikan prioritas klien perintis (Inventory + permint
 | F5 Terima sebagian & selisih | ✅ Selesai 17 Nov 2026 (`StockTransferPartialReceiptTest`). Selisih dicatat di baris transfer + catatan pergerakan "transfer masuk" (tanpa jenis pergerakan baru). Filter "Ada selisih" di daftar transfer. Transfer apotek dengan batch/ED wajib diterima penuh |
 | F6 Permintaan Stok | ✅ Selesai 17 Nov 2026 (`StockRequestTest`). Outlet meminta → pemasok merevisi jumlah & "Setujui & kirim" → Transfer Stok langsung Dikirim → diterima outlet = Selesai. Transfer hasil permintaan yang dibatalkan ikut membatalkan permintaan. Realtime lewat channel privat `stock-requests.{storeId}` (cadangan: muat ulang 30 detik). Badge jumlah permintaan masuk di menu. Tombol "Minta ke Gudang Pusat" di Daftar Belanja. Varian belum didukung (sama seperti Transfer Stok) |
 | Kunci transfer | ✅ Kirim & batal transfer kini mengunci baris sungguhan (sebelumnya klik ganda bisa memotong/mengembalikan stok dua kali) |
-| F7 | Belum dikerjakan — prioritas klien perintis |
+| F7 Pantau Stok Semua Lokasi | ✅ Selesai 17 Nov 2026 (`StockMonitorTest`). Menu owner "Pantau stok semua lokasi" (`/owner/stock-monitor`): tabel barang × lokasi (Gudang Pusat di kolom pertama), merah = habis, kuning = ≤ Stok Minimum, filter menipis/habis, cari, ekspor Excel berwarna. Dicocokkan lewat SKU lalu nama. Hanya lokasi grup aktif yang owner miliki. Barang bervarian belum ikut |
 | F8–F11 | Belum dikerjakan |
 | HPP FIFO | Menunggu jawaban klien (wajib atau tidak) |

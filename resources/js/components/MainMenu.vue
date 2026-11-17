@@ -15,6 +15,7 @@ import {
     ClipboardCheck,
     ClipboardList,
     Inbox,
+    LayoutGrid,
     ListChecks,
     Clock,
     CreditCard,
@@ -90,6 +91,8 @@ type NavItem = {
     kitchenQueueOnly?: boolean;
     /** Modul Central Kitchen (add-on grup usaha) */
     centralKitchenOnly?: boolean;
+    /** Wajib owner, juga saat role dikonfigurasi (mode strict). */
+    requiresOwner?: boolean;
     /** Hanya tampil jika Modul Antrian diaktifkan di pengaturan toko. */
     queueModuleOnly?: boolean;
     /** Disembunyikan jika toko mengaktifkan direct_stock_edit (koreksi via form produk). */
@@ -335,6 +338,14 @@ const navigationSource: NavItem[] = [
         advancedRetailOnly: true,
         centralKitchenOnly: true,
     },
+    {
+        name: 'Pantau stok semua lokasi',
+        href: '/owner/stock-monitor',
+        icon: LayoutGrid,
+        section: 'pembelian',
+        requiresOwner: true,
+        centralKitchenOnly: true,
+    },
     // ── Pelanggan & Promo ──
     {
         name: 'Pelanggan',
@@ -522,6 +533,7 @@ const navigationItems = computed((): ProcessedNavItem[] => {
         if (item.productionsOnly && !productionsEnabled) return [];
         if (item.kitchenQueueOnly && !kitchenQueueEnabled && !isKitchen) return [];
         if (item.centralKitchenOnly && !centralKitchenEnabled) return [];
+        if (item.requiresOwner && !isOwner) return [];
         if (item.queueModuleOnly && !queueModuleEnabled) return [];
         if (item.scanMejaOnly && !scanMejaEnabled) return [];
         if (item.attendanceOnly && !attendanceEnabled) return [];
