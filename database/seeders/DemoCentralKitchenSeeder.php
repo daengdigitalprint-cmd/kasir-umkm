@@ -45,12 +45,18 @@ class DemoCentralKitchenSeeder extends Seeder
 
     public const PASSWORD = 'password';
 
+    /** Diisi oleh perintah demo:central-kitchen; kosong = kata sandi lokal 'password'. */
+    public ?string $password = null;
+
+    /** Hanya perintah demo:central-kitchen --production yang boleh menyalakan ini. */
+    public bool $allowProduction = false;
+
     private array $users = [];
 
     public function run(): void
     {
-        if (! app()->environment(['local', 'testing'])) {
-            $this->command?->error('Seeder demo hanya boleh dijalankan di lingkungan local.');
+        if (! app()->environment(['local', 'testing']) && ! $this->allowProduction) {
+            $this->command?->error('Seeder demo hanya untuk local. Di server pakai: php artisan demo:central-kitchen --production');
 
             return;
         }
@@ -163,7 +169,7 @@ class DemoCentralKitchenSeeder extends Seeder
         $user = User::query()->create([
             'name' => $name,
             'email' => $email,
-            'password' => Hash::make(self::PASSWORD),
+            'password' => Hash::make($this->password ?? self::PASSWORD),
             'role' => $role,
             'store_id' => $store?->id,
             'email_verified_at' => now(),
@@ -653,7 +659,7 @@ class DemoCentralKitchenSeeder extends Seeder
             return;
         }
 
-        $this->command->info('Akun demo Central Kitchen siap (kata sandi semua: '.self::PASSWORD.')');
+        $this->command->info('Akun demo Central Kitchen siap (kata sandi semua: '.($this->password ?? self::PASSWORD).')');
         $this->command->table(['Email', 'Nama', 'Lokasi'], $this->users);
     }
 }
