@@ -406,6 +406,11 @@ class TransactionController extends Controller
                 ]
             );
 
+            // Pesanan yang di-void hilang dari Papan Dapur (hanya toko dengan Antrian Dapur).
+            if ($transaction->store) {
+                \App\Support\KitchenOrders::cancelForTransaction($transaction->store, $transaction);
+            }
+
             return response()->json([
                 'message' => 'Transaksi berhasil dibatalkan (void).',
                 'details' => $restorationDetails,

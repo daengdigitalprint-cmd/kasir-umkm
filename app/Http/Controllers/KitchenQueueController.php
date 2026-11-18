@@ -31,7 +31,12 @@ class KitchenQueueController extends Controller
             ->where('store_id', $store->id)
             ->whereNotNull('transaction_id')
             ->whereIn('status', ['waiting', 'serving', 'ready'])
-            ->whereDate('created_at', today())
+            // Pesanan hari ini, plus pesanan kemarin yang belum selesai (mis. lewat tengah malam).
+            ->where(fn ($q) => $q
+                ->whereDate('created_at', today())
+                ->orWhere(fn ($q2) => $q2
+                    ->where('created_at', '>=', today()->subDay())
+                    ->whereIn('status', ['waiting', 'serving'])))
             ->with('transaction:id,transaction_number,order_type,table_reference')
             ->orderByRaw("FIELD(status, 'waiting', 'serving', 'ready')")
             ->orderBy('created_at')

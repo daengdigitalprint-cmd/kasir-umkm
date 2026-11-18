@@ -9,7 +9,7 @@ import { receiptLinesToEscPos } from '@/lib/escPosEncode';
 import { ChefHat, RefreshCw, ShoppingCart, Utensils, Hand, Printer, Wifi, WifiOff } from 'lucide-vue-next';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
-interface EntryItem { product_name: string; quantity: number | string; }
+interface EntryItem { product_name: string; quantity: number | string; variant?: string | null; modifiers?: Array<{ label: string }> | null; }
 interface Entry { id: number; number: number; status: 'waiting' | 'serving' | 'ready' | 'completed' | 'cancelled'; order_type?: string | null; table_reference: string | null; transaction_number: string | null; created_at: string | null; called_at: string | null; notes: string | null; items: EntryItem[]; }
 interface BroadcastPayload { action: 'upsert' | 'delete'; entry: Entry; entryId: number; }
 const props = defineProps<{ store: { id: number; name: string }; entries: Entry[] }>();
@@ -24,10 +24,16 @@ watch(
 
 const previousWaitingIds = ref<number[]>(entries.value.filter((entry) => entry.status === 'waiting').map((entry) => entry.id));
 const audioContext = ref<AudioContext | null>(null);
+const soundReady = ref(false);
 const unlockNotificationSound = () => {
     audioContext.value ??= new AudioContext();
     if (audioContext.value.state === 'suspended') audioContext.value.resume();
+    soundReady.value = true;
 };
+
+// Jam berjalan untuk timer pesanan.
+const now = ref(Date.now());
+let clockId: ReturnType<typeof setInterval> | null = null;
 const playNewOrderSound = () => {
     if (!audioContext.value) return;
     const oscillator = audioContext.value.createOscillator();
@@ -43,7 +49,7 @@ const playNewOrderSound = () => {
 
 const isWsConnected = ref(false);
 const transportMode = ref<'idle' | 'ws' | 'polling'>('idle');
-const refresh = () => router.reload({ only: ['entries'], preserveScroll: true, onSuccess: () => {
+const refresh = () => router.reload({ only: ['entries'], onSuccess: () => {
     const waitingIds = entries.value.filter((entry) => entry.status === 'waiting').map((entry) => entry.id);
     if (waitingIds.some((id) => !previousWaitingIds.value.includes(id))) playNewOrderSound();
     previousWaitingIds.value = waitingIds;
@@ -136,7 +142,7 @@ const setupEcho = () => {
 const columns = computed(() => [
     { key: 'waiting' as const, label: 'Antrian Baru', accent: 'border-t-amber-500', badge: 'bg-amber-100 text-amber-700', action: 'Mulai Buat', next: 'serving' },
     { key: 'serving' as const, label: 'Sedang Dibuat', accent: 'border-t-blue-500', badge: 'bg-blue-100 text-blue-700', action: 'Siap', next: 'ready' },
-    { key: 'ready' as const, label: 'Siap Diserahkan', accent: 'border-t-emerald-500', badge: 'bg-emerald-100 text-emerald-700', action: null, next: null },
+    { key: 'ready' as const, label: 'Siap Diserahkan', accent: 'border-t-emerald-500', badge: 'bg-emerald-100 text-emerald-700', action: 'Diserahkan', next: 'completed' },
 ].map((column) => ({ ...column, entries: entries.value.filter((entry) => entry.status === column.key) })));
 
 const stats = computed(() => [
@@ -146,7 +152,17 @@ const stats = computed(() => [
     { label: 'Siap Diserahkan', value: entries.value.filter((e) => e.status === 'ready').length, subtitle: 'siap diantar', icon: Hand, color: 'text-emerald-600', bg: 'bg-emerald-100' },
 ]);
 
-const elapsed = (date: string | null) => { if (!date) return '0:00'; const seconds = Math.max(0, Math.floor((Date.now() - new Date(date).getTime()) / 1000)); return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`; };
+const elapsedSeconds = (date: string | null) => (date ? Math.max(0, Math.floor((now.value - new Date(date).getTime()) / 1000)) : 0);
+const elapsed = (date: string | null) => { const seconds = elapsedSeconds(date); return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`; };
+/** Kuning setelah 10 menit, merah setelah 20 menit (pesanan yang belum siap). */
+const lateClass = (entry: Entry) => {
+    if (entry.status === 'ready') return 'text-slate-400';
+    const minutes = elapsedSeconds(entry.created_at) / 60;
+    if (minutes >= 20) return 'rounded bg-red-100 px-1.5 font-bold text-red-700';
+    if (minutes >= 10) return 'rounded bg-amber-100 px-1.5 font-bold text-amber-700';
+    return 'text-slate-400';
+};
+const orderTypeLabel: Record<string, string> = { dine_in: 'Makan di tempat', takeaway: 'Bungkus', delivery: 'Antar', online: 'Online' };
 
 const { isPrinting: isPrinterPrinting, initialize: initializePrinter, printEscPosBytes } = usePrinter();
 const printEntry = async (entry: Entry) => {
@@ -154,7 +170,12 @@ const printEntry = async (entry: Entry) => {
         storeName: props.store.name,
         transactionNumber: entry.transaction_number || `#${entry.number}`,
         tableReference: entry.table_reference,
-        items: entry.items,
+        orderType: entry.order_type ?? null,
+        items: entry.items.map((item) => ({
+            product_name: item.variant ? `${item.product_name} (${item.variant})` : item.product_name,
+            quantity: item.quantity,
+            modifiers: item.modifiers ?? null,
+        })),
         paperWidthMm: 58,
     });
     const result = await printEscPosBytes(receiptLinesToEscPos(lines), { role: 'kitchen' });
@@ -169,17 +190,21 @@ const advanceStatus = async (entry: Entry, status: string) => {
         const response = await fetch(`/queue-entries/${entry.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-XSRF-TOKEN': decodeURIComponent(document.cookie.match(/XSRF-TOKEN=([^;]+)/)?.[1] ?? '') }, body: JSON.stringify({ status }) });
         if (!response.ok) throw new Error();
         const data = await response.json();
+        // Perbarui layar langsung, tanpa menunggu siaran WebSocket.
+        applyUpsert({ ...entry, status: status as Entry['status'] });
         toastSuccess(data.message || 'Status diperbarui', 1500);
     } catch { toastError('Gagal memperbarui status'); refresh(); }
 };
 
 onMounted(() => {
     window.addEventListener('pointerdown', unlockNotificationSound, { once: true });
+    clockId = setInterval(() => (now.value = Date.now()), 1000);
     setupEcho();
 });
 onUnmounted(() => {
     window.removeEventListener('pointerdown', unlockNotificationSound);
     if (pollId) clearInterval(pollId);
+    if (clockId) clearInterval(clockId);
     if (echoUnsubscribe) echoUnsubscribe();
     audioContext.value?.close();
 });
@@ -211,6 +236,14 @@ onUnmounted(() => {
                     <RefreshCw class="h-3.5 w-3.5" />
                 </Button>
             </div>
+            <button
+                v-if="!soundReady"
+                type="button"
+                class="mx-4 mt-3 shrink-0 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-left text-sm font-semibold text-amber-900"
+                @click="unlockNotificationSound"
+            >
+                🔔 Ketuk di sini sekali agar bunyi pesanan baru aktif.
+            </button>
             <div class="mt-3 grid shrink-0 grid-cols-2 gap-3 px-4 md:grid-cols-4">
                 <div v-for="stat in stats" :key="stat.label" class="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-3">
                     <div :class="['flex h-10 w-10 shrink-0 items-center justify-center rounded-xl', stat.bg]">
@@ -240,15 +273,30 @@ onUnmounted(() => {
                                 <div class="px-4 pb-2 pt-3">
                                     <div class="flex items-start justify-between">
                                         <div>
-                                            <p class="font-mono text-xs text-slate-400">#{{ entry.number }}</p>
+                                            <p class="font-mono text-xs text-slate-400">
+                                                #{{ entry.number }}
+                                                <span v-if="entry.order_type && orderTypeLabel[entry.order_type]" class="ml-1 font-sans font-semibold text-slate-500">· {{ orderTypeLabel[entry.order_type] }}</span>
+                                            </p>
                                             <p class="text-sm font-bold text-slate-900">{{ entry.table_reference ? `Meja ${entry.table_reference}` : entry.transaction_number }}</p>
                                         </div>
-                                        <span class="font-mono text-xs text-slate-400">{{ elapsed(entry.created_at) }}</span>
+                                        <span class="font-mono text-xs" :class="lateClass(entry)">{{ elapsed(entry.created_at) }}</span>
                                     </div>
                                     <div class="mt-1.5 space-y-0.5">
-                                        <div v-for="(item, index) in entry.items" :key="index" class="flex gap-1 text-sm">
-                                            <b>{{ item.quantity }}×</b>
-                                            <span class="truncate text-slate-600">{{ item.product_name }}</span>
+                                        <div v-for="(item, index) in entry.items" :key="index" class="text-sm">
+                                            <div class="flex gap-1">
+                                                <b>{{ item.quantity }}×</b>
+                                                <span class="text-slate-700">
+                                                    {{ item.product_name }}<span v-if="item.variant" class="font-semibold text-slate-900"> ({{ item.variant }})</span>
+                                                </span>
+                                            </div>
+                                            <p
+                                                v-for="(m, mi) in item.modifiers ?? []"
+                                                :key="mi"
+                                                class="ml-5 text-xs font-semibold"
+                                                :class="m.label.startsWith('Catatan') ? 'text-amber-700' : 'text-blue-700'"
+                                            >
+                                                + {{ m.label }}
+                                            </p>
                                         </div>
                                     </div>
                                     <p v-if="entry.notes" class="mt-2 rounded bg-yellow-50 p-2 text-xs text-yellow-800">{{ entry.notes }}</p>
@@ -258,8 +306,8 @@ onUnmounted(() => {
                                         class="flex-1 px-4 py-2 text-left text-xs font-bold text-slate-700 hover:bg-slate-50"
                                         @click="column.action && advanceStatus(entry, column.next)"
                                     >
-                                        {{ column.action || 'Siap Diserahkan' }}
-                                        <span v-if="column.action" class="float-right">›</span>
+                                        {{ column.action }}
+                                        <span class="float-right">›</span>
                                     </button>
                                     <button
                                         class="border-l border-slate-100 px-3 text-slate-500 hover:bg-slate-50"

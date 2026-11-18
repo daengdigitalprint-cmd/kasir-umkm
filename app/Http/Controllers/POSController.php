@@ -1303,43 +1303,14 @@ class POSController extends Controller
             $payload = $this->receiptTransactionPayload($transaction, $store);
             $payload['loyalty_points_earned'] = $pointsEarned;
 
-            // Auto-create queue entry jika modul antrian aktif
-            if ($store->settings['queue_module_enabled'] ?? false) {
-                try {
-                    $queue = $store->queues()->where('is_active', true)->first();
-                    if (! $queue) {
-                        $queue = $store->queues()->create([
-                            'name' => 'Kasir',
-                            'code' => 'Q001',
-                            'is_active' => true,
-                        ]);
-                    }
-                    $transaction->load('items');
-                    $lastNumber = $queue->entries()->max('number');
-                    $nextNumber = $lastNumber ? ((int) $lastNumber + 1) : 1;
-                    $items = $transaction->items->map(fn ($item) => [
-                        'product_name' => $item->product_name,
-                        'quantity' => (int) $item->quantity,
-                    ])->toArray();
-                    $queue->entries()->create([
-                        'store_id' => $store->id,
-                        'number' => $nextNumber,
-                        'status' => 'waiting',
-                        'order_type' => $orderType,
-                        'table_number' => $tableRef,
-                        'customer_name' => $request->customer_name,
-                        'customer_phone' => $customer?->phone,
-                        'transaction_id' => $transaction->id,
-                        'barber_user_id' => $barberUserId,
-                        'items' => $items,
-                    ]);
-                } catch (\Throwable $e) {
-                    Log::warning('[queue] gagal membuat antrian otomatis', [
-                        'transaction_id' => $transaction->id,
-                        'error' => $e->getMessage(),
-                    ]);
-                }
-            }
+            // Antrean otomatis: Papan Dapur (Antrian Dapur) atau Antrian Pelanggan.
+            \App\Support\KitchenOrders::enqueue($store, $transaction, [
+                'order_type' => $orderType,
+                'table_number' => $tableRef,
+                'customer_name' => $request->customer_name,
+                'customer_phone' => $customer?->phone,
+                'barber_user_id' => $barberUserId,
+            ]);
 
             return response()->json([
                 'success' => true,
@@ -1608,6 +1579,16 @@ class POSController extends Controller
             );
 
             $transaction->load(['items', 'store']);
+
+            // Open bill (makan dulu bayar nanti) langsung diteruskan ke Papan Dapur.
+            if (\App\Support\KitchenOrders::enabled($store)) {
+                \App\Support\KitchenOrders::enqueue($store, $transaction, [
+                    'order_type' => $transaction->order_type,
+                    'table_number' => $transaction->table_reference,
+                    'customer_name' => $transaction->customer_name ?? null,
+                    'notes' => $transaction->notes,
+                ]);
+            }
 
             return response()->json([
                 'success' => true,
@@ -1961,6 +1942,8 @@ class POSController extends Controller
                 'reason' => $reason,
             ]
         );
+
+        \App\Support\KitchenOrders::cancelForTransaction($store, $transaction);
 
         return response()->json([
             'success' => true,

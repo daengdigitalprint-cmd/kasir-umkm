@@ -167,29 +167,12 @@ class TableOrderController extends Controller
             'user_id' => auth()->id(),
         ]);
 
-        if (\App\Support\PlanModules::settingOn($store, 'kitchen_queue_enabled')) {
-            $queue = $store->queues()->where('is_active', true)->first();
-            if (! $queue) {
-                $queue = $store->queues()->create(['name' => 'Kasir', 'code' => 'Q001', 'is_active' => true]);
-            }
-
-            $queueEntry = QueueEntry::firstOrCreate(
-                ['transaction_id' => $transaction->id],
-                [
-                    'queue_id' => $queue->id,
-                    'store_id' => $store->id,
-                    'number' => ((int) $queue->entries()->max('number')) + 1,
-                    'status' => 'waiting',
-                    'order_type' => 'dine_in',
-                    'table_number' => $transaction->table_reference,
-                    'items' => $transaction->items->map(fn ($item) => [
-                        'product_name' => $item->product_name,
-                        'quantity' => (int) $item->quantity,
-                    ])->values()->all(),
-                ],
-            );
-
-            KitchenQueueUpdated::dispatch(KitchenQueueUpdated::fromEntry($queueEntry->load('transaction:id,transaction_number,order_type,table_reference')));
+        if (\App\Support\KitchenOrders::enabled($store)) {
+            \App\Support\KitchenOrders::enqueue($store, $transaction, [
+                'order_type' => 'dine_in',
+                'table_number' => $transaction->table_reference,
+                'customer_name' => $transaction->customer_name ?? null,
+            ]);
         }
 
         return redirect()->back()->with('success', 'Pesanan diterima dan diteruskan ke dapur.');

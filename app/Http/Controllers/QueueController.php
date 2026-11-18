@@ -282,7 +282,7 @@ class QueueController extends Controller
             ]);
         });
 
-        event(KitchenQueueUpdated::fromEntry($entry->load('transaction:id,transaction_number,order_type,table_reference')));
+        \App\Support\KitchenOrders::broadcast(KitchenQueueUpdated::fromEntry($entry->load('transaction:id,transaction_number,order_type,table_reference')));
 
         return back()->with('success', "Nomor antrian #{$entry->number} berhasil dibuat.");
     }
@@ -338,7 +338,7 @@ class QueueController extends Controller
             }
         });
 
-        event(KitchenQueueUpdated::fromEntry($queueEntry->load('transaction:id,transaction_number,order_type,table_reference')));
+        \App\Support\KitchenOrders::broadcast(KitchenQueueUpdated::fromEntry($queueEntry->load('transaction:id,transaction_number,order_type,table_reference')));
 
         return response()->json([
             'success' => true,
@@ -361,7 +361,7 @@ class QueueController extends Controller
         $entryId = (int) $queueEntry->id;
         $queueEntry->delete();
 
-        event(KitchenQueueUpdated::deleted($storeId, $entryId));
+        \App\Support\KitchenOrders::broadcast(KitchenQueueUpdated::deleted($storeId, $entryId));
 
         return response()->json([
             'success' => true,
