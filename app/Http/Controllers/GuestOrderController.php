@@ -186,13 +186,10 @@ class GuestOrderController extends Controller
             'number' => $transaction->transaction_number,
             'status' => $transaction->order_status,
             'payment_status' => $transaction->payment_status,
+            'payment_method' => $transaction->payment_method,
             'total_amount' => $transaction->total_amount,
-            'items' => $transaction->items->map(fn ($i) => [
-                'name' => $i->product_name,
-                'quantity' => $i->quantity,
-                'price' => $i->unit_price,
-                'total' => $i->total_price,
-            ]),
+            'reject_reason' => GuestMenuController::rejectReason($transaction),
+            'items' => $transaction->items->map(fn ($i) => GuestMenuController::guestItem($i)),
         ]);
     }
 }

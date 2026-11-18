@@ -82,23 +82,7 @@ class GuestMenuController extends Controller
             ->sortBy(fn ($product) => $bestSellingIds->search($product['id']))
             ->values();
 
-        // Metode pembayaran aktif dari settings toko
-        $rawMethods = $store->settings['scan_meja_payment_methods'] ?? [
-            ['type' => 'cash', 'label' => 'Tunai', 'active' => true],
-            ['type' => 'qris', 'label' => 'QRIS', 'active' => true],
-        ];
-        $paymentMethods = collect($rawMethods)
-            ->filter(fn ($m) => (bool) ($m['active'] ?? true))
-            ->map(fn ($m) => [
-                'type' => $m['type'],
-                'label' => $m['label'],
-                'instructions' => $m['instructions'] ?? null,
-                'image_url' => ! empty($m['image']) ? asset('storage/'.$m['image']) : null,
-                'bank_name' => $m['bank_name'] ?? null,
-                'account_number' => $m['account_number'] ?? null,
-                'account_name' => $m['account_name'] ?? null,
-            ])
-            ->values();
+        $paymentMethods = $this->paymentMethods($store);
 
         return Inertia::render('ScanMeja/Guest/Menu', [
             'table' => [
@@ -162,7 +146,11 @@ class GuestMenuController extends Controller
                 'id' => $store->id,
                 'name' => $store->name,
                 'currency' => $store->currency,
+                'phone' => $store->phone,
+                ...\App\Support\ScanMejaAppearance::urls($store),
             ],
+            // Detail metode bayar yang dipilih (gambar QRIS / rekening) agar pelanggan bisa membayar dari halaman ini.
+            'paymentMethod' => $this->paymentMethods($store)->firstWhere('type', $transaction->payment_method),
             'transaction' => [
                 'id' => $transaction->id,
                 'status_token' => $transaction->status_token,
@@ -173,14 +161,67 @@ class GuestMenuController extends Controller
                 'subtotal' => $transaction->subtotal,
                 'total_amount' => $transaction->total_amount,
                 'notes' => $transaction->notes,
+                'reject_reason' => self::rejectReason($transaction),
                 'created_at' => $transaction->created_at->toISOString(),
-                'items' => $transaction->items->map(fn ($i) => [
-                    'name' => $i->product_name,
-                    'quantity' => $i->quantity,
-                    'price' => $i->unit_price,
-                    'total' => $i->total_price,
-                ]),
+                'items' => $transaction->items->map(fn ($i) => self::guestItem($i)),
             ],
         ]);
+    }
+
+    /**
+     * Metode pembayaran aktif dari settings toko.
+     *
+     * @return \Illuminate\Support\Collection<int, array<string, mixed>>
+     */
+    private function paymentMethods(\App\Models\Store $store): \Illuminate\Support\Collection
+    {
+        $rawMethods = $store->settings['scan_meja_payment_methods'] ?? [
+            ['type' => 'cash', 'label' => 'Tunai', 'active' => true],
+            ['type' => 'qris', 'label' => 'QRIS', 'active' => true],
+        ];
+
+        return collect($rawMethods)
+            ->filter(fn ($m) => (bool) ($m['active'] ?? true))
+            ->map(fn ($m) => [
+                'type' => $m['type'],
+                'label' => $m['label'],
+                'instructions' => $m['instructions'] ?? null,
+                'image_url' => ! empty($m['image']) ? asset('storage/'.$m['image']) : null,
+                'bank_name' => $m['bank_name'] ?? null,
+                'account_number' => $m['account_number'] ?? null,
+                'account_name' => $m['account_name'] ?? null,
+            ])
+            ->values();
+    }
+
+    /**
+     * Item pesanan untuk halaman tamu, termasuk catatan per item.
+     *
+     * @return array<string, mixed>
+     */
+    public static function guestItem(TransactionItem $item): array
+    {
+        $note = collect($item->modifiers ?? [])
+            ->map(fn ($m) => is_array($m) ? ($m['value'] ?? $m['label'] ?? null) : null)
+            ->filter()
+            ->implode(', ');
+
+        return [
+            'name' => $item->product_name,
+            'quantity' => (float) $item->quantity,
+            'price' => (float) $item->unit_price,
+            'total' => (float) $item->total_price,
+            'note' => $note !== '' ? $note : null,
+        ];
+    }
+
+    /** Alasan penolakan dari kasir (dicatat sebagai "[Ditolak kasir: ...]"). */
+    public static function rejectReason(Transaction $transaction): ?string
+    {
+        if ($transaction->order_status !== 'cancelled') {
+            return null;
+        }
+
+        return preg_match('/\[Ditolak kasir: (.*?)\]/s', (string) $transaction->notes, $m) ? trim($m[1]) : null;
     }
 }

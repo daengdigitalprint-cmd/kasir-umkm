@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { ref, onMounted, onBeforeUnmount, computed } from 'vue';
-import { ArrowLeft, CheckCircle2, Clock, Loader2, XCircle, Utensils } from 'lucide-vue-next';
+import { ArrowLeft, Bell, Check, CheckCircle2, ChefHat, Clock, Copy, MessageCircle, Plus, Send, Utensils, XCircle } from 'lucide-vue-next';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 interface OrderItem {
     name: string;
     quantity: number;
     price: number;
     total: number;
+    note?: string | null;
 }
 
 interface TransactionData {
@@ -20,99 +21,176 @@ interface TransactionData {
     subtotal: number;
     total_amount: number;
     notes: string | null;
+    reject_reason?: string | null;
     created_at: string;
     items: OrderItem[];
 }
 
+interface PaymentMethod {
+    type: string;
+    label: string;
+    instructions: string | null;
+    image_url: string | null;
+    bank_name: string | null;
+    account_number: string | null;
+    account_name: string | null;
+}
+
 const props = defineProps<{
     table: { id: number; name: string; slug: string; capacity: number | null };
-    store: { id: number; name: string; currency: string };
+    store: { id: number; name: string; currency: string; phone?: string | null; logo_url?: string | null; cover_url?: string | null };
     transaction: TransactionData;
+    paymentMethod?: PaymentMethod | null;
 }>();
 
 const current = ref<TransactionData>(props.transaction);
-const pollingInterval = 3000;
+const lastUpdated = ref(new Date());
 let timer: ReturnType<typeof setInterval> | null = null;
 
-const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('id-ID', {
+const formatPrice = (price: number) =>
+    new Intl.NumberFormat('id-ID', {
         style: 'currency',
         currency: props.store.currency === 'IDR' ? 'IDR' : props.store.currency,
         minimumFractionDigits: 0,
-    }).format(price);
-};
+    }).format(Number(price));
+const qty = (q: number) => Number(q).toLocaleString('id-ID');
+const clock = (d: Date | string) => new Date(d).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
 
-const statusLabel = computed(() => {
-    const map: Record<string, string> = {
-        pending: 'Menunggu Konfirmasi',
-        accepted: 'Diterima Kasir',
-        processing: 'Sedang Disiapkan',
-        ready: 'Siap Diantar',
-        completed: 'Selesai',
-        cancelled: 'Dibatalkan',
-    };
-    return map[current.value.status] ?? current.value.status;
+const storeInitials = computed(() =>
+    props.store.name
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((w) => w[0]?.toUpperCase())
+        .join(''),
+);
+const phoneDigits = computed(() => (props.store.phone ?? '').replace(/\D/g, ''));
+const waLink = computed(() => {
+    if (!phoneDigits.value) return null;
+    const n = phoneDigits.value.startsWith('0') ? `62${phoneDigits.value.slice(1)}` : phoneDigits.value;
+    const text = encodeURIComponent(`Halo ${props.store.name}, saya dari ${props.table.name} dengan pesanan ${current.value.number}.`);
+    return `https://wa.me/${n}?text=${text}`;
 });
 
-const statusColor = computed(() => {
+// ── Status & langkah ──
+const isCancelled = computed(() => current.value.status === 'cancelled');
+const isCompleted = computed(() => current.value.status === 'completed');
+const isFinished = computed(() => isCancelled.value || isCompleted.value);
+const isPaid = computed(() => current.value.payment_status === 'paid');
+
+// 0 = dikirim, 1 = diterima kasir, 2 = disiapkan, 3 = selesai
+const stage = computed(() => {
     switch (current.value.status) {
-        case 'completed':
-            return 'text-emerald-600 bg-emerald-50';
-        case 'cancelled':
-            return 'text-red-600 bg-red-50';
         case 'pending':
-            return 'text-amber-600 bg-amber-50';
+            return 0;
         case 'accepted':
-            return 'text-sky-600 bg-sky-50';
         case 'processing':
-            return 'text-sky-600 bg-sky-50';
+            return 2;
+        case 'serving':
         case 'ready':
-            return 'text-violet-600 bg-violet-50';
+            return 2;
+        case 'completed':
+            return 3;
         default:
-            return 'text-slate-600 bg-slate-100';
+            return 0;
     }
 });
+const steps = [
+    { label: 'Dikirim', icon: Send },
+    { label: 'Diterima', icon: Check },
+    { label: 'Disiapkan', icon: ChefHat },
+    { label: 'Selesai', icon: CheckCircle2 },
+];
 
-const paymentStatusLabel = computed(() => ({
-    unpaid: 'Belum Dibayar',
-    pending_payment: 'Menunggu Pembayaran',
-    paid: 'Sudah Dibayar',
-    failed: 'Pembayaran Gagal',
-    refunded: 'Dikembalikan',
-}[current.value.payment_status] ?? current.value.payment_status));
-
-const paymentLabel = computed(() => {
-    const map: Record<string, string> = {
-        cash: 'Tunai',
-        qris: 'QRIS',
-        ewallet: 'E-Wallet',
-        transfer: 'Transfer Bank',
-        unpaid: 'Belum Dibayar',
+const hero = computed(() => {
+    if (isCancelled.value)
+        return {
+            icon: XCircle,
+            tone: 'bg-red-50 text-red-600',
+            title: 'Pesanan tidak dapat diproses',
+            body: 'Mohon maaf, pesanan Anda ditolak oleh kasir. Silakan hubungi staf atau pesan menu lain.',
+        };
+    if (isCompleted.value)
+        return {
+            icon: CheckCircle2,
+            tone: 'bg-emerald-50 text-emerald-600',
+            title: 'Pesanan selesai',
+            body: 'Terima kasih! Selamat menikmati hidangan Anda.',
+        };
+    if (current.value.status === 'ready')
+        return {
+            icon: Bell,
+            tone: 'bg-violet-50 text-violet-600',
+            title: 'Pesanan siap diantar',
+            body: 'Hidangan Anda akan segera diantar ke meja.',
+        };
+    if (stage.value === 2)
+        return {
+            icon: ChefHat,
+            tone: 'bg-sky-50 text-sky-600',
+            title: 'Pesanan sedang disiapkan',
+            body: 'Kasir sudah menerima pesanan dan dapur sedang menyiapkannya.',
+        };
+    return {
+        icon: Clock,
+        tone: 'bg-amber-50 text-amber-600',
+        title: 'Pesanan terkirim',
+        body: 'Menunggu konfirmasi kasir. Biasanya hanya beberapa saat.',
     };
-    return map[current.value.payment_method] ?? current.value.payment_method;
 });
 
-const isFinished = computed(() => ['completed', 'cancelled'].includes(current.value.status));
+const paymentLabel = computed(
+    () =>
+        props.paymentMethod?.label ??
+        ({ cash: 'Tunai', qris: 'QRIS', ewallet: 'E-Wallet', transfer: 'Transfer bank', bank_transfer: 'Transfer bank', card: 'Kartu' }[
+            current.value.payment_method
+        ] ||
+            current.value.payment_method),
+);
+const paymentHint = computed(() => {
+    if (isPaid.value) return 'Pembayaran sudah diterima.';
+    if (current.value.payment_method === 'cash') return 'Bayar tunai langsung ke kasir.';
+    return props.paymentMethod?.instructions || 'Selesaikan pembayaran lalu tunjukkan bukti ke kasir.';
+});
+const showPaymentDetail = computed(
+    () => !isPaid.value && !isCancelled.value && !!props.paymentMethod && (!!props.paymentMethod.image_url || !!props.paymentMethod.account_number),
+);
 
+const copied = ref(false);
+const copyAccount = () => {
+    const n = props.paymentMethod?.account_number;
+    if (!n) return;
+    navigator.clipboard
+        ?.writeText(n)
+        .then(() => {
+            copied.value = true;
+            setTimeout(() => (copied.value = false), 2000);
+        })
+        .catch(() => {});
+};
+
+// ── Pembaruan otomatis ──
 const fetchStatus = async () => {
     try {
         const response = await fetch(`/api/guest/order/${current.value.status_token}/status`, {
-            headers: { 'Accept': 'application/json' },
+            headers: { Accept: 'application/json' },
         });
         if (!response.ok) return;
         const data = await response.json();
         current.value = { ...current.value, ...data };
+        lastUpdated.value = new Date();
+        if (isFinished.value && timer) {
+            clearInterval(timer);
+            timer = null;
+        }
     } catch {
         // jaringan terganggu, biarkan polling berikutnya mencoba lagi
     }
 };
 
 onMounted(() => {
-    if (!isFinished.value) {
-        timer = setInterval(fetchStatus, pollingInterval);
-    }
+    if (!isFinished.value) timer = setInterval(fetchStatus, 4000);
 });
-
 onBeforeUnmount(() => {
     if (timer) clearInterval(timer);
 });
@@ -122,99 +200,164 @@ onBeforeUnmount(() => {
     <Head :title="`Status Pesanan #${current.number}`" />
 
     <div class="min-h-screen bg-slate-50">
-        <!-- Header -->
-        <header class="sticky top-0 z-20 bg-white border-b border-slate-200">
-            <div class="mx-auto flex max-w-md items-center gap-3 px-4 py-4">
+        <!-- Kepala halaman -->
+        <header class="sticky top-0 z-20 border-b border-slate-200 bg-white">
+            <div class="mx-auto flex max-w-md items-center gap-3 px-4 py-3">
                 <Link
                     :href="`/m/${table.slug}`"
-                    class="flex h-11 w-11 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100"
+                    class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100"
+                    aria-label="Kembali ke menu"
                 >
                     <ArrowLeft class="h-5 w-5" />
                 </Link>
+                <div
+                    class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-violet-50 text-xs font-black text-violet-700"
+                >
+                    <img v-if="store.logo_url" :src="store.logo_url" :alt="store.name" class="h-full w-full object-cover" />
+                    <span v-else>{{ storeInitials }}</span>
+                </div>
                 <div class="min-w-0">
-                    <p class="text-xs text-slate-500">{{ store.name }} · {{ table.name }}</p>
-                    <h1 class="truncate text-lg font-bold text-slate-800">Status Pesanan</h1>
+                    <h1 class="truncate text-base leading-tight font-black text-slate-900">{{ store.name }}</h1>
+                    <p class="text-xs text-slate-500">{{ table.name }} · Status pesanan</p>
                 </div>
             </div>
         </header>
 
-        <main class="mx-auto max-w-md px-4 py-6">
-            <!-- Card Status -->
-            <div class="rounded-3xl bg-white p-6 border border-slate-200">
-                <div class="flex items-center gap-4">
-                    <div
-                        class="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl"
-                        :class="statusColor"
-                    >
-                        <CheckCircle2 v-if="current.status === 'completed'" class="h-8 w-8" />
-                        <XCircle v-else-if="current.status === 'cancelled'" class="h-8 w-8" />
-                        <Clock v-else-if="current.status === 'pending'" class="h-8 w-8" />
-                        <Utensils v-else class="h-8 w-8" />
+        <main class="mx-auto max-w-md space-y-4 px-4 py-5 pb-28">
+            <!-- Status utama -->
+            <section class="rounded-2xl border border-slate-200 bg-white p-5">
+                <div class="flex items-start gap-4">
+                    <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl" :class="hero.tone">
+                        <component :is="hero.icon" class="h-7 w-7" />
                     </div>
                     <div class="min-w-0">
-                        <p class="text-xs font-medium text-slate-500">Nomor Pesanan</p>
-                        <p class="text-sm font-bold text-slate-800">{{ current.number }}</p>
-                        <span
-                            class="mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold"
-                            :class="statusColor"
-                        >
-                            <Loader2 v-if="!isFinished" class="h-3 w-3 animate-spin" />
-                            {{ statusLabel }}
-                        </span>
+                        <h2 class="text-lg leading-tight font-black text-slate-900">{{ hero.title }}</h2>
+                        <p class="mt-1 text-sm text-slate-500">{{ hero.body }}</p>
                     </div>
                 </div>
 
-                <p v-if="!isFinished" class="mt-4 text-xs text-slate-500">
-                    Halaman ini diperbarui otomatis. Silakan tunggu pesanan Anda disiapkan.
+                <p v-if="isCancelled && current.reject_reason" class="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
+                    Alasan: <b>{{ current.reject_reason }}</b>
                 </p>
-            </div>
 
-            <!-- Detail Pesanan -->
-            <div class="mt-4 rounded-3xl bg-white p-6 border border-slate-200">
-                <h2 class="text-sm font-bold text-slate-800">Detail Pesanan</h2>
+                <!-- Langkah -->
+                <ol v-if="!isCancelled" class="mt-5 grid grid-cols-4">
+                    <li v-for="(s, i) in steps" :key="s.label" class="relative flex flex-col items-center text-center">
+                        <span
+                            v-if="i > 0"
+                            class="absolute top-4 right-1/2 h-0.5 w-full -translate-y-1/2"
+                            :class="i <= stage ? 'bg-violet-500' : 'bg-slate-200'"
+                        />
+                        <span
+                            class="relative z-10 flex h-8 w-8 items-center justify-center rounded-full border-2"
+                            :class="
+                                i < stage || (i === stage && isCompleted)
+                                    ? 'border-violet-600 bg-violet-600 text-white'
+                                    : i === stage
+                                      ? 'border-violet-600 bg-white text-violet-600'
+                                      : 'border-slate-200 bg-white text-slate-300'
+                            "
+                        >
+                            <component :is="s.icon" class="h-4 w-4" :class="{ 'animate-pulse': i === stage && !isFinished }" />
+                        </span>
+                        <span class="mt-1.5 text-[11px] font-semibold" :class="i <= stage ? 'text-slate-800' : 'text-slate-400'">{{ s.label }}</span>
+                    </li>
+                </ol>
 
-                <ul class="mt-4 divide-y divide-slate-100">
-                    <li
-                        v-for="(item, index) in current.items"
-                        :key="index"
-                        class="flex items-center justify-between gap-3 py-3"
+                <div class="mt-5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-slate-100 pt-3 text-xs whitespace-nowrap text-slate-500">
+                    <span>
+                        No. pesanan <b class="font-mono text-slate-700">{{ current.number }}</b>
+                    </span>
+                    <span v-if="!isFinished" class="inline-flex items-center gap-1.5">
+                        <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" /> Diperbarui {{ clock(lastUpdated) }}
+                    </span>
+                    <span v-else>{{ clock(current.created_at) }}</span>
+                </div>
+            </section>
+
+            <!-- Pembayaran -->
+            <section class="rounded-2xl border border-slate-200 bg-white p-5">
+                <div class="flex items-center justify-between gap-3">
+                    <div>
+                        <p class="text-xs text-slate-500">Pembayaran</p>
+                        <p class="font-bold text-slate-900">{{ paymentLabel }}</p>
+                    </div>
+                    <span
+                        class="rounded-full px-2.5 py-1 text-xs font-bold"
+                        :class="
+                            isPaid ? 'bg-emerald-50 text-emerald-700' : isCancelled ? 'bg-slate-100 text-slate-500' : 'bg-amber-50 text-amber-700'
+                        "
                     >
-                        <div class="min-w-0">
-                            <p class="truncate text-sm font-medium text-slate-700">{{ item.name }}</p>
-                            <p class="text-xs text-slate-400">{{ Number(item.quantity).toLocaleString('id-ID') }}× {{ formatPrice(item.price) }}</p>
+                        {{ isPaid ? 'Lunas' : isCancelled ? 'Dibatalkan' : 'Belum dibayar' }}
+                    </span>
+                </div>
+                <p v-if="!isCancelled" class="mt-2 text-sm text-slate-500">{{ paymentHint }}</p>
+
+                <div v-if="showPaymentDetail" class="mt-4 rounded-xl border border-slate-200 p-4">
+                    <img v-if="paymentMethod?.image_url" :src="paymentMethod.image_url" alt="QRIS" class="mx-auto h-52 w-52 object-contain" />
+                    <div v-if="paymentMethod?.account_number" :class="{ 'mt-4 border-t border-slate-100 pt-4': paymentMethod?.image_url }">
+                        <p class="text-xs text-slate-500">Transfer ke {{ paymentMethod.bank_name }}</p>
+                        <div class="mt-1 flex items-center justify-between gap-2">
+                            <p class="font-mono text-lg font-bold text-slate-900">{{ paymentMethod.account_number }}</p>
+                            <button
+                                type="button"
+                                class="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600"
+                                @click="copyAccount"
+                            >
+                                <Copy class="h-3.5 w-3.5" /> {{ copied ? 'Tersalin' : 'Salin' }}
+                            </button>
                         </div>
-                        <span class="text-sm font-semibold text-slate-800">{{ formatPrice(item.total) }}</span>
+                        <p v-if="paymentMethod.account_name" class="text-xs text-slate-500">a.n. {{ paymentMethod.account_name }}</p>
+                    </div>
+                    <p class="mt-3 text-center text-sm">
+                        Total bayar <b class="text-slate-900">{{ formatPrice(current.total_amount) }}</b>
+                    </p>
+                </div>
+            </section>
+
+            <!-- Rincian -->
+            <section class="rounded-2xl border border-slate-200 bg-white p-5">
+                <h2 class="text-sm font-bold text-slate-900">Rincian pesanan</h2>
+                <ul class="mt-3 divide-y divide-slate-100">
+                    <li v-for="(item, index) in current.items" :key="index" class="flex gap-3 py-2.5">
+                        <span class="w-7 shrink-0 text-sm font-bold text-slate-900">{{ qty(item.quantity) }}×</span>
+                        <div class="min-w-0 flex-1">
+                            <p class="text-sm text-slate-800">{{ item.name }}</p>
+                            <p v-if="item.note" class="text-xs text-amber-700">{{ item.note }}</p>
+                        </div>
+                        <span class="shrink-0 text-sm text-slate-700">{{ formatPrice(item.total) }}</span>
                     </li>
                 </ul>
-
-                <div class="mt-4 space-y-2 border-t border-slate-100 pt-4">
-                    <div class="flex items-center justify-between text-sm text-slate-500">
-                        <span>Metode Pembayaran</span>
-                        <span class="font-semibold text-slate-700">{{ paymentLabel }}</span>
-                    </div>
-                    <div class="flex items-center justify-between text-sm text-slate-500">
-                        <span>Status Pembayaran</span>
-                        <span class="font-semibold" :class="current.payment_status === 'paid' ? 'text-emerald-600' : 'text-amber-600'">{{ paymentStatusLabel }}</span>
-                    </div>
-                    <div class="flex items-center justify-between text-sm text-slate-500">
-                        <span>Subtotal</span>
-                        <span>{{ formatPrice(current.subtotal) }}</span>
-                    </div>
-                    <div class="flex items-center justify-between border-t border-slate-100 pt-2 text-base font-bold text-slate-800">
-                        <span>Total</span>
-                        <span>{{ formatPrice(current.total_amount) }}</span>
-                    </div>
+                <div class="mt-2 flex items-center justify-between border-t border-dashed border-slate-200 pt-3">
+                    <span class="text-sm font-semibold text-slate-500">Total</span>
+                    <span class="text-lg font-black text-slate-900">{{ formatPrice(current.total_amount) }}</span>
                 </div>
-            </div>
+            </section>
 
-            <!-- Tombol kembali -->
-            <Link
-                :href="`/m/${table.slug}`"
-                class="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 px-5 py-4 text-white font-bold text-sm"
-            >
-                <ArrowLeft class="h-4 w-4" />
-                Kembali ke Menu
-            </Link>
+            <p class="flex items-center justify-center gap-1.5 text-center text-xs text-slate-400">
+                <Utensils class="h-3.5 w-3.5" /> Simpan halaman ini untuk memantau pesanan Anda.
+            </p>
         </main>
+
+        <!-- Aksi bawah -->
+        <div class="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white px-4 py-3">
+            <div class="mx-auto flex max-w-md gap-2">
+                <a
+                    v-if="waLink"
+                    :href="waLink"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="flex items-center justify-center gap-1.5 rounded-full border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700"
+                >
+                    <MessageCircle class="h-4 w-4" /> Hubungi
+                </a>
+                <Link
+                    :href="`/m/${table.slug}`"
+                    class="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-violet-600 px-5 py-3 text-sm font-bold text-white"
+                >
+                    <Plus class="h-4 w-4" /> {{ isCancelled ? 'Pesan menu lain' : 'Pesan lagi' }}
+                </Link>
+            </div>
+        </div>
     </div>
 </template>
