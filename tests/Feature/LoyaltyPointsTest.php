@@ -385,3 +385,45 @@ test('void transaksi membatalkan poin yang diperoleh pelanggan', function () {
     expect($service->reverseEarnedPoints($transaction))->toBe(0);
     expect($customer->fresh()->points_balance)->toBe(0);
 });
+
+test('notifikasi loyalitas bisa difilter per jenis dan status belum dibaca', function () {
+    ['store' => $store, 'user' => $user] = loyaltyStore();
+    $customer = loyaltyCustomer($store);
+    $service = app(LoyaltyService::class);
+    $service->earn($customer, 100, 'earn', 'seed');
+    $service->earn($customer, 50, 'earn', 'seed');
+    $service->broadcastPromo($store, 'Double poin', 'Akhir pekan ini.');
+    $store->loyaltyNotifications()->where('type', 'promo')->update(['read_at' => now()]);
+
+    $this->actingAs($user)
+        ->get('/loyalty/notifications?type=promo')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('Loyalty/Notifications')
+            ->has('notifications.data', 1)
+            ->where('filters.type', 'promo')
+            ->where('typeCounts.points_earned', 2)
+            ->where('unreadCount', 2));
+
+    $this->actingAs($user)
+        ->get('/loyalty/notifications?status=unread&type=tidak-valid')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('notifications.data', 2)
+            ->where('filters.type', null)
+            ->where('filters.status', 'unread'));
+});
+
+test('tandai semua notifikasi loyalitas dibaca hanya untuk toko sendiri', function () {
+    ['store' => $store, 'user' => $user] = loyaltyStore();
+    ['store' => $otherStore] = loyaltyStore();
+    app(LoyaltyService::class)->earn(loyaltyCustomer($store), 100, 'earn', 'seed');
+    app(LoyaltyService::class)->earn(loyaltyCustomer($otherStore), 100, 'earn', 'seed');
+
+    $this->actingAs($user)
+        ->post('/loyalty/notifications/read-all')
+        ->assertRedirect();
+
+    expect($store->loyaltyNotifications()->whereNull('read_at')->count())->toBe(0)
+        ->and($otherStore->loyaltyNotifications()->whereNull('read_at')->count())->toBe(1);
+});

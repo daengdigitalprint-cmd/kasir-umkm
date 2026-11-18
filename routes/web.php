@@ -352,6 +352,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/adjust', [App\Http\Controllers\LoyaltyController::class, 'adjust'])->name('adjust');
         Route::post('/promo', [App\Http\Controllers\LoyaltyController::class, 'broadcastPromo'])->name('promo');
         Route::get('/notifications', [App\Http\Controllers\LoyaltyController::class, 'notifications'])->name('notifications');
+        Route::post('/notifications/read-all', [App\Http\Controllers\LoyaltyController::class, 'markAllNotificationsRead'])->name('notifications.read-all');
         Route::post('/notifications/{notification}/read', [App\Http\Controllers\LoyaltyController::class, 'markNotificationRead'])->name('notifications.read');
     });
 

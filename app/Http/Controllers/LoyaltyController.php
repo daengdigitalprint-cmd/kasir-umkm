@@ -240,29 +240,57 @@ class LoyaltyController extends Controller
     }
 
     /** Inbox notifikasi loyalitas in-app untuk staf toko. */
-    public function notifications()
+    public function notifications(Request $request)
     {
         $store = $this->currentStore();
 
+        $types = ['points_earned', 'points_expiring', 'redemption_success', 'promo'];
+        $type = in_array($request->query('type'), $types, true) ? $request->query('type') : null;
+        $unreadOnly = $request->query('status') === 'unread';
+
         $notifications = $store->loyaltyNotifications()
             ->with('customer:id,name')
+            ->when($type, fn ($q) => $q->where('type', $type))
+            ->when($unreadOnly, fn ($q) => $q->whereNull('read_at'))
             ->latest()
             ->paginate(30)
+            ->withQueryString()
             ->through(fn (LoyaltyNotification $n) => [
                 'id' => $n->id,
                 'type' => $n->type,
                 'channel' => $n->channel,
                 'title' => $n->title,
                 'body' => $n->body,
+                'customer_id' => $n->customer_id,
                 'customer_name' => $n->customer?->name,
                 'read_at' => $n->read_at?->toIso8601String(),
                 'created_at' => $n->created_at?->toIso8601String(),
             ]);
 
+        $typeCounts = $store->loyaltyNotifications()
+            ->selectRaw('type, count(*) as total')
+            ->groupBy('type')
+            ->pluck('total', 'type');
+
         return Inertia::render('Loyalty/Notifications', [
             'notifications' => $notifications,
             'unreadCount' => $store->loyaltyNotifications()->whereNull('read_at')->count(),
+            'typeCounts' => $typeCounts,
+            'filters' => [
+                'type' => $type,
+                'status' => $unreadOnly ? 'unread' : 'all',
+            ],
         ]);
+    }
+
+    /** Tandai semua notifikasi loyalitas toko sebagai telah dibaca. */
+    public function markAllNotificationsRead()
+    {
+        $count = $this->currentStore()->loyaltyNotifications()
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
+
+        return back()->with('success', $count > 0 ? "{$count} notifikasi ditandai sudah dibaca." : 'Tidak ada notifikasi baru.');
     }
 
     /** Tandai notifikasi loyalitas sebagai telah dibaca. */
