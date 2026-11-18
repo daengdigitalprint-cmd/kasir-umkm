@@ -170,6 +170,7 @@ const typeClass: Record<string, string> = {
     purchase: 'bg-emerald-100 text-emerald-800',
     adjustment: 'bg-amber-100 text-amber-800',
     opname: 'bg-violet-100 text-violet-800',
+    repack: 'bg-cyan-100 text-cyan-800',
     adjustment_reversal: 'bg-slate-100 text-slate-700',
 };
 </script>

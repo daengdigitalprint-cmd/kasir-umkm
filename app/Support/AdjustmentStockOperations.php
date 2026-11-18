@@ -96,9 +96,11 @@ final class AdjustmentStockOperations
             return;
         }
 
-        $movementType = $document->type === StockAdjustment::TYPE_OPNAME
-            ? StockMovement::TYPE_OPNAME
-            : StockMovement::TYPE_ADJUSTMENT;
+        $movementType = match ($document->type) {
+            StockAdjustment::TYPE_OPNAME => StockMovement::TYPE_OPNAME,
+            StockAdjustment::TYPE_REPACK => StockMovement::TYPE_REPACK,
+            default => StockMovement::TYPE_ADJUSTMENT,
+        };
 
         $notes = $document->adjustment_number.' — '.StockAdjustment::reasonLabel((string) $document->reason_code);
 

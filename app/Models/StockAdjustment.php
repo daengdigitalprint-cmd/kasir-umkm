@@ -16,6 +16,9 @@ class StockAdjustment extends Model
 
     public const TYPE_OPNAME = 'opname';
 
+    /** Pecah kemasan / repack: produk asal berkurang, produk hasil bertambah. */
+    public const TYPE_REPACK = 'repack';
+
     public const STATUS_DRAFT = 'draft';
 
     public const STATUS_PENDING_APPROVAL = 'pending_approval';
@@ -39,6 +42,15 @@ class StockAdjustment extends Model
     public const REASON_CORRECTION = 'correction';
 
     public const REASON_OPNAME = 'opname';
+
+    public const REASON_REPACK = 'repack';
+
+    /** Arah isian jumlah per alasan. */
+    public const DIRECTION_DECREASE = 'decrease';
+
+    public const DIRECTION_INCREASE = 'increase';
+
+    public const DIRECTION_SET = 'set';
 
     protected $fillable = [
         'store_id',
@@ -95,7 +107,11 @@ class StockAdjustment extends Model
      */
     public static function nextNumber(int $storeId, string $type = self::TYPE_ADJUSTMENT): string
     {
-        $prefix = $type === self::TYPE_OPNAME ? 'OPN' : 'ADJ';
+        $prefix = match ($type) {
+            self::TYPE_OPNAME => 'OPN',
+            self::TYPE_REPACK => 'RPK',
+            default => 'ADJ',
+        };
         $year = now()->format('Y');
         $month = now()->format('m');
         $pattern = "{$prefix}/{$year}/{$month}/";
@@ -217,7 +233,28 @@ class StockAdjustment extends Model
             self::REASON_SAMPLE => 'Sampel atau hadiah',
             self::REASON_CORRECTION => 'Koreksi salah input',
             self::REASON_OPNAME => 'Hasil stock opname',
+            self::REASON_REPACK => 'Pecah kemasan',
         ];
+    }
+
+    /** Alasan yang bisa dipilih di form penyesuaian (opname & pecah kemasan punya menu sendiri). */
+    public static function manualReasonLabels(): array
+    {
+        $labels = self::reasonLabels();
+        unset($labels[self::REASON_OPNAME], $labels[self::REASON_REPACK]);
+
+        return $labels;
+    }
+
+    /** Rusak/hilang/dipakai mengurangi stok, ditemukan menambah, koreksi = stok sebenarnya. */
+    public static function directionFor(string $reason): string
+    {
+        return match ($reason) {
+            self::REASON_FOUND => self::DIRECTION_INCREASE,
+            self::REASON_CORRECTION, self::REASON_OPNAME => self::DIRECTION_SET,
+            self::REASON_REPACK => self::DIRECTION_SET,
+            default => self::DIRECTION_DECREASE,
+        };
     }
 
     public static function reasonLabel(string $reason): string

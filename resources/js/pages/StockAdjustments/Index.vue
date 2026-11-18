@@ -88,13 +88,18 @@ function filterByStatus(status: string) {
                         Catat barang rusak, hilang, kedaluwarsa, atau salah input. Setiap koreksi tersimpan sebagai dokumen bernomor.
                     </p>
                 </div>
-                <Button as-child class="rounded-xl">
-                    <Link href="/stock-adjustments/create" class="inline-flex items-center gap-2">
-                        <Plus class="h-4 w-4" />
-                        Penyesuaian baru
-                        <ArrowRight class="h-4 w-4 opacity-80" />
-                    </Link>
-                </Button>
+                <div class="flex flex-wrap gap-2">
+                    <Button as-child variant="outline" class="rounded-xl">
+                        <Link href="/stock-repacks/create" class="inline-flex items-center gap-2">Pecah kemasan</Link>
+                    </Button>
+                    <Button as-child class="rounded-xl">
+                        <Link href="/stock-adjustments/create" class="inline-flex items-center gap-2">
+                            <Plus class="h-4 w-4" />
+                            Penyesuaian baru
+                            <ArrowRight class="h-4 w-4 opacity-80" />
+                        </Link>
+                    </Button>
+                </div>
             </div>
 
             <div class="flex flex-wrap gap-2">

@@ -79,6 +79,7 @@ class StockMovementController extends Controller
                 StockMovement::TYPE_PRODUCTION_OUTPUT => 'Output produksi',
                 StockMovement::TYPE_PRODUCTION_REVERSAL => 'Pembatalan produksi',
                 StockMovement::TYPE_OPNAME => 'Stock opname',
+                StockMovement::TYPE_REPACK => 'Pecah kemasan',
                 StockMovement::TYPE_ADJUSTMENT_REVERSAL => 'Pembatalan penyesuaian',
             ],
         ]);

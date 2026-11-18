@@ -39,7 +39,7 @@ class StockAdjustmentController extends Controller
 
         $query = StockAdjustment::query()
             ->where('store_id', $store->id)
-            ->where('type', StockAdjustment::TYPE_ADJUSTMENT)
+            ->whereIn('type', [StockAdjustment::TYPE_ADJUSTMENT, StockAdjustment::TYPE_REPACK])
             ->with(['createdBy:id,name', 'postedBy:id,name'])
             ->withCount('lines');
 
@@ -88,7 +88,7 @@ class StockAdjustmentController extends Controller
             ->with(['variants' => fn ($q) => $q->orderBy('sort_order')->orderBy('id')])
             ->orderBy('name')
             ->get([
-                'id', 'name', 'sku', 'unit', 'stock_quantity', 'average_cost',
+                'id', 'name', 'sku', 'barcode', 'unit', 'stock_quantity', 'average_cost',
                 'cost_price', 'allows_decimal', 'has_variants',
             ]);
 
@@ -96,8 +96,9 @@ class StockAdjustmentController extends Controller
             'products' => $products,
             'batchTrackingEnabled' => BatchTracking::enabled($store),
             'pharmacyFieldsEnabled' => PharmacyFeatures::enabled($store),
-            'reasonLabels' => collect(StockAdjustment::reasonLabels())
-                ->except(StockAdjustment::REASON_OPNAME)
+            'reasonLabels' => StockAdjustment::manualReasonLabels(),
+            'reasonDirections' => collect(StockAdjustment::manualReasonLabels())
+                ->map(fn ($label, $code) => StockAdjustment::directionFor((string) $code))
                 ->all(),
         ]);
     }
@@ -105,6 +106,11 @@ class StockAdjustmentController extends Controller
     /**
      * Buat dokumen sekaligus posting. Penyesuaian bersifat insidental sehingga
      * tidak perlu tahap draft seperti opname.
+     *
+     * Tiap baris boleh punya alasan sendiri; baris dikelompokkan per alasan menjadi
+     * dokumen terpisah agar laporan per alasan tetap benar. Jumlah diisi sesuai alasan:
+     * berkurang (rusak, kedaluwarsa, hilang, dipakai, sampel), bertambah (ditemukan),
+     * atau stok sebenarnya (koreksi).
      */
     public function store(Request $request): RedirectResponse
     {
@@ -116,141 +122,64 @@ class StockAdjustmentController extends Controller
 
         StorePlanLimits::assertAdvancedRetail($store, 'Fitur penyesuaian stok tersedia mulai paket GrowUp.');
 
+        $reasons = array_keys(StockAdjustment::manualReasonLabels());
+
         $validated = $request->validate([
-            'reason_code' => ['required', 'string', Rule::in(array_keys(StockAdjustment::reasonLabels()))],
+            'reason_code' => ['nullable', 'string', Rule::in($reasons)],
             'notes' => ['nullable', 'string', 'max:2000'],
-            'counted_at' => ['nullable', 'date'],
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('store_id', $store->id)],
             'lines.*.product_variant_id' => ['nullable', 'integer', Rule::exists('product_variants', 'id')],
-            'lines.*.counted_quantity' => ['required', 'numeric', 'min:0'],
+            'lines.*.reason_code' => ['nullable', 'string', Rule::in($reasons)],
+            // Jumlah berkurang/bertambah (alasan selain koreksi).
+            'lines.*.quantity' => ['nullable', 'numeric', 'min:0'],
+            // Stok sebenarnya (koreksi, dan klien lama).
+            'lines.*.counted_quantity' => ['nullable', 'numeric', 'min:0'],
             'lines.*.batch_code' => ['nullable', 'string', 'max:120'],
             'lines.*.expiry_date' => ['nullable', 'date'],
             'lines.*.line_notes' => ['nullable', 'string', 'max:255'],
+        ], [
+            'reason_code.in' => 'Alasan tidak dikenal. Stock opname dan pecah kemasan punya menu sendiri.',
+            'lines.*.reason_code.in' => 'Alasan tidak dikenal. Stock opname dan pecah kemasan punya menu sendiri.',
         ]);
 
-        if ($validated['reason_code'] === StockAdjustment::REASON_OPNAME) {
-            throw ValidationException::withMessages([
-                'reason_code' => 'Alasan stock opname hanya dipakai lewat menu Stock Opname.',
-            ]);
+        // Kelompokkan baris per alasan.
+        $groups = [];
+        foreach ($validated['lines'] as $row) {
+            $reason = $row['reason_code'] ?? $validated['reason_code'] ?? null;
+            if ($reason === null) {
+                throw ValidationException::withMessages(['reason_code' => 'Pilih alasan penyesuaian terlebih dahulu.']);
+            }
+            if (! array_key_exists('quantity', $row) || $row['quantity'] === null || $row['quantity'] === '') {
+                if (! isset($row['counted_quantity']) || $row['counted_quantity'] === '') {
+                    throw ValidationException::withMessages(['lines' => 'Isi jumlah untuk setiap produk.']);
+                }
+            }
+            $groups[$reason][] = $row;
         }
 
-        $productIds = collect($validated['lines'])->pluck('product_id')->map(fn ($id) => (int) $id);
-
-        // Kunci duplikat memakai pasangan produk + varian agar dua varian
-        // dari produk yang sama tetap boleh dikoreksi dalam satu dokumen.
-        $lineKeys = collect($validated['lines'])
-            ->map(fn ($row) => ((int) $row['product_id']).':'.((int) ($row['product_variant_id'] ?? 0)));
-
-        if ($lineKeys->duplicates()->isNotEmpty()) {
-            throw ValidationException::withMessages([
-                'lines' => 'Terdapat produk atau varian yang sama lebih dari satu kali. Gabungkan menjadi satu baris.',
-            ]);
+        foreach ($groups as $rows) {
+            $keys = collect($rows)->map(fn ($r) => ((int) $r['product_id']).':'.((int) ($r['product_variant_id'] ?? 0)));
+            if ($keys->duplicates()->isNotEmpty()) {
+                throw ValidationException::withMessages([
+                    'lines' => 'Ada produk yang sama dua kali dengan alasan yang sama. Gabungkan menjadi satu baris.',
+                ]);
+            }
         }
 
         try {
-            $document = DB::transaction(function () use ($user, $store, $validated, $productIds) {
-                // Urutkan penguncian berdasarkan id untuk mencegah deadlock.
-                $products = Product::query()
-                    ->where('store_id', $store->id)
-                    ->whereIn('id', $productIds->sort()->values())
-                    ->orderBy('id')
-                    ->lockForUpdate()
-                    ->get()
-                    ->keyBy('id');
-
-                $document = StockAdjustment::create([
-                    'store_id' => $store->id,
-                    'type' => StockAdjustment::TYPE_ADJUSTMENT,
-                    'reason_code' => $validated['reason_code'],
-                    'status' => StockAdjustment::STATUS_DRAFT,
-                    'notes' => $validated['notes'] ?? null,
-                    'counted_at' => $validated['counted_at'] ?? now(),
-                    'created_by' => $user->id,
-                ]);
-
-                $totalValue = '0.00';
-                $pending = [];
-
-                foreach ($validated['lines'] as $row) {
-                    $product = $products->get((int) $row['product_id']);
-                    if (! $product) {
-                        throw ValidationException::withMessages([
-                            'lines' => 'Salah satu produk tidak ditemukan pada toko ini.',
-                        ]);
-                    }
-
-                    $variant = null;
-                    if (! empty($row['product_variant_id'])) {
-                        $variant = ProductVariant::query()
-                            ->whereKey((int) $row['product_variant_id'])
-                            ->where('product_id', $product->id)
-                            ->lockForUpdate()
-                            ->first();
-
-                        if (! $variant) {
-                            throw ValidationException::withMessages([
-                                'lines' => "Varian yang dipilih bukan milik produk «{$product->name}».",
-                            ]);
-                        }
-                    }
-
-                    AdjustmentStockOperations::assertAdjustable($store, $product, $variant);
-
-                    $systemQty = AdjustmentStockOperations::currentQuantity($product, $variant);
-                    $countedQty = ProductQuantity::normalizeStorageAmount($product, $row['counted_quantity']);
-                    $variance = AdjustmentStockOperations::variance($countedQty, $systemQty);
-                    $unitCost = InventoryCosting::currentAverageCost($product);
-                    $batchCode = trim((string) ($row['batch_code'] ?? ''));
-                    $expiryDate = $row['expiry_date'] ?? null;
-                    if (PharmacyFeatures::enabled($store) && $variant === null && BatchTracking::enabled($store)
-                        && ProductQuantity::cmp($variance, '0.0000') > 0 && ($batchCode === '' || $expiryDate === null)) {
-                        throw ValidationException::withMessages([
-                            'lines' => "Apotek: batch dan tanggal kedaluwarsa (ED) wajib untuk penyesuaian stok tambah «{$product->name}».",
-                        ]);
-                    }
-
-                    $line = StockAdjustmentLine::create([
-                        'stock_adjustment_id' => $document->id,
-                        'product_id' => $product->id,
-                        'product_variant_id' => $variant?->id,
-                        'batch_code' => $batchCode !== '' ? $batchCode : null,
-                        'expiry_date' => $expiryDate,
-                        'system_quantity' => $systemQty,
-                        'counted_quantity' => $countedQty,
-                        'variance_quantity' => $variance,
-                        'unit_cost' => $unitCost,
-                        'variance_value' => InventoryCosting::extendedCost($variance, $unitCost),
-                        'line_notes' => $row['line_notes'] ?? null,
-                    ]);
-
-                    $totalValue = bcadd($totalValue, (string) $line->variance_value, 2);
-                    $pending[] = [$product, $line, $variant];
+            $documents = DB::transaction(function () use ($user, $store, $validated, $groups) {
+                $docs = [];
+                foreach ($groups as $reason => $rows) {
+                    $docs[] = $this->createAndPost($store, $user, (string) $reason, $validated['notes'] ?? null, $rows);
                 }
 
-                $document->update(['total_variance_value' => $totalValue]);
-
-                // Dokumen di atas ambang ditahan; stok baru berubah setelah disetujui.
-                if (StockAdjustmentApproval::requiresApproval($store, $document->fresh())) {
-                    $document->update(['status' => StockAdjustment::STATUS_PENDING_APPROVAL]);
-
-                    return $document->fresh();
-                }
-
-                foreach ($pending as [$product, $line, $variant]) {
-                    AdjustmentStockOperations::applyLine($store, $user, $product, $document, $line, $variant);
-                }
-
-                $document->update([
-                    'status' => StockAdjustment::STATUS_POSTED,
-                    'posted_by' => $user->id,
-                    'posted_at' => now(),
-                ]);
-
-                return $document->fresh();
+                return $docs;
             });
 
-            JournalPoster::postStockAdjustment($store, $document);
+            foreach ($documents as $document) {
+                JournalPoster::postStockAdjustment($store, $document);
+            }
         } catch (ValidationException $e) {
             throw $e;
         } catch (\Throwable $e) {
@@ -259,11 +188,179 @@ class StockAdjustmentController extends Controller
             ]);
         }
 
+        if (count($documents) > 1) {
+            $numbers = collect($documents)->pluck('adjustment_number')->implode(', ');
+            $pending = collect($documents)->contains(fn ($d) => $d->status === StockAdjustment::STATUS_PENDING_APPROVAL);
+
+            return redirect()->route('stock-adjustments.index')->with('success', count($documents)
+                ." dokumen dibuat per alasan: {$numbers}."
+                .($pending ? ' Sebagian menunggu persetujuan sebelum stok berubah.' : ''));
+        }
+
+        $document = $documents[0];
         $message = $document->status === StockAdjustment::STATUS_PENDING_APPROVAL
             ? "Penyesuaian stok {$document->adjustment_number} menunggu persetujuan sebelum stok berubah."
             : "Penyesuaian stok {$document->adjustment_number} berhasil diposting.";
 
         return redirect()->route('stock-adjustments.show', $document)->with('success', $message);
+    }
+
+    /**
+     * Satu dokumen untuk satu alasan. Dipanggil di dalam transaksi.
+     *
+     * @param  list<array<string, mixed>>  $rows
+     */
+    private function createAndPost($store, $user, string $reason, ?string $notes, array $rows): StockAdjustment
+    {
+        $mode = StockAdjustment::directionFor($reason);
+        $productIds = collect($rows)->pluck('product_id')->map(fn ($id) => (int) $id);
+
+        // Urutkan penguncian berdasarkan id untuk mencegah deadlock.
+        $products = Product::query()
+            ->where('store_id', $store->id)
+            ->whereIn('id', $productIds->sort()->values())
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get()
+            ->keyBy('id');
+
+        $document = StockAdjustment::create([
+            'store_id' => $store->id,
+            'type' => StockAdjustment::TYPE_ADJUSTMENT,
+            'reason_code' => $reason,
+            'status' => StockAdjustment::STATUS_DRAFT,
+            'notes' => $notes,
+            'counted_at' => now(),
+            'created_by' => $user->id,
+        ]);
+
+        $totalValue = '0.00';
+        $pending = [];
+
+        foreach ($rows as $row) {
+            $product = $products->get((int) $row['product_id']);
+            if (! $product) {
+                throw ValidationException::withMessages([
+                    'lines' => 'Salah satu produk tidak ditemukan pada toko ini.',
+                ]);
+            }
+
+            $variant = null;
+            if (! empty($row['product_variant_id'])) {
+                $variant = ProductVariant::query()
+                    ->whereKey((int) $row['product_variant_id'])
+                    ->where('product_id', $product->id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $variant) {
+                    throw ValidationException::withMessages([
+                        'lines' => "Varian yang dipilih bukan milik produk «{$product->name}».",
+                    ]);
+                }
+            }
+
+            AdjustmentStockOperations::assertAdjustable($store, $product, $variant);
+
+            $label = $product->name.($variant ? ' — '.$variant->name : '');
+            $systemQty = AdjustmentStockOperations::currentQuantity($product, $variant);
+            $countedQty = $this->countedFromRow($product, $row, $mode, $systemQty, $label);
+            $variance = AdjustmentStockOperations::variance($countedQty, $systemQty);
+            $unitCost = InventoryCosting::currentAverageCost($product);
+            $batchCode = trim((string) ($row['batch_code'] ?? ''));
+            $expiryDate = $row['expiry_date'] ?? null;
+            if (PharmacyFeatures::enabled($store) && $variant === null && BatchTracking::enabled($store)
+                && ProductQuantity::cmp($variance, '0.0000') > 0 && ($batchCode === '' || $expiryDate === null)) {
+                throw ValidationException::withMessages([
+                    'lines' => "Apotek: batch dan tanggal kedaluwarsa (ED) wajib untuk penyesuaian stok tambah «{$product->name}».",
+                ]);
+            }
+
+            $line = StockAdjustmentLine::create([
+                'stock_adjustment_id' => $document->id,
+                'product_id' => $product->id,
+                'product_variant_id' => $variant?->id,
+                'batch_code' => $batchCode !== '' ? $batchCode : null,
+                'expiry_date' => $expiryDate,
+                'system_quantity' => $systemQty,
+                'counted_quantity' => $countedQty,
+                'variance_quantity' => $variance,
+                'unit_cost' => $unitCost,
+                'variance_value' => InventoryCosting::extendedCost($variance, $unitCost),
+                'line_notes' => $row['line_notes'] ?? null,
+            ]);
+
+            $totalValue = bcadd($totalValue, (string) $line->variance_value, 2);
+            $pending[] = [$product, $line, $variant];
+        }
+
+        if (collect($pending)->every(fn ($p) => bccomp((string) $p[1]->variance_quantity, '0', ProductQuantity::SCALE) === 0)) {
+            throw ValidationException::withMessages([
+                'lines' => 'Tidak ada perubahan stok. Isi jumlah yang berkurang, bertambah, atau stok sebenarnya.',
+            ]);
+        }
+
+        $document->update(['total_variance_value' => $totalValue]);
+
+        // Dokumen di atas ambang ditahan; stok baru berubah setelah disetujui.
+        if (StockAdjustmentApproval::requiresApproval($store, $document->fresh())) {
+            $document->update(['status' => StockAdjustment::STATUS_PENDING_APPROVAL]);
+
+            return $document->fresh();
+        }
+
+        foreach ($pending as [$product, $line, $variant]) {
+            AdjustmentStockOperations::applyLine($store, $user, $product, $document, $line, $variant);
+        }
+
+        $document->update([
+            'status' => StockAdjustment::STATUS_POSTED,
+            'posted_by' => $user->id,
+            'posted_at' => now(),
+        ]);
+
+        return $document->fresh();
+    }
+
+    /**
+     * Stok sebenarnya dari isian baris: berkurang, bertambah, atau langsung stok sebenarnya.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    private function countedFromRow(Product $product, array $row, string $mode, string $systemQty, string $label): string
+    {
+        $hasQuantity = isset($row['quantity']) && $row['quantity'] !== '';
+
+        // Klien lama / koreksi: isian berupa stok sebenarnya.
+        if ($mode === StockAdjustment::DIRECTION_SET || ! $hasQuantity) {
+            $raw = $row['counted_quantity'] ?? $row['quantity'] ?? null;
+
+            return ProductQuantity::normalizeStorageAmount($product, $raw);
+        }
+
+        $qty = ProductQuantity::normalizeStorageAmount($product, $row['quantity']);
+        if (bccomp($qty, '0', ProductQuantity::SCALE) <= 0) {
+            throw ValidationException::withMessages(['lines' => "Isi jumlah untuk «{$label}»."]);
+        }
+
+        if ($mode === StockAdjustment::DIRECTION_INCREASE) {
+            return bcadd($systemQty, $qty, ProductQuantity::SCALE);
+        }
+
+        if (bccomp($qty, $systemQty, ProductQuantity::SCALE) > 0) {
+            $sisa = rtrim(rtrim($systemQty, '0'), '.') ?: '0';
+            throw ValidationException::withMessages([
+                'lines' => "Stok «{$label}» hanya {$sisa}{$this->unitSuffix($product)}, tidak bisa dikurangi "
+                    .(rtrim(rtrim($qty, '0'), '.') ?: '0').'. Bila stok tercatat memang salah, pilih alasan "Koreksi salah input".',
+            ]);
+        }
+
+        return bcsub($systemQty, $qty, ProductQuantity::SCALE);
+    }
+
+    private function unitSuffix(Product $product): string
+    {
+        return $product->unit ? ' '.$product->unit : '';
     }
 
     public function show(Request $request, StockAdjustment $stockAdjustment): Response|RedirectResponse

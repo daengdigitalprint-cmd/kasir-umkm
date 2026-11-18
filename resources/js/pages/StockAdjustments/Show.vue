@@ -146,8 +146,8 @@ function submitCancel() {
                     Anda adalah pembuat dokumen ini, sehingga persetujuan harus dilakukan pengguna lain.
                 </p>
 
-                <p v-if="approveForm.errors.approval" class="mt-2 text-sm font-semibold text-red-700">
-                    {{ approveForm.errors.approval }}
+                <p v-if="(approveForm.errors as Record<string, string>).approval" class="mt-2 text-sm font-semibold text-red-700">
+                    {{ (approveForm.errors as Record<string, string>).approval }}
                 </p>
 
                 <Button

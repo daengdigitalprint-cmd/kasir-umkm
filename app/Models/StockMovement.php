@@ -44,6 +44,9 @@ class StockMovement extends Model
     /** Pembalik adjustment / opname saat dokumen koreksi dibatalkan. */
     public const TYPE_ADJUSTMENT_REVERSAL = 'adjustment_reversal';
 
+    /** Pecah kemasan: produk asal keluar, produk hasil masuk. */
+    public const TYPE_REPACK = 'repack';
+
     protected $fillable = [
         'store_id',
         'product_id',

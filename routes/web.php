@@ -365,6 +365,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('stock-adjustments/{stock_adjustment}/cancel', [App\Http\Controllers\StockAdjustmentController::class, 'cancel'])
         ->name('stock-adjustments.cancel')
         ->middleware(['store.active', 'role.stock_adjustment', 'plan.advanced']);
+    Route::get('stock-repacks/create', [App\Http\Controllers\StockRepackController::class, 'create'])
+        ->name('stock-repacks.create')
+        ->middleware(['store.active', 'role.stock_adjustment', 'plan.advanced']);
+    Route::post('stock-repacks', [App\Http\Controllers\StockRepackController::class, 'store'])
+        ->name('stock-repacks.store')
+        ->middleware(['store.active', 'role.stock_adjustment', 'plan.advanced']);
     Route::resource('stock-adjustments', App\Http\Controllers\StockAdjustmentController::class)
         ->only(['index', 'create', 'store', 'show'])
         ->middleware(['store.active', 'role.stock_adjustment', 'plan.advanced']);

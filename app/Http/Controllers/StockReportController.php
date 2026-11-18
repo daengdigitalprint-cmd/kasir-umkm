@@ -34,7 +34,7 @@ class StockReportController extends Controller
             'date_from' => ['nullable', 'date'],
             'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
             'reason_code' => ['nullable', 'string', Rule::in(array_keys(StockAdjustment::reasonLabels()))],
-            'type' => ['nullable', 'string', Rule::in([StockAdjustment::TYPE_ADJUSTMENT, StockAdjustment::TYPE_OPNAME])],
+            'type' => ['nullable', 'string', Rule::in([StockAdjustment::TYPE_ADJUSTMENT, StockAdjustment::TYPE_OPNAME, StockAdjustment::TYPE_REPACK])],
         ]);
 
         $from = $validated['date_from'] ?? now()->startOfMonth()->toDateString();
@@ -246,6 +246,7 @@ class StockReportController extends Controller
             StockMovement::TYPE_PRODUCTION_OUTPUT => 'Output produksi',
             StockMovement::TYPE_PRODUCTION_REVERSAL => 'Pembatalan produksi',
             StockMovement::TYPE_OPNAME => 'Stock opname',
+                StockMovement::TYPE_REPACK => 'Pecah kemasan',
             StockMovement::TYPE_ADJUSTMENT_REVERSAL => 'Pembatalan penyesuaian',
         ];
     }
