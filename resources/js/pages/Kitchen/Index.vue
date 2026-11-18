@@ -6,7 +6,7 @@ import { toastSuccess, toastError } from '@/lib/swal';
 import { usePrinter } from '@/composables/usePrinter';
 import { buildKotPlainLines } from '@/lib/receiptPlainText';
 import { receiptLinesToEscPos } from '@/lib/escPosEncode';
-import { ChefHat, RefreshCw, Utensils, Hand, Printer, Wifi, WifiOff, CheckCheck, Undo2, ListChecks, ChevronDown, ChevronUp, Maximize2, Minimize2, Layers, Check } from 'lucide-vue-next';
+import { ChefHat, RefreshCw, Utensils, Hand, Printer, Wifi, WifiOff, CheckCheck, Undo2, ListChecks, ChevronDown, ChevronUp, Maximize2, Minimize2, Layers, Check, Volume2, VolumeX } from 'lucide-vue-next';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
 type Status = 'waiting' | 'serving' | 'ready' | 'completed' | 'cancelled';
@@ -111,7 +111,7 @@ const history = ref<Entry[]>([...props.history]);
 const completedToday = ref(props.summary.completed_today);
 const avgPrep = ref<number | null>(props.summary.avg_prep_minutes);
 
-watch(() => props.entries, (next) => { entries.value = [...next]; }, { deep: true });
+watch(() => props.entries, (next) => { entries.value = [...next]; noticeNewOrders(next); }, { deep: true });
 watch(() => props.history, (next) => { history.value = [...next]; }, { deep: true });
 watch(() => props.summary, (next) => { completedToday.value = next.completed_today; avgPrep.value = next.avg_prep_minutes; }, { deep: true });
 
@@ -119,26 +119,97 @@ const tab = ref<'active' | 'done'>('active');
 const showTodo = ref(true);
 
 // ── Bunyi pesanan baru ──
-const previousWaitingIds = ref<number[]>(entries.value.filter((e) => e.status === 'waiting').map((e) => e.id));
+// Bunyi "ding-dong" keras, diulang tiap 20 detik (maks. 3x) sampai layar disentuh
+// atau pesanan mulai dibuat. Nyala/mati diingat per perangkat.
+const soundEnabled = ref<boolean>(readStore('sound', true));
 const audioContext = ref<AudioContext | null>(null);
 const soundReady = ref(false);
 const unlockNotificationSound = () => {
-    audioContext.value ??= new AudioContext();
-    if (audioContext.value.state === 'suspended') audioContext.value.resume();
-    soundReady.value = true;
+    try {
+        audioContext.value ??= new AudioContext();
+        if (audioContext.value.state === 'suspended') audioContext.value.resume();
+        soundReady.value = true;
+    } catch {
+        /* perangkat tanpa audio */
+    }
 };
+
+const tone = (freq: number, start: number, duration: number, volume: number) => {
+    const ctx = audioContext.value;
+    if (!ctx) return;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime + start);
+    gain.gain.exponentialRampToValueAtTime(volume, ctx.currentTime + start + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + start + duration);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(ctx.currentTime + start);
+    osc.stop(ctx.currentTime + start + duration + 0.02);
+};
+
+/** Ding-dong-ding untuk pesanan baru. */
 const playNewOrderSound = () => {
-    if (!audioContext.value) return;
-    const oscillator = audioContext.value.createOscillator();
-    const gain = audioContext.value.createGain();
-    oscillator.frequency.value = 880;
-    gain.gain.setValueAtTime(0.0001, audioContext.value.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.18, audioContext.value.currentTime + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.value.currentTime + 0.35);
-    oscillator.connect(gain).connect(audioContext.value.destination);
-    oscillator.start();
-    oscillator.stop(audioContext.value.currentTime + 0.35);
+    if (!soundEnabled.value || !audioContext.value) return;
+    if (audioContext.value.state === 'suspended') audioContext.value.resume();
+    tone(1318.5, 0, 0.45, 0.45);
+    tone(1046.5, 0.32, 0.55, 0.45);
+    tone(1318.5, 0.7, 0.6, 0.4);
+    try { navigator.vibrate?.([200, 100, 200]); } catch { /* tidak didukung */ }
 };
+
+const toggleSound = () => {
+    soundEnabled.value = !soundEnabled.value;
+    writeStore('sound', soundEnabled.value);
+    if (soundEnabled.value) {
+        unlockNotificationSound();
+        playNewOrderSound();
+    }
+};
+
+// Pesanan baru yang belum "dilihat": disorot, bunyi diulang, judul tab berkedip.
+const knownIds = new Set<number>([...props.entries, ...props.history].map((e) => e.id));
+const unseenIds = ref<Set<number>>(new Set());
+let repeatTimer: ReturnType<typeof setInterval> | null = null;
+let repeatCount = 0;
+const baseTitle = 'Papan Dapur';
+
+const stopRepeat = () => {
+    if (repeatTimer) clearInterval(repeatTimer);
+    repeatTimer = null;
+    repeatCount = 0;
+};
+
+const acknowledgeNewOrders = () => {
+    if (unseenIds.value.size === 0) return;
+    unseenIds.value = new Set();
+    stopRepeat();
+    document.title = baseTitle;
+};
+
+const alertNewOrders = (ids: number[]) => {
+    unseenIds.value = new Set([...unseenIds.value, ...ids]);
+    document.title = `(${unseenIds.value.size}) Pesanan baru — ${baseTitle}`;
+    playNewOrderSound();
+    stopRepeat();
+    repeatTimer = setInterval(() => {
+        const stillWaiting = entries.value.some((e) => unseenIds.value.has(e.id) && e.status === 'waiting');
+        repeatCount += 1;
+        if (!stillWaiting || repeatCount > 3) {
+            stopRepeat();
+            return;
+        }
+        playNewOrderSound();
+    }, 20000);
+};
+
+/** Bandingkan daftar pesanan dengan yang sudah dikenal; bunyikan untuk yang baru. */
+function noticeNewOrders(list: Entry[]) {
+    const fresh = list.filter((e) => e.status === 'waiting' && !knownIds.has(e.id)).map((e) => e.id);
+    list.forEach((e) => knownIds.add(e.id));
+    if (fresh.length > 0) alertNewOrders(fresh);
+}
 
 // Jam berjalan untuk timer pesanan.
 const now = ref(Date.now());
@@ -147,14 +218,8 @@ let clockId: ReturnType<typeof setInterval> | null = null;
 // ── Sinkronisasi ──
 const isWsConnected = ref(false);
 const transportMode = ref<'idle' | 'ws' | 'polling'>('idle');
-const refresh = () => router.reload({
-    only: ['entries', 'history', 'summary'],
-    onSuccess: () => {
-        const waitingIds = entries.value.filter((e) => e.status === 'waiting').map((e) => e.id);
-        if (waitingIds.some((id) => !previousWaitingIds.value.includes(id))) playNewOrderSound();
-        previousWaitingIds.value = waitingIds;
-    },
-});
+// Pesanan baru dari cek berkala dideteksi di watcher props.entries (noticeNewOrders).
+const refresh = () => router.reload({ only: ['entries', 'history', 'summary'] });
 
 const isToday = (iso?: string | null) => !!iso && new Date(iso).toDateString() === new Date().toDateString();
 
@@ -187,15 +252,15 @@ const applyUpsert = (payload: Entry) => {
     if (idx >= 0) entries.value[idx] = merged;
     else entries.value.push(merged);
 
-    if (!wasWaiting && merged.status === 'waiting' && !previous) {
-        playNewOrderSound();
-        previousWaitingIds.value = [...previousWaitingIds.value, merged.id];
+    if (!wasWaiting && merged.status === 'waiting' && !previous && !knownIds.has(merged.id)) {
+        knownIds.add(merged.id);
+        alertNewOrders([merged.id]);
     }
+    knownIds.add(merged.id);
 };
 
 const applyDelete = (entryId: number) => {
     entries.value = entries.value.filter((e) => e.id !== entryId);
-    previousWaitingIds.value = previousWaitingIds.value.filter((id) => id !== entryId);
 };
 
 let echoUnsubscribe: (() => void) | null = null;
@@ -294,8 +359,9 @@ const isVeryLate = (entry: Entry) => entry.status !== 'ready' && elapsedSeconds(
 // Pengingat bunyi sekali untuk pesanan yang lewat 20 menit dan belum siap.
 const remindedIds = new Set<number>();
 const playReminder = () => {
-    playNewOrderSound();
-    setTimeout(playNewOrderSound, 250);
+    if (!soundEnabled.value || !audioContext.value) return;
+    tone(880, 0, 0.3, 0.35);
+    tone(880, 0.4, 0.3, 0.35);
 };
 watch(now, () => {
     const late = entries.value.filter((e) => isVeryLate(e) && stationItems(e).length > 0 && !remindedIds.has(e.id));
@@ -430,6 +496,8 @@ const undoStatus = (entry: Entry) => {
 
 onMounted(() => {
     window.addEventListener('pointerdown', unlockNotificationSound, { once: true });
+    // Sentuhan apa pun di layar = pesanan baru sudah dilihat.
+    window.addEventListener('pointerdown', acknowledgeNewOrders);
     clockId = setInterval(() => (now.value = Date.now()), 1000);
     document.addEventListener('visibilitychange', onVisibility);
     requestWakeLock();
@@ -437,6 +505,9 @@ onMounted(() => {
 });
 onUnmounted(() => {
     window.removeEventListener('pointerdown', unlockNotificationSound);
+    window.removeEventListener('pointerdown', acknowledgeNewOrders);
+    stopRepeat();
+    document.title = baseTitle;
     if (pollId) clearInterval(pollId);
     if (clockId) clearInterval(clockId);
     if (echoUnsubscribe) echoUnsubscribe();
@@ -515,6 +586,17 @@ onUnmounted(() => {
                     <Button variant="outline" size="sm" class="gap-1.5 rounded-xl" @click="refresh">
                         <RefreshCw class="h-3.5 w-3.5" />
                     </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        class="gap-1.5 rounded-xl"
+                        :class="soundEnabled ? '' : 'text-slate-400'"
+                        :title="soundEnabled ? 'Matikan suara pesanan masuk' : 'Nyalakan suara pesanan masuk'"
+                        @click="toggleSound"
+                    >
+                        <component :is="soundEnabled ? Volume2 : VolumeX" class="h-3.5 w-3.5" />
+                        {{ soundEnabled ? 'Suara nyala' : 'Suara mati' }}
+                    </Button>
                     <Button variant="outline" size="sm" class="gap-1.5 rounded-xl" @click="toggleKiosk">
                         <component :is="kiosk ? Minimize2 : Maximize2" class="h-3.5 w-3.5" />
                         {{ kiosk ? 'Keluar mode layar' : 'Mode layar dapur' }}
@@ -523,13 +605,20 @@ onUnmounted(() => {
             </div>
 
             <button
-                v-if="!soundReady"
+                v-if="soundEnabled && !soundReady"
                 type="button"
-                class="mx-4 mt-3 shrink-0 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-left text-sm font-semibold text-amber-900"
-                @click="unlockNotificationSound"
+                class="mx-4 mt-3 shrink-0 animate-pulse rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3 text-left text-base font-bold text-amber-900"
+                @click="unlockNotificationSound(); playNewOrderSound()"
             >
-                🔔 Ketuk di sini sekali agar bunyi pesanan baru aktif.
+                🔔 Ketuk di sini untuk menyalakan suara pesanan masuk
+                <span class="block text-xs font-normal text-amber-800">Browser baru mengizinkan suara setelah layar disentuh sekali.</span>
             </button>
+            <div
+                v-if="unseenIds.size > 0"
+                class="mx-4 mt-3 shrink-0 animate-pulse rounded-xl bg-amber-500 px-4 py-2.5 text-base font-black text-white"
+            >
+                🔔 {{ unseenIds.size }} pesanan baru masuk — ketuk layar untuk menandai sudah dilihat
+            </div>
 
             <div class="mt-3 grid shrink-0 grid-cols-2 gap-3 px-4 md:grid-cols-4">
                 <div v-for="stat in stats" :key="stat.label" class="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-3">
@@ -577,7 +666,7 @@ onUnmounted(() => {
                                     class="overflow-hidden rounded-xl border bg-white shadow-sm transition"
                                     :class="[
                                         busy.has(entry.id) ? 'opacity-60' : '',
-                                        isVeryLate(entry) ? 'border-red-300 ring-2 ring-red-200' : 'border-slate-200',
+                                        isVeryLate(entry) ? 'border-red-300 ring-2 ring-red-200' : unseenIds.has(entry.id) ? 'border-amber-400 ring-2 ring-amber-300' : 'border-slate-200',
                                     ]"
                                 >
                                     <!-- Ketuk kartu untuk lanjut ke status berikutnya -->
@@ -591,6 +680,7 @@ onUnmounted(() => {
                                             <div>
                                                 <p class="font-mono text-xs text-slate-400">
                                                     #{{ entry.number }}
+                                                    <span v-if="unseenIds.has(entry.id)" class="ml-1 rounded bg-amber-500 px-1.5 py-0.5 font-sans text-[10px] font-black text-white">BARU</span>
                                                     <span v-if="entry.order_type && orderTypeLabel[entry.order_type]" class="ml-1 font-sans font-semibold text-slate-500">· {{ orderTypeLabel[entry.order_type] }}</span>
                                                 </p>
                                                 <p class="text-base font-bold text-slate-900">{{ entry.table_reference ? `Meja ${entry.table_reference}` : entry.transaction_number }}</p>
