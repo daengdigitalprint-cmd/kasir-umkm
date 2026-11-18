@@ -2,9 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\KitchenQueueUpdated;
+use App\Models\ProductCategory;
 use App\Models\QueueEntry;
 use App\Support\FnBFeatures;
+use App\Support\KitchenOrders;
 use App\Support\ReceiptSettings;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class KitchenQueueController extends Controller
@@ -77,7 +83,85 @@ class KitchenQueueController extends Controller
                 'avg_prep_minutes' => $prepMinutes->isNotEmpty() ? round($prepMinutes->avg(), 1) : null,
             ],
             'undoMinutes' => self::UNDO_MINUTES,
+            // Pilihan stasiun (mis. bar = minuman, dapur = makanan), disimpan per perangkat.
+            'categories' => ProductCategory::query()
+                ->where('store_id', $store->id)
+                ->orderBy('name')
+                ->get(['id', 'name']),
         ]);
+    }
+
+    /**
+     * Centang satu item pesanan. Semua item tercentang → pesanan otomatis "Siap";
+     * centang dibuka lagi pada pesanan Siap → kembali "Sedang Dibuat".
+     */
+    public function toggleItem(Request $request, QueueEntry $queueEntry, int $index): JsonResponse
+    {
+        $store = $request->user()->store;
+        abort_unless($store && (int) $queueEntry->store_id === (int) $store->id, 404);
+        abort_unless(KitchenOrders::enabled($store) && $queueEntry->transaction_id, 422, 'Papan dapur tidak aktif.');
+        abort_unless(in_array($queueEntry->status, ['waiting', 'serving', 'ready'], true), 422, 'Pesanan ini sudah selesai.');
+
+        $done = $request->validate(['done' => ['required', 'boolean']])['done'];
+
+        DB::transaction(function () use ($queueEntry, $index, $done) {
+            $entry = QueueEntry::query()->whereKey($queueEntry->id)->lockForUpdate()->firstOrFail();
+            $items = $entry->items ?? [];
+            abort_unless(array_key_exists($index, $items), 404);
+
+            $items[$index]['done'] = (bool) $done;
+            $allDone = collect($items)->every(fn ($i) => ! empty($i['done']));
+
+            $updates = ['items' => $items];
+            if ($allDone && in_array($entry->status, ['waiting', 'serving'], true)) {
+                $updates += ['status' => 'ready', 'called_at' => $entry->called_at ?? now(), 'ready_at' => now()];
+            } elseif (! $allDone && $entry->status === 'ready') {
+                $updates += ['status' => 'serving', 'ready_at' => null];
+            } elseif ($done && $entry->status === 'waiting') {
+                // Mulai mencentang = mulai dibuat.
+                $updates += ['status' => 'serving', 'called_at' => now()];
+            }
+
+            $entry->update($updates);
+
+            $trx = $entry->transaction;
+            if ($trx && ($updates['status'] ?? null) === 'ready') {
+                $trx->update(['order_status' => 'ready']);
+            } elseif ($trx && ($updates['status'] ?? null) === 'serving' && $trx->order_status === 'ready') {
+                $trx->update(['order_status' => 'accepted']);
+            }
+
+            $queueEntry->setRawAttributes($entry->getAttributes(), true);
+        });
+
+        $queueEntry->refresh()->load('transaction:id,transaction_number,order_type,table_reference');
+        KitchenOrders::broadcast(KitchenQueueUpdated::fromEntry($queueEntry));
+
+        return response()->json(['entry' => $this->payload($queueEntry)]);
+    }
+
+    /** Pesanan yang sudah Siap, untuk pemberitahuan di layar kasir. */
+    public function ready(Request $request): JsonResponse
+    {
+        $store = $request->user()->store;
+        if (! $store || ! KitchenOrders::enabled($store)) {
+            return response()->json(['enabled' => false, 'entries' => []]);
+        }
+
+        $entries = QueueEntry::query()
+            ->where('store_id', $store->id)
+            ->whereNotNull('transaction_id')
+            ->where('status', 'ready')
+            ->where('created_at', '>=', today()->subDay())
+            ->with('transaction:id,transaction_number,order_type,table_reference')
+            ->orderBy('ready_at')
+            ->limit(20)
+            ->get()
+            ->map(fn (QueueEntry $e) => $this->payload($e))
+            ->values()
+            ->all();
+
+        return response()->json(['enabled' => true, 'entries' => $entries]);
     }
 
     /** @return array<string, mixed> */

@@ -2,6 +2,7 @@
 import BarcodeScanner from '@/components/BarcodeScanner.vue';
 import PinLoginModal from '@/components/CashierPin/PinLoginModal.vue';
 import ThermalReceiptStruk from '@/components/pos/ThermalReceiptStruk.vue';
+import KitchenReadyNotice from '@/components/pos/KitchenReadyNotice.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -5955,5 +5956,7 @@ const sendWhatsAppInvoice = () => {
                 </div>
             </Teleport>
         </template>
+        <!-- Pesanan siap dari Papan Dapur (hanya toko dengan Antrian Dapur) -->
+        <KitchenReadyNotice />
     </AdminLayout>
 </template>

@@ -94,15 +94,20 @@ final class KitchenOrders
      */
     public static function itemsFor(Transaction $transaction): array
     {
-        $transaction->loadMissing('items');
+        $transaction->loadMissing('items.product.productCategory:id,name');
 
         return $transaction->items->map(function ($item) {
             $qty = (float) $item->quantity;
+            $category = $item->product?->productCategory;
 
             return [
                 'product_name' => (string) $item->product_name,
                 'quantity' => floor($qty) == $qty ? (int) $qty : $qty,
                 'variant' => $item->variant_label ?: null,
+                // Untuk filter stasiun (mis. bar = minuman, dapur = makanan).
+                'category_id' => $category?->id,
+                'category' => $category?->name,
+                'done' => false,
                 'modifiers' => collect($item->modifiers ?? [])
                     ->map(fn ($m) => ['label' => (string) ($m['label'] ?? '')])
                     ->filter(fn ($m) => $m['label'] !== '')

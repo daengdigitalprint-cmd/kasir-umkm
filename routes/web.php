@@ -582,6 +582,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/kitchen', [App\Http\Controllers\KitchenQueueController::class, 'index'])
         ->name('kitchen.index')
         ->middleware(['store.active', 'menu:kitchen_queue']);
+    Route::patch('/kitchen/entries/{queue_entry}/items/{index}', [App\Http\Controllers\KitchenQueueController::class, 'toggleItem'])
+        ->whereNumber('index')
+        ->name('kitchen.items.toggle')
+        ->middleware(['store.active', 'queue.access']);
+    Route::get('/kitchen/ready', [App\Http\Controllers\KitchenQueueController::class, 'ready'])
+        ->name('kitchen.ready')
+        ->middleware(['store.active', 'queue.access']);
 
     // Modul Antrian
     Route::get('/queues', [App\Http\Controllers\QueueController::class, 'index'])

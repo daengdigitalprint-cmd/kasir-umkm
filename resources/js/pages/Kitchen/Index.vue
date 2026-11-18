@@ -6,11 +6,11 @@ import { toastSuccess, toastError } from '@/lib/swal';
 import { usePrinter } from '@/composables/usePrinter';
 import { buildKotPlainLines } from '@/lib/receiptPlainText';
 import { receiptLinesToEscPos } from '@/lib/escPosEncode';
-import { ChefHat, RefreshCw, Utensils, Hand, Printer, Wifi, WifiOff, CheckCheck, Undo2, ListChecks, ChevronDown, ChevronUp } from 'lucide-vue-next';
+import { ChefHat, RefreshCw, Utensils, Hand, Printer, Wifi, WifiOff, CheckCheck, Undo2, ListChecks, ChevronDown, ChevronUp, Maximize2, Minimize2, Layers, Check } from 'lucide-vue-next';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
 type Status = 'waiting' | 'serving' | 'ready' | 'completed' | 'cancelled';
-interface EntryItem { product_name: string; quantity: number | string; variant?: string | null; modifiers?: Array<{ label: string }> | null; }
+interface EntryItem { product_name: string; quantity: number | string; variant?: string | null; modifiers?: Array<{ label: string }> | null; category_id?: number | null; category?: string | null; done?: boolean; }
 interface Entry {
     id: number;
     number: number;
@@ -35,9 +35,75 @@ const props = withDefaults(
         history?: Entry[];
         summary?: Summary;
         undoMinutes?: number;
+        categories?: Array<{ id: number; name: string }>;
     }>(),
-    { history: () => [], summary: () => ({ completed_today: 0, avg_prep_minutes: null }), undoMinutes: 10 },
+    { history: () => [], summary: () => ({ completed_today: 0, avg_prep_minutes: null }), undoMinutes: 10, categories: () => [] },
 );
+
+// ── Pengaturan per perangkat (tablet dapur / bar) ──
+const storageKey = (name: string) => `kitchen.${name}.${props.store.id}`;
+const readStore = <T,>(name: string, fallback: T): T => {
+    try {
+        const raw = localStorage.getItem(storageKey(name));
+        return raw === null ? fallback : (JSON.parse(raw) as T);
+    } catch {
+        return fallback;
+    }
+};
+const writeStore = (name: string, value: unknown) => {
+    try {
+        localStorage.setItem(storageKey(name), JSON.stringify(value));
+    } catch {
+        /* penyimpanan tidak tersedia: pengaturan berlaku sampai halaman ditutup */
+    }
+};
+
+// Mode layar dapur: tanpa menu samping, huruf besar, layar tidak mati.
+const kiosk = ref<boolean>(readStore('kiosk', false));
+let wakeLock: { release: () => Promise<void> } | null = null;
+const requestWakeLock = async () => {
+    try {
+        const nav = navigator as Navigator & { wakeLock?: { request: (t: 'screen') => Promise<{ release: () => Promise<void> }> } };
+        if (kiosk.value && nav.wakeLock && document.visibilityState === 'visible') wakeLock = await nav.wakeLock.request('screen');
+    } catch {
+        /* perangkat tidak mendukung: layar mengikuti pengaturan perangkat */
+    }
+};
+const releaseWakeLock = () => {
+    wakeLock?.release().catch(() => {});
+    wakeLock = null;
+};
+const toggleKiosk = async () => {
+    kiosk.value = !kiosk.value;
+    writeStore('kiosk', kiosk.value);
+    if (kiosk.value) {
+        try { await document.documentElement.requestFullscreen?.(); } catch { /* tidak semua perangkat mengizinkan */ }
+        requestWakeLock();
+    } else {
+        if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+        releaseWakeLock();
+    }
+};
+const onVisibility = () => { if (document.visibilityState === 'visible') requestWakeLock(); };
+
+// Stasiun: kategori yang ditampilkan di perangkat ini (kosong = semua). 0 = tanpa kategori.
+const station = ref<number[]>(readStore('station', [] as number[]));
+const showStationPicker = ref(false);
+const toggleStation = (id: number) => {
+    station.value = station.value.includes(id) ? station.value.filter((x) => x !== id) : [...station.value, id];
+    writeStore('station', station.value);
+};
+const clearStation = () => { station.value = []; writeStore('station', []); };
+const stationLabel = computed(() => {
+    if (station.value.length === 0) return 'Semua';
+    const names = station.value.map((id) => (id === 0 ? 'Tanpa kategori' : props.categories.find((c) => c.id === id)?.name ?? '?'));
+    return names.length > 2 ? `${names.slice(0, 2).join(', ')} +${names.length - 2}` : names.join(', ');
+});
+/** Item lama (sebelum ada kategori) tampil di semua stasiun. */
+const itemInStation = (item: EntryItem) =>
+    station.value.length === 0 || !('category_id' in item) || station.value.includes(item.category_id ?? 0);
+const stationItems = (entry: Entry) =>
+    entry.items.map((item, index) => ({ item, index })).filter(({ item }) => itemInStation(item));
 
 const ACTIVE_STATUSES: Status[] = ['waiting', 'serving', 'ready'];
 const entries = ref<Entry[]>([...props.entries]);
@@ -185,7 +251,7 @@ const columns = computed(() => [
     { key: 'waiting' as const, label: 'Antrian Baru', accent: 'border-t-amber-500', badge: 'bg-amber-100 text-amber-700', action: 'Mulai Buat', next: 'serving' as Status },
     { key: 'serving' as const, label: 'Sedang Dibuat', accent: 'border-t-blue-500', badge: 'bg-blue-100 text-blue-700', action: 'Siap', next: 'ready' as Status },
     { key: 'ready' as const, label: 'Siap Diserahkan', accent: 'border-t-emerald-500', badge: 'bg-emerald-100 text-emerald-700', action: 'Diserahkan', next: 'completed' as Status },
-].map((column) => ({ ...column, entries: entries.value.filter((entry) => entry.status === column.key) })));
+].map((column) => ({ ...column, entries: entries.value.filter((entry) => entry.status === column.key && stationItems(entry).length > 0) })));
 
 const formatMinutes = (m: number | null) => (m === null ? '—' : m < 1 ? '< 1 mnt' : `${Math.round(m)} mnt`);
 
@@ -202,6 +268,7 @@ const todo = computed(() => {
     for (const entry of entries.value) {
         if (entry.status !== 'waiting' && entry.status !== 'serving') continue;
         for (const item of entry.items) {
+            if (!itemInStation(item) || item.done) continue;
             const name = item.variant ? `${item.product_name} (${item.variant})` : item.product_name;
             const row = map.get(name) ?? { name, qty: 0 };
             row.qty += Number(item.quantity) || 0;
@@ -222,6 +289,22 @@ const lateClass = (entry: Entry) => {
     if (minutes >= 10) return 'rounded bg-amber-100 px-1.5 font-bold text-amber-700';
     return 'text-slate-400';
 };
+const isVeryLate = (entry: Entry) => entry.status !== 'ready' && elapsedSeconds(entry.created_at) >= 20 * 60;
+
+// Pengingat bunyi sekali untuk pesanan yang lewat 20 menit dan belum siap.
+const remindedIds = new Set<number>();
+const playReminder = () => {
+    playNewOrderSound();
+    setTimeout(playNewOrderSound, 250);
+};
+watch(now, () => {
+    const late = entries.value.filter((e) => isVeryLate(e) && stationItems(e).length > 0 && !remindedIds.has(e.id));
+    if (late.length > 0) {
+        late.forEach((e) => remindedIds.add(e.id));
+        playReminder();
+    }
+});
+
 const clock = (iso?: string | null) => (iso ? new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '—');
 const durationMinutes = (from?: string | null, to?: string | null) =>
     from && to ? Math.max(0, (new Date(to).getTime() - new Date(from).getTime()) / 60000) : null;
@@ -306,6 +389,40 @@ const setStatus = async (entry: Entry, status: Status, undo = false) => {
     }
 };
 
+/** Centang/buka satu item. Semua item tercentang → pesanan otomatis Siap. */
+const toggleItem = async (entry: Entry, index: number) => {
+    if (busy.value.has(entry.id)) return;
+    const item = entry.items[index];
+    if (!item) return;
+    busy.value = new Set([...busy.value, entry.id]);
+    const done = !item.done;
+    // Tampilkan langsung, lalu sesuaikan dengan jawaban server.
+    entry.items[index] = { ...item, done };
+    try {
+        const response = await fetch(`/kitchen/entries/${entry.id}/items/${index}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-XSRF-TOKEN': decodeURIComponent(document.cookie.match(/XSRF-TOKEN=([^;]+)/)?.[1] ?? ''),
+            },
+            body: JSON.stringify({ done }),
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(body.message || 'Gagal mencentang item');
+        if (body.entry) applyUpsert(body.entry as Entry);
+    } catch (e) {
+        entry.items[index] = { ...item };
+        toastError(e instanceof Error ? e.message : 'Gagal mencentang item');
+    } finally {
+        const next = new Set(busy.value);
+        next.delete(entry.id);
+        busy.value = next;
+    }
+};
+const doneCount = (entry: Entry) => entry.items.filter((i) => i.done).length;
+
 const undoStatus = (entry: Entry) => {
     const back = previousStatus[entry.status];
     if (back) setStatus(entry, back, true);
@@ -314,6 +431,8 @@ const undoStatus = (entry: Entry) => {
 onMounted(() => {
     window.addEventListener('pointerdown', unlockNotificationSound, { once: true });
     clockId = setInterval(() => (now.value = Date.now()), 1000);
+    document.addEventListener('visibilitychange', onVisibility);
+    requestWakeLock();
     setupEcho();
 });
 onUnmounted(() => {
@@ -321,13 +440,15 @@ onUnmounted(() => {
     if (pollId) clearInterval(pollId);
     if (clockId) clearInterval(clockId);
     if (echoUnsubscribe) echoUnsubscribe();
+    document.removeEventListener('visibilitychange', onVisibility);
+    releaseWakeLock();
     audioContext.value?.close();
 });
 </script>
 
 <template>
-    <AdminLayout title="Papan Dapur"><Head title="Papan Dapur" />
-        <div class="flex h-[calc(100vh-4rem)] flex-col pb-4">
+    <AdminLayout title="Papan Dapur" :fullscreen="kiosk"><Head title="Papan Dapur" />
+        <div class="flex flex-col pb-4" :class="kiosk ? 'h-screen' : 'h-[calc(100vh-4rem)]'">
             <div class="flex shrink-0 flex-wrap items-center justify-between gap-3 px-4 pt-4">
                 <div class="flex items-center gap-3">
                     <h1 class="text-lg font-black text-slate-900">Papan Dapur</h1>
@@ -343,7 +464,36 @@ onUnmounted(() => {
                         <span class="h-2 w-2 rounded-full bg-slate-300" /> Menghubungkan...
                     </span>
                 </div>
-                <div class="flex items-center gap-2">
+                <div class="flex flex-wrap items-center gap-2">
+                    <div class="relative">
+                        <button
+                            type="button"
+                            class="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700"
+                            @click="showStationPicker = !showStationPicker"
+                        >
+                            <Layers class="h-4 w-4 text-slate-500" /> Stasiun: {{ stationLabel }}
+                        </button>
+                        <div
+                            v-if="showStationPicker"
+                            class="absolute right-0 z-30 mt-1 max-h-80 w-64 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg"
+                        >
+                            <p class="px-2 pb-1 text-xs text-slate-500">Tampilkan kategori ini saja di perangkat ini (mis. tablet bar = minuman).</p>
+                            <button type="button" class="w-full rounded-lg px-2 py-1.5 text-left text-sm hover:bg-slate-50" @click="clearStation">
+                                <span :class="station.length === 0 ? 'font-bold text-slate-900' : 'text-slate-600'">Semua kategori</span>
+                            </button>
+                            <label
+                                v-for="c in [...props.categories, { id: 0, name: 'Tanpa kategori' }]"
+                                :key="c.id"
+                                class="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-slate-50"
+                            >
+                                <input type="checkbox" :checked="station.includes(c.id)" class="h-4 w-4 rounded" @change="toggleStation(c.id)" />
+                                {{ c.name }}
+                            </label>
+                            <button type="button" class="mt-1 w-full rounded-lg bg-slate-900 px-2 py-1.5 text-sm font-semibold text-white" @click="showStationPicker = false">
+                                Selesai
+                            </button>
+                        </div>
+                    </div>
                     <div class="flex rounded-xl border border-slate-200 bg-white p-1 text-sm font-semibold">
                         <button
                             type="button"
@@ -364,6 +514,10 @@ onUnmounted(() => {
                     </div>
                     <Button variant="outline" size="sm" class="gap-1.5 rounded-xl" @click="refresh">
                         <RefreshCw class="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="outline" size="sm" class="gap-1.5 rounded-xl" @click="toggleKiosk">
+                        <component :is="kiosk ? Minimize2 : Maximize2" class="h-3.5 w-3.5" />
+                        {{ kiosk ? 'Keluar mode layar' : 'Mode layar dapur' }}
                     </Button>
                 </div>
             </div>
@@ -420,8 +574,11 @@ onUnmounted(() => {
                                 <div
                                     v-for="entry in column.entries"
                                     :key="entry.id"
-                                    class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition"
-                                    :class="busy.has(entry.id) ? 'opacity-60' : ''"
+                                    class="overflow-hidden rounded-xl border bg-white shadow-sm transition"
+                                    :class="[
+                                        busy.has(entry.id) ? 'opacity-60' : '',
+                                        isVeryLate(entry) ? 'border-red-300 ring-2 ring-red-200' : 'border-slate-200',
+                                    ]"
                                 >
                                     <!-- Ketuk kartu untuk lanjut ke status berikutnya -->
                                     <button
@@ -438,14 +595,28 @@ onUnmounted(() => {
                                                 </p>
                                                 <p class="text-base font-bold text-slate-900">{{ entry.table_reference ? `Meja ${entry.table_reference}` : entry.transaction_number }}</p>
                                             </div>
-                                            <span class="font-mono text-xs" :class="lateClass(entry)">{{ elapsed(entry.created_at) }}</span>
+                                            <span class="text-right">
+                                                <span class="block font-mono text-xs" :class="lateClass(entry)">{{ elapsed(entry.created_at) }}</span>
+                                                <span v-if="doneCount(entry) > 0" class="text-[11px] font-semibold text-emerald-600">{{ doneCount(entry) }}/{{ entry.items.length }} item</span>
+                                            </span>
                                         </div>
-                                        <div class="mt-1.5 space-y-0.5">
-                                            <div v-for="(item, index) in entry.items" :key="index" class="text-sm">
-                                                <div class="flex gap-1">
-                                                    <b>{{ item.quantity }}×</b>
-                                                    <span class="text-slate-700">
-                                                        {{ item.product_name }}<span v-if="item.variant" class="font-semibold text-slate-900"> ({{ item.variant }})</span>
+                                        <div class="mt-1.5 space-y-1">
+                                            <div
+                                                v-for="{ item, index } in stationItems(entry)"
+                                                :key="index"
+                                                :class="kiosk ? 'text-base' : 'text-sm'"
+                                                @click.stop="toggleItem(entry, index)"
+                                            >
+                                                <div class="flex items-start gap-1.5 rounded-md px-1 py-0.5 hover:bg-slate-100">
+                                                    <span
+                                                        class="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border"
+                                                        :class="item.done ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 bg-white'"
+                                                    >
+                                                        <Check v-if="item.done" class="h-3 w-3" />
+                                                    </span>
+                                                    <b :class="item.done ? 'text-slate-400' : ''">{{ item.quantity }}×</b>
+                                                    <span :class="item.done ? 'text-slate-400 line-through' : 'text-slate-700'">
+                                                        {{ item.product_name }}<span v-if="item.variant" class="font-semibold" :class="item.done ? '' : 'text-slate-900'"> ({{ item.variant }})</span>
                                                     </span>
                                                 </div>
                                                 <p
@@ -457,6 +628,9 @@ onUnmounted(() => {
                                                     + {{ m.label }}
                                                 </p>
                                             </div>
+                                            <p v-if="stationItems(entry).length < entry.items.length" class="text-[11px] italic text-slate-400">
+                                                + {{ entry.items.length - stationItems(entry).length }} item di stasiun lain
+                                            </p>
                                         </div>
                                         <p v-if="entry.notes" class="mt-2 rounded bg-yellow-50 p-2 text-xs text-yellow-800">{{ entry.notes }}</p>
                                     </button>

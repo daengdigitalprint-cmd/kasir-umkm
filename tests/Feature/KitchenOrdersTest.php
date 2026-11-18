@@ -226,3 +226,53 @@ it('menampilkan riwayat selesai hari ini dan rata-rata lama masak di papan dapur
             ->where('summary.completed_today', 1)
             ->where('summary.avg_prep_minutes', fn ($v) => abs((float) $v - 8.0) < 0.2));
 });
+
+it('menyertakan kategori produk di item dapur untuk filter stasiun', function () {
+    $store = kitchenStore(['kitchen_queue_enabled' => true]);
+    $trx = kitchenTransaction($store);
+    $category = \App\Models\ProductCategory::query()->firstOrCreate(['store_id' => $store->id, 'name' => 'Minuman Dingin']);
+    $trx->items->first()->product->update(['product_category_id' => $category->id]);
+
+    $entry = KitchenOrders::enqueue($store, $trx->fresh());
+
+    expect($entry->items[0]['category_id'])->toBe($category->id)
+        ->and($entry->items[0]['category'])->toBe('Minuman Dingin')
+        ->and($entry->items[0]['done'])->toBeFalse();
+});
+
+it('mencentang item: mulai dibuat, lalu otomatis Siap saat semua item selesai', function () {
+    $store = kitchenStore(['kitchen_queue_enabled' => true]);
+    $trx = kitchenTransaction($store, [['Nasi Goreng', 1, null, []], ['Es Teh', 2, null, []]]);
+    $entry = KitchenOrders::enqueue($store, $trx);
+    $user = kitchenAdmin($store);
+
+    $this->actingAs($user)->patchJson("/kitchen/entries/{$entry->id}/items/0", ['done' => true])->assertOk();
+    expect($entry->fresh()->status)->toBe('serving');
+
+    $this->actingAs($user)->patchJson("/kitchen/entries/{$entry->id}/items/1", ['done' => true])
+        ->assertOk()
+        ->assertJsonPath('entry.status', 'ready');
+    expect($entry->fresh()->ready_at)->not->toBeNull();
+
+    // Centang dibuka lagi → kembali Sedang Dibuat.
+    $this->actingAs($user)->patchJson("/kitchen/entries/{$entry->id}/items/1", ['done' => false])->assertOk();
+    expect($entry->fresh()->status)->toBe('serving')
+        ->and($entry->fresh()->ready_at)->toBeNull();
+});
+
+it('memberi daftar pesanan siap untuk layar kasir hanya bila Antrian Dapur aktif', function () {
+    $store = kitchenStore(['kitchen_queue_enabled' => true]);
+    $entry = KitchenOrders::enqueue($store, kitchenTransaction($store));
+    $entry->update(['status' => 'ready', 'ready_at' => now()]);
+
+    $this->actingAs(kitchenAdmin($store))->getJson('/kitchen/ready')
+        ->assertOk()
+        ->assertJsonPath('enabled', true)
+        ->assertJsonCount(1, 'entries');
+
+    $plain = kitchenStore([]);
+    $this->actingAs(kitchenAdmin($plain))->getJson('/kitchen/ready')
+        ->assertOk()
+        ->assertJsonPath('enabled', false)
+        ->assertJsonCount(0, 'entries');
+});
