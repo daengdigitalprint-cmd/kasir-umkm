@@ -619,12 +619,12 @@ onUnmounted(() => {
                         variant="outline"
                         size="sm"
                         class="gap-1.5 rounded-xl"
-                        :class="soundEnabled ? '' : 'text-slate-400'"
-                        :title="soundEnabled ? 'Matikan suara pesanan masuk' : 'Nyalakan suara pesanan masuk'"
-                        @click="toggleSound"
+                        :class="!soundEnabled ? 'text-slate-400' : !soundReady ? 'border-amber-300 bg-amber-50 text-amber-800' : ''"
+                        :title="!soundEnabled ? 'Nyalakan suara pesanan masuk' : !soundReady ? 'Sentuh layar sekali agar suara aktif' : 'Matikan suara pesanan masuk'"
+                        @click="!soundReady && soundEnabled ? (unlockNotificationSound(), playNewOrderSound()) : toggleSound()"
                     >
                         <component :is="soundEnabled ? Volume2 : VolumeX" class="h-3.5 w-3.5" />
-                        {{ soundEnabled ? 'Suara nyala' : 'Suara mati' }}
+                        {{ !soundEnabled ? 'Suara mati' : !soundReady ? 'Aktifkan suara' : 'Suara nyala' }}
                     </Button>
                     <Button variant="outline" size="sm" class="gap-1.5 rounded-xl" @click="toggleKiosk">
                         <component :is="kiosk ? Minimize2 : Maximize2" class="h-3.5 w-3.5" />
@@ -633,22 +633,6 @@ onUnmounted(() => {
                 </div>
             </div>
 
-            <button
-                v-if="soundEnabled && !soundReady"
-                type="button"
-                class="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-slate-900/85 px-6 text-center text-white"
-                @click="unlockNotificationSound(); playNewOrderSound()"
-            >
-                <span class="text-6xl">🔔</span>
-                <span class="text-2xl font-black">Ketuk layar untuk mulai</span>
-                <span class="max-w-md text-base text-slate-200">
-                    Agar suara pesanan masuk berbunyi. Browser hanya mengizinkan suara setelah layar disentuh,
-                    termasuk setiap kali halaman dimuat ulang.
-                </span>
-                <span v-if="unseenIds.size > 0" class="rounded-full bg-amber-500 px-4 py-1.5 text-base font-bold">
-                    {{ unseenIds.size }} pesanan baru menunggu
-                </span>
-            </button>
             <div
                 v-if="unseenIds.size > 0"
                 class="mx-4 mt-3 shrink-0 animate-pulse rounded-xl bg-amber-500 px-4 py-2.5 text-base font-black text-white"
