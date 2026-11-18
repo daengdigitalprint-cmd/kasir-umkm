@@ -234,7 +234,7 @@ const submitOrder = async () => {
 
     <div class="min-h-screen bg-slate-50 flex flex-col">
         <!-- Header -->
-        <header class="sticky top-0 z-30 rounded-b-3xl border-b border-slate-100 bg-white/85 shadow-sm backdrop-blur-md">
+        <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-md">
             <div class="px-4 py-3 flex items-center gap-3 max-w-3xl mx-auto w-full">
                 <button
                     v-if="cartOpen"
@@ -293,7 +293,7 @@ const submitOrder = async () => {
 
             <!-- Menu List -->
             <div v-else>
-                <div v-if="props.categories.length" class="-mx-4 mb-5 overflow-x-auto border-b border-slate-100 bg-slate-50 px-4 py-2">
+                <div v-if="props.categories.length" class="-mx-4 mb-5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden border-b border-slate-100 bg-slate-50 px-4 py-2">
                     <div class="flex min-w-max gap-2">
                         <button
                             v-for="category in props.categories"
@@ -316,12 +316,12 @@ const submitOrder = async () => {
                         <Flame class="h-4 w-4 text-orange-500" />
                         Produk Terlaris
                     </h2>
-                    <div class="flex gap-3 overflow-x-auto pb-1">
+                    <div class="flex gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                         <button
                             v-for="product in props.bestSelling"
                             :key="product.id"
                             @click="openProduct(product)"
-                            class="relative w-36 shrink-0 overflow-hidden rounded-2xl border border-orange-100 bg-white text-left shadow-sm transition hover:shadow-md"
+                            class="relative w-36 shrink-0 overflow-hidden rounded-2xl border border-orange-100 bg-white text-left transition hover:border-orange-300"
                         >
                             <span class="absolute left-2 top-2 z-10 rounded-full bg-orange-500 px-2 py-1 text-[10px] font-black text-white">
                                 Terlaris
@@ -349,7 +349,7 @@ const submitOrder = async () => {
                             v-for="product in category.products"
                             :key="product.id"
                             @click="openProduct(product)"
-                            class="text-left rounded-2xl border border-slate-100 bg-white overflow-hidden hover:shadow-md transition group"
+                            class="text-left rounded-2xl border border-slate-200 bg-white overflow-hidden hover:border-primary/40 transition group"
                         >
                             <div class="aspect-square w-full bg-slate-50 overflow-hidden">
                                 <img
@@ -403,7 +403,7 @@ const submitOrder = async () => {
         <!-- Cart Bar (bottom) -->
         <div
             v-if="cartCount > 0 && !cartOpen && !ordered"
-            class="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-100 shadow-lg p-4"
+            class="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-200 p-4"
         >
             <div class="max-w-3xl mx-auto">
                 <!-- F8: saran tambahan menu -->
@@ -414,7 +414,7 @@ const submitOrder = async () => {
                             <X class="h-4 w-4" />
                         </button>
                     </div>
-                    <div class="flex gap-2 overflow-x-auto">
+                    <div class="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                         <button
                             v-for="s in upsellSuggestions"
                             :key="s.id"

@@ -158,7 +158,7 @@ class TableOrderController extends Controller
         }
 
         if ($transaction->order_status !== 'pending') {
-            return response()->json(['message' => 'Pesanan sudah diproses.'], 422);
+            return back()->with('error', 'Pesanan sudah diproses.');
         }
 
         $transaction->update([
@@ -188,7 +188,7 @@ class TableOrderController extends Controller
             abort(404);
         }
         if ($transaction->payment_status === 'paid') {
-            return response()->json(['message' => 'Pesanan sudah dibayar.'], 422);
+            return back()->with('error', 'Pesanan sudah dibayar.');
         }
 
         $validated = $request->validate([
@@ -197,7 +197,7 @@ class TableOrderController extends Controller
         ]);
         $shift = CashShift::query()->where('store_id', $store->id)->where('user_id', auth()->id())->whereNull('closed_at')->first();
         if (! $shift) {
-            return response()->json(['message' => 'Buka shift kasir terlebih dahulu.'], 422);
+            return back()->with('error', 'Buka shift kasir terlebih dahulu.');
         }
 
         $details = $transaction->payment_details ?? [];
@@ -240,10 +240,10 @@ class TableOrderController extends Controller
             abort(403);
         }
         if ($transaction->order_status !== 'accepted' && $transaction->order_status !== 'ready') {
-            return response()->json(['message' => 'Pesanan belum siap diselesaikan.'], 422);
+            return back()->with('error', 'Pesanan belum siap diselesaikan.');
         }
         if ($transaction->payment_status !== 'paid') {
-            return response()->json(['message' => 'Pesanan harus dibayar sebelum diselesaikan.'], 422);
+            return back()->with('error', 'Pesanan harus dibayar sebelum diselesaikan.');
         }
         $transaction->update(['order_status' => 'completed', 'status' => 'completed', 'completed_at' => now()]);
 
@@ -265,7 +265,7 @@ class TableOrderController extends Controller
         }
 
         if ($transaction->order_status !== 'pending') {
-            return response()->json(['message' => 'Pesanan sudah diproses.'], 422);
+            return back()->with('error', 'Pesanan sudah diproses.');
         }
 
         $validated = $request->validate([

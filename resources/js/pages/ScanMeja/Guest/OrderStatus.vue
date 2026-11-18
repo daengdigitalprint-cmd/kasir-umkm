@@ -123,7 +123,7 @@ onBeforeUnmount(() => {
 
     <div class="min-h-screen bg-slate-50">
         <!-- Header -->
-        <header class="sticky top-0 z-20 bg-white border-b border-slate-100 shadow-sm">
+        <header class="sticky top-0 z-20 bg-white border-b border-slate-200">
             <div class="mx-auto flex max-w-md items-center gap-3 px-4 py-4">
                 <Link
                     :href="`/m/${table.slug}`"
@@ -140,7 +140,7 @@ onBeforeUnmount(() => {
 
         <main class="mx-auto max-w-md px-4 py-6">
             <!-- Card Status -->
-            <div class="rounded-3xl bg-white p-6 shadow-sm border border-slate-100">
+            <div class="rounded-3xl bg-white p-6 border border-slate-200">
                 <div class="flex items-center gap-4">
                     <div
                         class="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl"
@@ -170,7 +170,7 @@ onBeforeUnmount(() => {
             </div>
 
             <!-- Detail Pesanan -->
-            <div class="mt-4 rounded-3xl bg-white p-6 shadow-sm border border-slate-100">
+            <div class="mt-4 rounded-3xl bg-white p-6 border border-slate-200">
                 <h2 class="text-sm font-bold text-slate-800">Detail Pesanan</h2>
 
                 <ul class="mt-4 divide-y divide-slate-100">
@@ -181,7 +181,7 @@ onBeforeUnmount(() => {
                     >
                         <div class="min-w-0">
                             <p class="truncate text-sm font-medium text-slate-700">{{ item.name }}</p>
-                            <p class="text-xs text-slate-400">{{ item.quantity }}x {{ formatPrice(item.price) }}</p>
+                            <p class="text-xs text-slate-400">{{ Number(item.quantity).toLocaleString('id-ID') }}× {{ formatPrice(item.price) }}</p>
                         </div>
                         <span class="text-sm font-semibold text-slate-800">{{ formatPrice(item.total) }}</span>
                     </li>
