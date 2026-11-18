@@ -15,6 +15,7 @@ use App\Support\Accounting\JournalPoster;
 use App\Support\AdjustmentStockOperations;
 use App\Support\BatchTracking;
 use App\Support\InventoryCosting;
+use App\Support\InventoryType;
 use App\Support\OpnameCounting;
 use App\Support\ProductQuantity;
 use App\Support\StockAdjustmentApproval;
@@ -97,6 +98,9 @@ class StockOpnameController extends Controller
         return Inertia::render('StockOpnames/Create', [
             'categories' => $categories,
             'countableTotal' => $this->countableProductsQuery($store)->count(),
+            'productionOutputCount' => $this->countableProductsQuery($store, true)
+                ->where('inventory_type', InventoryType::PRODUCTION_OUTPUT)
+                ->count(),
         ]);
     }
 
@@ -116,11 +120,12 @@ class StockOpnameController extends Controller
         $validated = $request->validate([
             'notes' => ['nullable', 'string', 'max:2000'],
             'blind_count' => ['nullable', 'boolean'],
+            'include_production' => ['nullable', 'boolean'],
             'category_ids' => ['nullable', 'array'],
             'category_ids.*' => ['integer', Rule::exists('product_categories', 'id')->where('store_id', $store->id)],
         ]);
 
-        $products = $this->countableProductsQuery($store)
+        $products = $this->countableProductsQuery($store, (bool) ($validated['include_production'] ?? false))
             ->when(
                 ! empty($validated['category_ids']),
                 fn ($q) => $q->whereIn('product_category_id', $validated['category_ids'])
@@ -804,13 +809,20 @@ class StockOpnameController extends Controller
             ->all();
     }
 
-    private function countableProductsQuery($store)
+    /**
+     * Produk yang dihitung saat opname. Hasil produksi (mis. biang teh, gula cair)
+     * bawaannya tidak ikut: stoknya berputar lewat produksi & resep, bukan dihitung fisik.
+     */
+    private function countableProductsQuery($store, bool $includeProduction = false)
     {
         return $store->products()
             ->where('track_stock', true)
             ->where('unlimited_stock', false)
             ->where('is_bundle', false)
             ->where('is_active', true)
+            ->when(! $includeProduction, fn ($q) => $q->where(fn ($q2) => $q2
+                ->whereNull('inventory_type')
+                ->orWhere('inventory_type', '!=', InventoryType::PRODUCTION_OUTPUT)))
             ->with(['variants' => fn ($q) => $q->orderBy('sort_order')->orderBy('id')]);
     }
 

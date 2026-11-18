@@ -248,9 +248,10 @@ class StockOpnameImportService
 
                     $counted = ProductQuantity::normalizeStorageAmount($line->product, $row['counted_quantity']);
 
-                    // Waktu hitung dari berkas tidak diketahui: dianggap saat sesi dibuka
-                    // (sesuai "Stok Sistem" yang tercetak di lembar hitung).
-                    OpnameCounting::record($document, $line, $counted, null);
+                    // Waktu hitung dari berkas = saat diunggah. Sesi bisa terbuka berhari-hari;
+                    // penjualan sejak sesi dibuka sampai unggah ikut diperhitungkan agar tidak
+                    // terhitung dua kali.
+                    OpnameCounting::record($document, $line, $counted, $import->created_at ?? now());
                     if (($row['note'] ?? null) !== null) {
                         $line->update(['line_notes' => $row['note']]);
                     }

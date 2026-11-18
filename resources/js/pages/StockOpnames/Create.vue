@@ -8,11 +8,13 @@ import { ArrowLeft, EyeOff } from 'lucide-vue-next';
 const props = defineProps<{
     categories: Array<{ id: number; name: string }>;
     countableTotal: number;
+    productionOutputCount?: number;
 }>();
 
 const form = useForm({
     notes: '',
     blind_count: false,
+    include_production: false,
     category_ids: [] as number[],
 });
 
@@ -79,6 +81,19 @@ function submit() {
                     <p class="text-xs text-slate-500">
                         {{ form.category_ids.length === 0 ? 'Seluruh produk akan dihitung.' : `${form.category_ids.length} kategori dipilih.` }}
                     </p>
+                    <label
+                        v-if="(props.productionOutputCount ?? 0) > 0"
+                        class="mt-2 flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-3 text-sm"
+                    >
+                        <input v-model="form.include_production" type="checkbox" class="mt-0.5 h-4 w-4 rounded" />
+                        <span>
+                            <span class="font-semibold text-slate-900">Ikut hitung {{ props.productionOutputCount }} produk hasil produksi</span>
+                            <span class="block text-xs text-slate-500">
+                                Bawaannya tidak dihitung (mis. biang teh, gula cair) karena stoknya mengikuti catatan produksi.
+                                Centang bila hasil produksi memang disimpan dan perlu dihitung, seperti di dapur pusat.
+                            </span>
+                        </span>
+                    </label>
                 </CardContent>
             </Card>
 

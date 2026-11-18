@@ -169,3 +169,46 @@ it('tidak menghitung dua kali penjualan yang terjadi setelah sesi dibuka tetapi 
     // Tanpa koreksi, stok akan jadi 50 (penjualan terhitung dua kali).
     expect((float) $a->fresh()->stock_quantity)->toEqual(55.0);
 });
+
+it('tidak menyertakan produk hasil produksi kecuali diminta', function () {
+    [$store, $user] = countingStore();
+    countingProduct($store, 'SKM', 100);
+    countingProduct($store, 'Biang Teh Cair', 5000)->update(['inventory_type' => 'production_output']);
+
+    $default = openCountingSession($user);
+    expect($default->lines()->count())->toBe(1);
+
+    $withProduction = openCountingSession($user, ['include_production' => true]);
+    expect($withProduction->lines()->count())->toBe(2);
+});
+
+it('membandingkan hasil Excel dengan stok saat berkas diunggah, bukan saat sesi dibuka', function () {
+    \Illuminate\Support\Facades\Storage::fake('local');
+    [$store, $user] = countingStore();
+    $a = countingProduct($store, 'SKM', 100);
+
+    $this->travelTo(now()->subDays(17));
+    $doc = openCountingSession($user);
+    $this->travelBack();
+
+    // 17 hari penjualan: 100 → 60. Hitung fisik hari ini: 60 → tidak ada selisih.
+    $a->update(['stock_quantity' => 60]);
+    StockMovement::query()->create([
+        'store_id' => $store->id, 'product_id' => $a->id, 'user_id' => $user->id,
+        'quantity_change' => -40, 'type' => 'sale', 'balance_after' => 60,
+    ]);
+
+    $lineId = $doc->lines()->first()->id;
+    $csv = "ID Baris,Nama Produk,Stok Fisik\n{$lineId},SKM,60\n";
+    $this->actingAs($user)->post("/stock-opnames/{$doc->id}/imports", [
+        'file' => \Illuminate\Http\UploadedFile::fake()->createWithContent('hitung.csv', $csv),
+    ])->assertRedirect();
+
+    $line = $doc->lines()->first();
+    expect((float) $line->counted_quantity)->toEqual(60.0)
+        ->and((float) $line->movement_during_count)->toEqual(-40.0)
+        ->and((float) $line->variance_quantity)->toEqual(0.0);
+
+    $this->actingAs($user)->post("/stock-opnames/{$doc->id}/post")->assertSessionHasNoErrors();
+    expect((float) $a->fresh()->stock_quantity)->toEqual(60.0);
+});
