@@ -276,3 +276,65 @@ it('memberi daftar pesanan siap untuk layar kasir hanya bila Antrian Dapur aktif
         ->assertJsonPath('enabled', false)
         ->assertJsonCount(0, 'entries');
 });
+
+it('tidak mengubah open bill saat dapur menandai Siap dan Diserahkan', function () {
+    $store = kitchenStore(['kitchen_queue_enabled' => true]);
+    $trx = kitchenTransaction($store);
+    $trx->update(['status' => 'pending', 'order_status' => 'open', 'payment_status' => 'unpaid']);
+    $entry = KitchenOrders::enqueue($store, $trx);
+    $user = kitchenAdmin($store);
+
+    foreach (['serving', 'ready', 'completed'] as $status) {
+        $this->actingAs($user)->patchJson("/queue-entries/{$entry->id}", ['status' => $status])->assertOk();
+    }
+
+    $fresh = $trx->fresh();
+    expect($fresh->order_status)->toBe('open')
+        ->and($fresh->status)->toBe('pending')
+        ->and($fresh->payment_status)->toBe('unpaid')
+        ->and($fresh->completed_at)->toBeNull();
+});
+
+it('tidak mengubah open bill saat semua item dicentang', function () {
+    $store = kitchenStore(['kitchen_queue_enabled' => true]);
+    $trx = kitchenTransaction($store);
+    $trx->update(['status' => 'pending', 'order_status' => 'open', 'payment_status' => 'unpaid']);
+    $entry = KitchenOrders::enqueue($store, $trx);
+
+    $this->actingAs(kitchenAdmin($store))->patchJson("/kitchen/entries/{$entry->id}/items/0", ['done' => true])->assertOk();
+
+    expect($entry->fresh()->status)->toBe('ready')
+        ->and($trx->fresh()->order_status)->toBe('open');
+});
+
+it('pesanan meja yang belum dibayar tidak ditandai selesai oleh dapur', function () {
+    $store = kitchenStore(['kitchen_queue_enabled' => true]);
+    $trx = kitchenTransaction($store);
+    $trx->update(['status' => 'pending', 'order_status' => 'accepted', 'payment_status' => 'unpaid']);
+    $entry = KitchenOrders::enqueue($store, $trx);
+    $user = kitchenAdmin($store);
+
+    foreach (['serving', 'ready'] as $status) {
+        $this->actingAs($user)->patchJson("/queue-entries/{$entry->id}", ['status' => $status])->assertOk();
+    }
+    expect($trx->fresh()->order_status)->toBe('ready');
+
+    $this->actingAs($user)->patchJson("/queue-entries/{$entry->id}", ['status' => 'completed'])->assertOk();
+    expect($trx->fresh()->order_status)->toBe('ready')
+        ->and($trx->fresh()->status)->toBe('pending');
+});
+
+it('pesanan meja yang sudah dibayar selesai saat diserahkan dapur', function () {
+    $store = kitchenStore(['kitchen_queue_enabled' => true]);
+    $trx = kitchenTransaction($store);
+    $trx->update(['status' => 'pending', 'order_status' => 'accepted', 'payment_status' => 'paid']);
+    $entry = KitchenOrders::enqueue($store, $trx);
+    $user = kitchenAdmin($store);
+
+    foreach (['serving', 'ready', 'completed'] as $status) {
+        $this->actingAs($user)->patchJson("/queue-entries/{$entry->id}", ['status' => $status])->assertOk();
+    }
+
+    expect($trx->fresh()->order_status)->toBe('completed')
+        ->and($trx->fresh()->status)->toBe('completed');
+});

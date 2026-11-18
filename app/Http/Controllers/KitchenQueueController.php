@@ -122,13 +122,11 @@ class KitchenQueueController extends Controller
                 $updates += ['status' => 'serving', 'called_at' => now()];
             }
 
+            $previousStatus = $entry->status;
             $entry->update($updates);
 
-            $trx = $entry->transaction;
-            if ($trx && ($updates['status'] ?? null) === 'ready') {
-                $trx->update(['order_status' => 'ready']);
-            } elseif ($trx && ($updates['status'] ?? null) === 'serving' && $trx->order_status === 'ready') {
-                $trx->update(['order_status' => 'accepted']);
+            if (isset($updates['status'])) {
+                KitchenOrders::syncTransaction($entry, $previousStatus, $updates['status']);
             }
 
             $queueEntry->setRawAttributes($entry->getAttributes(), true);

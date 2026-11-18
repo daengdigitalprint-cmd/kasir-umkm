@@ -356,29 +356,8 @@ class QueueController extends Controller
         DB::transaction(function () use ($queueEntry, $updates, $newStatus, $isUndo, $previousStatus) {
             $queueEntry->update($updates);
 
-            if ($isUndo) {
-                // Kembalikan status pesanan hanya bila tadi diubah oleh papan dapur.
-                $trx = $queueEntry->transaction;
-                if ($trx && $previousStatus === 'completed' && $trx->order_status === 'completed') {
-                    $trx->update(['order_status' => 'ready']);
-                } elseif ($trx && $previousStatus === 'ready' && $trx->order_status === 'ready') {
-                    $trx->update(['order_status' => 'accepted']);
-                }
-
-                return;
-            }
-
-            if ($queueEntry->transaction && $newStatus === 'ready') {
-                $queueEntry->transaction->update(['order_status' => 'ready']);
-            }
-
-            if ($newStatus === 'completed' && $queueEntry->transaction) {
-                $queueEntry->transaction->update([
-                    'order_status' => 'completed',
-                    'status' => 'completed',
-                    'completed_at' => now(),
-                ]);
-            }
+            // Dapur hanya menyiapkan pesanan; status bayar/open bill tetap urusan kasir.
+            \App\Support\KitchenOrders::syncTransaction($queueEntry, $previousStatus, $newStatus);
         });
 
         \App\Support\KitchenOrders::broadcast(KitchenQueueUpdated::fromEntry($queueEntry->load('transaction:id,transaction_number,order_type,table_reference')));

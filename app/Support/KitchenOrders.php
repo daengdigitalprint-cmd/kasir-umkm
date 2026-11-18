@@ -117,6 +117,35 @@ final class KitchenOrders
         })->values()->all();
     }
 
+    /**
+     * Sesuaikan status pesanan di transaksi setelah status dapur berubah.
+     *
+     * Dapur hanya menyiapkan makanan, tidak memvalidasi pembayaran:
+     * - Open bill (order_status "open") tidak pernah diubah: tetap di daftar kasir sampai dibayar.
+     * - Pesanan meja (QR) yang sudah diterima kasir ikut berstatus ready, dan baru "completed"
+     *   bila sudah dibayar.
+     * - Transaksi lain (mis. bayar langsung di kasir) tidak diubah.
+     */
+    public static function syncTransaction(QueueEntry $entry, string $from, string $to): void
+    {
+        $trx = $entry->transaction;
+        if (! $trx || $trx->order_status === 'open' || $from === $to) {
+            return;
+        }
+
+        if ($to === 'ready' && $trx->order_status === 'accepted') {
+            $trx->update(['order_status' => 'ready']);
+        } elseif ($from === 'ready' && $to !== 'completed' && $trx->order_status === 'ready') {
+            // Dikembalikan dari Siap.
+            $trx->update(['order_status' => 'accepted']);
+        } elseif ($to === 'completed' && in_array($trx->order_status, ['accepted', 'ready'], true) && $trx->payment_status === 'paid') {
+            $trx->update(['order_status' => 'completed', 'status' => 'completed', 'completed_at' => now()]);
+        } elseif ($from === 'completed' && $to === 'ready' && $trx->order_status === 'completed' && $trx->completed_at?->gt(now()->subMinutes(15))) {
+            // Diserahkan dibatalkan (salah tekan).
+            $trx->update(['order_status' => 'ready']);
+        }
+    }
+
     /** Pesanan dibatalkan/di-void di kasir → hilang dari papan dapur. Hanya untuk toko dengan papan dapur. */
     public static function cancelForTransaction(Store $store, Transaction $transaction): void
     {
