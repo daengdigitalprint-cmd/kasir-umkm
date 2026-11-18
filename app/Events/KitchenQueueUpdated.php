@@ -59,6 +59,8 @@ class KitchenQueueUpdated implements ShouldBroadcastNow
                 'transaction_number' => $transaction?->transaction_number,
                 'created_at' => $entry->created_at?->toIso8601String(),
                 'called_at' => $entry->called_at?->toIso8601String(),
+                'ready_at' => $entry->ready_at?->toIso8601String(),
+                'completed_at' => $entry->completed_at?->toIso8601String(),
                 'notes' => $entry->notes,
                 'items' => $entry->items ?? [],
                 'barber_user_id' => $entry->barber_user_id,

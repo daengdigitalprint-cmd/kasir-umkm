@@ -26,6 +26,7 @@ class QueueEntry extends Model
         'notes',
         'items',
         'called_at',
+        'ready_at',
         'completed_at',
     ];
 
@@ -35,6 +36,7 @@ class QueueEntry extends Model
             'priority' => 'integer',
             'items' => 'array',
             'called_at' => 'datetime',
+            'ready_at' => 'datetime',
             'completed_at' => 'datetime',
         ];
     }

@@ -25,6 +25,12 @@ function kitchenStore(array $settings): Store
         'is_active' => true,
         'business_type' => 'fnb',
         'settings' => $settings,
+        'is_subscription_active' => true,
+        'subscription_plan_id' => \App\Models\SubscriptionPlan::query()->firstOrCreate(
+            ['slug' => 'bisnis'],
+            ['name' => 'GrowUp', 'price' => 99000, 'billing_cycle' => 'monthly', 'is_active' => true],
+        )->id,
+        'subscription_end' => now()->addMonth(),
     ]);
 }
 
@@ -150,4 +156,73 @@ it('tidak menggagalkan proses saat siaran ke layar dapur error', function () {
 
     expect($entry)->not->toBeNull()
         ->and($entry->exists)->toBeTrue();
+});
+
+function kitchenAdmin(Store $store): User
+{
+    $user = User::factory()->create(['store_id' => $store->id, 'role' => 'admin', 'email_verified_at' => now()]);
+    $store->members()->attach($user->id, ['role' => 'admin']);
+
+    return $user;
+}
+
+it('mencatat waktu siap dan bisa mengembalikan salah tekan dalam 10 menit', function () {
+    $store = kitchenStore(['kitchen_queue_enabled' => true]);
+    $entry = KitchenOrders::enqueue($store, kitchenTransaction($store));
+    $user = kitchenAdmin($store);
+
+    $this->actingAs($user)->patchJson("/queue-entries/{$entry->id}", ['status' => 'serving'])->assertOk();
+    $this->actingAs($user)->patchJson("/queue-entries/{$entry->id}", ['status' => 'ready'])->assertOk();
+    expect($entry->fresh()->ready_at)->not->toBeNull();
+
+    $this->actingAs($user)->patchJson("/queue-entries/{$entry->id}", ['status' => 'completed'])->assertOk();
+    $this->actingAs($user)->patchJson("/queue-entries/{$entry->id}", ['status' => 'ready'])->assertOk();
+
+    $fresh = $entry->fresh();
+    expect($fresh->status)->toBe('ready')
+        ->and($fresh->completed_at)->toBeNull();
+});
+
+it('menolak mengembalikan status setelah lewat 10 menit', function () {
+    $store = kitchenStore(['kitchen_queue_enabled' => true]);
+    $entry = KitchenOrders::enqueue($store, kitchenTransaction($store));
+    $entry->update(['status' => 'completed', 'completed_at' => now()->subMinutes(15)]);
+
+    $this->actingAs(kitchenAdmin($store))
+        ->patchJson("/queue-entries/{$entry->id}", ['status' => 'ready'])
+        ->assertStatus(422);
+
+    expect($entry->fresh()->status)->toBe('completed');
+});
+
+it('tidak mengizinkan status mundur di toko tanpa Antrian Dapur', function () {
+    $store = kitchenStore(['queue_module_enabled' => true]);
+    $entry = KitchenOrders::enqueue($store, kitchenTransaction($store));
+    $entry->update(['status' => 'serving', 'called_at' => now()]);
+
+    $this->actingAs(kitchenAdmin($store))
+        ->patchJson("/queue-entries/{$entry->id}", ['status' => 'waiting'])
+        ->assertStatus(422);
+});
+
+it('menampilkan riwayat selesai hari ini dan rata-rata lama masak di papan dapur', function () {
+    $store = kitchenStore(['kitchen_queue_enabled' => true]);
+    $entry = KitchenOrders::enqueue($store, kitchenTransaction($store));
+    $entry->forceFill([
+        'status' => 'completed',
+        'created_at' => now()->subMinutes(12),
+        'ready_at' => now()->subMinutes(4),
+        'completed_at' => now()->subMinutes(2),
+    ])->saveQuietly();
+
+    // Akses menu diatur paket & peran (diuji terpisah); di sini yang diuji isi papan dapur.
+    $this->withoutMiddleware(\App\Http\Middleware\EnsureMenuAccess::class);
+
+    $this->actingAs(kitchenAdmin($store))->get('/kitchen')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('Kitchen/Index')
+            ->has('history', 1)
+            ->where('summary.completed_today', 1)
+            ->where('summary.avg_prep_minutes', fn ($v) => abs((float) $v - 8.0) < 0.2));
 });

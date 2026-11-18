@@ -309,21 +309,64 @@ class QueueController extends Controller
             'ready' => ['completed'],
         ];
 
-        if (! in_array($newStatus, $allowedTransitions[$queueEntry->status] ?? [], true)) {
+        // Papan Dapur: salah tekan bisa dikembalikan satu langkah dalam 10 menit.
+        $undoTransitions = ['serving' => 'waiting', 'ready' => 'serving', 'completed' => 'ready'];
+        $isUndo = ($undoTransitions[$queueEntry->status] ?? null) === $newStatus;
+        if ($isUndo) {
+            $changedAt = match ($queueEntry->status) {
+                'serving' => $queueEntry->called_at,
+                'ready' => $queueEntry->ready_at,
+                'completed' => $queueEntry->completed_at,
+                default => null,
+            } ?? $queueEntry->updated_at;
+
+            if (! \App\Support\KitchenOrders::enabled($store) || $queueEntry->transaction_id === null) {
+                abort(422, 'Perubahan status antrian tidak valid.');
+            }
+            if ($changedAt && $changedAt->lt(now()->subMinutes(10))) {
+                abort(422, 'Status hanya bisa dikembalikan dalam 10 menit.');
+            }
+        } elseif (! in_array($newStatus, $allowedTransitions[$queueEntry->status] ?? [], true)) {
             abort(422, 'Perubahan status antrian tidak valid.');
         }
 
         $updates = ['status' => $newStatus];
 
-        if ($newStatus === 'serving' && $queueEntry->status === 'waiting') {
+        if ($isUndo) {
+            $updates += match ($queueEntry->status) {
+                'serving' => ['called_at' => null],
+                'ready' => ['ready_at' => null],
+                'completed' => ['completed_at' => null],
+                default => [],
+            };
+        }
+
+        if ($newStatus === 'ready' && ! $isUndo) {
+            $updates['ready_at'] = now();
+        }
+
+        if ($newStatus === 'serving' && $queueEntry->status === 'waiting' && ! $isUndo) {
             $updates['called_at'] = now();
         }
 
         if ($newStatus === 'completed' && $queueEntry->status !== 'completed') {
             $updates['completed_at'] = now();
         }
-        DB::transaction(function () use ($queueEntry, $updates, $newStatus) {
+        $previousStatus = $queueEntry->status;
+        DB::transaction(function () use ($queueEntry, $updates, $newStatus, $isUndo, $previousStatus) {
             $queueEntry->update($updates);
+
+            if ($isUndo) {
+                // Kembalikan status pesanan hanya bila tadi diubah oleh papan dapur.
+                $trx = $queueEntry->transaction;
+                if ($trx && $previousStatus === 'completed' && $trx->order_status === 'completed') {
+                    $trx->update(['order_status' => 'ready']);
+                } elseif ($trx && $previousStatus === 'ready' && $trx->order_status === 'ready') {
+                    $trx->update(['order_status' => 'accepted']);
+                }
+
+                return;
+            }
 
             if ($queueEntry->transaction && $newStatus === 'ready') {
                 $queueEntry->transaction->update(['order_status' => 'ready']);
