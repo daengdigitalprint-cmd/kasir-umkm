@@ -13,8 +13,10 @@ import {
     Copy,
     Download,
     ExternalLink,
+    ImagePlus,
     LayoutGrid,
     MapPin,
+    Palette,
     Pencil,
     Plus,
     Printer,
@@ -24,8 +26,9 @@ import {
     StickyNote,
     Trash2,
     Users,
+    Utensils,
 } from 'lucide-vue-next';
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, ref } from 'vue';
 
 interface TableItem {
     id: number;
@@ -43,7 +46,77 @@ interface TableItem {
 
 const props = defineProps<{
     tables: TableItem[];
+    appearance?: { store_name: string; cover_url: string | null; logo_url: string | null; store_logo_url: string | null };
 }>();
+
+// --- Tampilan menu digital (sampul & logo) ---
+const showAppearance = ref(false);
+const appearanceForm = useForm({
+    cover: null as File | null,
+    logo: null as File | null,
+    remove_cover: false,
+    remove_logo: false,
+});
+const coverPreview = ref<string | null>(null);
+const logoPreview = ref<string | null>(null);
+const revoke = (u: string | null) => u && URL.revokeObjectURL(u);
+onBeforeUnmount(() => {
+    revoke(coverPreview.value);
+    revoke(logoPreview.value);
+});
+
+const openAppearance = () => {
+    appearanceForm.reset();
+    appearanceForm.clearErrors();
+    revoke(coverPreview.value);
+    revoke(logoPreview.value);
+    coverPreview.value = null;
+    logoPreview.value = null;
+    showAppearance.value = true;
+};
+const pickImage = (field: 'cover' | 'logo', e: Event) => {
+    const file = (e.target as HTMLInputElement).files?.[0] ?? null;
+    (e.target as HTMLInputElement).value = '';
+    if (!file) return;
+    appearanceForm[field] = file;
+    appearanceForm[field === 'cover' ? 'remove_cover' : 'remove_logo'] = false;
+    const target = field === 'cover' ? coverPreview : logoPreview;
+    revoke(target.value);
+    target.value = URL.createObjectURL(file);
+};
+const removeImage = (field: 'cover' | 'logo') => {
+    appearanceForm[field] = null;
+    appearanceForm[field === 'cover' ? 'remove_cover' : 'remove_logo'] = true;
+    const target = field === 'cover' ? coverPreview : logoPreview;
+    revoke(target.value);
+    target.value = null;
+};
+// Gambar yang tampil di pratinjau: pilihan baru → tersimpan → cadangan.
+const shownCover = computed(() => coverPreview.value ?? (appearanceForm.remove_cover ? null : (props.appearance?.cover_url ?? null)));
+const shownLogo = computed(
+    () => logoPreview.value ?? (appearanceForm.remove_logo ? null : (props.appearance?.logo_url ?? null)) ?? props.appearance?.store_logo_url ?? null,
+);
+const hasOwnCover = computed(() => !!coverPreview.value || (!appearanceForm.remove_cover && !!props.appearance?.cover_url));
+const hasOwnLogo = computed(() => !!logoPreview.value || (!appearanceForm.remove_logo && !!props.appearance?.logo_url));
+const storeInitials = computed(() =>
+    (props.appearance?.store_name ?? '')
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((w) => w[0]?.toUpperCase())
+        .join(''),
+);
+const saveAppearance = () => {
+    appearanceForm.post('/tables/appearance', {
+        forceFormData: true,
+        preserveScroll: true,
+        onSuccess: () => {
+            showAppearance.value = false;
+            toastSuccess('Tampilan menu digital disimpan.');
+        },
+    });
+};
+const previewTable = computed(() => props.tables.find((t) => t.is_active) ?? null);
 
 // --- Ringkasan ---
 const activeCount = computed(() => props.tables.filter((t) => t.is_active).length);
@@ -281,6 +354,34 @@ const printableCount = computed(() => filteredTables.value.filter((t) => t.is_ac
                         <Printer class="h-4 w-4" /> Cetak QR ({{ printableCount }})
                     </Button>
                     <Button class="gap-1.5 rounded-xl" @click="openCreate"><Plus class="h-4 w-4" /> Tambah meja</Button>
+                </div>
+            </div>
+
+            <!-- Tampilan menu digital -->
+            <div class="flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+                <div class="relative h-16 w-28 shrink-0 overflow-hidden rounded-xl bg-violet-100">
+                    <img v-if="appearance?.cover_url" :src="appearance.cover_url" alt="" class="h-full w-full object-cover" />
+                    <div
+                        class="absolute bottom-1.5 left-1.5 flex h-7 w-7 items-center justify-center overflow-hidden rounded-lg border-2 border-white bg-white text-[10px] font-black text-violet-700"
+                    >
+                        <img
+                            v-if="appearance?.logo_url || appearance?.store_logo_url"
+                            :src="(appearance.logo_url || appearance.store_logo_url)!"
+                            alt=""
+                            class="h-full w-full object-cover"
+                        />
+                        <span v-else>{{ storeInitials }}</span>
+                    </div>
+                </div>
+                <div class="min-w-0 flex-1">
+                    <p class="font-bold text-slate-900">Tampilan menu digital</p>
+                    <p class="text-sm text-slate-500">Ganti foto latar header dan logo yang dilihat pelanggan saat scan QR.</p>
+                </div>
+                <div class="flex gap-2">
+                    <a v-if="previewTable" :href="previewTable.guest_url" target="_blank" rel="noopener">
+                        <Button variant="outline" class="gap-1.5 rounded-xl"><ExternalLink class="h-4 w-4" /> Lihat</Button>
+                    </a>
+                    <Button variant="outline" class="gap-1.5 rounded-xl" @click="openAppearance"><Palette class="h-4 w-4" /> Atur tampilan</Button>
                 </div>
             </div>
 
@@ -526,6 +627,142 @@ const printableCount = computed(() => filteredTables.value.filter((t) => t.is_ac
                         </Button>
                     </DialogFooter>
                 </form>
+            </DialogContent>
+        </Dialog>
+
+        <!-- Dialog tampilan menu digital -->
+        <Dialog v-model:open="showAppearance">
+            <DialogContent class="max-h-[92vh] overflow-y-auto sm:max-w-[760px]">
+                <DialogHeader>
+                    <DialogTitle>Tampilan menu digital</DialogTitle>
+                    <DialogDescription>Atur foto latar header dan logo yang dilihat pelanggan. Perubahan berlaku untuk semua meja.</DialogDescription>
+                </DialogHeader>
+
+                <div class="grid gap-6 md:grid-cols-[1fr_260px]">
+                    <!-- Pengaturan -->
+                    <div class="space-y-5">
+                        <div>
+                            <Label>Foto latar header</Label>
+                            <p class="mt-0.5 text-xs text-slate-500">Disarankan foto lebar (mis. 1200×500), JPG/PNG/WebP maks 3 MB.</p>
+                            <div class="mt-2 overflow-hidden rounded-xl border border-dashed border-slate-300">
+                                <div class="relative aspect-[12/5] bg-slate-50">
+                                    <img v-if="shownCover" :src="shownCover" alt="" class="h-full w-full object-cover" />
+                                    <div
+                                        v-else
+                                        class="flex h-full w-full flex-col items-center justify-center gap-1 text-center text-xs text-slate-500"
+                                    >
+                                        <ImagePlus class="h-6 w-6 text-slate-400" />
+                                        Belum ada foto. Menu memakai foto produk pertama.
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-2 flex flex-wrap gap-2">
+                                <label
+                                    class="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                >
+                                    <ImagePlus class="h-4 w-4" /> {{ hasOwnCover ? 'Ganti foto' : 'Pilih foto' }}
+                                    <input type="file" accept="image/jpeg,image/png,image/webp" class="hidden" @change="pickImage('cover', $event)" />
+                                </label>
+                                <Button
+                                    v-if="hasOwnCover"
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    class="text-red-600 hover:bg-red-50"
+                                    @click="removeImage('cover')"
+                                >
+                                    <Trash2 class="h-4 w-4" /> Hapus
+                                </Button>
+                            </div>
+                            <p v-if="appearanceForm.errors.cover" class="mt-1 text-sm text-red-600">{{ appearanceForm.errors.cover }}</p>
+                        </div>
+
+                        <div>
+                            <Label>Logo di menu</Label>
+                            <p class="mt-0.5 text-xs text-slate-500">Persegi (mis. 400×400), maks 1 MB. Kosongkan untuk memakai logo toko.</p>
+                            <div class="mt-2 flex items-center gap-3">
+                                <div
+                                    class="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-dashed border-slate-300 bg-violet-50 text-xl font-black text-violet-700"
+                                >
+                                    <img v-if="shownLogo" :src="shownLogo" alt="" class="h-full w-full object-cover" />
+                                    <span v-else>{{ storeInitials }}</span>
+                                </div>
+                                <div class="flex flex-wrap gap-2">
+                                    <label
+                                        class="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                    >
+                                        <ImagePlus class="h-4 w-4" /> {{ hasOwnLogo ? 'Ganti logo' : 'Pilih logo' }}
+                                        <input
+                                            type="file"
+                                            accept="image/jpeg,image/png,image/webp"
+                                            class="hidden"
+                                            @change="pickImage('logo', $event)"
+                                        />
+                                    </label>
+                                    <Button
+                                        v-if="hasOwnLogo"
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        class="text-red-600 hover:bg-red-50"
+                                        @click="removeImage('logo')"
+                                    >
+                                        <Trash2 class="h-4 w-4" /> Hapus
+                                    </Button>
+                                </div>
+                            </div>
+                            <p v-if="!hasOwnLogo" class="mt-1 text-xs text-slate-500">
+                                {{ appearance?.store_logo_url ? 'Saat ini memakai logo toko.' : 'Belum ada logo — menu menampilkan inisial toko.' }}
+                            </p>
+                            <p v-if="appearanceForm.errors.logo" class="mt-1 text-sm text-red-600">{{ appearanceForm.errors.logo }}</p>
+                        </div>
+                    </div>
+
+                    <!-- Pratinjau ala layar HP -->
+                    <div>
+                        <p class="mb-2 text-xs font-semibold text-slate-500">Pratinjau di HP pelanggan</p>
+                        <div class="overflow-hidden rounded-[1.75rem] border-4 border-slate-800 bg-white">
+                            <div class="relative h-24 bg-violet-100">
+                                <img v-if="shownCover" :src="shownCover" alt="" class="h-full w-full object-cover" />
+                                <div v-else class="flex h-full items-center justify-center"><Utensils class="h-8 w-8 text-violet-200" /></div>
+                                <span class="absolute top-2 right-2 rounded-full bg-white/95 px-2 py-0.5 text-[9px] font-bold text-slate-800">{{
+                                    previewTable?.name ?? 'Meja 1'
+                                }}</span>
+                            </div>
+                            <div class="relative -mt-7 px-2.5">
+                                <div class="flex gap-2 rounded-xl border border-slate-200 bg-white p-2">
+                                    <div
+                                        class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-violet-50 text-xs font-black text-violet-700"
+                                    >
+                                        <img v-if="shownLogo" :src="shownLogo" alt="" class="h-full w-full object-cover" />
+                                        <span v-else>{{ storeInitials }}</span>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <span class="rounded bg-violet-50 px-1 text-[8px] font-bold text-violet-700">✓ Pesan dari meja</span>
+                                        <p class="truncate text-xs font-black text-slate-900">{{ appearance?.store_name }}</p>
+                                        <p class="text-[9px] text-slate-500">{{ previewTable?.name ?? 'Meja 1' }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="space-y-2 p-2.5">
+                                <div v-for="i in 3" :key="i" class="flex gap-2">
+                                    <div class="h-10 w-10 rounded-lg bg-slate-100" />
+                                    <div class="flex-1 space-y-1 pt-1">
+                                        <div class="h-2 w-3/4 rounded bg-slate-200" />
+                                        <div class="h-2 w-1/3 rounded bg-slate-100" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <DialogFooter>
+                    <Button type="button" variant="outline" @click="showAppearance = false">Batal</Button>
+                    <Button type="button" :disabled="appearanceForm.processing || !appearanceForm.isDirty" @click="saveAppearance">
+                        {{ appearanceForm.processing ? 'Menyimpan…' : 'Simpan tampilan' }}
+                    </Button>
+                </DialogFooter>
             </DialogContent>
         </Dialog>
 

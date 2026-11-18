@@ -625,6 +625,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/tables', [App\Http\Controllers\TableController::class, 'store'])
         ->name('tables.store')
         ->middleware(['store.active', 'role.pos']);
+    Route::post('/tables/appearance', [App\Http\Controllers\TableController::class, 'updateAppearance'])
+        ->name('tables.appearance')
+        ->middleware(['store.active', 'role.pos']);
     Route::patch('/tables/{table}', [App\Http\Controllers\TableController::class, 'update'])
         ->name('tables.update')
         ->middleware(['store.active', 'role.pos']);

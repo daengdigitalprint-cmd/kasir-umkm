@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Table;
 use App\Services\QrCodeService;
+use App\Support\ScanMejaAppearance;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 class TableController extends Controller
@@ -40,6 +42,7 @@ class TableController extends Controller
 
         return Inertia::render('ScanMeja/Tables', [
             'tables' => $tables,
+            'appearance' => ScanMejaAppearance::forStore($store),
         ]);
     }
 
@@ -147,6 +150,45 @@ class TableController extends Controller
         } catch (\Exception $e) {
             return back()->with('error', 'Gagal generate QR code: '.$e->getMessage());
         }
+    }
+
+    /**
+     * Simpan tampilan menu digital: foto latar header (sampul) dan logo khusus menu.
+     * Logo kosong → menu memakai logo toko; sampul kosong → menu memakai foto menu pertama.
+     */
+    public function updateAppearance(Request $request)
+    {
+        [$store, $redirect] = $this->guardStore();
+        if ($redirect) {
+            return $redirect;
+        }
+
+        $request->validate([
+            'cover' => 'nullable|file|image|mimes:jpeg,jpg,png,webp|max:3072',
+            'logo' => 'nullable|file|image|mimes:jpeg,jpg,png,webp|max:1024',
+            'remove_cover' => 'nullable|boolean',
+            'remove_logo' => 'nullable|boolean',
+        ]);
+
+        $settings = $store->settings ?? [];
+
+        foreach (['cover' => 'scan_meja_cover', 'logo' => 'scan_meja_logo'] as $field => $key) {
+            $old = $settings[$key] ?? null;
+            $replace = $request->hasFile($field);
+
+            if (($replace || $request->boolean('remove_'.$field)) && $old) {
+                Storage::disk('public')->delete($old);
+                unset($settings[$key]);
+            }
+
+            if ($replace) {
+                $settings[$key] = $request->file($field)->store('scan-meja/'.$store->id, 'public');
+            }
+        }
+
+        $store->update(['settings' => $settings]);
+
+        return back()->with('success', 'Tampilan menu digital disimpan.');
     }
 
     private function serialize(Table $t): array

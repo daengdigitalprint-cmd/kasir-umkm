@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
 import { ref, computed, onMounted } from 'vue';
-import { ShoppingCart, Plus, Minus, X, ArrowLeft, Check, Utensils, MapPin, Clock, Banknote, QrCode, Building, CreditCard, Flame, ExternalLink } from 'lucide-vue-next';
+import { ShoppingCart, Plus, Minus, X, Check, Utensils, MapPin, Clock, Banknote, QrCode, Building, Flame, ExternalLink, Search, Phone, MessageCircle } from 'lucide-vue-next';
 
 interface Product {
     id: number;
@@ -37,7 +37,7 @@ interface PaymentMethod {
 
 const props = defineProps<{
     table: { id: number; name: string; slug: string; capacity: number | null };
-    store: { id: number; name: string; currency: string };
+    store: { id: number; name: string; currency: string; address?: string | null; phone?: string | null; logo_url?: string | null; cover_url?: string | null };
     categories: Category[];
     bestSelling?: Product[];
     paymentMethods?: PaymentMethod[];
@@ -111,12 +111,64 @@ const formatPrice = (price: number) => {
     }).format(price);
 };
 
+// ── Kepala halaman: inisial toko & kontak ──
+const storeInitials = computed(() =>
+    props.store.name
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((w) => w[0]?.toUpperCase())
+        .join(''),
+);
+const phoneDigits = computed(() => (props.store.phone ?? '').replace(/\D/g, ''));
+const waNumber = computed(() => (phoneDigits.value.startsWith('0') ? `62${phoneDigits.value.slice(1)}` : phoneDigits.value));
+
+// Foto sampul: dari pengaturan Tampilan menu digital; bila kosong pakai foto menu pertama.
+const coverImage = computed(
+    () =>
+        props.store.cover_url ??
+        [...(props.bestSelling ?? []), ...props.categories.flatMap((c) => c.products)].find((p) => p.image)?.image ??
+        null,
+);
+const paymentSummary = computed(() => availablePaymentMethods.value.map((m) => m.label).join(' · '));
+const qtyInCart = (productId: number) => cart.value.find((i) => i.product.id === productId)?.quantity ?? 0;
+
+// Kolom cari muncul saat tombol "Cari menu" ditekan.
+const searchOpen = ref(false);
+const searchInput = ref<HTMLInputElement | null>(null);
+const openSearch = () => {
+    searchOpen.value = true;
+    setTimeout(() => searchInput.value?.focus(), 50);
+};
+const closeSearch = () => {
+    search.value = '';
+    searchOpen.value = false;
+};
+
+// ── Cari menu ──
+const search = ref('');
+const searching = computed(() => search.value.trim().length > 0);
+const visibleCategories = computed(() => {
+    const q = search.value.trim().toLowerCase();
+    if (!q) return props.categories;
+    return props.categories
+        .map((c) => ({ ...c, products: c.products.filter((p) => p.name.toLowerCase().includes(q) || p.description?.toLowerCase().includes(q)) }))
+        .filter((c) => c.products.length > 0);
+});
+
 const activeCategory = ref<number | null>(null);
 const categoryRefs = new Map<number, HTMLElement>();
 
 const scrollToCategory = (categoryId: number) => {
     activeCategory.value = categoryId;
-    categoryRefs.get(categoryId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Saat sedang mencari, kosongkan pencarian dulu agar semua kategori tampil kembali.
+    const go = () => categoryRefs.get(categoryId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (searching.value) {
+        search.value = '';
+        setTimeout(go, 50);
+    } else {
+        go();
+    }
 };
 
 const cartCount = computed(() => cart.value.reduce((sum, item) => sum + item.quantity, 0));
@@ -232,45 +284,97 @@ const submitOrder = async () => {
 <template>
     <Head :title="`${store.name} - Menu Digital`" />
 
-    <div class="min-h-screen bg-slate-50 flex flex-col">
-        <!-- Header -->
-        <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-md">
-            <div class="px-4 py-3 flex items-center gap-3 max-w-3xl mx-auto w-full">
-                <button
-                    v-if="cartOpen"
-                    @click="cartOpen = false"
-                    class="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-slate-100"
-                >
-                    <ArrowLeft class="h-5 w-5 text-slate-600" />
+    <div class="min-h-screen bg-white flex flex-col">
+        <!-- Sampul + kartu toko -->
+        <div class="relative">
+            <div class="h-40 w-full overflow-hidden bg-violet-100 sm:h-52">
+                <img v-if="coverImage" :src="coverImage" alt="" class="h-full w-full object-cover" />
+                <div v-else class="flex h-full w-full items-center justify-center"><Utensils class="h-12 w-12 text-violet-200" /></div>
+                <div class="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-transparent" />
+            </div>
+            <span class="absolute top-3 right-4 inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-xs font-bold text-slate-800">
+                <MapPin class="h-3.5 w-3.5 text-violet-600" /> {{ table.name }}
+            </span>
+        </div>
+
+        <header class="relative z-10 mx-auto -mt-12 w-full max-w-3xl px-4">
+            <div class="flex gap-3 rounded-2xl border border-slate-200 bg-white p-3">
+                <div class="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-violet-50 text-xl font-black text-violet-700">
+                    <img v-if="store.logo_url" :src="store.logo_url" :alt="store.name" class="h-full w-full object-cover" />
+                    <span v-else>{{ storeInitials }}</span>
+                </div>
+                <div class="min-w-0 flex-1 py-0.5">
+                    <span class="inline-flex items-center gap-1 rounded-md bg-violet-50 px-1.5 py-0.5 text-[11px] font-bold text-violet-700">
+                        <Check class="h-3 w-3" /> Pesan dari meja
+                    </span>
+                    <h1 class="mt-1 truncate text-lg leading-tight font-black text-slate-900">{{ store.name }}</h1>
+                    <p v-if="store.address" class="truncate text-xs text-slate-500">{{ store.address }}</p>
+                    <p class="mt-1 text-xs text-slate-600">
+                        {{ table.name }}<template v-if="table.capacity"> · {{ table.capacity }} orang</template>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Tombol aksi -->
+            <div class="mt-3 flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <button type="button" class="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-violet-300 bg-white px-3.5 py-2 text-sm font-semibold text-violet-700" @click="openSearch">
+                    <Search class="h-4 w-4" /> Cari menu
                 </button>
-                <div class="flex-1 min-w-0">
-                    <h1 class="font-black text-slate-900 text-base truncate">{{ store.name }}</h1>
-                    <div class="flex items-center gap-2 text-xs text-slate-500">
-                        <MapPin class="h-3 w-3" />
-                        {{ table.name }}
-                        <span v-if="table.capacity" class="inline-flex items-center gap-0.5">
-                            <span class="text-slate-300">·</span>
-                            {{ table.capacity }} orang
-                        </span>
+                <a v-if="phoneDigits" :href="`https://wa.me/${waNumber}`" target="_blank" rel="noopener noreferrer" class="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700">
+                    <MessageCircle class="h-4 w-4" /> Hubungi toko
+                </a>
+                <a v-if="phoneDigits" :href="`tel:${phoneDigits}`" class="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700">
+                    <Phone class="h-4 w-4" /> Telepon
+                </a>
+            </div>
+
+            <!-- Info singkat -->
+            <div class="mt-3 grid grid-cols-2 gap-2">
+                <div class="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white p-2.5">
+                    <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600"><Clock class="h-4 w-4" /></div>
+                    <div class="min-w-0">
+                        <p class="text-xs font-bold text-slate-800">Langsung ke kasir</p>
+                        <p class="truncate text-[11px] text-slate-500">Tanpa antre</p>
                     </div>
                 </div>
-                <button
-                    @click="cartOpen = !cartOpen; ordered = false"
-                    class="relative flex h-10 w-10 items-center justify-center rounded-xl bg-violet-600 text-white"
-                >
-                    <ShoppingCart class="h-5 w-5" />
-                    <span
-                        v-if="cartCount > 0"
-                        class="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-black px-1"
-                    >
-                        {{ cartCount }}
-                    </span>
-                </button>
+                <div class="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white p-2.5">
+                    <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600"><Banknote class="h-4 w-4" /></div>
+                    <div class="min-w-0">
+                        <p class="text-xs font-bold text-slate-800">Pembayaran</p>
+                        <p class="truncate text-[11px] text-slate-500">{{ paymentSummary }}</p>
+                    </div>
+                </div>
             </div>
         </header>
 
+        <!-- Bilah lengket: cari / kategori -->
+        <div class="sticky top-0 z-30 mt-4 border-b border-slate-200 bg-white">
+            <div class="mx-auto max-w-3xl px-4">
+                <div v-if="searchOpen" class="flex items-center gap-2 py-2">
+                    <label class="flex flex-1 items-center gap-2 rounded-xl border border-violet-300 bg-white px-3 py-2">
+                        <Search class="h-4 w-4 shrink-0 text-slate-400" />
+                        <input ref="searchInput" v-model="search" type="text" inputmode="search" enterkeyhint="search" placeholder="Cari menu" class="w-full bg-transparent text-sm outline-none placeholder:text-slate-400" />
+                    </label>
+                    <button type="button" class="px-1 text-sm font-semibold text-violet-700" @click="closeSearch">Batal</button>
+                </div>
+                <div v-else class="flex items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <button type="button" class="shrink-0 py-3 pr-2 text-slate-500" aria-label="Cari menu" @click="openSearch"><Search class="h-4 w-4" /></button>
+                    <button
+                        v-for="category in props.categories"
+                        :key="category.id"
+                        type="button"
+                        class="shrink-0 border-b-2 px-3 py-3 text-sm font-bold whitespace-nowrap transition"
+                        :class="activeCategory === category.id ? 'border-violet-600 text-violet-700' : 'border-transparent text-slate-500 hover:text-slate-800'"
+                        @click="scrollToCategory(category.id)"
+                    >
+                        {{ category.name }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <!-- Main Content -->
-        <main class="flex-1 max-w-3xl mx-auto w-full px-4 pb-32 pt-4">
+        <main class="flex-1 max-w-3xl mx-auto w-full px-4 pb-10 pt-5">
             <!-- Success state -->
             <div v-if="ordered" class="text-center py-16">
                 <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50">
@@ -293,84 +397,75 @@ const submitOrder = async () => {
 
             <!-- Menu List -->
             <div v-else>
-                <div v-if="props.categories.length" class="-mx-4 mb-5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden border-b border-slate-100 bg-slate-50 px-4 py-2">
-                    <div class="flex min-w-max gap-2">
-                        <button
-                            v-for="category in props.categories"
-                            :key="category.id"
-                            @click="scrollToCategory(category.id)"
-                            :class="[
-                                'rounded-full border px-4 py-2 text-xs font-bold transition',
-                                activeCategory === category.id
-                                    ? 'border-violet-600 bg-violet-600 text-white'
-                                    : 'border-slate-200 bg-white text-slate-600 hover:border-violet-300 hover:text-violet-700',
-                            ]"
-                        >
-                            {{ category.name }}
-                        </button>
-                    </div>
-                </div>
+                <p v-if="searching" class="mb-4 text-sm text-slate-500">
+                    Hasil pencarian <b class="text-slate-800">"{{ search.trim() }}"</b>
+                </p>
 
-                <section v-if="props.bestSelling?.length" class="mb-7">
-                    <h2 class="mb-3 flex items-center gap-2 text-base font-black text-slate-900">
-                        <Flame class="h-4 w-4 text-orange-500" />
-                        Produk Terlaris
+                <!-- Terlaris: kartu geser -->
+                <section v-if="props.bestSelling?.length && !searching" class="mb-7">
+                    <h2 class="mb-3 flex items-center gap-2 text-lg font-black text-slate-900">
+                        <Flame class="h-5 w-5 text-orange-500" /> Terlaris
                     </h2>
-                    <div class="flex gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                        <button
-                            v-for="product in props.bestSelling"
-                            :key="product.id"
-                            @click="openProduct(product)"
-                            class="relative w-36 shrink-0 overflow-hidden rounded-2xl border border-orange-100 bg-white text-left transition hover:border-orange-300"
-                        >
-                            <span class="absolute left-2 top-2 z-10 rounded-full bg-orange-500 px-2 py-1 text-[10px] font-black text-white">
-                                Terlaris
-                            </span>
-                            <div class="aspect-square w-full bg-slate-50 overflow-hidden">
+                    <div class="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                        <div v-for="product in props.bestSelling" :key="product.id" class="w-36 shrink-0">
+                            <button type="button" class="relative block aspect-square w-full overflow-hidden rounded-2xl bg-slate-100" @click="openProduct(product)">
                                 <img v-if="product.image" :src="product.image" :alt="product.name" class="h-full w-full object-cover" />
-                                <div v-else class="flex h-full w-full items-center justify-center"><Utensils class="h-8 w-8 text-slate-200" /></div>
+                                <div v-else class="flex h-full w-full items-center justify-center"><Utensils class="h-8 w-8 text-slate-300" /></div>
+                                <span v-if="qtyInCart(product.id)" class="absolute top-2 right-2 flex h-7 min-w-7 items-center justify-center rounded-full border-2 border-white bg-violet-600 px-1 text-xs font-black text-white">
+                                    {{ qtyInCart(product.id) }}
+                                </span>
+                            </button>
+                            <div class="mt-2 flex items-start justify-between gap-1">
+                                <button type="button" class="min-w-0 text-left" @click="openProduct(product)">
+                                    <p class="line-clamp-2 text-sm leading-tight font-semibold text-slate-900">{{ product.name }}</p>
+                                    <p class="mt-1 text-sm font-black text-slate-900">{{ formatPrice(product.price) }}</p>
+                                </button>
+                                <button type="button" class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-violet-300 text-violet-700" :aria-label="`Tambah ${product.name}`" @click="addToCart(product)">
+                                    <Plus class="h-4 w-4" />
+                                </button>
                             </div>
-                            <div class="p-2.5">
-                                <h3 class="line-clamp-2 text-sm font-bold leading-tight text-slate-900">{{ product.name }}</h3>
-                                <p class="mt-1.5 text-sm font-black text-violet-700">{{ formatPrice(product.price) }}</p>
-                            </div>
-                        </button>
+                        </div>
                     </div>
                 </section>
 
-                <div v-for="category in props.categories" :key="category.id" :ref="(element) => element && categoryRefs.set(category.id, element as HTMLElement)" class="mb-6 scroll-mt-28">
-                    <h2 class="font-black text-slate-900 text-base mb-3 flex items-center gap-2">
-                        <Utensils class="h-4 w-4 text-violet-500" />
-                        {{ category.name }}
-                    </h2>
-
-                    <div class="grid grid-cols-2 gap-3 md:grid-cols-3">
-                        <button
-                            v-for="product in category.products"
-                            :key="product.id"
-                            @click="openProduct(product)"
-                            class="text-left rounded-2xl border border-slate-200 bg-white overflow-hidden hover:border-primary/40 transition group"
-                        >
-                            <div class="aspect-square w-full bg-slate-50 overflow-hidden">
-                                <img
-                                    v-if="product.image"
-                                    :src="product.image"
-                                    :alt="product.name"
-                                    class="h-full w-full object-cover group-hover:scale-105 transition"
-                                />
-                                <div v-else class="h-full w-full flex items-center justify-center">
-                                    <Utensils class="h-8 w-8 text-slate-200" />
+                <!-- Daftar per kategori: baris foto + teks + tombol tambah -->
+                <section v-for="category in visibleCategories" :key="category.id" :ref="(element) => element && categoryRefs.set(category.id, element as HTMLElement)" class="mb-6 scroll-mt-16">
+                    <h2 class="mb-1 text-lg font-black text-slate-900">{{ category.name }}</h2>
+                    <div class="divide-y divide-slate-100">
+                        <div v-for="product in category.products" :key="product.id" class="flex gap-3 py-3">
+                            <button type="button" class="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-slate-100" @click="openProduct(product)">
+                                <img v-if="product.image" :src="product.image" :alt="product.name" class="h-full w-full object-cover" />
+                                <div v-else class="flex h-full w-full items-center justify-center"><Utensils class="h-7 w-7 text-slate-300" /></div>
+                            </button>
+                            <div class="flex min-w-0 flex-1 flex-col">
+                                <button type="button" class="text-left" @click="openProduct(product)">
+                                    <h3 class="line-clamp-2 text-sm leading-tight font-bold text-slate-900">{{ product.name }}</h3>
+                                    <p v-if="product.description" class="mt-0.5 line-clamp-2 text-xs text-slate-500">{{ product.description }}</p>
+                                </button>
+                                <div class="mt-auto flex items-center justify-between pt-2">
+                                    <p class="text-sm font-black text-slate-900">{{ formatPrice(product.price) }}</p>
+                                    <div v-if="qtyInCart(product.id)" class="flex items-center gap-2">
+                                        <button type="button" class="flex h-7 w-7 items-center justify-center rounded-full border border-slate-300 text-slate-600" :aria-label="`Kurangi ${product.name}`" @click="decrement(product.id)">
+                                            <Minus class="h-3.5 w-3.5" />
+                                        </button>
+                                        <span class="w-4 text-center text-sm font-bold">{{ qtyInCart(product.id) }}</span>
+                                        <button type="button" class="flex h-7 w-7 items-center justify-center rounded-full bg-violet-600 text-white" :aria-label="`Tambah ${product.name}`" @click="addToCart(product)">
+                                            <Plus class="h-3.5 w-3.5" />
+                                        </button>
+                                    </div>
+                                    <button v-else type="button" class="flex h-7 w-7 items-center justify-center rounded-full border border-violet-300 text-violet-700" :aria-label="`Tambah ${product.name}`" @click="addToCart(product)">
+                                        <Plus class="h-4 w-4" />
+                                    </button>
                                 </div>
                             </div>
-                            <div class="p-2.5">
-                                <h3 class="font-bold text-slate-900 text-sm leading-tight line-clamp-2">{{ product.name }}</h3>
-                                <p class="text-xs text-slate-400 mt-1">
-                                    {{ product.description ? product.description.slice(0, 40) + '…' : 'Menu tersedia' }}
-                                </p>
-                                <p class="font-black text-violet-700 text-sm mt-1.5">{{ formatPrice(product.price) }}</p>
-                            </div>
-                        </button>
+                        </div>
                     </div>
+                </section>
+
+                <div v-if="searching && visibleCategories.length === 0" class="py-16 text-center">
+                    <Search class="mx-auto mb-3 h-10 w-10 text-slate-200" />
+                    <p class="text-sm font-bold text-slate-500">Menu tidak ditemukan</p>
+                    <button type="button" class="mt-3 text-sm font-semibold text-violet-600" @click="search = ''">Lihat semua menu</button>
                 </div>
 
                 <div v-if="props.categories.length === 0" class="text-center py-16">
@@ -381,18 +476,24 @@ const submitOrder = async () => {
             </div>
         </main>
 
-        <footer class="rounded-t-3xl border-t border-slate-100 bg-white px-4 py-8 text-center">
+        <footer class="border-t border-slate-200 bg-white px-4 pt-6 text-center" :class="cartCount > 0 && !cartOpen && !ordered ? 'pb-32' : 'pb-6'">
             <div class="mx-auto max-w-3xl">
-                <div class="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50">
-                    <Utensils class="h-5 w-5 text-violet-600" />
+                <p class="text-sm font-bold text-slate-800">{{ store.name }}</p>
+                <p v-if="store.address" class="mt-0.5 text-xs text-slate-500">{{ store.address }}</p>
+                <div v-if="phoneDigits" class="mt-3 flex items-center justify-center gap-4 text-xs font-semibold">
+                    <a :href="`tel:${phoneDigits}`" class="inline-flex items-center gap-1.5 text-slate-600 hover:text-violet-700">
+                        <Phone class="h-3.5 w-3.5" /> Telepon
+                    </a>
+                    <span class="text-slate-300">·</span>
+                    <a :href="`https://wa.me/${waNumber}`" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-slate-600 hover:text-violet-700">
+                        <MessageCircle class="h-3.5 w-3.5" /> WhatsApp
+                    </a>
                 </div>
-                <p class="text-sm font-black text-slate-800">{{ store.name }}</p>
-                <p class="mt-1 text-xs text-slate-500">Pesan langsung dari {{ table.name }}</p>
                 <a
                     href="https://play.google.com/store/apps/details?id=com.kasirumkm.idea&hl=id"
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400 transition hover:text-violet-600"
+                    class="mt-4 inline-flex items-center gap-1 text-[11px] font-medium text-slate-400 transition hover:text-violet-600"
                 >
                     Powered by Kasir UMKM by MaccaPOS
                     <ExternalLink class="h-3 w-3" />
@@ -403,7 +504,7 @@ const submitOrder = async () => {
         <!-- Cart Bar (bottom) -->
         <div
             v-if="cartCount > 0 && !cartOpen && !ordered"
-            class="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-200 p-4"
+            class="fixed bottom-0 inset-x-0 z-30 rounded-t-3xl border-t border-slate-200 bg-white px-4 pt-3 pb-4"
         >
             <div class="max-w-3xl mx-auto">
                 <!-- F8: saran tambahan menu -->
@@ -432,13 +533,13 @@ const submitOrder = async () => {
                 </div>
                 <button
                     @click="cartOpen = true"
-                    class="w-full flex items-center justify-between rounded-2xl bg-violet-600 px-5 py-4 text-white font-bold"
+                    class="flex w-full items-center justify-between rounded-full bg-violet-600 px-6 py-4 font-bold text-white"
                 >
                     <span class="flex items-center gap-2 text-sm">
                         <ShoppingCart class="h-5 w-5" />
-                        {{ cartCount }} item
+                        Keranjang · {{ cartCount }} item
                     </span>
-                    <span class="text-sm">Lihat Pesanan · {{ formatPrice(cartSubtotal) }}</span>
+                    <span class="text-base">{{ formatPrice(cartSubtotal) }}</span>
                 </button>
             </div>
         </div>
