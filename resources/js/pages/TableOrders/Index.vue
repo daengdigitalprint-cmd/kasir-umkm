@@ -7,17 +7,20 @@ import AdminLayout from '@/layouts/AdminLayout.vue';
 import { receiptLinesToEscPos } from '@/lib/escPosEncode';
 import { buildKotPlainLines } from '@/lib/receiptPlainText';
 import { toastError, toastSuccess } from '@/lib/swal';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import {
+    Banknote,
     BellRing,
     Check,
     ChefHat,
     CircleCheck,
+    CircleDollarSign,
     CircleX,
     MessageSquareText,
     Printer,
     QrCode,
     RefreshCw,
+    Smartphone,
     UtensilsCrossed,
     Wallet,
     X,
@@ -45,7 +48,13 @@ interface Order {
     created_at: string | null;
     completed_at: string | null;
     items: OrderItem[];
+    /** Status di papan dapur: waiting | serving | ready | completed | cancelled (null bila tidak lewat dapur). */
+    kitchen_status?: string | null;
 }
+
+// Papan dapur aktif? (shared prop) — bila mati, pesanan yang diterima tidak tampil di layar dapur.
+const page = usePage();
+const kitchenOn = computed(() => Boolean((page.props as { kitchen_queue_enabled?: boolean }).kitchen_queue_enabled));
 
 const props = defineProps<{
     orders: {
@@ -62,8 +71,8 @@ const tabs = computed(() => [
     { key: 'pending', label: 'Baru', hint: 'Perlu dikonfirmasi', count: props.stats.pending, icon: BellRing, tone: 'text-blue-600 bg-blue-50' },
     {
         key: 'accepted',
-        label: 'Diproses',
-        hint: 'Dimasak / menunggu bayar',
+        label: 'Belum bayar',
+        hint: 'Diterima, menunggu pembayaran',
         count: props.stats.accepted,
         icon: ChefHat,
         tone: 'text-orange-600 bg-orange-50',
@@ -83,20 +92,36 @@ const filter = (status: string) => router.get('/table-orders', { status }, { pre
 // --- Label & format ---
 const statusMeta: Record<string, { label: string; tone: string }> = {
     pending: { label: 'Baru', tone: 'bg-blue-50 text-blue-700' },
-    accepted: { label: 'Diproses dapur', tone: 'bg-orange-50 text-orange-700' },
+    accepted: { label: 'Diterima', tone: 'bg-orange-50 text-orange-700' },
     serving: { label: 'Disajikan', tone: 'bg-orange-50 text-orange-700' },
     ready: { label: 'Siap diantar', tone: 'bg-violet-50 text-violet-700' },
     completed: { label: 'Selesai', tone: 'bg-emerald-50 text-emerald-700' },
     cancelled: { label: 'Ditolak', tone: 'bg-red-50 text-red-700' },
 };
-const statusOf = (s: string) => statusMeta[s] ?? { label: s, tone: 'bg-slate-100 text-slate-600' };
+// Untuk pesanan yang diterima: status papan dapur lebih akurat (mis. sudah diantar tapi belum bayar).
+const kitchenMeta: Record<string, { label: string; tone: string }> = {
+    waiting: { label: 'Antre di dapur', tone: 'bg-orange-50 text-orange-700' },
+    serving: { label: 'Sedang dimasak', tone: 'bg-orange-50 text-orange-700' },
+    ready: { label: 'Siap diantar', tone: 'bg-violet-50 text-violet-700' },
+    completed: { label: 'Sudah diantar', tone: 'bg-emerald-50 text-emerald-700' },
+};
+const statusOf = (o: Order) => {
+    if (['accepted', 'serving', 'ready'].includes(o.status) && o.kitchen_status && kitchenMeta[o.kitchen_status])
+        return kitchenMeta[o.kitchen_status];
+    return statusMeta[o.status] ?? { label: o.status, tone: 'bg-slate-100 text-slate-600' };
+};
+/** Sudah diantar ke meja tetapi belum dibayar → tagihan yang harus segera ditagih. */
+const servedUnpaid = (o: Order) => o.kitchen_status === 'completed' && o.payment_status !== 'paid' && o.status !== 'cancelled';
+// Tagihan yang sudah diantar ditaruh paling atas.
+const sortedOrders = computed(() =>
+    props.statusFilter === 'accepted' ? [...props.orders.data].sort((a, b) => Number(servedUnpaid(b)) - Number(servedUnpaid(a))) : props.orders.data,
+);
 
+// Sama dengan pilihan metode di layar bayar POS.
 const paymentMethods = [
-    { value: 'cash', label: 'Tunai' },
-    { value: 'qris', label: 'QRIS' },
-    { value: 'bank_transfer', label: 'Transfer bank' },
-    { value: 'card', label: 'Kartu' },
-    { value: 'ewallet', label: 'E-Wallet' },
+    { value: 'cash', label: 'Tunai', icon: Banknote },
+    { value: 'ewallet', label: 'E-Wallet', icon: Smartphone },
+    { value: 'other', label: 'Lainnya', icon: CircleDollarSign },
 ];
 const paymentLabel = (method: string | null) =>
     ({
@@ -203,8 +228,9 @@ const payTarget = ref<Order | null>(null);
 const payMethod = ref('cash');
 const openPay = (order: Order) => {
     payTarget.value = order;
-    const m = order.payment_method === 'transfer' ? 'bank_transfer' : order.payment_method;
-    payMethod.value = paymentMethods.some((p) => p.value === m) ? (m as string) : 'cash';
+    // Pilihan pelanggan di menu digital dipetakan ke metode POS.
+    const m = order.payment_method ?? 'cash';
+    payMethod.value = m === 'cash' ? 'cash' : ['qris', 'ewallet'].includes(m) ? 'ewallet' : 'other';
     payDialog.value = true;
 };
 const submitPay = () => {
@@ -236,7 +262,10 @@ const emptyText = computed(
                 title: 'Belum ada pesanan baru',
                 body: 'Pesanan dari scan QR meja akan muncul di sini. Halaman diperbarui otomatis setiap 20 detik.',
             },
-            accepted: { title: 'Tidak ada pesanan yang sedang diproses', body: 'Pesanan yang Anda terima akan pindah ke sini sampai dibayar.' },
+            accepted: {
+                title: 'Tidak ada tagihan meja yang belum dibayar',
+                body: 'Pesanan yang Anda terima tampil di sini sampai pembayarannya dicatat.',
+            },
             completed: { title: 'Belum ada pesanan selesai hari ini', body: 'Pesanan yang sudah dibayar akan tercatat di sini.' },
             cancelled: { title: 'Tidak ada pesanan ditolak', body: 'Pesanan yang Anda tolak akan tercatat di sini beserta alasannya.' },
         })[props.statusFilter] ?? { title: 'Tidak ada pesanan', body: '' },
@@ -261,6 +290,21 @@ const emptyText = computed(
                         <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': refreshing }" /> Muat ulang
                     </Button>
                 </div>
+            </div>
+
+            <!-- Papan dapur mati: jelaskan agar kasir tidak mengira pesanan sudah sampai dapur -->
+            <div
+                v-if="!kitchenOn"
+                class="flex flex-wrap items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
+            >
+                <ChefHat class="h-5 w-5 shrink-0 text-amber-600" />
+                <p class="min-w-0 flex-1">
+                    <b>Papan dapur belum aktif.</b> Pesanan yang diterima tidak muncul di layar dapur. Cetak KOT untuk dapur, atau aktifkan
+                    <b>Antrian Dapur</b> di Pengaturan → Toko → Modul Fitur.
+                </p>
+                <Link href="/settings/profile">
+                    <Button variant="outline" size="sm" class="rounded-xl bg-white">Buka pengaturan</Button>
+                </Link>
             </div>
 
             <!-- Tab status sekaligus ringkasan -->
@@ -288,11 +332,14 @@ const emptyText = computed(
             <!-- Daftar pesanan -->
             <div v-if="orders.data.length" class="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
                 <div
-                    v-for="order in orders.data"
+                    v-for="order in sortedOrders"
                     :key="order.id"
                     class="flex flex-col rounded-2xl border bg-white shadow-sm"
-                    :class="waitingLong(order) ? 'border-amber-300' : 'border-slate-200'"
+                    :class="servedUnpaid(order) ? 'border-red-300 ring-1 ring-red-100' : waitingLong(order) ? 'border-amber-300' : 'border-slate-200'"
                 >
+                    <div v-if="servedUnpaid(order)" class="rounded-t-2xl bg-red-50 px-4 py-1.5 text-xs font-bold text-red-700">
+                        Sudah diantar ke meja · belum dibayar
+                    </div>
                     <!-- Kepala kartu: meja besar agar mudah dicari -->
                     <div class="flex items-start gap-3 border-b border-slate-100 p-4">
                         <div
@@ -302,8 +349,8 @@ const emptyText = computed(
                         </div>
                         <div class="min-w-0 flex-1">
                             <div class="flex flex-wrap items-center gap-2">
-                                <span class="rounded-full px-2 py-0.5 text-xs font-semibold" :class="statusOf(order.status).tone">{{
-                                    statusOf(order.status).label
+                                <span class="rounded-full px-2 py-0.5 text-xs font-semibold" :class="statusOf(order).tone">{{
+                                    statusOf(order).label
                                 }}</span>
                                 <span
                                     class="rounded-full px-2 py-0.5 text-xs font-semibold"
@@ -360,7 +407,7 @@ const emptyText = computed(
                             <X class="h-4 w-4" /> Tolak
                         </Button>
                         <Button class="col-span-2 gap-1.5 rounded-xl" :disabled="busyId === order.id" @click="accept(order)">
-                            <Check class="h-4 w-4" /> Terima & kirim ke dapur
+                            <Check class="h-4 w-4" /> {{ kitchenOn ? 'Terima & kirim ke dapur' : 'Terima pesanan' }}
                         </Button>
                     </div>
                     <div
@@ -476,23 +523,19 @@ const emptyText = computed(
                     <p class="text-xs text-slate-500">Total dibayar</p>
                     <p class="text-3xl font-black text-slate-900 tabular-nums">{{ money(payTarget?.total_amount ?? 0) }}</p>
                 </div>
-                <div class="grid grid-cols-3 gap-2">
-                    <button
+                <div class="grid grid-cols-2 gap-2">
+                    <Button
                         v-for="m in paymentMethods"
                         :key="m.value"
-                        type="button"
-                        class="rounded-xl border px-3 py-2 text-sm font-semibold transition"
-                        :class="
-                            payMethod === m.value
-                                ? 'border-primary bg-primary/5 text-primary'
-                                : 'border-slate-200 text-slate-600 hover:border-slate-300'
-                        "
+                        :variant="payMethod === m.value ? 'default' : 'outline'"
+                        size="sm"
+                        class="h-10"
                         @click="payMethod = m.value"
                     >
+                        <component :is="m.icon" class="mr-2 h-4 w-4" />
                         {{ m.label }}
-                    </button>
+                    </Button>
                 </div>
-                <p class="text-xs text-slate-500">Pembayaran dicatat ke shift kasir Anda yang sedang buka, dan pesanan ditandai selesai.</p>
                 <DialogFooter>
                     <Button variant="outline" @click="payDialog = false">Batal</Button>
                     <Button class="gap-1.5" :disabled="busyId !== null" @click="submitPay"><Wallet class="h-4 w-4" /> Konfirmasi lunas</Button>

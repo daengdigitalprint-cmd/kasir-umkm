@@ -227,6 +227,10 @@ class HandleInertiaRequests extends Middleware
                     })
                     ->count()
                 : 0,
+            // Pesanan meja yang sudah diterima tetapi belum dibayar (bukan Open Bill POS).
+            'unpaid_table_order_count' => $activeStore && PlanModules::settingOn($activeStore, 'scan_meja_enabled')
+                ? \App\Support\TableOrders::unpaidCount($activeStore->id)
+                : 0,
             'location_type' => $activeStore
                 ? StoreLocationType::of($activeStore)
                 : 'outlet',

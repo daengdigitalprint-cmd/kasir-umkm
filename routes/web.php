@@ -649,6 +649,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/table-orders', [App\Http\Controllers\TableOrderController::class, 'index'])
         ->name('table-orders.index')
         ->middleware(['store.active', 'role.pos']);
+    Route::get('/table-orders/unpaid', [App\Http\Controllers\TableOrderController::class, 'unpaid'])
+        ->name('table-orders.unpaid')
+        ->middleware(['store.active', 'role.pos']);
     Route::post('/table-orders/{transaction}/accept', [App\Http\Controllers\TableOrderController::class, 'accept'])
         ->name('table-orders.accept')
         ->middleware(['store.active', 'role.pos']);

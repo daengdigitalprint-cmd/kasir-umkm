@@ -756,6 +756,33 @@ const openBills = ref<OpenBill[]>([]);
 const openBillsLoading = ref(false);
 const openBillsSearch = ref('');
 const openBillsSelectedId = ref<number | null>(null);
+
+/** Pesanan meja (menu digital) yang sudah diterima tetapi belum dibayar — tampil di panel Open Bill. */
+interface TableUnpaidOrder {
+    id: number;
+    transaction_number: string;
+    table_reference: string | null;
+    customer_name: string | null;
+    payment_method: string | null;
+    total_amount: number;
+    items_count: number;
+    items: { product_name: string; quantity: number }[];
+    kitchen_status: string | null;
+    elapsed_minutes: number;
+}
+const tableUnpaid = ref<TableUnpaidOrder[]>([]);
+const tableUnpaidLoading = ref(false);
+const unpaidTableOrderCount = computed(() => Number((page.props as { unpaid_table_order_count?: number }).unpaid_table_order_count ?? 0));
+const tablePayTarget = ref<TableUnpaidOrder | null>(null);
+const tablePayMethod = ref('cash');
+const tablePayCash = ref('');
+const tablePaySubmitting = ref(false);
+// Sama dengan pilihan metode di layar bayar POS.
+const tablePayMethods = [
+    { value: 'cash', label: 'Tunai', icon: Banknote },
+    { value: 'ewallet', label: 'E-Wallet', icon: Smartphone },
+    { value: 'other', label: 'Lainnya', icon: CircleDollarSign },
+];
 interface OpenBill {
     id: number;
     transaction_number: string;
@@ -2658,6 +2685,65 @@ async function refreshCashShift() {
     }
 }
 
+/** ===== Pesanan meja belum bayar (Scan Meja) ===== */
+
+async function fetchTableUnpaid() {
+    if (!scanMejaEnabled.value) return;
+    tableUnpaidLoading.value = true;
+    try {
+        const res = await fetch('/table-orders/unpaid', {
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json', 'X-XSRF-TOKEN': csrfTokenPos() },
+        });
+        if (!res.ok) throw new Error('Gagal memuat pesanan meja');
+        const data = await res.json();
+        tableUnpaid.value = data.orders ?? [];
+    } catch (e) {
+        console.error('[pesanan-meja] fetch error', e);
+    } finally {
+        tableUnpaidLoading.value = false;
+    }
+}
+
+function openTablePay(order: TableUnpaidOrder) {
+    tablePayTarget.value = order;
+    // Pilihan pelanggan di menu digital dipetakan ke metode POS.
+    const m = order.payment_method ?? 'cash';
+    tablePayMethod.value = m === 'cash' ? 'cash' : ['qris', 'ewallet'].includes(m) ? 'ewallet' : 'other';
+    tablePayCash.value = '';
+}
+
+const tablePayChange = computed(() => {
+    const paid = Number(tablePayCash.value.replace(/[^0-9]/g, '') || 0);
+    return tablePayTarget.value && paid > 0 ? paid - tablePayTarget.value.total_amount : null;
+});
+
+async function submitTablePay() {
+    const order = tablePayTarget.value;
+    if (!order || tablePaySubmitting.value) return;
+    tablePaySubmitting.value = true;
+    try {
+        const res = await fetch(`/table-orders/${order.id}/pay`, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': csrfTokenPos() },
+            body: JSON.stringify({ payment_method: tablePayMethod.value }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.success === false) {
+            throw new Error(data.message ?? 'Pembayaran gagal dicatat');
+        }
+        toastSuccess(data.message ?? 'Pembayaran pesanan meja dicatat.');
+        tablePayTarget.value = null;
+        await fetchTableUnpaid();
+        router.reload({ only: ['unpaid_table_order_count'] });
+    } catch (e: any) {
+        toastError(e.message ?? 'Pembayaran gagal dicatat');
+    } finally {
+        tablePaySubmitting.value = false;
+    }
+}
+
 /** ===== Open Bills (Order Hold) Handlers ===== */
 
 async function fetchOpenBills() {
@@ -2687,6 +2773,7 @@ function openOpenBillsDrawer() {
     openBillsDrawerOpen.value = true;
     openBillsSearch.value = '';
     fetchOpenBills();
+    fetchTableUnpaid();
 }
 
 function closeOpenBillsDrawer() {
@@ -3796,19 +3883,19 @@ const sendWhatsAppInvoice = () => {
                     </div>
                     <!-- Open Bills (Pesanan Belum Bayar): tombol + badge jumlah -->
                     <button
-                        v-if="openBillEnabled"
+                        v-if="openBillEnabled || scanMejaEnabled"
                         type="button"
                         class="relative flex h-10 items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-sm font-semibold text-emerald-800 shadow-sm transition-colors hover:bg-emerald-100"
-                        title="Pesanan Belum Bayar (Open Bills)"
+                        title="Pesanan Belum Bayar (Open Bills & pesanan meja)"
                         @click="openOpenBillsDrawer"
                     >
                         <ShoppingBag class="h-5 w-5" />
                         <span class="hidden sm:inline">Open Bills</span>
                         <span
-                            v-if="openBills.length > 0"
+                            v-if="openBills.length + unpaidTableOrderCount > 0"
                             class="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] leading-none font-bold text-white"
                         >
-                            {{ openBills.length > 99 ? '99+' : openBills.length }}
+                            {{ openBills.length + unpaidTableOrderCount > 99 ? '99+' : openBills.length + unpaidTableOrderCount }}
                         </span>
                     </button>
                     <!-- Scan Meja: notif badge + banner notifikasi (potret/mobile) -->
@@ -5726,7 +5813,7 @@ const sendWhatsAppInvoice = () => {
                                 <span
                                     class="flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-100 px-1.5 text-xs font-bold text-emerald-700"
                                 >
-                                    {{ openBills.length }}
+                                    {{ openBills.length + tableUnpaid.length }}
                                 </span>
                             </div>
                             <Button variant="ghost" size="icon" @click="closeOpenBillsDrawer" aria-label="Tutup">
@@ -5746,13 +5833,59 @@ const sendWhatsAppInvoice = () => {
                                 />
                             </div>
 
-                            <template v-if="openBillsLoading">
+                            <!-- Pesanan meja (menu digital) yang sudah diterima tapi belum dibayar -->
+                            <section v-if="scanMejaEnabled && (tableUnpaid.length || tableUnpaidLoading)" class="rounded-xl border border-orange-200 bg-orange-50/60 p-2">
+                                <div class="flex items-center justify-between px-1 pb-1.5">
+                                    <p class="flex items-center gap-1.5 text-xs font-bold text-orange-800"><Table2 class="h-3.5 w-3.5" /> Pesanan meja belum bayar</p>
+                                    <Link href="/table-orders?status=accepted" class="text-[11px] font-semibold text-orange-700 hover:underline">Lihat semua</Link>
+                                </div>
+                                <div v-if="tableUnpaidLoading && !tableUnpaid.length" class="flex justify-center py-3">
+                                    <Loader2 class="h-5 w-5 animate-spin text-orange-500" />
+                                </div>
+                                <ul v-else class="divide-y divide-orange-100" role="list">
+                                    <li v-for="t in tableUnpaid" :key="t.id" class="rounded-xl bg-white px-2 py-3">
+                                        <div class="flex items-start justify-between gap-2">
+                                            <div class="min-w-0 flex-1">
+                                                <span v-if="t.customer_name" class="block max-w-[14rem] truncate text-sm font-semibold text-emerald-700">
+                                                    {{ t.customer_name }}
+                                                </span>
+                                                <div class="flex flex-wrap items-center gap-2">
+                                                    <span class="font-mono text-sm font-bold text-slate-900">{{ t.transaction_number }}</span>
+                                                    <span
+                                                        v-if="t.table_reference"
+                                                        class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800"
+                                                    >
+                                                        <Table2 class="h-3 w-3" />
+                                                        {{ t.table_reference }}
+                                                    </span>
+                                                </div>
+                                                <div class="mt-1 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                                                    <span class="flex items-center gap-1"><Clock class="h-3 w-3" /> {{ t.elapsed_minutes }} menit lalu</span>
+                                                </div>
+                                            </div>
+                                            <div class="ml-2 flex-shrink-0 text-right">
+                                                <p class="font-bold text-slate-900 tabular-nums">{{ formatCurrency(t.total_amount) }}</p>
+                                                <p class="text-[10px] text-slate-400">{{ Number(t.items_count) }} item</p>
+                                            </div>
+                                        </div>
+                                        <div class="mt-2 flex items-center gap-2 border-t border-slate-100 pt-2">
+                                            <Button size="sm" variant="outline" class="flex-1 gap-1.5" @click="openTablePay(t)">
+                                                <ArrowRight class="h-3.5 w-3.5" />
+                                                Lanjut Bayar
+                                            </Button>
+                                        </div>
+                                    </li>
+                                </ul>
+                            </section>
+
+                            <template v-if="!openBillEnabled"></template>
+                            <template v-else-if="openBillsLoading">
                                 <div class="flex items-center justify-center py-8">
                                     <Loader2 class="h-6 w-6 animate-spin text-emerald-600" />
                                 </div>
                             </template>
 
-                            <template v-else-if="openBills.length === 0">
+                            <template v-else-if="openBills.length === 0 && !tableUnpaid.length">
                                 <div class="flex flex-col items-center justify-center py-12 text-center text-slate-500">
                                     <ShoppingBag class="h-12 w-12 text-slate-300" />
                                     <p class="mt-3 font-medium">Belum ada pesanan terbuka</p>
@@ -5833,6 +5966,59 @@ const sendWhatsAppInvoice = () => {
                                     </li>
                                 </ul>
                             </template>
+                        </div>
+                    </div>
+                </div>
+            </Teleport>
+
+            <!-- ═══ Bayar pesanan meja (menu digital) ═══ -->
+            <Teleport to="body">
+                <div v-if="tablePayTarget" class="fixed inset-0 z-[70] flex items-center justify-center p-4" role="dialog" aria-modal="true">
+                    <div class="fixed inset-0 bg-slate-900/40" @click="tablePayTarget = null" />
+                    <div class="relative w-full max-w-sm rounded-xl border border-slate-200 bg-white p-4" @click.stop>
+                        <div class="flex items-start justify-between gap-2">
+                            <div>
+                                <h3 class="font-bold text-slate-900">Bayar {{ tablePayTarget.table_reference || 'pesanan meja' }}</h3>
+                                <p class="font-mono text-xs text-slate-500">{{ tablePayTarget.transaction_number }}</p>
+                            </div>
+                            <Button variant="ghost" size="icon" aria-label="Tutup" @click="tablePayTarget = null"><X class="h-5 w-5" /></Button>
+                        </div>
+                        <div class="mt-3 rounded-xl bg-slate-50 p-3 text-center">
+                            <p class="text-xs text-slate-500">Total tagihan</p>
+                            <p class="text-3xl font-black text-slate-900 tabular-nums">{{ formatCurrency(tablePayTarget.total_amount) }}</p>
+                        </div>
+                        <div class="mt-3 space-y-2">
+                            <Label class="text-sm font-medium text-gray-700">Metode Pembayaran</Label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <Button
+                                    v-for="m in tablePayMethods"
+                                    :key="m.value"
+                                    :variant="tablePayMethod === m.value ? 'default' : 'outline'"
+                                    size="sm"
+                                    class="h-10"
+                                    @click="tablePayMethod = m.value"
+                                >
+                                    <component :is="m.icon" class="mr-2 h-4 w-4" />
+                                    {{ m.label }}
+                                </Button>
+                            </div>
+                        </div>
+                        <div v-if="tablePayMethod === 'cash'" class="mt-3 space-y-1">
+                            <Label for="tp-cash" class="text-sm font-medium text-gray-700">Uang diterima</Label>
+                            <Input id="tp-cash" v-model="tablePayCash" inputmode="numeric" placeholder="0" class="h-10" />
+                            <p v-if="tablePayChange !== null" class="text-sm" :class="tablePayChange < 0 ? 'text-red-600' : 'text-emerald-700'">
+                                {{ tablePayChange < 0 ? 'Kurang ' + formatCurrency(-tablePayChange) : 'Kembalian ' + formatCurrency(tablePayChange) }}
+                            </p>
+                        </div>
+                        <div class="mt-4 flex gap-2">
+                            <Button variant="outline" class="flex-1" @click="tablePayTarget = null">Batal</Button>
+                            <Button
+                                class="flex-1"
+                                :disabled="tablePaySubmitting || (tablePayMethod === 'cash' && tablePayChange !== null && tablePayChange < 0)"
+                                @click="submitTablePay"
+                            >
+                                <Loader2 v-if="tablePaySubmitting" class="mr-1 h-4 w-4 animate-spin" /> Konfirmasi lunas
+                            </Button>
                         </div>
                     </div>
                 </div>

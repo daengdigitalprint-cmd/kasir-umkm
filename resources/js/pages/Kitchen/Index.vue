@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, router } from '@inertiajs/vue3';
+import { Head, router, usePage } from '@inertiajs/vue3';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Button } from '@/components/ui/button';
 import { toastSuccess, toastError } from '@/lib/swal';
@@ -8,6 +8,9 @@ import { buildKotPlainLines } from '@/lib/receiptPlainText';
 import { receiptLinesToEscPos } from '@/lib/escPosEncode';
 import { ChefHat, RefreshCw, Utensils, Hand, Printer, Wifi, WifiOff, CheckCheck, Undo2, ListChecks, ChevronDown, ChevronUp, Maximize2, Minimize2, Layers, Check, Volume2, VolumeX } from 'lucide-vue-next';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+
+// Modul Antrian Dapur aktif? Bila mati, tidak ada pesanan yang dikirim ke papan ini.
+const kitchenModuleOn = computed(() => Boolean((usePage().props as { kitchen_queue_enabled?: boolean }).kitchen_queue_enabled));
 
 type Status = 'waiting' | 'serving' | 'ready' | 'completed' | 'cancelled';
 interface EntryItem { product_name: string; quantity: number | string; variant?: string | null; modifiers?: Array<{ label: string }> | null; category_id?: number | null; category?: string | null; done?: boolean; }
@@ -549,6 +552,11 @@ onUnmounted(() => {
 <template>
     <AdminLayout title="Papan Dapur" :fullscreen="kiosk"><Head :title="unseenIds.size > 0 ? `(${unseenIds.size}) Pesanan baru` : 'Papan Dapur'" />
         <div class="flex flex-col pb-4" :class="kiosk ? 'h-screen' : 'h-[calc(100vh-4rem)]'">
+            <!-- Modul Antrian Dapur mati: pesanan kasir & scan meja tidak akan dikirim ke papan ini -->
+            <div v-if="!kitchenModuleOn" class="mx-4 mt-4 shrink-0 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <b>Antrian Dapur belum aktif.</b> Pesanan dari kasir dan scan meja tidak akan masuk ke papan ini. Minta owner/admin
+                mengaktifkan <b>Antrian Dapur</b> di Pengaturan → Toko → Modul Fitur.
+            </div>
             <div class="flex shrink-0 flex-wrap items-center justify-between gap-3 px-4 pt-4">
                 <div class="flex items-center gap-3">
                     <h1 class="text-lg font-black text-slate-900">Papan Dapur</h1>

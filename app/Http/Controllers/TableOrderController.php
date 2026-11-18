@@ -7,6 +7,7 @@ use App\Models\CashShift;
 use App\Models\QueueEntry;
 use App\Models\Transaction;
 use App\Support\ScanMejaFeatures;
+use App\Support\TableOrders;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -50,13 +51,12 @@ class TableOrderController extends Controller
             ]);
 
         if ($statusFilter === 'accepted') {
-            $query->whereIn('order_status', ['accepted', 'ready']);
+            $query->whereIn('order_status', TableOrders::UNPAID_STATUSES)->where('payment_status', '!=', 'paid');
         } elseif (in_array($statusFilter, ['pending', 'ready', 'completed', 'cancelled'], true)) {
             $query->where('order_status', $statusFilter);
         }
 
-        $orders = $query
-            ->latest()
+        $orders = ($statusFilter === 'accepted' ? $query->oldest() : $query->latest())
             ->paginate(20)
             ->withQueryString();
 
@@ -77,14 +77,7 @@ class TableOrderController extends Controller
                         ->orWhere('payment_details->source', 'scan_meja');
                 })
                 ->count(),
-            'accepted' => Transaction::where('store_id', $store->id)
-                ->where('order_type', 'dine_in')
-                ->whereIn('order_status', ['accepted', 'ready'])
-                ->where(function ($q) {
-                    $q->whereJsonContains('payment_details->source', 'scan_meja')
-                        ->orWhere('payment_details->source', 'scan_meja');
-                })
-                ->count(),
+            'accepted' => TableOrders::unpaidCount($store->id),
             'serving' => Transaction::where('store_id', $store->id)->where('order_type', 'dine_in')->where('order_status', 'serving')->where('payment_details->source', 'scan_meja')->count(),
             'ready' => Transaction::where('store_id', $store->id)->where('order_type', 'dine_in')->where('order_status', 'ready')->where('payment_details->source', 'scan_meja')->count(),
             'completed' => Transaction::where('store_id', $store->id)
@@ -106,9 +99,12 @@ class TableOrderController extends Controller
                 ->count(),
         ];
 
+        $kitchen = TableOrders::kitchenStatuses($orders->getCollection()->pluck('id'));
+
         return Inertia::render('TableOrders/Index', [
-            'orders' => $orders->through(function (Transaction $t) {
+            'orders' => $orders->through(function (Transaction $t) use ($kitchen) {
                 return [
+                    'kitchen_status' => $kitchen->get($t->id),
                     'id' => $t->id,
                     'transaction_number' => $t->transaction_number,
                     'status' => $t->order_status,
@@ -167,12 +163,22 @@ class TableOrderController extends Controller
             'user_id' => auth()->id(),
         ]);
 
-        if (\App\Support\KitchenOrders::enabled($store)) {
-            \App\Support\KitchenOrders::enqueue($store, $transaction, [
-                'order_type' => 'dine_in',
-                'table_number' => $transaction->table_reference,
-                'customer_name' => $transaction->customer_name ?? null,
-            ]);
+        // Hanya kirim ke layar dapur bila modul Antrian Dapur (atau antrean lama) aktif.
+        if (! \App\Support\KitchenOrders::shouldEnqueue($store)) {
+            return redirect()->back()->with(
+                'success',
+                'Pesanan diterima. Papan dapur belum aktif, jadi pesanan tidak muncul di layar dapur — cetak KOT atau aktifkan Antrian Dapur di Pengaturan.',
+            );
+        }
+
+        $entry = \App\Support\KitchenOrders::enqueue($store, $transaction, [
+            'order_type' => 'dine_in',
+            'table_number' => $transaction->table_reference,
+            'customer_name' => $transaction->payment_details['customer_name'] ?? null,
+        ]);
+
+        if (! $entry) {
+            return redirect()->back()->with('warning', 'Pesanan diterima, tetapi gagal dikirim ke layar dapur. Cetak KOT sebagai cadangan.');
         }
 
         return redirect()->back()->with('success', 'Pesanan diterima dan diteruskan ke dapur.');
@@ -188,7 +194,7 @@ class TableOrderController extends Controller
             abort(404);
         }
         if ($transaction->payment_status === 'paid') {
-            return back()->with('error', 'Pesanan sudah dibayar.');
+            return $this->payResult($request, false, 'Pesanan sudah dibayar.');
         }
 
         $validated = $request->validate([
@@ -197,7 +203,7 @@ class TableOrderController extends Controller
         ]);
         $shift = CashShift::query()->where('store_id', $store->id)->where('user_id', auth()->id())->whereNull('closed_at')->first();
         if (! $shift) {
-            return back()->with('error', 'Buka shift kasir terlebih dahulu.');
+            return $this->payResult($request, false, 'Buka shift kasir terlebih dahulu.');
         }
 
         $details = $transaction->payment_details ?? [];
@@ -224,10 +230,56 @@ class TableOrderController extends Controller
         $queueEntries = QueueEntry::where('transaction_id', $transaction->id)->get();
         foreach ($queueEntries as $entry) {
             $entry->update(['status' => 'completed']);
-            event(KitchenQueueUpdated::fromEntry($entry->load('transaction:id,transaction_number,order_type,table_reference')));
+            \App\Support\KitchenOrders::broadcast(KitchenQueueUpdated::fromEntry($entry->load('transaction:id,transaction_number,order_type,table_reference')));
         }
 
-        return redirect()->back()->with('success', 'Pembayaran pesanan berhasil.');
+        return $this->payResult($request, true, 'Pembayaran '.($transaction->table_reference ?: 'pesanan meja').' berhasil dicatat.');
+    }
+
+    /**
+     * Daftar pesanan meja yang sudah diterima tetapi belum dibayar (untuk panel Open Bill di POS).
+     */
+    public function unpaid(Request $request)
+    {
+        $store = auth()->user()?->store;
+
+        if (! $store || ! ScanMejaFeatures::enabled($store)) {
+            return response()->json(['success' => true, 'orders' => []]);
+        }
+
+        $orders = TableOrders::unpaidQuery($store->id)
+            ->with('items:id,transaction_id,product_name,quantity')
+            ->oldest()
+            ->limit(50)
+            ->get();
+        $kitchen = TableOrders::kitchenStatuses($orders->pluck('id'));
+
+        return response()->json([
+            'success' => true,
+            'orders' => $orders->map(fn (Transaction $t) => [
+                'id' => $t->id,
+                'transaction_number' => $t->transaction_number,
+                'table_reference' => $t->table_reference,
+                'customer_name' => $t->payment_details['customer_name'] ?? null,
+                'payment_method' => $t->payment_method,
+                'total_amount' => (float) $t->total_amount,
+                'items_count' => (float) $t->items->sum('quantity'),
+                'items' => $t->items->map(fn ($i) => ['product_name' => $i->product_name, 'quantity' => (float) $i->quantity])->values(),
+                'kitchen_status' => $kitchen->get($t->id),
+                'created_at' => $t->created_at?->toIso8601String(),
+                'elapsed_minutes' => (int) abs(now()->diffInMinutes($t->created_at)),
+            ])->values(),
+        ]);
+    }
+
+    /** Hasil bayar: JSON bila dipanggil dari POS, redirect + flash bila dari halaman Pesanan Masuk. */
+    private function payResult(Request $request, bool $ok, string $message)
+    {
+        if ($request->expectsJson() && ! $request->header('X-Inertia')) {
+            return response()->json(['success' => $ok, 'message' => $message], $ok ? 200 : 422);
+        }
+
+        return back()->with($ok ? 'success' : 'error', $message);
     }
 
     /**
@@ -250,7 +302,7 @@ class TableOrderController extends Controller
         $queueEntries = QueueEntry::where('transaction_id', $transaction->id)->get();
         foreach ($queueEntries as $entry) {
             $entry->update(['status' => 'completed']);
-            event(KitchenQueueUpdated::fromEntry($entry->load('transaction:id,transaction_number,order_type,table_reference')));
+            \App\Support\KitchenOrders::broadcast(KitchenQueueUpdated::fromEntry($entry->load('transaction:id,transaction_number,order_type,table_reference')));
         }
 
         return redirect()->back()->with('success', 'Pesanan ditandai selesai.');
@@ -282,7 +334,7 @@ class TableOrderController extends Controller
         $queueEntries = QueueEntry::where('transaction_id', $transaction->id)->get();
         foreach ($queueEntries as $entry) {
             $entry->update(['status' => 'cancelled']);
-            event(KitchenQueueUpdated::fromEntry($entry->load('transaction:id,transaction_number,order_type,table_reference')));
+            \App\Support\KitchenOrders::broadcast(KitchenQueueUpdated::fromEntry($entry->load('transaction:id,transaction_number,order_type,table_reference')));
         }
 
         return redirect()->back()->with('success', 'Pesanan ditolak.');

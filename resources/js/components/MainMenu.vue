@@ -517,6 +517,8 @@ const navigationItems = computed((): ProcessedNavItem[] => {
     const receivablesEnabled = Boolean((page.props as { receivables_enabled?: boolean }).receivables_enabled);
     const pendingQueueCount = Number((page.props as { pending_queue_count?: number }).pending_queue_count ?? 0);
     const pendingTableOrderCount = Number((page.props as { pending_table_order_count?: number }).pending_table_order_count ?? 0);
+    // Tagihan meja yang sudah diterima tetapi belum dibayar ikut dihitung agar kasir tidak lupa menagih.
+    const unpaidTableOrderCount = Number((page.props as { unpaid_table_order_count?: number }).unpaid_table_order_count ?? 0);
     const pendingKitchenOrderCount = Number((page.props as { pending_kitchen_order_count?: number }).pending_kitchen_order_count ?? 0);
     const pendingHr = (page.props as { pending_hr_requests?: { leave?: number; overtime?: number; total?: number } }).pending_hr_requests;
     // Total semua outlet yang dikelola (owner multi-outlet), bukan hanya outlet aktif.
@@ -639,8 +641,8 @@ const navigationItems = computed((): ProcessedNavItem[] => {
         }
 
         // Badge pesanan meja pending (Scan Meja)
-        if (item.menuKey === 'table_orders' && pendingTableOrderCount > 0) {
-            return [{ ...item, pendingCount: pendingTableOrderCount }];
+        if (item.menuKey === 'table_orders' && pendingTableOrderCount + unpaidTableOrderCount > 0) {
+            return [{ ...item, pendingCount: pendingTableOrderCount + unpaidTableOrderCount }];
         }
 
         // Barbershop: sebutkan 'Layanan' pada menu Produk
