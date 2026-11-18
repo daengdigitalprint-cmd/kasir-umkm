@@ -87,6 +87,8 @@ class DemoCentralKitchenSeeder extends Seeder
                 // Order otomatis ke CK setiap jam 21.00 (bisa dicoba lewat tombol "Buat sekarang").
                 'auto_stock_request' => ['enabled' => true, 'time' => '21:00'],
             ]);
+            // GrowUp termasuk 1 outlet; outlet kedua = 1 add-on yang sudah dibeli.
+            $outletA->forceFill(['extra_outlets' => 1])->save();
             $outletB = $this->store($org, $plan, 'Demo Outlet Sudiang', StoreLocationType::OUTLET, 'Jl. Citra Sudiang Blok X4 No. 21, Makassar', [
                 'upsell_enabled' => true,
                 'delivery_enabled' => true,

@@ -18,6 +18,7 @@ export interface LandingPricingData {
         monthly_label: string;
         yearly_label: string;
         max_stores: number | null;
+        outlet_addon_label?: string;
     };
     yearly_saving_months: number | null;
 }
@@ -49,7 +50,8 @@ const data = computed<LandingPricingData>(
                 description: 'Untuk pertumbuhan outlet: operasional penuh, laporan mendalam, multi-outlet.',
                 monthly_label: '',
                 yearly_label: '',
-                max_stores: 3,
+                max_stores: 1,
+                outlet_addon_label: 'Rp85 rb',
             },
             yearly_saving_months: null,
         },
@@ -77,7 +79,9 @@ const growUpFeatures = computed<string[]>(() => {
 
     return [
         'Produk & pelanggan tanpa batas',
-        outlet ? 'Hingga ' + outlet + ' outlet & transfer stok' : 'Outlet tanpa batas & transfer stok',
+        outlet
+            ? outlet + ' outlet, tambah outlet ' + (data.value.paid.outlet_addon_label || 'Rp85 rb') + '/bulan'
+            : 'Outlet tanpa batas & transfer stok',
         'Shift kasir, pembelian & stok opname',
         'Diskon, loyalitas & piutang pelanggan',
         'Resep, akuntansi & asisten AI',

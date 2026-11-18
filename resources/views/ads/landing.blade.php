@@ -29,7 +29,7 @@
     ];
     $growUpFeatures = [
         'Produk & pelanggan tanpa batas',
-        $paid['max_stores'] ? 'Hingga '.$paid['max_stores'].' outlet & transfer stok' : 'Outlet tanpa batas & transfer stok',
+        $paid['max_stores'] ? $paid['max_stores'].' outlet, tambah outlet '.($paid['outlet_addon_label'] ?? 'Rp85 rb').'/bulan' : 'Outlet tanpa batas & transfer stok',
         'Shift kasir, pembelian & stok opname',
         'Diskon, loyalitas & piutang pelanggan',
     ];

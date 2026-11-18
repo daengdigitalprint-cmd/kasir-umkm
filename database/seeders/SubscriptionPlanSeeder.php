@@ -18,7 +18,7 @@ class SubscriptionPlanSeeder extends Seeder
             'Struk Print',
             'Akses Laporan (Rentang Tanggal Hingga 1 Tahun)',
             'Promo Tanpa Batas',
-            'Hingga 3 Outlet',
+            '1 Outlet (tambah outlet Rp85.000/bulan)',
             'Opsi Produk',
             'Varian Produk',
             'Jumlah Desimal (kuantitas / harga)',
@@ -49,12 +49,12 @@ class SubscriptionPlanSeeder extends Seeder
             ->whereIn('slug', ['basic', 'premium', 'enterprise'])
             ->update(['is_active' => false]);
 
-        // Fix data lama: "Hingga 5 Outlet" → "Hingga 3 Outlet"
+        // Fix data lama: teks outlet lama → "1 Outlet (tambah outlet Rp85.000/bulan)"
         SubscriptionPlan::query()
-            ->whereJsonContains('features', 'Hingga 5 Outlet')
+            ->where(fn ($q) => $q->whereJsonContains('features', 'Hingga 5 Outlet')->orWhereJsonContains('features', 'Hingga 3 Outlet'))
             ->each(function (SubscriptionPlan $plan) {
                 $features = $plan->features;
-                $features = array_map(fn (string $f) => str_replace('Hingga 5 Outlet', 'Hingga 3 Outlet', $f), $features);
+                $features = array_map(fn (string $f) => str_replace(['Hingga 5 Outlet', 'Hingga 3 Outlet'], '1 Outlet (tambah outlet Rp85.000/bulan)', $f), $features);
                 $plan->update(['features' => $features]);
             });
 
@@ -85,7 +85,7 @@ class SubscriptionPlanSeeder extends Seeder
                 'duration_days' => 30,
                 'max_products' => null,
                 'max_customers' => null,
-                'max_stores' => 3,
+                'max_stores' => 1,
                 'features' => $growupFeatures,
                 'is_active' => true,
                 'is_popular' => true,
@@ -131,7 +131,7 @@ class SubscriptionPlanSeeder extends Seeder
                 'duration_days' => 365,
                 'max_products' => null,
                 'max_customers' => null,
-                'max_stores' => 3,
+                'max_stores' => 1,
                 'features' => $growupFeatures,
                 'is_active' => true,
                 'is_popular' => false,
@@ -146,7 +146,7 @@ class SubscriptionPlanSeeder extends Seeder
                 'duration_days' => 365,
                 'max_products' => null,
                 'max_customers' => null,
-                'max_stores' => 3,
+                'max_stores' => 1,
                 'features' => $growupFeatures,
                 'is_active' => false, // tidak ditawarkan lagi (lebih mahal dari GrowUp tahunan)
                 'is_popular' => false,
