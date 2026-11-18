@@ -14,7 +14,37 @@ class CashTransaction extends Model
 
     protected $casts = [
         'amount' => 'decimal:4',
+        'approved_with_pin' => 'boolean',
+        'voided_at' => 'datetime',
     ];
+
+    /** Nama global scope yang menyembunyikan entri yang sudah dibatalkan. */
+    public const SCOPE_ACTIVE = 'not_voided';
+
+    /**
+     * Entri yang dibatalkan tidak boleh ikut menghitung saldo laci, laporan,
+     * atau tutup shift di mana pun — jadi disaring secara global.
+     * Pakai withVoided() bila perlu menampilkan riwayat lengkap.
+     */
+    protected static function booted(): void
+    {
+        static::addGlobalScope(self::SCOPE_ACTIVE, fn ($query) => $query->whereNull($query->getModel()->qualifyColumn('voided_at')));
+    }
+
+    public function scopeWithVoided($query)
+    {
+        return $query->withoutGlobalScope(self::SCOPE_ACTIVE);
+    }
+
+    public function isVoided(): bool
+    {
+        return $this->voided_at !== null;
+    }
+
+    public function voidedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'voided_by');
+    }
 
     public const TYPE_IN = 'in';
 

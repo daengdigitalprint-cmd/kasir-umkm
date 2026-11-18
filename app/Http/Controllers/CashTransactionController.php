@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\CashShift;
 use App\Models\CashTransaction;
+use App\Models\JournalEntry;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Support\Accounting\JournalPoster;
+use App\Support\CashDrawerSettings;
 use App\Support\StorePlanLimits;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -14,6 +16,9 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -46,11 +51,13 @@ class CashTransactionController extends Controller
         }
 
         $summary = $this->buildShiftSummary($openShift);
+        // Riwayat menampilkan juga entri yang dibatalkan (dicoret) agar jejaknya terlihat.
         $transactions = $this->serializeTransactions(
             CashTransaction::query()
+                ->withVoided()
                 ->where('store_id', $store->id)
                 ->where('cash_shift_id', $openShift->id)
-                ->with('user:id,name')
+                ->with(['user:id,name', 'voidedBy:id,name'])
                 ->latest()
                 ->get()
         );
@@ -60,12 +67,148 @@ class CashTransactionController extends Controller
             'shift' => [
                 'id' => $openShift->id,
                 'shift_number' => $openShift->shift_number,
+                'opened_at' => $openShift->opened_at?->toIso8601String(),
                 'opening_cash' => $summary['opening_cash'],
                 'expected_cash' => $summary['expected_cash'],
             ],
             'summary' => $summary,
             'canViewReport' => $user->canAccessBackOffice(),
+            'canManage' => $user->canAccessBackOffice(),
+            'drawerSettings' => CashDrawerSettings::forPage($store),
         ]);
+    }
+
+    /**
+     * Batalkan entri kas pada shift yang masih buka. Entri tidak dihapus:
+     * ditandai batal (tidak dihitung lagi) dan jurnalnya dibalik.
+     */
+    public function void(Request $request, int $cashTransaction): RedirectResponse
+    {
+        $user = Auth::user();
+        $store = $user->store;
+
+        if (! $store) {
+            abort(403, 'Tidak ada toko aktif.');
+        }
+
+        $validated = $request->validate([
+            'reason' => 'required|string|max:500',
+            'approval_pin' => 'nullable|string|max:12',
+        ]);
+
+        $openShift = $this->resolveOpenShift($request, $store, $user);
+        $ct = CashTransaction::query()->withVoided()->where('store_id', $store->id)->findOrFail($cashTransaction);
+
+        if ($ct->isVoided()) {
+            return back()->with('error', 'Entri ini sudah dibatalkan.');
+        }
+
+        if (! $openShift || (int) $ct->cash_shift_id !== (int) $openShift->id) {
+            return back()->with('error', 'Hanya entri pada shift yang sedang buka yang bisa dibatalkan.');
+        }
+
+        $isManager = $user->canAccessBackOffice();
+        if (! $isManager && CashDrawerSettings::hasApprovalPin($store)) {
+            if ($error = $this->checkApprovalPin($store, $user, $validated['approval_pin'] ?? null)) {
+                return back()->withErrors(['approval_pin' => $error]);
+            }
+        } elseif (! $isManager && (int) $ct->user_id !== (int) $user->id) {
+            return back()->with('error', 'Anda hanya bisa membatalkan entri yang Anda catat sendiri.');
+        }
+
+        try {
+            DB::transaction(function () use ($store, $user, $ct, $validated) {
+                $ct->update([
+                    'voided_at' => now(),
+                    'voided_by' => $user->id,
+                    'void_reason' => $validated['reason'],
+                ]);
+
+                $entry = $ct->journal_entry_id ? JournalEntry::query()->find($ct->journal_entry_id) : null;
+                if ($entry) {
+                    JournalPoster::postReversal($store, $entry, now()->toDateString(), $user->id, 'Batal kas #'.$ct->id.': '.$validated['reason']);
+                }
+            });
+        } catch (\RuntimeException $e) {
+            return back()->with('error', 'Gagal membatalkan: '.$e->getMessage());
+        }
+
+        return back()->with('success', 'Entri kas dibatalkan dan saldo laci dihitung ulang.');
+    }
+
+    /**
+     * Simpan pengaturan laci: batas persetujuan, PIN persetujuan, dan tombol cepat (owner/admin/manajer).
+     */
+    public function updateSettings(Request $request): RedirectResponse
+    {
+        $user = Auth::user();
+        $store = $user->store;
+
+        if (! $store || ! $user->canAccessBackOffice()) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'approval_limit' => 'required|integer|min:0|max:1000000000',
+            'approval_pin' => ['nullable', 'string', 'regex:/^\d{4,6}$/'],
+            'remove_approval_pin' => 'nullable|boolean',
+            'presets' => 'present|array|max:'.CashDrawerSettings::MAX_PRESETS,
+            'presets.*.type' => 'required|in:in,out',
+            'presets.*.category' => 'required|string|max:50',
+            'presets.*.label' => 'required|string|max:40',
+            'presets.*.notes' => 'required|string|max:255',
+            'presets.*.amount' => 'nullable|integer|min:1|max:1000000000',
+        ], [
+            'approval_pin.regex' => 'PIN harus 4–6 angka.',
+        ]);
+
+        $presets = [];
+        foreach ($validated['presets'] as $i => $p) {
+            if (! array_key_exists($p['category'], CashTransaction::categoriesForType($p['type']))) {
+                return back()->withErrors(["presets.$i.category" => 'Jenis tidak cocok dengan arah kas.']);
+            }
+            $presets[] = [
+                'type' => $p['type'],
+                'category' => $p['category'],
+                'label' => trim($p['label']),
+                'notes' => trim($p['notes']),
+                'amount' => isset($p['amount']) ? (int) $p['amount'] : null,
+            ];
+        }
+
+        $settings = $store->settings ?? [];
+        $settings['cash_out_approval_limit'] = (int) $validated['approval_limit'];
+        $settings['cash_quick_presets'] = $presets;
+
+        if ($request->boolean('remove_approval_pin')) {
+            unset($settings['cash_approval_pin_hash']);
+        } elseif (! empty($validated['approval_pin'])) {
+            $settings['cash_approval_pin_hash'] = Hash::make($validated['approval_pin']);
+        }
+
+        $store->update(['settings' => $settings]);
+
+        return back()->with('success', 'Pengaturan laci kasir disimpan.');
+    }
+
+    /** Pesan galat bila PIN persetujuan salah/terkunci; null bila benar. */
+    private function checkApprovalPin($store, User $user, ?string $pin): ?string
+    {
+        $key = 'cash-approval-pin:'.$store->id.':'.$user->id;
+
+        if (RateLimiter::tooManyAttempts($key, 5)) {
+            return 'Terlalu banyak percobaan PIN. Coba lagi dalam '.RateLimiter::availableIn($key).' detik.';
+        }
+
+        if (! CashDrawerSettings::verifyApprovalPin($store, $pin)) {
+            RateLimiter::hit($key, 300);
+
+            return $pin ? 'PIN persetujuan salah.' : 'Masukkan PIN persetujuan dari owner/supervisor.';
+        }
+
+        RateLimiter::clear($key);
+
+        return null;
     }
 
     /**
@@ -172,9 +315,12 @@ class CashTransactionController extends Controller
         $validated = $request->validate([
             'type' => 'required|in:in,out',
             'category' => 'required|string|max:50',
-            'amount' => 'required|numeric|min:1',
+            'amount' => 'required|numeric|min:1|max:1000000000',
             'party_name' => 'nullable|string|max:255',
             'notes' => 'required|string|max:1000',
+            'receipt' => 'nullable|file|image|mimes:jpeg,jpg,png,webp|max:4096',
+            'approval_pin' => 'nullable|string|max:12',
+            'confirm_overdraw' => 'nullable|boolean',
         ]);
 
         $allowedCategories = array_keys(CashTransaction::categoriesForType($validated['type']));
@@ -182,7 +328,31 @@ class CashTransactionController extends Controller
             return back()->withErrors(['category' => 'Kategori tidak valid untuk jenis transaksi ini.']);
         }
 
-        DB::transaction(function () use ($store, $user, $openShift, $validated) {
+        $amount = (float) $validated['amount'];
+        $approvedWithPin = false;
+
+        if ($validated['type'] === CashTransaction::TYPE_OUT) {
+            // Saldo laci tidak boleh diam-diam jadi minus: kasir harus mengonfirmasi.
+            $balance = $this->buildShiftSummary($openShift)['expected_cash'];
+            if ($amount > $balance && ! $request->boolean('confirm_overdraw')) {
+                return back()->withErrors([
+                    'amount' => 'Saldo laci hanya Rp '.number_format($balance, 0, ',', '.').'. Centang konfirmasi bila tetap ingin mencatat.',
+                ]);
+            }
+
+            if (! $user->canAccessBackOffice() && CashDrawerSettings::outNeedsApproval($store, $amount)) {
+                if ($error = $this->checkApprovalPin($store, $user, $validated['approval_pin'] ?? null)) {
+                    return back()->withErrors(['approval_pin' => $error]);
+                }
+                $approvedWithPin = true;
+            }
+        }
+
+        $receiptPath = $request->hasFile('receipt')
+            ? $request->file('receipt')->store('cash-receipts/'.$store->id, 'public')
+            : null;
+
+        DB::transaction(function () use ($store, $user, $openShift, $validated, $receiptPath, $approvedWithPin) {
             $ct = CashTransaction::create([
                 'store_id' => $store->id,
                 'user_id' => $user->id,
@@ -192,6 +362,8 @@ class CashTransactionController extends Controller
                 'amount' => $validated['amount'],
                 'party_name' => $validated['party_name'] ?? null,
                 'notes' => $validated['notes'],
+                'receipt_path' => $receiptPath,
+                'approved_with_pin' => $approvedWithPin,
             ]);
 
             JournalPoster::postCashTransaction($store, $ct);
@@ -383,8 +555,14 @@ class CashTransactionController extends Controller
             'party_name' => $transaction->party_name,
             'notes' => $transaction->notes,
             'recorded_by' => $transaction->user?->name,
+            'recorded_by_id' => $transaction->user_id,
             'shift_number' => $transaction->cashShift?->shift_number,
             'created_at' => $transaction->created_at?->toIso8601String(),
+            'receipt_url' => $transaction->receipt_path ? Storage::disk('public')->url($transaction->receipt_path) : null,
+            'approved_with_pin' => (bool) $transaction->approved_with_pin,
+            'voided_at' => $transaction->voided_at?->toIso8601String(),
+            'voided_by' => $transaction->voidedBy?->name,
+            'void_reason' => $transaction->void_reason,
         ];
     }
 }

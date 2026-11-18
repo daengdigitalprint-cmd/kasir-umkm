@@ -73,7 +73,7 @@ class DeleteUserTransactions extends Command
         return [
             'Penjualan' => Transaction::query()->where('user_id', $user->id)->where('created_at', '>=', $from)->where('created_at', '<', $until)->count(),
             'Pembelian' => Purchase::query()->where('user_id', $user->id)->where('purchased_at', '>=', $from)->where('purchased_at', '<', $until)->count(),
-            'Arus kas' => CashTransaction::query()->where('user_id', $user->id)->where('created_at', '>=', $from)->where('created_at', '<', $until)->count(),
+            'Arus kas' => CashTransaction::query()->withVoided()->where('user_id', $user->id)->where('created_at', '>=', $from)->where('created_at', '<', $until)->count(),
             'Pembayaran pembelian' => PurchasePayment::query()->where('user_id', $user->id)->whereBetween('payment_date', [$from, $to])->count(),
             'Pembayaran piutang' => ReceivablePayment::query()->where('user_id', $user->id)->where('received_at', '>=', $from)->where('received_at', '<', $until)->count(),
             'Retur penjualan' => SalesReturn::query()->where('user_id', $user->id)->where('returned_at', '>=', $from)->where('returned_at', '<', $until)->count(),
@@ -131,7 +131,7 @@ class DeleteUserTransactions extends Command
                         }
                     });
 
-                CashTransaction::query()->where('user_id', $user->id)->where('created_at', '>=', $from)->where('created_at', '<', $until)->delete();
+                CashTransaction::query()->withVoided()->where('user_id', $user->id)->where('created_at', '>=', $from)->where('created_at', '<', $until)->delete();
                 PurchasePayment::query()->where('user_id', $user->id)->whereBetween('payment_date', [$from, date('Y-m-d', strtotime($until.' -1 day'))])->delete();
                 ReceivablePayment::query()->where('user_id', $user->id)->where('received_at', '>=', $from)->where('received_at', '<', $until)->delete();
                 SalesReturn::query()->where('user_id', $user->id)->where('returned_at', '>=', $from)->where('returned_at', '<', $until)->delete();

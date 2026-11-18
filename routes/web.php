@@ -532,6 +532,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Transaksi Kasir (Uang Masuk / Keluar)
         Route::get('/transactions', [App\Http\Controllers\CashTransactionController::class, 'index'])->name('transactions.index');
         Route::post('/transactions', [App\Http\Controllers\CashTransactionController::class, 'store'])->name('transactions.store');
+        Route::put('/transactions/settings', [App\Http\Controllers\CashTransactionController::class, 'updateSettings'])->name('transactions.settings');
+        Route::post('/transactions/{cashTransaction}/void', [App\Http\Controllers\CashTransactionController::class, 'void'])
+            ->whereNumber('cashTransaction')
+            ->name('transactions.void');
     });
 
     Route::prefix('pos')->name('pos.')->middleware(['store.active', 'role.pos'])->group(function () {
