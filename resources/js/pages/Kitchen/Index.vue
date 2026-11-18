@@ -124,11 +124,31 @@ const showTodo = ref(true);
 const soundEnabled = ref<boolean>(readStore('sound', true));
 const audioContext = ref<AudioContext | null>(null);
 const soundReady = ref(false);
+// Bunyi yang tertahan karena suara belum diizinkan browser; dimainkan saat layar disentuh.
+let pendingChime = false;
 const unlockNotificationSound = () => {
     try {
         audioContext.value ??= new AudioContext();
         if (audioContext.value.state === 'suspended') audioContext.value.resume();
         soundReady.value = true;
+        if (pendingChime) {
+            pendingChime = false;
+            setTimeout(() => playNewOrderSound(), 50);
+        }
+    } catch {
+        /* perangkat tanpa audio */
+    }
+};
+
+/**
+ * Coba nyalakan suara tanpa sentuhan (diizinkan sebagian browser bila situs sering dipakai).
+ * Bila ditolak, layar "Ketuk untuk mulai" tampil.
+ */
+const tryAutoUnlock = async () => {
+    try {
+        audioContext.value ??= new AudioContext();
+        if (audioContext.value.state === 'suspended') await audioContext.value.resume().catch(() => {});
+        if (audioContext.value.state === 'running') soundReady.value = true;
     } catch {
         /* perangkat tanpa audio */
     }
@@ -151,8 +171,13 @@ const tone = (freq: number, start: number, duration: number, volume: number) => 
 
 /** Ding-dong-ding untuk pesanan baru. */
 const playNewOrderSound = () => {
-    if (!soundEnabled.value || !audioContext.value) return;
-    if (audioContext.value.state === 'suspended') audioContext.value.resume();
+    if (!soundEnabled.value) return;
+    if (!soundReady.value || !audioContext.value || audioContext.value.state !== 'running') {
+        // Belum diizinkan browser: mainkan begitu layar disentuh.
+        pendingChime = true;
+        if (audioContext.value?.state === 'suspended') audioContext.value.resume().catch(() => {});
+        if (audioContext.value?.state !== 'running') return;
+    }
     tone(1318.5, 0, 0.45, 0.45);
     tone(1046.5, 0.32, 0.55, 0.45);
     tone(1318.5, 0.7, 0.6, 0.4);
@@ -169,11 +194,14 @@ const toggleSound = () => {
 };
 
 // Pesanan baru yang belum "dilihat": disorot, bunyi diulang, judul tab berkedip.
+// Pesanan yang masuk < 3 menit sebelum halaman dibuka (mis. halaman dimuat ulang setelah
+// pembaruan aplikasi) tetap dianggap baru, agar tidak terlewat tanpa bunyi.
+const RECENT_MS = 3 * 60 * 1000;
+const isRecentWaiting = (e: Entry) => e.status === 'waiting' && !!e.created_at && Date.now() - new Date(e.created_at).getTime() < RECENT_MS;
 const knownIds = new Set<number>([...props.entries, ...props.history].map((e) => e.id));
 const unseenIds = ref<Set<number>>(new Set());
 let repeatTimer: ReturnType<typeof setInterval> | null = null;
 let repeatCount = 0;
-const baseTitle = 'Papan Dapur';
 
 const stopRepeat = () => {
     if (repeatTimer) clearInterval(repeatTimer);
@@ -185,12 +213,10 @@ const acknowledgeNewOrders = () => {
     if (unseenIds.value.size === 0) return;
     unseenIds.value = new Set();
     stopRepeat();
-    document.title = baseTitle;
 };
 
 const alertNewOrders = (ids: number[]) => {
     unseenIds.value = new Set([...unseenIds.value, ...ids]);
-    document.title = `(${unseenIds.value.size}) Pesanan baru — ${baseTitle}`;
     playNewOrderSound();
     stopRepeat();
     repeatTimer = setInterval(() => {
@@ -496,6 +522,10 @@ const undoStatus = (entry: Entry) => {
 
 onMounted(() => {
     window.addEventListener('pointerdown', unlockNotificationSound, { once: true });
+    tryAutoUnlock().then(() => {
+        const recent = entries.value.filter(isRecentWaiting).map((e) => e.id);
+        if (recent.length > 0) alertNewOrders(recent);
+    });
     // Sentuhan apa pun di layar = pesanan baru sudah dilihat.
     window.addEventListener('pointerdown', acknowledgeNewOrders);
     clockId = setInterval(() => (now.value = Date.now()), 1000);
@@ -507,7 +537,6 @@ onUnmounted(() => {
     window.removeEventListener('pointerdown', unlockNotificationSound);
     window.removeEventListener('pointerdown', acknowledgeNewOrders);
     stopRepeat();
-    document.title = baseTitle;
     if (pollId) clearInterval(pollId);
     if (clockId) clearInterval(clockId);
     if (echoUnsubscribe) echoUnsubscribe();
@@ -518,7 +547,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <AdminLayout title="Papan Dapur" :fullscreen="kiosk"><Head title="Papan Dapur" />
+    <AdminLayout title="Papan Dapur" :fullscreen="kiosk"><Head :title="unseenIds.size > 0 ? `(${unseenIds.size}) Pesanan baru` : 'Papan Dapur'" />
         <div class="flex flex-col pb-4" :class="kiosk ? 'h-screen' : 'h-[calc(100vh-4rem)]'">
             <div class="flex shrink-0 flex-wrap items-center justify-between gap-3 px-4 pt-4">
                 <div class="flex items-center gap-3">
@@ -607,11 +636,18 @@ onUnmounted(() => {
             <button
                 v-if="soundEnabled && !soundReady"
                 type="button"
-                class="mx-4 mt-3 shrink-0 animate-pulse rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3 text-left text-base font-bold text-amber-900"
+                class="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-slate-900/85 px-6 text-center text-white"
                 @click="unlockNotificationSound(); playNewOrderSound()"
             >
-                🔔 Ketuk di sini untuk menyalakan suara pesanan masuk
-                <span class="block text-xs font-normal text-amber-800">Browser baru mengizinkan suara setelah layar disentuh sekali.</span>
+                <span class="text-6xl">🔔</span>
+                <span class="text-2xl font-black">Ketuk layar untuk mulai</span>
+                <span class="max-w-md text-base text-slate-200">
+                    Agar suara pesanan masuk berbunyi. Browser hanya mengizinkan suara setelah layar disentuh,
+                    termasuk setiap kali halaman dimuat ulang.
+                </span>
+                <span v-if="unseenIds.size > 0" class="rounded-full bg-amber-500 px-4 py-1.5 text-base font-bold">
+                    {{ unseenIds.size }} pesanan baru menunggu
+                </span>
             </button>
             <div
                 v-if="unseenIds.size > 0"
