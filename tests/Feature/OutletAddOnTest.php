@@ -185,6 +185,34 @@ class OutletAddOnTest extends TestCase
         StorePlanLimits::assertCanAddStoreToOrganization($org->id);
     }
 
+    public function test_addon_bought_from_central_warehouse_counts_for_group(): void
+    {
+        $org = Organization::create(['name' => 'Grup', 'slug' => 'grup-'.Str::random(5)]);
+        $plan = $this->createGrowUpPlan();
+
+        Store::create([
+            'name' => 'Outlet 1',
+            'slug' => 'outlet-'.Str::random(6),
+            'is_active' => true,
+            'organization_id' => $org->id,
+            'subscription_plan_id' => $plan->id,
+            'location_type' => \App\Support\StoreLocationType::OUTLET,
+            'extra_outlets' => 4,
+        ]);
+        Store::create([
+            'name' => 'Gudang Pusat',
+            'slug' => 'gudang-'.Str::random(6),
+            'is_active' => true,
+            'organization_id' => $org->id,
+            'subscription_plan_id' => $plan->id,
+            'location_type' => \App\Support\StoreLocationType::CENTRAL_WAREHOUSE,
+            'extra_outlets' => 2,
+        ]);
+
+        // Batas paket 3 + add-on 4 (outlet) + 2 (dibeli lewat gudang) = 9.
+        $this->assertEquals(9, StorePlanLimits::maxOutletsAllowedForOrganization($org->id));
+    }
+
     public function test_new_empty_group_enforces_limit_via_fallback_plan(): void
     {
         $org = Organization::create(['name' => 'Grup Baru', 'slug' => 'grup-'.Str::random(5)]);

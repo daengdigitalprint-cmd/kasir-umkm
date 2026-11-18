@@ -71,7 +71,10 @@ class SubscriptionController extends Controller
         $currentOutletCount = $organizationId
             ? \App\Models\Store::where('organization_id', $organizationId)->outlet()->count()
             : 1;
-        $extraOutlets = (int) ($store->extra_outlets ?? 0);
+        // Add-on dihitung per grup, sama seperti kuotanya.
+        $extraOutlets = $organizationId
+            ? (int) \App\Models\Store::where('organization_id', $organizationId)->sum('extra_outlets')
+            : (int) ($store->extra_outlets ?? 0);
         // Batas dasar dari paket (max_stores); fallback ke max_stores paket toko ini bila grup null.
         $baseLimit = $organizationId
             ? \App\Support\StorePlanLimits::maxOutletsAllowedForOrganization($organizationId)

@@ -216,8 +216,11 @@ final class StorePlanLimits
 
         $baseMax = $limits->isNotEmpty() ? (int) $limits->max() : null;
 
-        // Tambahkan total extra_outlets yang sudah dibeli
-        $totalExtraOutlets = $stores->sum('extra_outlets');
+        // Add-on outlet berlaku untuk seluruh grup, termasuk yang dibeli lewat
+        // akun Gudang Pusat (halaman Langganan bisa dibuka dari lokasi mana pun).
+        $totalExtraOutlets = (int) Store::query()
+            ->where('organization_id', $organizationId)
+            ->sum('extra_outlets');
 
         if ($baseMax === null && $totalExtraOutlets === 0) {
             return null;
