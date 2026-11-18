@@ -81,7 +81,7 @@ function openImportOpnameSession(User $user, Store $store, array $products): Sto
             'stock_adjustment_id' => $document->id,
             'product_id' => $product->id,
             'system_quantity' => $systemQty,
-            'counted_quantity' => $systemQty,
+            'counted_quantity' => null,
             'variance_quantity' => '0.0000',
             'unit_cost' => InventoryCosting::currentAverageCost($product),
             'variance_value' => '0.00',
@@ -164,7 +164,7 @@ it('mengunduh lembar hitung berisi daftar produk beserta snapshot stok sistem', 
     expect(trim((string) $body['SKU-A'][$colCounted]))->toBe('');
 });
 
-it('memproses unggahan valid dan menampilkan preview selisih tanpa mengubah stok', function () {
+it('memproses unggahan valid dan langsung mengisi lembar hitung tanpa mengubah stok', function () {
     Storage::fake('local');
     [$store, $user] = makeImportOpnameStore();
     $productA = makeImportOpnameProduct($store, ['sku' => 'SKU-A', 'stock_quantity' => 60]);
@@ -184,9 +184,10 @@ it('memproses unggahan valid dan menampilkan preview selisih tanpa mengubah stok
     $show = $this->getJson(route('stock-opnames.imports.show', [$document, $import]));
     $show->assertOk()
         ->assertJsonPath('status', 'completed')
-        ->assertJsonPath('can_apply', true)
+        ->assertJsonPath('can_apply', false)
         ->assertJsonPath('summary.matched_rows', 2)
         ->assertJsonPath('summary.error_rows', 0);
+    expect($show->json('applied_at'))->not->toBeNull();
 
     $preview = $show->json('preview');
     expect($preview)->toHaveCount(2);
@@ -203,13 +204,14 @@ it('memproses unggahan valid dan menampilkan preview selisih tanpa mengubah stok
     expect((float) $rowB['variance_quantity'])->toEqual(2.0);
     expect((float) $rowB['variance_value'])->toEqual(18000.0);
 
-    // Preview tidak boleh menulis apa pun ke lembar hitung.
+    // Lembar hitung terisi, stok produk belum berubah sampai posting.
     $lineA = $document->lines()->where('product_id', $productA->id)->firstOrFail();
-    expect((float) $lineA->counted_quantity)->toEqual(60.0);
-    expect((float) $lineA->variance_quantity)->toEqual(0.0);
+    expect((float) $lineA->counted_quantity)->toEqual(55.0);
+    expect((float) $lineA->variance_quantity)->toEqual(-5.0);
+    expect((float) $productA->fresh()->stock_quantity)->toEqual(60.0);
 });
 
-it('melaporkan kesalahan per baris untuk SKU tak ditemukan, stok kosong, negatif, duplikat, dan bukan angka', function () {
+it('melaporkan kesalahan per baris untuk SKU tak ditemukan, negatif, duplikat, dan bukan angka; baris kosong dilewati', function () {
     Storage::fake('local');
     [$store, $user] = makeImportOpnameStore();
     $productA = makeImportOpnameProduct($store, ['sku' => 'SKU-A']);
@@ -232,13 +234,17 @@ it('melaporkan kesalahan per baris untuk SKU tak ditemukan, stok kosong, negatif
     $show->assertOk()
         ->assertJsonPath('status', 'completed')
         ->assertJsonPath('can_apply', false)
-        ->assertJsonPath('summary.error_rows', 5)
+        ->assertJsonPath('summary.error_rows', 4)
+        ->assertJsonPath('summary.blank_rows', 1)
         ->assertJsonPath('summary.matched_rows', 0);
+
+    expect($show->json('problems'))->toHaveCount(4);
+    expect($show->json('problems.0.counted'))->toBe('5');
 
     $errors = $show->json('errors');
     expect(implode("\n", $errors))
         ->toContain('Baris 2:')->toContain('SKU «SKU-X» tidak ditemukan')
-        ->toContain('Baris 3:')->toContain('kolom Stok Fisik wajib diisi')
+        ->not->toContain('Baris 3:')
         ->toContain('Baris 4:')->toContain('kolom Stok Fisik tidak boleh negatif')
         ->toContain('Baris 5:')->toContain('SKU «SKU-B» sudah diisi pada baris lain')
         ->toContain('Baris 6:')->toContain('kolom Stok Fisik harus berupa angka');
@@ -297,7 +303,7 @@ it('menerapkan hasil preview ke lembar hitung setelah konfirmasi', function () {
     expect((float) $document->fresh()->total_variance_value)->toEqual(-27000.0);
 });
 
-it('menolak menerapkan berkas yang masih memiliki kesalahan', function () {
+it('tetap mengisi baris valid walau berkas memiliki baris bermasalah', function () {
     Storage::fake('local');
     [$store, $user] = makeImportOpnameStore();
     $productA = makeImportOpnameProduct($store, ['sku' => 'SKU-A']);
@@ -312,12 +318,11 @@ it('menolak menerapkan berkas yang masih memiliki kesalahan', function () {
     uploadOpnameCsv($user, $document, $csv)->assertRedirect();
     $import = latestOpnameImport();
 
-    $this->post(route('stock-opnames.imports.apply', [$document, $import]))
-        ->assertSessionHasErrors('import');
-
-    expect($import->refresh()->isApplied())->toBeFalse();
+    expect($import->refresh()->isApplied())->toBeTrue();
     expect((float) $document->lines()->where('product_id', $productA->id)->firstOrFail()->counted_quantity)
-        ->toEqual(60.0);
+        ->toEqual(55.0);
+    expect($import->report['problems'][0]['sku'])->toBe('SKU-HILANG');
+    expect($document->lines()->where('product_id', $productB->id)->firstOrFail()->counted_quantity)->toBeNull();
 });
 
 it('menolak menerapkan berkas yang sudah pernah diterapkan', function () {
@@ -344,15 +349,16 @@ it('menolak menerapkan hasil saat sesi sudah final', function () {
 
     $csv = importOpnameCsv([['SKU-A', '', '', '', '', '60', '55', '']]);
 
+    \Illuminate\Support\Facades\Queue::fake();
     uploadOpnameCsv($user, $document, $csv)->assertRedirect();
     $import = latestOpnameImport();
 
     $document->update(['status' => StockAdjustment::STATUS_POSTED]);
-
-    $this->post(route('stock-opnames.imports.apply', [$document, $import]))
-        ->assertSessionHasErrors('import');
+    (new \App\Jobs\ProcessStockOpnameImport($import->id))->handle(app(\App\Services\StockOpnameImportService::class));
 
     expect($import->refresh()->isApplied())->toBeFalse();
+    $this->post(route('stock-opnames.imports.apply', [$document, $import]))
+        ->assertSessionHasErrors('import');
 });
 
 it('mengabaikan produk yang tidak ada di berkas secara bawaan', function () {
@@ -373,8 +379,8 @@ it('mengabaikan produk yang tidak ada di berkas secara bawaan', function () {
         ->assertJsonPath('summary.missing_lines', 0);
 
     expect($show->json('preview'))->toHaveCount(1);
-    expect((float) $document->lines()->where('product_id', $productB->id)->firstOrFail()->counted_quantity)
-        ->toEqual(40.0);
+    expect($document->lines()->where('product_id', $productB->id)->firstOrFail()->counted_quantity)
+        ->toBeNull();
 });
 
 it('menganggap stok 0 untuk produk yang tidak ada di berkas pada mode zero', function () {
@@ -446,11 +452,8 @@ it('mencocokkan baris lewat Nama Produk saat SKU dan Barcode kosong', function (
 
     $show = $this->getJson(route('stock-opnames.imports.show', [$document, $import]));
     $show->assertOk()
-        ->assertJsonPath('can_apply', true)
         ->assertJsonPath('summary.matched_rows', 2)
         ->assertJsonPath('summary.error_rows', 0);
-
-    $this->post(route('stock-opnames.imports.apply', [$document, $import]))->assertRedirect();
 
     $lineA = $document->lines()->where('product_id', $productA->id)->firstOrFail();
     expect((float) $lineA->counted_quantity)->toEqual(55.0);
@@ -538,4 +541,40 @@ it('melaporkan kesalahan saat Nama Produk tidak ditemukan atau kolom identitas k
     expect($errors)
         ->toContain('Baris 2:')->toContain('Nama Produk «Kurma Khalas» tidak ditemukan')
         ->toContain('Baris 3:')->toContain('kolom SKU atau Barcode wajib diisi');
+});
+
+it('mencocokkan lewat ID Baris walau nama produk di berkas sudah diubah', function () {
+    Storage::fake('local');
+    [$store, $user] = makeImportOpnameStore();
+    $product = makeImportOpnameProduct($store, ['name' => 'KHALAS OTHMANIA 10KG', 'stock_quantity' => 12]);
+    $document = openImportOpnameSession($user, $store, [$product]);
+    $lineId = $document->lines()->firstOrFail()->id;
+
+    $csv = importOpnameCsv(
+        [[(string) $lineId, '', '', '', 'khalas al othmaniah/alfursan', '', 'pcs', '12', '10', '']],
+        ['ID Baris', 'Kategori', 'SKU', 'Barcode', 'Nama Produk', 'Varian', 'Satuan', 'Stok Sistem', 'Stok Fisik', 'Catatan'],
+    );
+
+    uploadOpnameCsv($user, $document, $csv)->assertRedirect();
+
+    expect(latestOpnameImport()->error_rows)->toBe(0);
+    expect((float) $document->lines()->firstOrFail()->counted_quantity)->toEqual(10.0);
+});
+
+it('menyembunyikan Stok Sistem di lembar hitung sesi hitung buta dan menyertakan ID Baris', function () {
+    [$store, $user] = makeImportOpnameStore();
+    $product = makeImportOpnameProduct($store, ['sku' => 'SKU-A', 'stock_quantity' => 60]);
+    $document = openImportOpnameSession($user, $store, [$product]);
+    $document->update(['blind_count' => true]);
+
+    $response = $this->actingAs($user)->get(route('stock-opnames.template', $document));
+    $response->assertSuccessful();
+
+    $rows = (new StockOpnameSheetImport)->rowsFrom($response->getFile()->getPathname());
+    $header = array_map([ProductImportSchema::class, 'normalizeHeader'], $rows[0]);
+
+    expect($header)->toContain('id_baris')
+        ->and($header)->toContain('kategori')
+        ->and($header)->not->toContain('stok_sistem');
+    expect((int) $rows[1][array_search('id_baris', $header, true)])->toBe($document->lines()->firstOrFail()->id);
 });

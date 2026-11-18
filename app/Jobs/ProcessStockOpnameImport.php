@@ -37,6 +37,13 @@ class ProcessStockOpnameImport implements ShouldQueue
 
         try {
             $service->process($import);
+
+            // Langsung isi lembar hitung dengan baris yang valid; baris bermasalah
+            // tetap tercatat di laporan sebagai "Perlu dicek".
+            $import->refresh();
+            if (($import->report['preview'] ?? []) !== [] && $import->stockAdjustment?->isDraft()) {
+                $service->apply($import);
+            }
         } catch (\Throwable $e) {
             if (! $e instanceof \RuntimeException) {
                 report($e);

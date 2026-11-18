@@ -15,6 +15,7 @@ use App\Support\Accounting\JournalPoster;
 use App\Support\AdjustmentStockOperations;
 use App\Support\BatchTracking;
 use App\Support\InventoryCosting;
+use App\Support\OpnameCounting;
 use App\Support\ProductQuantity;
 use App\Support\StockAdjustmentApproval;
 use App\Support\StorePlanLimits;
@@ -141,6 +142,7 @@ class StockOpnameController extends Controller
                 'status' => StockAdjustment::STATUS_DRAFT,
                 'notes' => $validated['notes'] ?? null,
                 'counted_at' => now(),
+                'blind_count' => (bool) ($validated['blind_count'] ?? false),
                 'created_by' => $user->id,
             ]);
 
@@ -155,7 +157,7 @@ class StockOpnameController extends Controller
                             'product_id' => $product->id,
                             'product_variant_id' => $variant->id,
                             'system_quantity' => $systemQty,
-                            'counted_quantity' => $systemQty,
+                            'counted_quantity' => null,
                             'variance_quantity' => '0.0000',
                             'unit_cost' => InventoryCosting::currentAverageCost($product),
                             'variance_value' => '0.00',
@@ -172,7 +174,7 @@ class StockOpnameController extends Controller
                     'stock_adjustment_id' => $document->id,
                     'product_id' => $product->id,
                     'system_quantity' => $systemQty,
-                    'counted_quantity' => $systemQty,
+                    'counted_quantity' => null,
                     'variance_quantity' => '0.0000',
                     'unit_cost' => InventoryCosting::currentAverageCost($product),
                     'variance_value' => '0.00',
@@ -199,7 +201,8 @@ class StockOpnameController extends Controller
         $this->assertOwnedOpname($store, $stockOpname);
 
         $stockOpname->load([
-            'lines.product:id,name,sku,unit,allows_decimal,stock_quantity',
+            'lines.product:id,name,sku,barcode,unit,allows_decimal,stock_quantity,product_category_id',
+            'lines.product.productCategory:id,name',
             'lines.productVariant:id,product_id,name,sku',
             'createdBy:id,name',
             'postedBy:id,name',
@@ -219,6 +222,7 @@ class StockOpnameController extends Controller
             'canDelete' => $stockOpname->isCancelled() && $canReview,
             'canApprove' => $isPending && $canReview && ! $blockedBySegregation,
             'segregationBlocked' => $isPending && $canReview && $blockedBySegregation,
+            'excelMovedLines' => $stockOpname->isDraft() ? $this->excelLinesMovedSinceOpen($stockOpname) : [],
             'imports' => $stockOpname->imports()
                 ->latest()
                 ->limit(5)
@@ -251,7 +255,8 @@ class StockOpnameController extends Controller
         $validated = $request->validate([
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.id' => ['required', 'integer'],
-            'lines.*.counted_quantity' => ['required', 'numeric', 'min:0'],
+            // Kosong = belum dihitung.
+            'lines.*.counted_quantity' => ['nullable', 'numeric', 'min:0'],
             'lines.*.line_notes' => ['nullable', 'string', 'max:255'],
         ]);
 
@@ -264,21 +269,38 @@ class StockOpnameController extends Controller
                     continue;
                 }
 
-                $counted = ProductQuantity::normalizeStorageAmount($line->product, $row['counted_quantity']);
-                $variance = AdjustmentStockOperations::variance($counted, (string) $line->system_quantity);
+                $raw = $row['counted_quantity'] ?? null;
+                $current = $line->counted_quantity === null
+                    ? null
+                    : bcadd((string) $line->counted_quantity, '0', ProductQuantity::SCALE);
 
-                $line->update([
-                    'counted_quantity' => $counted,
-                    'variance_quantity' => $variance,
-                    'variance_value' => InventoryCosting::extendedCost($variance, (string) $line->unit_cost),
-                    'line_notes' => $row['line_notes'] ?? $line->line_notes,
-                ]);
+                if ($raw === null || $raw === '') {
+                    if ($current !== null) {
+                        OpnameCounting::clear($line);
+                    }
+                } else {
+                    $counted = ProductQuantity::normalizeStorageAmount($line->product, $raw);
+                    // Waktu hitung hanya dicatat ulang bila angkanya berubah.
+                    if ($current === null || bccomp($current, $counted, ProductQuantity::SCALE) !== 0) {
+                        OpnameCounting::record($stockOpname, $line, $counted, now());
+                    }
+                }
+
+                $note = $row['line_notes'] ?? null;
+                if ((string) $note !== (string) $line->line_notes) {
+                    $line->update(['line_notes' => $note !== '' ? $note : null]);
+                }
             }
 
             $stockOpname->update([
                 'total_variance_value' => (string) $stockOpname->lines()->sum('variance_value'),
             ]);
         });
+
+        // Simpan otomatis dari halaman sesi tidak perlu memunculkan notifikasi tiap kali.
+        if ($request->boolean('autosave')) {
+            return redirect()->route('stock-opnames.show', $stockOpname);
+        }
 
         return redirect()->route('stock-opnames.show', $stockOpname)
             ->with('success', 'Hasil hitung tersimpan. Sesi dapat dilanjutkan kapan saja.');
@@ -302,7 +324,7 @@ class StockOpnameController extends Controller
 
         try {
             return Excel::download(
-                new StockOpnameTemplateExport($stockOpname->id, BatchTracking::enabled($store)),
+                new StockOpnameTemplateExport($stockOpname->id, BatchTracking::enabled($store), (bool) $stockOpname->blind_count),
                 $filename,
                 \Maatwebsite\Excel\Excel::XLSX,
                 [
@@ -399,6 +421,7 @@ class StockOpnameController extends Controller
 
         return response()->json(array_merge($this->importPayload($import), [
             'errors' => $report['errors'] ?? [],
+            'problems' => $report['problems'] ?? [],
             'preview' => array_slice($preview, 0, self::IMPORT_PREVIEW_LIMIT),
             'preview_total' => count($preview),
         ]));
@@ -454,14 +477,29 @@ class StockOpnameController extends Controller
 
         StorePlanLimits::assertAdvancedRetail($store, 'Fitur stock opname tersedia mulai paket GrowUp.');
 
+        // Produk yang belum dihitung: dibiarkan (stok tidak berubah) atau dianggap habis.
+        $uncountedMode = $request->validate([
+            'uncounted_mode' => ['nullable', Rule::in(['ignore', 'zero'])],
+        ])['uncounted_mode'] ?? 'ignore';
+
         try {
-            $document = DB::transaction(function () use ($user, $store, $stockOpname) {
+            $document = DB::transaction(function () use ($user, $store, $stockOpname, $uncountedMode) {
                 $document = StockAdjustment::query()
                     ->whereKey($stockOpname->id)
                     ->lockForUpdate()
                     ->firstOrFail();
 
                 $document->assertCanTransitionTo(StockAdjustment::STATUS_POSTED);
+
+                $uncounted = $document->lines()->whereNull('counted_quantity')->get();
+                if ($uncountedMode === 'ignore' && $uncounted->count() === $document->lines()->count()) {
+                    throw new \RuntimeException('Belum ada produk yang dihitung. Isi jumlah fisik minimal satu produk sebelum posting.');
+                }
+                if ($uncountedMode === 'zero') {
+                    foreach ($uncounted as $line) {
+                        OpnameCounting::recordZeroNow($document, $line);
+                    }
+                }
 
                 // Nilai selisih sudah dihitung saat draft; dipakai menentukan
                 // apakah dokumen perlu ditahan untuk persetujuan.
@@ -724,6 +762,48 @@ class StockOpnameController extends Controller
     /**
      * Produk yang layak masuk lembar hitung (lihat aturan 3.4).
      */
+    /**
+     * Baris yang diisi dari berkas Excel (waktu hitungnya tidak diketahui) padahal stok
+     * produknya bergerak sejak sesi dibuka. Ditampilkan sebagai peringatan sebelum posting.
+     *
+     * @return list<array{line_id: int, name: string, movement: string}>
+     */
+    private function excelLinesMovedSinceOpen(StockAdjustment $document): array
+    {
+        if ($document->counted_at === null) {
+            return [];
+        }
+
+        $excelLines = $document->lines
+            ->filter(fn (StockAdjustmentLine $l) => $l->counted_quantity !== null && $l->counted_at === null && $l->product_batch_id === null);
+        if ($excelLines->isEmpty()) {
+            return [];
+        }
+
+        $moves = \App\Models\StockMovement::query()
+            ->where('store_id', $document->store_id)
+            ->whereIn('product_id', $excelLines->pluck('product_id')->unique())
+            ->where('created_at', '>', $document->counted_at)
+            ->selectRaw('product_id, product_variant_id, SUM(quantity_change) as moved')
+            ->groupBy('product_id', 'product_variant_id')
+            ->get()
+            ->keyBy(fn ($m) => $m->product_id.'-'.($m->product_variant_id ?? 0));
+
+        return $excelLines
+            ->map(function (StockAdjustmentLine $l) use ($moves) {
+                $moved = (float) ($moves->get($l->product_id.'-'.($l->product_variant_id ?? 0))?->moved ?? 0);
+
+                return abs($moved) < 0.00001 ? null : [
+                    'line_id' => $l->id,
+                    'name' => trim(($l->product?->name ?? '').($l->productVariant ? ' — '.$l->productVariant->name : '')),
+                    'movement' => (string) $moved,
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+    }
+
     private function countableProductsQuery($store)
     {
         return $store->products()
@@ -776,7 +856,6 @@ class StockOpnameController extends Controller
             'summary' => $report['summary'] ?? null,
             'can_apply' => $import->isCompleted()
                 && ! $import->isApplied()
-                && ($report['errors'] ?? []) === []
                 && ($report['preview'] ?? []) !== [],
         ];
     }

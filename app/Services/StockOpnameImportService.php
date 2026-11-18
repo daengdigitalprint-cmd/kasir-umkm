@@ -8,6 +8,7 @@ use App\Models\StockAdjustmentLine;
 use App\Models\StockOpnameImport;
 use App\Support\AdjustmentStockOperations;
 use App\Support\InventoryCosting;
+use App\Support\OpnameCounting;
 use App\Support\ProductImportSchema;
 use App\Support\ProductQuantity;
 use Illuminate\Support\Collection;
@@ -41,6 +42,8 @@ class StockOpnameImportService
 
     private const COL_NOTE = 'catatan';
 
+    private const COL_LINE_ID = 'id_baris';
+
     /**
      * Validasi berkas lalu susun laporan preview selisih tanpa menulis data apa pun.
      *
@@ -73,8 +76,9 @@ class StockOpnameImportService
             throw new \RuntimeException('Kolom "Stok Fisik" tidak ditemukan pada baris header. Gunakan lembar hitung yang diunduh dari sesi ini.');
         }
 
-        if (! isset($headerMap[ProductImportSchema::COL_SKU]) && ! isset($headerMap[ProductImportSchema::COL_BARCODE])) {
-            throw new \RuntimeException('Kolom "SKU" dan "Barcode" tidak ditemukan pada baris header. Gunakan lembar hitung yang diunduh dari sesi ini.');
+        if (! isset($headerMap[self::COL_LINE_ID]) && ! isset($headerMap[ProductImportSchema::COL_SKU])
+            && ! isset($headerMap[ProductImportSchema::COL_BARCODE]) && ! isset($headerMap[ProductImportSchema::COL_NAME])) {
+            throw new \RuntimeException('Kolom pengenal produk (ID Baris, SKU, Barcode, atau Nama Produk) tidak ditemukan pada baris header. Gunakan lembar hitung yang diunduh dari sesi ini.');
         }
 
         $dataRows = [];
@@ -108,13 +112,25 @@ class StockOpnameImportService
         $index = $this->buildLineIndex($lines);
 
         $errors = [];
+        $problems = [];
         $preview = [];
         $matchedLineIds = [];
         $matchedRows = 0;
         $errorRows = 0;
+        $blankRows = 0;
         $processed = 0;
 
         foreach ($dataRows as $rowNumber => $row) {
+            $processed++;
+
+            // Stok Fisik kosong = produk ini belum/tidak dihitung, bukan kesalahan.
+            $rawCounted = $this->rawValue($row, $headerMap, StockOpnameSheetImport::COL_COUNTED);
+            if ($rawCounted === null || (is_string($rawCounted) && trim($rawCounted) === '')) {
+                $blankRows++;
+
+                continue;
+            }
+
             $rowErrors = [];
             $item = $this->prepareRow($index, $matchedLineIds, $headerMap, $row, (int) $rowNumber, $rowErrors);
 
@@ -123,12 +139,23 @@ class StockOpnameImportService
                 foreach ($rowErrors as $message) {
                     $errors[] = "Baris {$rowNumber}: {$message}";
                 }
+                if (count($problems) < self::MAX_REPORTED_ERRORS) {
+                    $problems[] = [
+                        'row' => (int) $rowNumber,
+                        'message' => implode(' ', $rowErrors),
+                        'name' => $this->stringValue($row, $headerMap, ProductImportSchema::COL_NAME),
+                        'variant' => $this->stringValue($row, $headerMap, self::COL_VARIANT),
+                        'sku' => $this->stringValue($row, $headerMap, ProductImportSchema::COL_SKU)
+                            ?? $this->stringValue($row, $headerMap, ProductImportSchema::COL_BARCODE),
+                        'counted' => is_scalar($rawCounted) ? (string) $rawCounted : null,
+                        'note' => $this->stringValue($row, $headerMap, self::COL_NOTE),
+                    ];
+                }
             } elseif ($item !== null) {
                 $matchedRows++;
                 $preview[] = $item;
             }
 
-            $processed++;
             if ($processed % self::PROGRESS_STEP === 0) {
                 $import->update(['processed_rows' => $processed]);
             }
@@ -158,6 +185,7 @@ class StockOpnameImportService
                     'data_rows' => count($dataRows),
                     'matched_rows' => $matchedRows,
                     'error_rows' => $errorRows,
+                    'blank_rows' => $blankRows,
                     'missing_lines' => $missingLines,
                     'counted_lines' => count($preview),
                     'positive_value' => $positive,
@@ -166,6 +194,7 @@ class StockOpnameImportService
                 ],
                 'preview' => $preview,
                 'errors' => $this->capErrors($errors),
+                'problems' => $problems,
             ],
         ]);
     }
@@ -186,11 +215,8 @@ class StockOpnameImportService
             throw new \RuntimeException('Hasil berkas ini sudah pernah diterapkan ke lembar hitung.');
         }
 
+        // Baris bermasalah tidak menghalangi baris lain; daftarnya tampil sebagai "Perlu dicek".
         $report = $import->report ?? [];
-        if (($report['errors'] ?? []) !== []) {
-            $errorRows = (int) ($report['summary']['error_rows'] ?? count($report['errors']));
-            throw new \RuntimeException("Masih ada {$errorRows} baris bermasalah pada berkas ini. Perbaiki lalu unggah ulang sebelum menerapkan hasil.");
-        }
 
         $preview = $report['preview'] ?? [];
         if ($preview === []) {
@@ -221,14 +247,13 @@ class StockOpnameImportService
                     }
 
                     $counted = ProductQuantity::normalizeStorageAmount($line->product, $row['counted_quantity']);
-                    $variance = AdjustmentStockOperations::variance($counted, (string) $line->system_quantity);
 
-                    $line->update([
-                        'counted_quantity' => $counted,
-                        'variance_quantity' => $variance,
-                        'variance_value' => InventoryCosting::extendedCost($variance, (string) $line->unit_cost),
-                        'line_notes' => $row['note'] ?? $line->line_notes,
-                    ]);
+                    // Waktu hitung dari berkas tidak diketahui: dianggap saat sesi dibuka
+                    // (sesuai "Stok Sistem" yang tercetak di lembar hitung).
+                    OpnameCounting::record($document, $line, $counted, null);
+                    if (($row['note'] ?? null) !== null) {
+                        $line->update(['line_notes' => $row['note']]);
+                    }
                 }
             }
 
@@ -246,12 +271,14 @@ class StockOpnameImportService
      */
     private function buildLineIndex(Collection $lines): array
     {
-        $index = ['bySku' => [], 'byBarcode' => [], 'byBatch' => [], 'byName' => []];
+        $index = ['byId' => [], 'bySku' => [], 'byBarcode' => [], 'byBatch' => [], 'byName' => []];
 
         foreach ($lines as $line) {
             if (! $line->product) {
                 continue;
             }
+
+            $index['byId'][(string) $line->id] = [$line];
 
             $this->pushIndex($index['bySku'], $line->productVariant?->sku ?: $line->product->sku, $line);
             $this->pushIndex($index['byBarcode'], $line->product->barcode, $line);
@@ -346,6 +373,22 @@ class StockOpnameImportService
         $batch = $this->stringValue($row, $headerMap, ProductImportSchema::COL_BATCH_CODE);
         $variantName = $this->stringValue($row, $headerMap, self::COL_VARIANT);
         $byName = false;
+
+        // ID Baris dari lembar hitung sesi ini paling pasti; nama boleh sudah berubah.
+        $lineId = $this->stringValue($row, $headerMap, self::COL_LINE_ID);
+        if ($lineId !== null && is_numeric($lineId)) {
+            $byIdLine = $index['byId'][(string) (int) $lineId][0] ?? null;
+            if ($byIdLine !== null) {
+                if (isset($matchedLineIds[$byIdLine->id])) {
+                    $errors[] = "produk «{$byIdLine->product?->name}» sudah diisi pada baris lain. Gabungkan menjadi satu baris.";
+
+                    return null;
+                }
+                $matchedLineIds[$byIdLine->id] = true;
+
+                return $byIdLine;
+            }
+        }
 
         if ($batch !== null) {
             $label = "Kode Batch «{$batch}»";

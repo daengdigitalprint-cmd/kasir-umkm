@@ -6,62 +6,80 @@ use App\Models\StockAdjustmentLine;
 use Illuminate\Database\Eloquent\Builder;
 use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\WithChunkReading;
+use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithStyles;
+use Maatwebsite\Excel\Events\AfterSheet;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 /**
  * Lembar hitung stock opname untuk satu sesi.
  *
- * Kolom `Stok Fisik` dan `Catatan` sengaja dibiarkan kosong untuk diisi
- * petugas saat menghitung di gudang. Nilai `Stok Sistem` adalah snapshot sesi
- * (bukan stok berjalan) supaya selisih tetap konsisten walau ada transaksi
- * selama proses hitung berlangsung.
- *
- * Pencocokan saat unggah memakai SKU/Barcode/Kode Batch; bila kolom tersebut
- * kosong, baris dicocokkan lewat Nama Produk + Varian + Satuan. Kolom nama
- * dan varian tetap ditampilkan agar mudah dibandingkan dengan hasil hitung.
+ * - Kolom pertama "ID Baris" disembunyikan dan dipakai untuk mencocokkan saat unggah,
+ *   sehingga nama produk boleh berubah/terketik ulang tanpa membuat baris gagal cocok.
+ * - Urut per kategori lalu nama, supaya penghitung tidak bolak-balik antar rak.
+ * - Kolom "Stok Sistem" tidak dicetak bila sesi memakai hitung buta.
+ * - "Stok Fisik" yang dibiarkan kosong = belum dihitung (bukan error).
  */
-class StockOpnameTemplateExport implements FromQuery, WithChunkReading, WithHeadings, WithMapping, WithStyles
+class StockOpnameTemplateExport implements FromQuery, WithChunkReading, WithEvents, WithHeadings, WithMapping, WithStyles
 {
     public function __construct(
         private readonly int $stockAdjustmentId,
         private readonly bool $withBatch = false,
+        private readonly bool $blindCount = false,
     ) {}
 
     public function query(): Builder
     {
         return StockAdjustmentLine::query()
-            ->where('stock_adjustment_id', $this->stockAdjustmentId)
-            ->with(['product', 'productVariant', 'productBatch'])
-            ->orderBy('id');
+            ->select('stock_adjustment_lines.*')
+            ->leftJoin('products', 'products.id', '=', 'stock_adjustment_lines.product_id')
+            ->leftJoin('product_categories', 'product_categories.id', '=', 'products.product_category_id')
+            ->where('stock_adjustment_lines.stock_adjustment_id', $this->stockAdjustmentId)
+            ->with(['product.productCategory', 'productVariant', 'productBatch'])
+            // Produk tanpa kategori di akhir.
+            ->orderByRaw('product_categories.name IS NULL')
+            ->orderBy('product_categories.name')
+            ->orderBy('products.name')
+            ->orderBy('stock_adjustment_lines.id');
     }
 
     /** @return list<string> */
     public function headings(): array
     {
-        $headings = ['SKU', 'Barcode', 'Nama Produk', 'Varian', 'Satuan', 'Stok Sistem', 'Stok Fisik', 'Catatan'];
+        $headings = ['ID Baris', 'Kategori', 'SKU', 'Barcode', 'Nama Produk', 'Varian', 'Satuan'];
+        if (! $this->blindCount) {
+            $headings[] = 'Stok Sistem';
+        }
+        $headings[] = 'Stok Fisik';
+        $headings[] = 'Catatan';
 
         return $this->withBatch ? array_merge($headings, ['Kode Batch']) : $headings;
     }
 
-    /** @return list<string> */
+    /** @return list<string|int> */
     public function map($line): array
     {
         $product = $line->product;
         $variant = $line->productVariant;
 
         $row = [
+            $line->id,
+            $product?->productCategory?->name ?? '',
             $variant?->sku ?? $product?->sku ?? '',
             $product?->barcode ?? '',
             $product?->name ?? '',
             $variant?->name ?? '',
             $product?->unit ?? '',
-            (string) $line->system_quantity,
-            '',
-            '',
         ];
+        if (! $this->blindCount) {
+            $row[] = (string) (float) $line->system_quantity;
+        }
+        // Yang sudah dihitung ikut dicetak, supaya lembar bisa dilanjutkan.
+        $row[] = $line->counted_quantity === null ? '' : (string) (float) $line->counted_quantity;
+        $row[] = $line->line_notes ?? '';
 
         if ($this->withBatch) {
             $row[] = $line->batch_code ?? $line->productBatch?->batch_code ?? '';
@@ -78,11 +96,41 @@ class StockOpnameTemplateExport implements FromQuery, WithChunkReading, WithHead
     public function styles(Worksheet $sheet): array
     {
         // Lebar kolom tetap: autosize lambat untuk lembar dengan ribuan baris.
-        $widths = ['A' => 22, 'B' => 20, 'C' => 42, 'D' => 22, 'E' => 12, 'F' => 14, 'G' => 14, 'H' => 28, 'I' => 20];
-        foreach ($widths as $column => $width) {
-            $sheet->getColumnDimension($column)->setWidth($width);
+        $widths = [8, 20, 18, 18, 42, 20, 10];
+        if (! $this->blindCount) {
+            $widths[] = 13;
+        }
+        $widths[] = 13;
+        $widths[] = 28;
+        if ($this->withBatch) {
+            $widths[] = 20;
+        }
+
+        foreach ($widths as $i => $width) {
+            $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($i + 1))->setWidth($width);
         }
 
         return [1 => ['font' => ['bold' => true]]];
+    }
+
+    /** @return array<class-string, callable> */
+    public function registerEvents(): array
+    {
+        return [
+            AfterSheet::class => function (AfterSheet $event): void {
+                $sheet = $event->sheet->getDelegate();
+                $lastColumn = $sheet->getHighestColumn();
+                $lastRow = $sheet->getHighestRow();
+
+                $sheet->getColumnDimension('A')->setVisible(false);
+                $sheet->freezePane('A2');
+                $sheet->setAutoFilter("A1:{$lastColumn}{$lastRow}");
+
+                // Sorot kolom yang perlu diisi.
+                $countedColumn = Coordinate::stringFromColumnIndex($this->blindCount ? 8 : 9);
+                $sheet->getStyle("{$countedColumn}1:{$countedColumn}{$lastRow}")
+                    ->getFill()->setFillType('solid')->getStartColor()->setRGB('FFF7D6');
+            },
+        ];
     }
 }

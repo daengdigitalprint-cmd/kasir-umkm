@@ -12,7 +12,7 @@ const props = defineProps<{
 
 const form = useForm({
     notes: '',
-    blind_count: true,
+    blind_count: false,
     category_ids: [] as number[],
 });
 
@@ -96,7 +96,8 @@ function submit() {
                             </span>
                             <span class="mt-1 block text-sm text-slate-600">
                                 Disarankan. Bila petugas melihat angka sistem, ia cenderung menyalin angka itu alih-alih menghitung
-                                sungguhan, sehingga selisih yang sebenarnya tidak pernah ketahuan.
+                                sungguhan, sehingga selisih yang sebenarnya tidak pernah ketahuan. Kolom "Stok Sistem" juga tidak
+                                dicetak di lembar hitung Excel.
                             </span>
                         </span>
                     </label>

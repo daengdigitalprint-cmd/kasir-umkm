@@ -48,6 +48,7 @@ class StockAdjustment extends Model
         'status',
         'notes',
         'counted_at',
+        'blind_count',
         'created_by',
         'approved_by',
         'approved_at',
@@ -63,6 +64,7 @@ class StockAdjustment extends Model
     {
         return [
             'counted_at' => 'datetime',
+            'blind_count' => 'boolean',
             'approved_at' => 'datetime',
             'posted_at' => 'datetime',
             'cancelled_at' => 'datetime',
