@@ -44,7 +44,8 @@ class AiAlert extends Model
 
         switch ($this->type) {
             case 'low_stock':
-                return '/stock-overview?low_stock=1';
+                // Peringatan memuat stok di bawah minimum DAN stok habis yang masih laku.
+                return '/stock-overview?stock=restock';
 
             case 'transaction_anomaly':
                 // Detektor memeriksa 24 jam sebelum peringatan dibuat.

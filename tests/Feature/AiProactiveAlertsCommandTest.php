@@ -295,7 +295,7 @@ it('membuka halaman detail saat peringatan diklik dan menandainya dibaca', funct
 
     $this->actingAs($user)
         ->post("/ai/alerts/{$alert->id}/open")
-        ->assertRedirect('/stock-overview?low_stock=1');
+        ->assertRedirect('/stock-overview?stock=restock');
 
     expect($alert->fresh()->is_read)->toBeTrue();
 });

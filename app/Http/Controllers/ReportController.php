@@ -965,7 +965,12 @@ class ReportController extends Controller
 
         $search = $request->get('search', '');
         $categoryId = $request->get('category_id');
-        $showLowStock = $request->boolean('low_stock', false);
+        // Filter status stok: low (menipis), out (habis), restock (keduanya —
+        // dipakai tautan peringatan "Stok kritis"). `low_stock=1` = tautan lama.
+        $stockFilter = $request->get('stock');
+        if (! in_array($stockFilter, ['low', 'out', 'restock'], true)) {
+            $stockFilter = $request->boolean('low_stock') ? 'low' : null;
+        }
 
         $products = $selectedStore->products()
             ->where('track_stock', true)
@@ -978,9 +983,17 @@ class ReportController extends Controller
             ->when($categoryId, function ($q, $categoryId) {
                 $q->where('product_category_id', $categoryId);
             })
-            ->when($showLowStock, function ($q) {
+            ->when($stockFilter === 'low', function ($q) {
                 $q->whereColumn('stock_quantity', '<=', 'min_stock_level')
                     ->where('stock_quantity', '>', 0);
+            })
+            ->when($stockFilter === 'out', function ($q) {
+                $q->where(fn ($q2) => $q2->where('stock_quantity', '<=', 0)->orWhereNull('stock_quantity'));
+            })
+            ->when($stockFilter === 'restock', function ($q) {
+                $q->where(fn ($q2) => $q2->whereColumn('stock_quantity', '<=', 'min_stock_level')
+                    ->orWhere('stock_quantity', '<=', 0)
+                    ->orWhereNull('stock_quantity'));
             })
             ->orderBy('name')
             ->paginate(25)
@@ -990,8 +1003,8 @@ class ReportController extends Controller
             ->where('track_stock', true)
             ->selectRaw('
                 COUNT(*) as total,
-                SUM(CASE WHEN stock_quantity > 0 THEN 1 ELSE 0 END) as in_stock,
-                SUM(CASE WHEN stock_quantity <= 0 THEN 1 ELSE 0 END) as out_of_stock,
+                SUM(CASE WHEN stock_quantity > 0 AND stock_quantity > COALESCE(min_stock_level, 0) THEN 1 ELSE 0 END) as in_stock,
+                SUM(CASE WHEN stock_quantity <= 0 OR stock_quantity IS NULL THEN 1 ELSE 0 END) as out_of_stock,
                 SUM(CASE WHEN stock_quantity > 0 AND stock_quantity <= min_stock_level THEN 1 ELSE 0 END) as low_stock,
                 COALESCE(SUM(stock_quantity), 0) as total_qty,
                 COALESCE(SUM(stock_quantity * COALESCE(average_cost, 0)), 0) as total_value
@@ -1024,7 +1037,7 @@ class ReportController extends Controller
             'categories' => $categories,
             'search' => $search,
             'categoryId' => $categoryId ? (int) $categoryId : null,
-            'showLowStock' => $showLowStock,
+            'stockFilter' => $stockFilter,
             'stores' => $accessibleStores->map(fn ($s) => [
                 'id' => $s->id,
                 'name' => $s->name,

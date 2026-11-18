@@ -53,12 +53,14 @@ const props = defineProps<{
     selectedStoreId: number;
     search: string;
     categoryId: number | null;
-    showLowStock: boolean;
+    stockFilter: StockFilter;
 }>();
+
+type StockFilter = 'low' | 'out' | 'restock' | null;
 
 const searchQuery = ref(props.search);
 const activeCategoryId = ref<number | null>(props.categoryId);
-const activeShowLowStock = ref(props.showLowStock);
+const activeStockFilter = ref<StockFilter>(props.stockFilter);
 const activeStoreId = ref<number>(props.selectedStoreId);
 
 const doSearch = () => {
@@ -66,7 +68,7 @@ const doSearch = () => {
     if (activeStoreId.value) params.store_id = activeStoreId.value;
     if (searchQuery.value) params.search = searchQuery.value;
     if (activeCategoryId.value) params.category_id = activeCategoryId.value;
-    if (activeShowLowStock.value) params.low_stock = '1';
+    if (activeStockFilter.value) params.stock = activeStockFilter.value;
     router.get('/stock-overview', params, { preserveState: true, replace: true });
 };
 
@@ -74,7 +76,7 @@ const changeStore = (id: number) => {
     if (!id || id === activeStoreId.value) return;
     activeStoreId.value = id;
     activeCategoryId.value = null;
-    activeShowLowStock.value = false;
+    activeStockFilter.value = null;
     searchQuery.value = '';
     doSearch();
 };
@@ -84,8 +86,11 @@ const filterByCategory = (id: number | null) => {
     doSearch();
 };
 
-const toggleLowStock = () => {
-    activeShowLowStock.value = !activeShowLowStock.value;
+// "restock" (dari peringatan Stok kritis) menyalakan chip Menipis & Habis sekaligus.
+const isStockChipActive = (f: 'low' | 'out') => activeStockFilter.value === f || activeStockFilter.value === 'restock';
+
+const toggleStockFilter = (f: 'low' | 'out') => {
+    activeStockFilter.value = activeStockFilter.value === f ? null : f;
     doSearch();
 };
 
@@ -270,24 +275,37 @@ const formatStock = (row: Product) => {
                                 <button
                                     type="button"
                                     class="shrink-0 rounded-full px-4 py-1.5 text-sm font-medium border transition-colors"
-                                    :class="activeCategoryId === null && !activeShowLowStock
+                                    :class="activeCategoryId === null && !activeStockFilter
                                         ? 'bg-primary text-white border-primary'
                                         : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'"
-                                    @click="activeCategoryId = null; activeShowLowStock = false; doSearch()"
+                                    @click="activeCategoryId = null; activeStockFilter = null; doSearch()"
                                 >
                                     Semua
                                 </button>
                                 <button
                                     type="button"
                                     class="shrink-0 rounded-full px-4 py-1.5 text-sm font-medium border transition-colors"
-                                    :class="activeShowLowStock
+                                    :class="isStockChipActive('low')
                                         ? 'bg-primary text-white border-primary'
                                         : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'"
-                                    @click="toggleLowStock"
+                                    @click="toggleStockFilter('low')"
                                 >
                                     <span class="flex items-center gap-1">
                                         <AlertTriangle class="h-3.5 w-3.5 text-amber-500" />
-                                        Stok Menipis
+                                        Stok Menipis ({{ stats.low_stock }})
+                                    </span>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="shrink-0 rounded-full px-4 py-1.5 text-sm font-medium border transition-colors"
+                                    :class="isStockChipActive('out')
+                                        ? 'bg-primary text-white border-primary'
+                                        : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'"
+                                    @click="toggleStockFilter('out')"
+                                >
+                                    <span class="flex items-center gap-1">
+                                        <Package class="h-3.5 w-3.5 text-red-500" />
+                                        Stok Habis ({{ stats.out_of_stock }})
                                     </span>
                                 </button>
                                 <button
