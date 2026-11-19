@@ -69,7 +69,7 @@ const goTo = (url: string | null) => {
             pembalik pada periode terbuka.
         </p>
 
-        <Card class="rounded-2xl border-slate-200 shadow-sm overflow-hidden">
+        <Card class="rounded-2xl border-slate-200 shadow-none overflow-hidden">
             <CardContent class="p-0">
                 <div class="divide-y divide-slate-100">
                     <div v-for="entry in props.entries.data" :key="entry.id" class="px-4 py-3">

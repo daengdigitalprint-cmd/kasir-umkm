@@ -47,7 +47,7 @@ const formatDate = (s: string | null) =>
 </script>
 
 <template>
-    <div class="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div class="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-none">
         <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">Identitas Laporan</p>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
             <div>

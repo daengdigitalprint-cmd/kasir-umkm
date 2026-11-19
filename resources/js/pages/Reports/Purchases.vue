@@ -228,7 +228,7 @@ const supplierBarOptions = computed(() => ({
         </div>
 
         <!-- Filter periode -->
-        <Card class="border-0 shadow-md mb-6">
+        <Card class="border border-slate-200 shadow-none mb-6">
             <CardContent class="p-4 md:p-5">
                 <div
                     v-if="props.isOwner && props.accessibleStores && props.accessibleStores.length"
@@ -265,7 +265,7 @@ const supplierBarOptions = computed(() => ({
 
         <!-- KPI -->
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
-            <Card class="border-0 shadow-lg">
+            <Card class="border border-slate-200 shadow-none">
                 <CardContent class="p-4 md:p-5">
                     <div class="p-2.5 bg-amber-50 rounded-2xl w-fit mb-3">
                         <ShoppingBag class="h-5 w-5 text-amber-600" />
@@ -278,7 +278,7 @@ const supplierBarOptions = computed(() => ({
                 </CardContent>
             </Card>
 
-            <Card class="border-0 shadow-lg">
+            <Card class="border border-slate-200 shadow-none">
                 <CardContent class="p-4 md:p-5">
                     <div class="p-2.5 bg-primary/10 rounded-2xl w-fit mb-3">
                         <Receipt class="h-5 w-5 text-primary" />
@@ -291,7 +291,7 @@ const supplierBarOptions = computed(() => ({
                 </CardContent>
             </Card>
 
-            <Card class="border-0 shadow-lg">
+            <Card class="border border-slate-200 shadow-none">
                 <CardContent class="p-4 md:p-5">
                     <div class="p-2.5 bg-sky-50 rounded-2xl w-fit mb-3">
                         <Receipt class="h-5 w-5 text-sky-600" />
@@ -304,7 +304,7 @@ const supplierBarOptions = computed(() => ({
                 </CardContent>
             </Card>
 
-            <Card class="border-0 shadow-lg">
+            <Card class="border border-slate-200 shadow-none">
                 <CardContent class="p-4 md:p-5">
                     <div class="p-2.5 bg-violet-100 rounded-2xl w-fit mb-3">
                         <Truck class="h-5 w-5 text-violet-600" />
@@ -319,7 +319,7 @@ const supplierBarOptions = computed(() => ({
         </div>
 
         <!-- Tren pembelian -->
-        <Card class="border-0 shadow-lg mb-6">
+        <Card class="border border-slate-200 shadow-none mb-6">
             <CardHeader>
                 <CardTitle class="text-lg font-black">Tren pembelian</CardTitle>
                 <CardDescription>
@@ -339,7 +339,7 @@ const supplierBarOptions = computed(() => ({
         </Card>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            <Card class="border-0 shadow-lg min-w-0">
+            <Card class="border border-slate-200 shadow-none min-w-0">
                 <CardHeader>
                     <CardTitle class="text-lg font-black">Pembelian per supplier</CardTitle>
                     <CardDescription>10 supplier dengan nilai pembelian tertinggi</CardDescription>
@@ -352,7 +352,7 @@ const supplierBarOptions = computed(() => ({
                 </CardContent>
             </Card>
 
-            <Card class="border-0 shadow-lg min-w-0">
+            <Card class="border border-slate-200 shadow-none min-w-0">
                 <CardHeader>
                     <CardTitle class="text-lg font-black">Barang paling banyak dibeli</CardTitle>
                     <CardDescription>Berdasarkan nilai pembelian</CardDescription>
@@ -386,7 +386,7 @@ const supplierBarOptions = computed(() => ({
         </div>
 
         <!-- Daftar pembelian -->
-        <Card class="border-0 shadow-lg">
+        <Card class="border border-slate-200 shadow-none">
             <CardHeader>
                 <CardTitle class="flex items-center gap-2">
                     <ShoppingBag class="h-5 w-5 text-slate-600" />

@@ -125,7 +125,7 @@ const goToPage = (url: string | null) => {
         <ReportTabs active-tab="komisi" />
 
         <!-- Filter periode -->
-        <Card class="border-0 shadow-md mb-6">
+        <Card class="border border-slate-200 shadow-none mb-6">
             <CardContent class="p-4 md:p-5">
                 <div
                     v-if="props.isOwner && props.accessibleStores && props.accessibleStores.length"
@@ -171,7 +171,7 @@ const goToPage = (url: string | null) => {
 
         <!-- Summary KPI -->
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
-            <Card class="border-0 shadow-lg">
+            <Card class="border border-slate-200 shadow-none">
                 <CardContent class="p-4 md:p-5">
                     <div class="p-2.5 bg-violet-100 rounded-2xl mb-3">
                         <Wallet class="h-5 w-5 text-violet-600" />
@@ -183,7 +183,7 @@ const goToPage = (url: string | null) => {
                 </CardContent>
             </Card>
 
-            <Card class="border-0 shadow-lg">
+            <Card class="border border-slate-200 shadow-none">
                 <CardContent class="p-4 md:p-5">
                     <div class="p-2.5 bg-primary/10 rounded-2xl mb-3">
                         <Scissors class="h-5 w-5 text-primary" />
@@ -195,7 +195,7 @@ const goToPage = (url: string | null) => {
                 </CardContent>
             </Card>
 
-            <Card class="border-0 shadow-lg">
+            <Card class="border border-slate-200 shadow-none">
                 <CardContent class="p-4 md:p-5">
                     <div class="p-2.5 bg-emerald-50 rounded-2xl mb-3">
                         <Receipt class="h-5 w-5 text-emerald-600" />
@@ -207,7 +207,7 @@ const goToPage = (url: string | null) => {
                 </CardContent>
             </Card>
 
-            <Card class="border-0 shadow-lg">
+            <Card class="border border-slate-200 shadow-none">
                 <CardContent class="p-4 md:p-5">
                     <div class="p-2.5 bg-sky-50 rounded-2xl mb-3">
                         <Users class="h-5 w-5 text-sky-600" />
@@ -221,7 +221,7 @@ const goToPage = (url: string | null) => {
         </div>
 
         <!-- Rekap per barber -->
-        <Card class="border-0 shadow-lg mb-6">
+        <Card class="border border-slate-200 shadow-none mb-6">
             <CardHeader>
                 <CardTitle class="text-lg font-black">Rekap komisi per barber</CardTitle>
                 <CardDescription>
@@ -271,7 +271,7 @@ const goToPage = (url: string | null) => {
         </Card>
 
         <!-- Detail transaksi -->
-        <Card class="border-0 shadow-lg">
+        <Card class="border border-slate-200 shadow-none">
             <CardHeader>
                 <CardTitle class="text-lg font-black">Transaksi dengan barber</CardTitle>
                 <CardDescription>15 transaksi terakhir dalam periode</CardDescription>

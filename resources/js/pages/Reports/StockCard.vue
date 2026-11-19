@@ -184,7 +184,7 @@ const typeClass: Record<string, string> = {
             <ReportExportButton report="kartu-stok" :params="{ product_id: productId, date_from: dateFrom, date_to: dateTo }" />
         </div>
 
-        <Card class="mb-6 border-0 shadow-md">
+        <Card class="mb-6 border border-slate-200 shadow-none">
             <CardContent class="grid gap-4 pt-6 md:grid-cols-4">
                 <div class="relative md:col-span-2" ref="dropdownRef">
                     <label class="mb-1.5 block text-xs font-semibold text-slate-600">Produk</label>
@@ -213,7 +213,7 @@ const typeClass: Record<string, string> = {
                     </div>
                     <div
                         v-if="dropdownOpen && filteredProducts.length > 0"
-                        class="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg"
+                        class="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-none"
                     >
                         <button
                             v-for="(p, idx) in filteredProducts"
@@ -235,7 +235,7 @@ const typeClass: Record<string, string> = {
                     </div>
                     <div
                         v-else-if="dropdownOpen && searchQuery && filteredProducts.length === 0"
-                        class="absolute z-50 mt-1 w-full rounded-xl border border-slate-200 bg-white p-3 text-center text-sm text-slate-500 shadow-lg"
+                        class="absolute z-50 mt-1 w-full rounded-xl border border-slate-200 bg-white p-3 text-center text-sm text-slate-500 shadow-none"
                     >
                         Produk tidak ditemukan
                     </div>
@@ -265,7 +265,7 @@ const typeClass: Record<string, string> = {
         </Card>
 
         <div v-if="props.product" class="grid gap-4 md:grid-cols-4">
-            <Card class="rounded-2xl border-slate-200 shadow-sm">
+            <Card class="rounded-2xl border-slate-200 shadow-none">
                 <CardContent class="pt-6">
                     <p class="text-xs font-semibold tracking-wide text-slate-500 uppercase">Saldo awal</p>
                     <p class="mt-1 text-xl font-black text-slate-900 tabular-nums">
@@ -273,19 +273,19 @@ const typeClass: Record<string, string> = {
                     </p>
                 </CardContent>
             </Card>
-            <Card class="rounded-2xl border-slate-200 shadow-sm">
+            <Card class="rounded-2xl border-slate-200 shadow-none">
                 <CardContent class="pt-6">
                     <p class="text-xs font-semibold tracking-wide text-slate-500 uppercase">Total masuk</p>
                     <p class="mt-1 text-xl font-black text-emerald-600 tabular-nums">+{{ formatQty(props.summary.total_in) }}</p>
                 </CardContent>
             </Card>
-            <Card class="rounded-2xl border-slate-200 shadow-sm">
+            <Card class="rounded-2xl border-slate-200 shadow-none">
                 <CardContent class="pt-6">
                     <p class="text-xs font-semibold tracking-wide text-slate-500 uppercase">Total keluar</p>
                     <p class="mt-1 text-xl font-black text-red-600 tabular-nums">−{{ formatQty(props.summary.total_out) }}</p>
                 </CardContent>
             </Card>
-            <Card class="rounded-2xl border-slate-200 shadow-sm">
+            <Card class="rounded-2xl border-slate-200 shadow-none">
                 <CardContent class="pt-6">
                     <p class="text-xs font-semibold tracking-wide text-slate-500 uppercase">Saldo akhir</p>
                     <p
@@ -305,7 +305,7 @@ const typeClass: Record<string, string> = {
             </Card>
         </div>
 
-        <Card class="rounded-2xl border-slate-200 shadow-sm">
+        <Card class="rounded-2xl border-slate-200 shadow-none">
             <CardHeader>
                 <CardTitle class="text-base font-bold">
                     {{ props.product ? props.product.name : 'Pilih produk' }}

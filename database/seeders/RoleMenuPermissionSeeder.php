@@ -58,6 +58,10 @@ class RoleMenuPermissionSeeder extends Seeder
                 'shopping_list', 'purchases', 'purchase_returns', 'pre_orders', 'reports', 'expenses',
                 'activity_logs', 'kpi', 'settings',
                 'attendance', 'payroll',
+                // Menu manajemen pemilik usaha (lihat migrasi open_management_menus_for_owner).
+                'customers', 'receivables', 'discounts', 'loyalty', 'upsell',
+                'manage_products', 'manage_staff', 'manage_stores',
+                'stock_opnames', 'stock_movements',
             ],
         ];
 

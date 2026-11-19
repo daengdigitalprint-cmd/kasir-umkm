@@ -99,7 +99,7 @@ const formatCurrency = (n: number) =>
             berjalan dihitung otomatis dari pendapatan, HPP, dan beban. Bukan pengganti audit SAK.
         </p>
 
-        <Card class="rounded-2xl border-slate-200 shadow-sm mb-6">
+        <Card class="rounded-2xl border-slate-200 shadow-none mb-6">
             <CardHeader class="pb-2">
                 <div class="flex items-center gap-2">
                     <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
@@ -140,7 +140,7 @@ const formatCurrency = (n: number) =>
         </div>
 
         <div class="grid gap-6 lg:grid-cols-2">
-            <Card class="rounded-2xl border-slate-200 shadow-sm overflow-hidden">
+            <Card class="rounded-2xl border-slate-200 shadow-none overflow-hidden">
                 <CardHeader class="pb-2">
                     <CardTitle class="text-base">Aset</CardTitle>
                 </CardHeader>
@@ -167,7 +167,7 @@ const formatCurrency = (n: number) =>
                 </CardContent>
             </Card>
 
-            <Card class="rounded-2xl border-slate-200 shadow-sm overflow-hidden">
+            <Card class="rounded-2xl border-slate-200 shadow-none overflow-hidden">
                 <CardHeader class="pb-2">
                     <CardTitle class="text-base">Kewajiban &amp; Ekuitas</CardTitle>
                 </CardHeader>
@@ -217,7 +217,7 @@ const formatCurrency = (n: number) =>
             </Card>
         </div>
 
-        <Card class="rounded-2xl border-slate-200 shadow-sm mt-6">
+        <Card class="rounded-2xl border-slate-200 shadow-none mt-6">
             <CardHeader class="pb-2">
                 <CardTitle class="text-base">Catat setoran modal</CardTitle>
                 <CardDescription>

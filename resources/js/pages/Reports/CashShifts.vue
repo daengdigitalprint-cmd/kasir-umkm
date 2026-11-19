@@ -134,28 +134,28 @@ const formatDt = (iso: string | null) => {
         </div>
 
         <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
-            <Card class="border-slate-200 shadow-sm">
+            <Card class="border-slate-200 shadow-none">
                 <CardContent class="pt-5">
                     <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Shift ditutup</p>
                     <p class="text-2xl font-black text-slate-900 mt-1">{{ summary.shifts_closed }}</p>
                     <p class="text-xs text-slate-500 mt-1">Periode filter</p>
                 </CardContent>
             </Card>
-            <Card class="border-slate-200 shadow-sm">
+            <Card class="border-slate-200 shadow-none">
                 <CardContent class="pt-5">
                     <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Penjualan tunai (dalam shift)</p>
                     <p class="text-2xl font-black text-emerald-700 mt-1">Rp {{ formatMoney(summary.total_cash_sales_in_shifts) }}</p>
                     <p class="text-xs text-slate-500 mt-1">Jumlah transaksi tunai tercatat</p>
                 </CardContent>
             </Card>
-            <Card class="border-slate-200 shadow-sm">
+            <Card class="border-slate-200 shadow-none">
                 <CardContent class="pt-5">
                     <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Shift ada selisih</p>
                     <p class="text-2xl font-black text-slate-900 mt-1">{{ summary.shifts_with_difference }}</p>
                     <p class="text-xs text-slate-500 mt-1">Kas dihitung ≠ perkiraan</p>
                 </CardContent>
             </Card>
-            <Card class="border-slate-200 shadow-sm">
+            <Card class="border-slate-200 shadow-none">
                 <CardContent class="pt-5">
                     <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Σ selisih (tutup)</p>
                     <p
@@ -169,7 +169,7 @@ const formatDt = (iso: string | null) => {
             </Card>
         </div>
 
-        <Card class="border-0 shadow-md mb-6">
+        <Card class="border border-slate-200 shadow-none mb-6">
             <CardContent class="p-4 md:p-5">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:flex-wrap">
                     <div class="space-y-2">
@@ -201,7 +201,7 @@ const formatDt = (iso: string | null) => {
             </CardContent>
         </Card>
 
-        <Card class="border-0 shadow-lg">
+        <Card class="border border-slate-200 shadow-none">
             <CardHeader>
                 <CardTitle class="flex items-center gap-2">
                     <Clock class="h-5 w-5 text-slate-600" />

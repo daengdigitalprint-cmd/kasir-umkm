@@ -446,7 +446,7 @@ const isCurrentRoute = (href: string) => {
                             for="sidebar-active-store"
                             class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2"
                         >
-                            Toko aktif
+                            {{ isOwner ? 'Outlet yang dikelola' : 'Toko aktif' }}
                         </label>
                         <select
                             id="sidebar-active-store"
@@ -460,6 +460,9 @@ const isCurrentRoute = (href: string) => {
                                 </optgroup>
                             </template>
                         </select>
+                        <p v-if="isOwner" class="mt-1.5 text-[11px] leading-snug text-slate-400">
+                            Menu di bawah berlaku untuk outlet ini. Dashboard &amp; laporan bisa menampilkan semua outlet.
+                        </p>
                     </div>
                     <MainMenu @close-mobile-menu="closeMobileMenu" />
                 </div>
@@ -500,7 +503,7 @@ const isCurrentRoute = (href: string) => {
                             for="drawer-active-store"
                             class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2"
                         >
-                            Toko aktif
+                            {{ isOwner ? 'Outlet yang dikelola' : 'Toko aktif' }}
                         </label>
                         <select
                             id="drawer-active-store"
@@ -514,8 +517,11 @@ const isCurrentRoute = (href: string) => {
                                 </optgroup>
                             </template>
                         </select>
+                        <p v-if="isOwner" class="mt-1.5 text-[11px] leading-snug text-slate-400">
+                            Menu di bawah berlaku untuk outlet ini. Dashboard &amp; laporan bisa menampilkan semua outlet.
+                        </p>
                     </div>
-                    
+
                     <MainMenu @close-mobile-menu="closeMobileMenu" />
                 </div>
             </div>

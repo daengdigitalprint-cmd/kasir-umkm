@@ -51,7 +51,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside));
 
         <div
             v-if="open"
-            class="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-lg border border-slate-200 z-50"
+            class="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-none border border-slate-200 z-50"
         >
             <div class="py-1">
                 <button

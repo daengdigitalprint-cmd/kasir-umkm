@@ -61,7 +61,7 @@ const formatCurrency = (n: number) =>
             </p>
         </div>
 
-        <Card class="rounded-2xl border-slate-200 shadow-sm mb-6">
+        <Card class="rounded-2xl border-slate-200 shadow-none mb-6">
             <CardHeader class="pb-2">
                 <div class="flex items-center gap-2">
                     <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/15">
@@ -88,7 +88,7 @@ const formatCurrency = (n: number) =>
             </CardContent>
         </Card>
 
-        <Card class="rounded-2xl border-slate-200 shadow-sm">
+        <Card class="rounded-2xl border-slate-200 shadow-none">
             <CardContent class="p-6 space-y-4">
                 <div class="flex justify-between border-b border-slate-100 pb-3">
                     <span class="text-slate-700">PPN Keluaran (dari penjualan)</span>

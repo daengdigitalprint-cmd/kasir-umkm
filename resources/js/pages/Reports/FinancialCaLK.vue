@@ -92,7 +92,7 @@ const formatQty = (n: number) => {
         </p>
 
         <!-- Filter tanggal -->
-        <Card class="rounded-2xl border-slate-200 shadow-sm mb-6">
+        <Card class="rounded-2xl border-slate-200 shadow-none mb-6">
             <CardHeader class="pb-2">
                 <div class="flex items-center gap-2">
                     <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
@@ -116,7 +116,7 @@ const formatQty = (n: number) => {
         </Card>
 
         <!-- Kebijakan Akuntansi -->
-        <Card class="rounded-2xl border-slate-200 shadow-sm mb-6">
+        <Card class="rounded-2xl border-slate-200 shadow-none mb-6">
             <CardHeader class="pb-2">
                 <div class="flex items-center gap-2">
                     <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/10">
@@ -142,7 +142,7 @@ const formatQty = (n: number) => {
         </Card>
 
         <!-- Rincian Akun Neraca -->
-        <Card class="rounded-2xl border-slate-200 shadow-sm mb-6">
+        <Card class="rounded-2xl border-slate-200 shadow-none mb-6">
             <CardHeader class="pb-2">
                 <div class="flex items-center gap-2">
                     <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/10">
@@ -185,7 +185,7 @@ const formatQty = (n: number) => {
         </Card>
 
         <!-- Rincian Entitas -->
-        <Card class="rounded-2xl border-slate-200 shadow-sm mb-6">
+        <Card class="rounded-2xl border-slate-200 shadow-none mb-6">
             <CardHeader class="pb-2">
                 <div class="flex items-center gap-2">
                     <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10">
@@ -228,7 +228,7 @@ const formatQty = (n: number) => {
         </Card>
 
         <!-- Catatan Penting -->
-        <Card class="rounded-2xl border-slate-200 shadow-sm">
+        <Card class="rounded-2xl border-slate-200 shadow-none">
             <CardContent class="p-6">
                 <div class="rounded-xl bg-amber-50 border border-amber-200 p-4">
                     <p class="text-sm font-semibold text-amber-900 mb-2">Catatan Penting</p>

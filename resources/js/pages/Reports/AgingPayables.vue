@@ -82,7 +82,7 @@ const statusColor = (days: number | null, remaining: number) => {
         <p class="text-sm text-slate-600 mb-4">Laporan umur utang usaha — melihat pembelian mana yang sudah jatuh tempo dan perlu segera dilunasi.</p>
 
         <!-- Filter -->
-        <Card class="rounded-2xl border-slate-200 shadow-sm mb-6">
+        <Card class="rounded-2xl border-slate-200 shadow-none mb-6">
             <CardContent class="p-4">
                 <form class="flex flex-wrap items-end gap-3" @submit.prevent="applyFilter">
                     <div class="space-y-1.5">
@@ -96,7 +96,7 @@ const statusColor = (days: number | null, remaining: number) => {
 
         <!-- Aging Buckets -->
         <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
-            <div v-for="(bucket, key) in props.buckets" :key="key" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div v-for="(bucket, key) in props.buckets" :key="key" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-none">
                 <div class="flex items-center gap-2 mb-2">
                     <div :class="['h-3 w-3 rounded-full', bucketColor(key)]" />
                     <span class="text-xs font-medium text-slate-600">{{ bucket.label }}</span>
@@ -108,7 +108,7 @@ const statusColor = (days: number | null, remaining: number) => {
 
         <!-- Summary -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-            <Card class="rounded-2xl border-slate-200 shadow-sm">
+            <Card class="rounded-2xl border-slate-200 shadow-none">
                 <CardContent class="p-4">
                     <div class="flex items-center gap-3">
                         <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
@@ -121,7 +121,7 @@ const statusColor = (days: number | null, remaining: number) => {
                     </div>
                 </CardContent>
             </Card>
-            <Card class="rounded-2xl border-slate-200 shadow-sm">
+            <Card class="rounded-2xl border-slate-200 shadow-none">
                 <CardContent class="p-4">
                     <div class="flex items-center gap-3">
                         <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-red-500/10">
@@ -134,7 +134,7 @@ const statusColor = (days: number | null, remaining: number) => {
                     </div>
                 </CardContent>
             </Card>
-            <Card class="rounded-2xl border-slate-200 shadow-sm">
+            <Card class="rounded-2xl border-slate-200 shadow-none">
                 <CardContent class="p-4">
                     <div class="flex items-center gap-3">
                         <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10">
@@ -150,7 +150,7 @@ const statusColor = (days: number | null, remaining: number) => {
         </div>
 
         <!-- Table -->
-        <Card class="rounded-2xl border-slate-200 shadow-sm">
+        <Card class="rounded-2xl border-slate-200 shadow-none">
             <CardHeader class="pb-2">
                 <CardTitle class="text-sm">Rincian Utang Usaha</CardTitle>
                 <CardDescription>{{ summary.count }} pembelian belum lunas</CardDescription>

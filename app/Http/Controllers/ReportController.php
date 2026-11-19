@@ -146,7 +146,10 @@ class ReportController extends Controller
             ->where('status', 'completed')
             ->count();
 
-        $averageOrderValue = $totalTransactions > 0 ? $totalSales / $totalTransactions : 0;
+        // Penjualan bersih — definisi yang sama dengan Dashboard Owner:
+        // subtotal - diskon - retur, tanpa pajak/layanan/tip/ongkir (bukan pendapatan usaha).
+        $netSales = $this->netSales($storeIds, Carbon::parse($startDate)->startOfDay(), Carbon::parse($endDate)->endOfDay());
+        $averageOrderValue = $totalTransactions > 0 ? $netSales / $totalTransactions : 0;
 
         // Top products — dihitung dari baris transaksi, bukan harga master produk.
         // Harga master bisa berubah atau salah input, sedangkan total_price adalah
@@ -195,7 +198,9 @@ class ReportController extends Controller
 
         $rangeStart = Carbon::parse($startDate)->startOfDay();
         $rangeEnd = Carbon::parse($endDate)->endOfDay();
-        $daysSpan = max(1, $rangeStart->diffInDays($rangeEnd) + 1);
+        // diffInDays menghasilkan pecahan bila akhir = 23:59:59; hitung dari awal hari agar
+        // pembanding tepat sepanjang rentang terpilih (1–19 Nov → 13–31 Okt, bukan 12–31 Okt).
+        $daysSpan = max(1, (int) $rangeStart->copy()->startOfDay()->diffInDays($rangeEnd->copy()->startOfDay()) + 1);
 
         $prevRangeEnd = $rangeStart->copy()->subDay()->endOfDay();
         $prevRangeStart = $prevRangeEnd->copy()->subDays($daysSpan - 1)->startOfDay();
@@ -214,6 +219,11 @@ class ReportController extends Controller
             ? round((($totalSales - $prevTotalSales) / $prevTotalSales) * 100, 1)
             : null;
 
+        $prevNetSales = $this->netSales($storeIds, $prevRangeStart, $prevRangeEnd);
+        $netSalesChangePct = $prevNetSales > 0
+            ? round((($netSales - $prevNetSales) / $prevNetSales) * 100, 1)
+            : null;
+
         $transactionsChangePct = $prevTotalTransactions > 0
             ? round((($totalTransactions - $prevTotalTransactions) / $prevTotalTransactions) * 100, 1)
             : null;
@@ -221,10 +231,10 @@ class ReportController extends Controller
         $completedTxInRange = Transaction::whereIn('store_id', $storeIds)
             ->whereBetween('created_at', [$startDate, $endDate.' 23:59:59'])
             ->where('status', 'completed')
-            ->get(['created_at', 'total_amount', 'payment_method', 'discount_amount', 'tax_amount', 'sales_channel', 'commission_amount']);
+            ->get(['created_at', 'subtotal', 'total_amount', 'payment_method', 'discount_amount', 'tax_amount', 'sales_channel', 'commission_amount']);
 
         $totalsByDay = $completedTxInRange->groupBy(fn ($t) => $t->created_at->format('Y-m-d'))
-            ->map(fn ($rows) => round((float) $rows->sum('total_amount'), 2));
+            ->map(fn ($rows) => round((float) $rows->sum(fn ($t) => (float) $t->subtotal - (float) $t->discount_amount), 2));
 
         $dailyTotalsMap = [];
         $cursor = $rangeStart->copy();
@@ -395,12 +405,17 @@ class ReportController extends Controller
                 'prev_start' => $prevRangeStart->format('Y-m-d'),
                 'prev_end' => $prevRangeEnd->format('Y-m-d'),
                 'prev_total_sales' => $prevTotalSales,
+                'prev_net_sales' => $prevNetSales,
+                'net_sales_change_pct' => $netSalesChangePct,
                 'prev_total_transactions' => $prevTotalTransactions,
                 'sales_change_pct' => $salesChangePct,
                 'transactions_change_pct' => $transactionsChangePct,
             ],
             'summary' => [
+                // Uang yang diterima kasir (termasuk pajak/layanan/tip/ongkir).
                 'total_sales' => $totalSales,
+                'net_sales' => round($netSales, 2),
+                'collected_not_revenue' => round(max(0, (float) $totalSales - $this->grossBeforeReturns($storeIds, $startDate, $endDate)), 2),
                 'total_transactions' => $totalTransactions,
                 'average_order_value' => $averageOrderValue,
                 'total_customers' => $totalCustomers,
@@ -431,6 +446,35 @@ class ReportController extends Controller
             'channelTotalCommission' => round($channelTotalCommission, 2),
             'categoryRevenue' => $categoryRevenue,
         ]);
+    }
+
+    /**
+     * Penjualan bersih: subtotal - diskon - retur penjualan (nilai sebelum pajak).
+     *
+     * @param  array<int>  $storeIds
+     */
+    private function netSales(array $storeIds, Carbon $start, Carbon $end): float
+    {
+        $sales = (float) Transaction::whereIn('store_id', $storeIds)
+            ->whereBetween('created_at', [$start, $end])
+            ->where('status', 'completed')
+            ->sum(DB::raw('subtotal - discount_amount'));
+
+        $returns = (float) DB::table('sales_returns')
+            ->whereIn('store_id', $storeIds)
+            ->whereBetween('returned_at', [$start, $end])
+            ->sum(DB::raw('subtotal - discount_amount'));
+
+        return $sales - $returns;
+    }
+
+    /** Subtotal - diskon tanpa memperhitungkan retur (untuk selisih uang diterima vs penjualan). */
+    private function grossBeforeReturns(array $storeIds, string $startDate, string $endDate): float
+    {
+        return (float) Transaction::whereIn('store_id', $storeIds)
+            ->whereBetween('created_at', [$startDate, $endDate.' 23:59:59'])
+            ->where('status', 'completed')
+            ->sum(DB::raw('subtotal - discount_amount'));
     }
 
     /**

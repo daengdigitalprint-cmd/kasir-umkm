@@ -92,7 +92,7 @@ const formatCurrency = (n: number) =>
             saldo akhir.
         </p>
 
-        <Card class="rounded-2xl border-slate-200 shadow-sm mb-6">
+        <Card class="rounded-2xl border-slate-200 shadow-none mb-6">
             <CardHeader class="pb-2">
                 <div class="flex items-center gap-2">
                     <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
@@ -119,7 +119,7 @@ const formatCurrency = (n: number) =>
             </CardContent>
         </Card>
 
-        <Card class="rounded-2xl border-slate-200 shadow-sm overflow-hidden">
+        <Card class="rounded-2xl border-slate-200 shadow-none overflow-hidden">
             <CardContent class="p-0">
                 <div class="overflow-x-auto p-6">
                     <table class="w-full text-sm">

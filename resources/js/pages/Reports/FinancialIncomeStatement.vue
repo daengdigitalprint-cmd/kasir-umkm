@@ -102,7 +102,7 @@ const trendClass = (n: number | null) => (n === null ? 'text-slate-500' : n > 0 
             Bukan pengganti audit SAK; sesuaikan dengan kebijakan akuntansi Anda.
         </p>
 
-        <Card class="rounded-2xl border-slate-200 shadow-sm mb-6">
+        <Card class="rounded-2xl border-slate-200 shadow-none mb-6">
             <CardHeader class="pb-2">
                 <div class="flex items-center gap-2">
                     <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10">
@@ -129,7 +129,7 @@ const trendClass = (n: number | null) => (n === null ? 'text-slate-500' : n > 0 
             </CardContent>
         </Card>
 
-        <Card class="rounded-2xl border-slate-200 shadow-sm">
+        <Card class="rounded-2xl border-slate-200 shadow-none">
             <CardContent class="p-6 space-y-4">
                 <div class="space-y-2 border-b border-slate-100 pb-3">
                     <div v-for="account in accounts.revenue ?? []" :key="account.code" class="flex justify-between text-sm text-slate-600">
@@ -191,7 +191,7 @@ const trendClass = (n: number | null) => (n === null ? 'text-slate-500' : n > 0 
         </Card>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card class="rounded-2xl border-slate-200 shadow-sm">
+            <Card class="rounded-2xl border-slate-200 shadow-none">
                 <CardHeader class="pb-2">
                     <CardTitle>Margin</CardTitle>
                     <CardDescription>Rasio terhadap pendapatan bersih</CardDescription>
@@ -208,7 +208,7 @@ const trendClass = (n: number | null) => (n === null ? 'text-slate-500' : n > 0 
                 </CardContent>
             </Card>
 
-            <Card class="rounded-2xl border-slate-200 shadow-sm">
+            <Card class="rounded-2xl border-slate-200 shadow-none">
                 <CardHeader class="pb-2">
                     <CardTitle>Perbandingan periode sebelumnya</CardTitle>
                     <CardDescription>{{ comparison.prev_start }} s.d. {{ comparison.prev_end }}</CardDescription>

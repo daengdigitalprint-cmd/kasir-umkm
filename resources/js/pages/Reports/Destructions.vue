@@ -16,13 +16,13 @@ defineProps<{
         <ReportTabs active-tab="pemusnahan" />
 
         <div class="mb-6 grid grid-cols-2 gap-3 md:gap-4">
-            <Card class="border-0 shadow-lg">
+            <Card class="border border-slate-200 shadow-none">
                 <CardContent class="p-4 md:p-5">
                     <p class="text-xs font-medium text-slate-500">Total pemusnahan</p>
                     <p class="mt-1 text-lg font-black text-slate-900 tabular-nums md:text-2xl">{{ summary.count }}</p>
                 </CardContent>
             </Card>
-            <Card class="border-0 shadow-lg">
+            <Card class="border border-slate-200 shadow-none">
                 <CardContent class="p-4 md:p-5">
                     <p class="text-xs font-medium text-slate-500">Jumlah unit</p>
                     <p class="mt-1 text-lg font-black text-slate-900 tabular-nums md:text-2xl">{{ summary.quantity }}</p>
@@ -30,7 +30,7 @@ defineProps<{
             </Card>
         </div>
 
-        <Card class="border-0 shadow-lg">
+        <Card class="border border-slate-200 shadow-none">
             <CardContent class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead>

@@ -114,7 +114,7 @@ const statusBadge = (status: string) => {
             <ReportExportButton report="produksi" :params="{ start_date: filterStart, end_date: filterEnd }" />
         </div>
 
-        <Card class="border-0 shadow-md mb-6">
+        <Card class="border border-slate-200 shadow-none mb-6">
             <CardContent class="p-4 md:p-5">
                 <div class="flex flex-col gap-4 md:flex-row md:items-end md:flex-wrap">
                     <div class="space-y-2">
@@ -131,25 +131,25 @@ const statusBadge = (status: string) => {
         </Card>
 
         <div class="grid grid-cols-2 gap-4 mb-6 md:grid-cols-4">
-            <Card class="border-0 shadow-md">
+            <Card class="border border-slate-200 shadow-none">
                 <CardContent class="p-4">
                     <p class="text-xs font-medium text-slate-500">Total Batch</p>
                     <p class="mt-1 text-2xl font-bold text-slate-800">{{ summary.total_batches }}</p>
                 </CardContent>
             </Card>
-            <Card class="border-0 shadow-md">
+            <Card class="border border-slate-200 shadow-none">
                 <CardContent class="p-4">
                     <p class="text-xs font-medium text-slate-500">Total Output</p>
                     <p class="mt-1 text-2xl font-bold text-slate-800">{{ formatDecimal(summary.total_output, 2) }}</p>
                 </CardContent>
             </Card>
-            <Card class="border-0 shadow-md">
+            <Card class="border border-slate-200 shadow-none">
                 <CardContent class="p-4">
                     <p class="text-xs font-medium text-slate-500">Total Biaya</p>
                     <p class="mt-1 text-2xl font-bold text-slate-800">Rp {{ formatCurrency(summary.total_cost) }}</p>
                 </CardContent>
             </Card>
-            <Card class="border-0 shadow-md">
+            <Card class="border border-slate-200 shadow-none">
                 <CardContent class="p-4">
                     <p class="text-xs font-medium text-slate-500">Rata-rata Biaya/Unit</p>
                     <p class="mt-1 text-2xl font-bold text-slate-800">Rp {{ formatDecimal(summary.avg_cost_per_unit, 0) }}</p>
@@ -157,7 +157,7 @@ const statusBadge = (status: string) => {
             </Card>
         </div>
 
-        <Card class="border-0 shadow-lg">
+        <Card class="border border-slate-200 shadow-none">
             <CardHeader>
                 <CardTitle class="flex items-center gap-2">
                     <Factory class="h-5 w-5 text-slate-600" />

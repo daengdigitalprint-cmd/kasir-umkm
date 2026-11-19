@@ -210,14 +210,20 @@ class User extends Authenticatable
         return $this->isAdmin() || $this->isManager() || $this->isCashier() || $this->isOwner();
     }
 
-    /** Hanya admin toko (pemilik) — pengaturan toko, PPN, data sensitif. */
+    /**
+     * Admin toko atau pemilik usaha — pengaturan toko, PPN, tim & akses, data sensitif.
+     *
+     * Owner hanya untuk toko yang SEDANG AKTIF (peran di toko itu = owner), bukan isOwner()
+     * yang juga benar bila menjadi owner di toko lain: owner toko A yang membuka toko B
+     * sebagai kasir tidak boleh mendapat hak kelola toko B.
+     */
     public function canManageStoreSettings(): bool
     {
         if ($this->isSuperAdmin()) {
             return true;
         }
 
-        return $this->isAdmin();
+        return $this->isAdmin() || $this->getRoleForActiveStore() === 'owner';
     }
 
     /** Daftar menu_key yang diizinkan untuk role user ini. */

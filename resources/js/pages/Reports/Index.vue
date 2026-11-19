@@ -1,57 +1,31 @@
 <script setup lang="ts">
-import { router } from '@inertiajs/vue3';
-import ReportTabs from '@/components/ReportTabs.vue';
 import ReportExportButton from '@/components/ReportExportButton.vue';
 import ReportOutletFilter from '@/components/ReportOutletFilter.vue';
-import AdminLayout from '@/layouts/AdminLayout.vue';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import ReportTabs from '@/components/ReportTabs.vue';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import AdminLayout from '@/layouts/AdminLayout.vue';
+import { router } from '@inertiajs/vue3';
 import {
+    ArcElement,
+    BarElement,
+    CategoryScale,
     Chart as ChartJS,
-    CategoryScale,
+    Filler,
+    Legend,
     LinearScale,
-    PointElement,
     LineElement,
-    BarElement,
-    ArcElement,
+    PointElement,
     Title,
     Tooltip,
-    Legend,
-    Filler,
 } from 'chart.js';
-import { Line, Bar, Doughnut } from 'vue-chartjs';
-import {
-    BarChart3,
-    DollarSign,
-    TrendingUp,
-    TrendingDown,
-    ShoppingCart,
-    Package,
-    Users,
-    Activity,
-    CalendarRange,
-    Percent,
-    Receipt,
-    Tags,
-    Gift,
-} from 'lucide-vue-next';
-import { ref, computed, watch } from 'vue';
+import { BarChart3, CalendarDays, ChevronDown, Package, ShoppingCart, TrendingDown, TrendingUp } from 'lucide-vue-next';
+import { computed, ref, watch } from 'vue';
+import { Bar, Doughnut, Line } from 'vue-chartjs';
 
-ChartJS.register(
-    CategoryScale,
-    LinearScale,
-    PointElement,
-    LineElement,
-    BarElement,
-    ArcElement,
-    Title,
-    Tooltip,
-    Legend,
-    Filler,
-);
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
 interface TopProduct {
     id: number;
@@ -110,12 +84,16 @@ interface Props {
         prev_start: string;
         prev_end: string;
         prev_total_sales: number;
+        prev_net_sales?: number;
+        net_sales_change_pct?: number | null;
         prev_total_transactions: number;
         sales_change_pct: number | null;
         transactions_change_pct: number | null;
     };
     summary: {
         total_sales: number;
+        net_sales?: number;
+        collected_not_revenue?: number;
         total_transactions: number;
         average_order_value: number;
         total_customers: number;
@@ -217,28 +195,55 @@ const formatDelta = (pct: number | null) => {
 };
 
 const applyFilter = () => {
-    router.get(
-        '/reports',
-        { start_date: filterStart.value, end_date: filterEnd.value },
-        { preserveState: true, preserveScroll: true },
-    );
+    if (!filterStart.value || !filterEnd.value || filterStart.value > filterEnd.value) return;
+    const params: Record<string, string | number> = { start_date: filterStart.value, end_date: filterEnd.value };
+    if (props.selectedStoreId) params.store_id = props.selectedStoreId;
+    router.get('/reports', params, { preserveState: true, preserveScroll: true, replace: true });
 };
 
-const presetDays = (days: number) => {
-    const end = new Date();
-    const start = new Date();
-    start.setDate(end.getDate() - (days - 1));
-    filterEnd.value = end.toISOString().slice(0, 10);
-    filterStart.value = start.toISOString().slice(0, 10);
+// Tanggal lokal (toISOString memakai UTC dan bisa mundur sehari di pagi hari).
+const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const presets = [
+    { key: 'today', label: 'Hari ini', range: () => [new Date(), new Date()] },
+    { key: '7d', label: '7 hari', range: () => [new Date(Date.now() - 6 * 864e5), new Date()] },
+    { key: 'month', label: 'Bulan ini', range: () => [new Date(new Date().getFullYear(), new Date().getMonth(), 1), new Date()] },
+    {
+        key: 'lastmonth',
+        label: 'Bulan lalu',
+        range: () => [new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1), new Date(new Date().getFullYear(), new Date().getMonth(), 0)],
+    },
+    { key: '3m', label: '3 bulan', range: () => [new Date(new Date().getFullYear(), new Date().getMonth() - 2, 1), new Date()] },
+] as const;
+const activePreset = computed(
+    () => presets.find((p) => ymd(p.range()[0]) === filterStart.value && ymd(p.range()[1]) === filterEnd.value)?.key ?? null,
+);
+const showCustom = ref(false);
+const applyPreset = (p: (typeof presets)[number]) => {
+    const [a, b] = p.range();
+    filterStart.value = ymd(a);
+    filterEnd.value = ymd(b);
+    showCustom.value = false;
     applyFilter();
 };
+const onDateChange = () => applyFilter();
 
-const presetThisMonth = () => {
-    const now = new Date();
-    filterStart.value = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-    filterEnd.value = now.toISOString().slice(0, 10);
-    applyFilter();
-};
+const rangeText = computed(() => {
+    const f = (x: string) => new Date(x + 'T12:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+    const a = props.dateRange.start_date;
+    const b = props.dateRange.end_date;
+    return a === b ? f(a) : `${f(a)} – ${f(b)}`;
+});
+const comparisonText = computed(() => {
+    const f = (x: string) => new Date(x + 'T12:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+    return `${f(props.comparison.prev_start)} – ${f(props.comparison.prev_end)}`;
+});
+
+// Angka utama memakai penjualan bersih (sama dengan Dashboard Owner); fallback ke data lama.
+const netSales = computed(() => props.summary.net_sales ?? props.summary.total_sales);
+const netChange = computed(() =>
+    props.summary.net_sales !== undefined ? (props.comparison.net_sales_change_pct ?? null) : props.comparison.sales_change_pct,
+);
+const showDetails = ref(false);
 
 const violetFill = 'rgba(124, 58, 237, 0.12)';
 const violetBorder = 'rgb(124, 58, 237)';
@@ -288,13 +293,7 @@ const lineChartOptions = computed(() => ({
 }));
 
 const paymentChartData = computed(() => {
-    const colors = [
-        'rgb(124, 58, 237)',
-        'rgb(99, 102, 241)',
-        'rgb(168, 85, 247)',
-        'rgb(192, 132, 252)',
-        'rgb(124, 58, 237)',
-    ];
+    const colors = ['rgb(124, 58, 237)', 'rgb(99, 102, 241)', 'rgb(168, 85, 247)', 'rgb(192, 132, 252)', 'rgb(124, 58, 237)'];
     return {
         labels: props.paymentBreakdown.map((p) => paymentMethodLabel(p.method)),
         datasets: [
@@ -363,9 +362,7 @@ const categoryBarOptions = computed(() => ({
 }));
 
 const topProductsBarData = computed(() => ({
-    labels: props.topProductsChart.map((p) =>
-        p.name.length > 22 ? p.name.slice(0, 20) + '…' : p.name,
-    ),
+    labels: props.topProductsChart.map((p) => (p.name.length > 22 ? p.name.slice(0, 20) + '…' : p.name)),
     datasets: [
         {
             label: 'Qty terjual',
@@ -415,238 +412,158 @@ const hppCoverageGap = computed(() => Math.max(0, props.hppSummary.items_total -
             />
         </div>
 
-        <!-- Filter periode -->
-        <Card class="border-0 shadow-md mb-6">
-            <CardContent class="p-4 md:p-5">
-                <!-- Baris 1: Pilih outlet (owner saja) -->
-                <div
-                    v-if="props.isOwner && props.accessibleStores && props.accessibleStores.length"
-                    class="flex items-center gap-3 mb-4 pb-4 border-b border-slate-100"
+        <!-- Filter periode (langsung berlaku) -->
+        <div class="mb-5 space-y-3 rounded-2xl border border-slate-200 bg-white p-3 sm:p-4">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="text-sm text-slate-500">
+                    <b class="text-slate-800">{{ rangeText }}</b> · dibanding {{ comparisonText }}
+                </p>
+                <div v-if="props.isOwner && props.accessibleStores && props.accessibleStores.length" class="flex items-center gap-2">
+                    <span class="text-xs font-medium text-slate-500">Outlet</span>
+                    <ReportOutletFilter :stores="props.accessibleStores" :selected-id="props.selectedStoreId ?? null" />
+                </div>
+            </div>
+            <div class="-mx-1 flex gap-1.5 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <button
+                    v-for="p in presets"
+                    :key="p.key"
+                    type="button"
+                    class="shrink-0 rounded-full border px-3 py-1.5 text-sm font-semibold whitespace-nowrap transition"
+                    :class="
+                        activePreset === p.key && !showCustom
+                            ? 'border-primary bg-primary text-white'
+                            : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                    "
+                    @click="applyPreset(p)"
                 >
-                    <div class="p-2 bg-primary/10 rounded-xl shrink-0">
-                        <Package class="h-4 w-4 text-primary" />
-                    </div>
-                    <span class="text-sm font-bold text-slate-700 shrink-0">Lihat data outlet:</span>
-                    <ReportOutletFilter
-                        :stores="props.accessibleStores"
-                        :selected-id="props.selectedStoreId ?? null"
-                    />
-                </div>
-
-                <!-- Baris 2: Filter tanggal -->
-                <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                    <div class="flex items-center gap-2 text-primary">
-                        <CalendarRange class="h-5 w-5 shrink-0" />
-                        <div>
-                            <p class="text-sm font-black text-slate-900">Filter periode</p>
-                            <p class="text-xs text-slate-500">Data membaca transaksi selesai dalam rentang tanggal</p>
-                        </div>
-                    </div>
-                    <form class="flex flex-wrap items-end gap-3" @submit.prevent="applyFilter">
-                        <div class="space-y-1.5">
-                            <Label for="rep-start" class="text-xs">Dari</Label>
-                            <Input id="rep-start" v-model="filterStart" type="date" class="w-40" required />
-                        </div>
-                        <div class="space-y-1.5">
-                            <Label for="rep-end" class="text-xs">Sampai</Label>
-                            <Input id="rep-end" v-model="filterEnd" type="date" class="w-40" required />
-                        </div>
-                        <Button type="submit" class="shrink-0">Terapkan</Button>
-                    </form>
-                    <div class="flex flex-wrap gap-2">
-                        <Button type="button" variant="outline" size="sm" @click="presetDays(7)">7 hari</Button>
-                        <Button type="button" variant="outline" size="sm" @click="presetDays(30)">30 hari</Button>
-                        <Button type="button" variant="outline" size="sm" @click="presetDays(90)">90 hari</Button>
-                        <Button type="button" variant="outline" size="sm" @click="presetThisMonth">Bulan ini</Button>
-                    </div>
-                </div>
-            </CardContent>
-        </Card>
-
-        <!-- Summary KPI -->
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
-            <Card class="border-0 shadow-lg">
-                <CardContent class="p-4 md:p-5">
-                    <div class="flex items-start justify-between gap-2 mb-3">
-                        <div class="p-2.5 bg-emerald-50 rounded-2xl">
-                            <DollarSign class="h-5 w-5 text-emerald-600" />
-                        </div>
-                        <div class="flex items-center gap-0.5 text-xs font-bold" :class="deltaClass(comparison.sales_change_pct)">
-                            <TrendingUp v-if="comparison.sales_change_pct != null && comparison.sales_change_pct >= 0" class="h-3.5 w-3.5" />
-                            <TrendingDown v-else-if="comparison.sales_change_pct != null" class="h-3.5 w-3.5" />
-                            <span v-if="comparison.sales_change_pct != null">{{ comparison.sales_change_pct }}%</span>
-                        </div>
-                    </div>
-                    <p class="text-xs font-medium text-slate-500">Total omzet</p>
-                    <p class="text-lg md:text-2xl font-black text-slate-900 tabular-nums">
-                        {{ formatCurrency(summary.total_sales) }}
-                    </p>
-                    <p class="text-[11px] text-slate-500 mt-1 leading-tight">{{ formatDelta(comparison.sales_change_pct) }}</p>
-                </CardContent>
-            </Card>
-
-            <Card class="border-0 shadow-lg">
-                <CardContent class="p-4 md:p-5">
-                    <div class="flex items-start justify-between gap-2 mb-3">
-                        <div class="p-2.5 bg-primary/10 rounded-2xl">
-                            <ShoppingCart class="h-5 w-5 text-primary" />
-                        </div>
-                        <div
-                            class="flex items-center gap-0.5 text-xs font-bold"
-                            :class="deltaClass(comparison.transactions_change_pct)"
-                        >
-                            <TrendingUp
-                                v-if="comparison.transactions_change_pct != null && comparison.transactions_change_pct >= 0"
-                                class="h-3.5 w-3.5"
-                            />
-                            <TrendingDown v-else-if="comparison.transactions_change_pct != null" class="h-3.5 w-3.5" />
-                            <span v-if="comparison.transactions_change_pct != null">{{ comparison.transactions_change_pct }}%</span>
-                        </div>
-                    </div>
-                    <p class="text-xs font-medium text-slate-500">Transaksi selesai</p>
-                    <p class="text-lg md:text-2xl font-black text-slate-900 tabular-nums">{{ summary.total_transactions }}</p>
-                    <p class="text-[11px] text-slate-500 mt-1 leading-tight">
-                        {{ formatDelta(comparison.transactions_change_pct) }}
-                    </p>
-                    <p class="text-[11px] text-slate-500 mt-0.5">Rata-rata: {{ formatCurrency(summary.average_order_value) }}</p>
-                </CardContent>
-            </Card>
-
-            <Card class="border-0 shadow-lg">
-                <CardContent class="p-4 md:p-5">
-                    <div class="flex items-start justify-between gap-2 mb-3">
-                        <div class="p-2.5 bg-violet-100 rounded-2xl">
-                            <Users class="h-5 w-5 text-violet-600" />
-                        </div>
-                        <div
-                            v-if="new_customers_change_pct != null"
-                            class="flex items-center gap-0.5 text-xs font-bold"
-                            :class="deltaClass(new_customers_change_pct)"
-                        >
-                            <Percent class="h-3.5 w-3.5" />
-                            <span>{{ new_customers_change_pct }}%</span>
-                        </div>
-                    </div>
-                    <p class="text-xs font-medium text-slate-500">Pelanggan baru</p>
-                    <p class="text-lg md:text-2xl font-black text-slate-900 tabular-nums">{{ summary.new_customers }}</p>
-                    <p class="text-[11px] text-slate-500 mt-1 leading-tight">{{ formatDelta(new_customers_change_pct) }}</p>
-                    <p class="text-[11px] text-slate-500 mt-0.5">Total terdaftar: {{ summary.total_customers }}</p>
-                </CardContent>
-            </Card>
-
-            <Card class="border-0 shadow-lg">
-                <CardContent class="p-4 md:p-5">
-                    <div class="flex items-start justify-between gap-2 mb-3">
-                        <div class="p-2.5 bg-amber-50 rounded-2xl">
-                            <Package class="h-5 w-5 text-amber-600" />
-                        </div>
-                        <Activity class="h-5 w-5 text-slate-300" />
-                    </div>
-                    <p class="text-xs font-medium text-slate-500">Unit terjual</p>
-                    <p class="text-lg md:text-2xl font-black text-slate-900 tabular-nums">{{ summary.items_sold }}</p>
-                    <p class="text-[11px] text-slate-500 mt-1">Jumlah qty baris item</p>
-                </CardContent>
-            </Card>
+                    {{ p.label }}
+                </button>
+                <button
+                    type="button"
+                    class="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold whitespace-nowrap transition"
+                    :class="
+                        showCustom || !activePreset
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                    "
+                    @click="showCustom = !showCustom"
+                >
+                    <CalendarDays class="h-4 w-4" /> Atur tanggal
+                </button>
+            </div>
+            <div v-if="showCustom" class="flex flex-wrap items-center gap-2">
+                <Label for="rep-start" class="sr-only">Dari</Label>
+                <Input id="rep-start" v-model="filterStart" type="date" :max="filterEnd" class="h-9 w-40" @change="onDateChange" />
+                <span class="text-sm text-slate-400">s/d</span>
+                <Label for="rep-end" class="sr-only">Sampai</Label>
+                <Input id="rep-end" v-model="filterEnd" type="date" :min="filterStart" class="h-9 w-40" @change="onDateChange" />
+            </div>
         </div>
 
-        <!-- Laba kotor & margin -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-            <Card class="border-0 shadow-md border-slate-100">
-                <CardContent class="p-4 flex items-center gap-4">
-                    <div class="p-3 rounded-2xl bg-emerald-50">
-                        <TrendingUp class="h-6 w-6 text-emerald-600" />
-                    </div>
-                    <div class="min-w-0">
-                        <p class="text-xs font-medium text-slate-500">Laba kotor</p>
-                        <p class="text-xl font-black text-slate-900 tabular-nums">
-                            {{ formatCurrency(hppSummary.total_gross_profit) }}
-                        </p>
-                        <p class="text-[11px] text-slate-500 mt-0.5">Omzet dikurangi HPP</p>
-                    </div>
-                </CardContent>
-            </Card>
-            <Card class="border-0 shadow-md border-slate-100">
-                <CardContent class="p-4 flex items-center gap-4">
-                    <div class="p-3 rounded-2xl bg-violet-50">
-                        <Percent class="h-6 w-6 text-violet-600" />
-                    </div>
-                    <div class="min-w-0">
-                        <p class="text-xs font-medium text-slate-500">Margin kotor</p>
-                        <p class="text-xl font-black text-slate-900 tabular-nums">
-                            {{ hppSummary.gross_margin_pct === null ? '—' : hppSummary.gross_margin_pct + '%' }}
-                        </p>
-                        <p class="text-[11px] text-slate-500 mt-0.5">Laba kotor terhadap omzet</p>
-                    </div>
-                </CardContent>
-            </Card>
-            <Card class="border-0 shadow-md border-slate-100">
-                <CardContent class="p-4 flex items-center gap-4">
-                    <div class="p-3 rounded-2xl bg-rose-50">
-                        <DollarSign class="h-6 w-6 text-rose-600" />
-                    </div>
-                    <div class="min-w-0">
-                        <p class="text-xs font-medium text-slate-500">Total HPP</p>
-                        <p class="text-xl font-black text-slate-900 tabular-nums">
-                            {{ formatCurrency(hppSummary.total_cost) }}
-                        </p>
-                        <p v-if="hppCoverageGap > 0" class="text-[11px] text-amber-600 mt-0.5">
-                            {{ hppCoverageGap }} baris item belum punya data HPP
-                        </p>
-                        <p v-else class="text-[11px] text-slate-500 mt-0.5">Modal barang yang terjual</p>
-                    </div>
-                </CardContent>
-            </Card>
+        <!-- Angka utama -->
+        <div class="mb-4 grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
+            <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                <div class="mb-2 flex items-start justify-between gap-2">
+                    <p class="text-xs font-medium text-slate-500">Penjualan bersih</p>
+                    <span class="flex items-center gap-0.5 text-xs font-bold" :class="deltaClass(netChange)">
+                        <TrendingUp v-if="netChange != null && netChange >= 0" class="h-3.5 w-3.5" />
+                        <TrendingDown v-else-if="netChange != null" class="h-3.5 w-3.5" />
+                        <span v-if="netChange != null">{{ netChange }}%</span>
+                    </span>
+                </div>
+                <p class="text-lg font-black text-slate-900 tabular-nums md:text-2xl">Rp {{ formatCurrency(netSales) }}</p>
+                <p class="mt-1 text-[11px] leading-tight text-slate-500">Setelah diskon &amp; retur, tanpa pajak/tip</p>
+            </div>
+            <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                <div class="mb-2 flex items-start justify-between gap-2">
+                    <p class="text-xs font-medium text-slate-500">Laba kotor</p>
+                    <span class="text-xs font-bold text-slate-500">{{
+                        hppSummary.gross_margin_pct === null ? '' : 'Margin ' + hppSummary.gross_margin_pct + '%'
+                    }}</span>
+                </div>
+                <p class="text-lg font-black text-slate-900 tabular-nums md:text-2xl">Rp {{ formatCurrency(hppSummary.total_gross_profit) }}</p>
+                <p v-if="hppCoverageGap > 0" class="mt-1 text-[11px] leading-tight text-amber-600">
+                    {{ hppCoverageGap }} baris item belum punya harga modal
+                </p>
+                <p v-else class="mt-1 text-[11px] leading-tight text-slate-500">Penjualan dikurangi harga modal</p>
+            </div>
+            <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                <div class="mb-2 flex items-start justify-between gap-2">
+                    <p class="text-xs font-medium text-slate-500">Transaksi</p>
+                    <span class="flex items-center gap-0.5 text-xs font-bold" :class="deltaClass(comparison.transactions_change_pct)">
+                        <TrendingUp
+                            v-if="comparison.transactions_change_pct != null && comparison.transactions_change_pct >= 0"
+                            class="h-3.5 w-3.5"
+                        />
+                        <TrendingDown v-else-if="comparison.transactions_change_pct != null" class="h-3.5 w-3.5" />
+                        <span v-if="comparison.transactions_change_pct != null">{{ comparison.transactions_change_pct }}%</span>
+                    </span>
+                </div>
+                <p class="text-lg font-black text-slate-900 tabular-nums md:text-2xl">{{ summary.total_transactions.toLocaleString('id-ID') }}</p>
+                <p class="mt-1 text-[11px] leading-tight text-slate-500">Transaksi selesai</p>
+            </div>
+            <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                <p class="mb-2 text-xs font-medium text-slate-500">Rata-rata per transaksi</p>
+                <p class="text-lg font-black text-slate-900 tabular-nums md:text-2xl">Rp {{ formatCurrency(summary.average_order_value) }}</p>
+                <p class="mt-1 text-[11px] leading-tight text-slate-500">Nilai belanja tiap pelanggan</p>
+            </div>
         </div>
 
-        <!-- Ringkasan diskon & pajak -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-            <Card class="border-0 shadow-md border-slate-100">
-                <CardContent class="p-4">
-                    <div class="flex items-center gap-4">
-                        <div class="p-3 rounded-2xl bg-orange-50">
-                            <Tags class="h-6 w-6 text-orange-600" />
-                        </div>
-                        <div>
-                            <p class="text-xs font-medium text-slate-500">Total diskon (transaksi)</p>
-                            <p class="text-xl font-black text-slate-900">{{ formatCurrency(summary.total_discount) }}</p>
-                        </div>
-                    </div>
-                    <ul v-if="summary.discount_by_type?.length" class="mt-3 space-y-1 border-t border-slate-100 pt-2">
-                        <li v-for="d in summary.discount_by_type" :key="d.type" class="flex items-center justify-between text-xs">
-                            <span class="text-slate-500">{{ discountTypeLabel(d.type) }}</span>
-                            <span class="font-semibold text-slate-700 tabular-nums">{{ formatCurrency(d.total) }}</span>
-                        </li>
-                    </ul>
-                </CardContent>
-            </Card>
-            <Card class="border-0 shadow-md border-slate-100">
-                <CardContent class="p-4 flex items-center gap-4">
-                    <div class="p-3 rounded-2xl bg-sky-50">
-                        <Receipt class="h-6 w-6 text-sky-600" />
-                    </div>
-                    <div>
-                        <p class="text-xs font-medium text-slate-500">Total pajak (transaksi)</p>
-                        <p class="text-xl font-black text-slate-900">{{ formatCurrency(summary.total_tax) }}</p>
-                    </div>
-                </CardContent>
-            </Card>
-            <Card class="border-0 shadow-md border-slate-100">
-                <CardContent class="p-4 flex items-center gap-4">
-                    <div class="p-3 rounded-2xl bg-emerald-50">
-                        <Gift class="h-6 w-6 text-emerald-600" />
-                    </div>
-                    <div>
-                        <p class="text-xs font-medium text-slate-500">Unit gratis (promo)</p>
-                        <p class="text-xl font-black text-slate-900 tabular-nums">{{ fmtQty(summary.total_free_quantity) }}</p>
-                    </div>
-                </CardContent>
-            </Card>
+        <!-- Rincian (terlipat) -->
+        <div class="mb-6 rounded-2xl border border-slate-200 bg-white">
+            <button
+                type="button"
+                class="flex w-full items-center justify-between gap-2 px-4 py-3 text-left"
+                :aria-expanded="showDetails"
+                @click="showDetails = !showDetails"
+            >
+                <span class="text-sm font-bold text-slate-800">Rincian lain</span>
+                <span class="flex items-center gap-1 text-xs text-slate-500">
+                    Uang diterima, HPP, diskon, pajak, pelanggan, unit terjual
+                    <ChevronDown class="h-4 w-4 transition-transform" :class="{ 'rotate-180': showDetails }" />
+                </span>
+            </button>
+            <div v-if="showDetails" class="grid grid-cols-2 gap-x-6 gap-y-3 border-t border-slate-100 p-4 text-sm sm:grid-cols-3 lg:grid-cols-4">
+                <div>
+                    <p class="text-xs text-slate-500">Uang diterima kasir</p>
+                    <p class="font-bold text-slate-900 tabular-nums">Rp {{ formatCurrency(summary.total_sales) }}</p>
+                    <p class="text-[11px] text-slate-400">Termasuk pajak, layanan, tip, ongkir</p>
+                </div>
+                <div>
+                    <p class="text-xs text-slate-500">Total HPP</p>
+                    <p class="font-bold text-slate-900 tabular-nums">Rp {{ formatCurrency(hppSummary.total_cost) }}</p>
+                </div>
+                <div>
+                    <p class="text-xs text-slate-500">Total diskon</p>
+                    <p class="font-bold text-slate-900 tabular-nums">Rp {{ formatCurrency(summary.total_discount) }}</p>
+                    <p v-for="d in summary.discount_by_type ?? []" :key="d.type" class="text-[11px] text-slate-400">
+                        {{ discountTypeLabel(d.type) }}: Rp {{ formatCurrency(d.total) }}
+                    </p>
+                </div>
+                <div>
+                    <p class="text-xs text-slate-500">Total pajak</p>
+                    <p class="font-bold text-slate-900 tabular-nums">Rp {{ formatCurrency(summary.total_tax) }}</p>
+                </div>
+                <div>
+                    <p class="text-xs text-slate-500">Pelanggan baru</p>
+                    <p class="font-bold text-slate-900 tabular-nums">{{ summary.new_customers }}</p>
+                    <p class="text-[11px] text-slate-400">{{ formatDelta(new_customers_change_pct) }} · total {{ summary.total_customers }}</p>
+                </div>
+                <div>
+                    <p class="text-xs text-slate-500">Unit terjual</p>
+                    <p class="font-bold text-slate-900 tabular-nums">{{ fmtQty(summary.items_sold) }}</p>
+                </div>
+                <div>
+                    <p class="text-xs text-slate-500">Unit gratis (promo)</p>
+                    <p class="font-bold text-slate-900 tabular-nums">{{ fmtQty(summary.total_free_quantity) }}</p>
+                </div>
+            </div>
         </div>
 
         <!-- Grafik: tren omzet -->
-        <Card class="border-0 shadow-lg mb-6">
+        <Card class="mb-6 border border-slate-200 shadow-none">
             <CardHeader>
-                <CardTitle class="text-lg font-black">Tren omzet</CardTitle>
+                <CardTitle class="text-lg font-black">Tren penjualan bersih</CardTitle>
                 <CardDescription>
                     {{ salesTrend.length > 62 ? 'Agregasi bulanan (periode panjang).' : 'Per hari dalam rentang filter.' }}
                 </CardDescription>
@@ -656,28 +573,28 @@ const hppCoverageGap = computed(() => Math.max(0, props.hppSummary.items_total -
                     <Line :data="lineChartData" :options="lineChartOptions" />
                 </div>
                 <div v-else class="py-16 text-center text-slate-500">
-                    <BarChart3 class="h-12 w-12 mx-auto mb-3 text-slate-300" />
+                    <BarChart3 class="mx-auto mb-3 h-12 w-12 text-slate-300" />
                     <p class="font-medium">Belum ada omzet di periode ini</p>
-                    <p class="text-sm mt-1">Coba perbesar rentang tanggal atau lakukan transaksi POS.</p>
+                    <p class="mt-1 text-sm">Coba perbesar rentang tanggal atau lakukan transaksi POS.</p>
                 </div>
             </CardContent>
         </Card>
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            <Card class="border-0 shadow-lg min-w-0">
+        <div class="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <Card class="min-w-0 border border-slate-200 shadow-none">
                 <CardHeader>
                     <CardTitle class="text-lg font-black">Metode pembayaran</CardTitle>
                     <CardDescription>Proporsi omzet menurut metode bayar</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <div v-if="hasPaymentData" class="h-[280px] flex justify-center">
+                    <div v-if="hasPaymentData" class="flex h-[280px] justify-center">
                         <Doughnut :data="paymentChartData" :options="paymentChartOptions" />
                     </div>
-                    <p v-else class="py-12 text-center text-slate-500 text-sm">Tidak ada data pembayaran.</p>
+                    <p v-else class="py-12 text-center text-sm text-slate-500">Tidak ada data pembayaran.</p>
                 </CardContent>
             </Card>
 
-            <Card class="border-0 shadow-lg min-w-0">
+            <Card class="min-w-0 border border-slate-200 shadow-none">
                 <CardHeader>
                     <CardTitle class="text-lg font-black">Omzet per kategori</CardTitle>
                     <CardDescription>Berdasarkan kategori produk di keranjang</CardDescription>
@@ -686,13 +603,13 @@ const hppCoverageGap = computed(() => Math.max(0, props.hppSummary.items_total -
                     <div v-if="hasCategoryData" class="h-[280px] w-full min-w-0">
                         <Bar :data="categoryBarData" :options="categoryBarOptions" />
                     </div>
-                    <p v-else class="py-12 text-center text-slate-500 text-sm">Belum ada penjualan per kategori.</p>
+                    <p v-else class="py-12 text-center text-sm text-slate-500">Belum ada penjualan per kategori.</p>
                 </CardContent>
             </Card>
         </div>
 
         <!-- Produk terlaris (grafik batang) -->
-        <Card v-if="hasTopBarData" class="border-0 shadow-lg mb-6">
+        <Card v-if="hasTopBarData" class="mb-6 border border-slate-200 shadow-none">
             <CardHeader>
                 <CardTitle class="text-lg font-black">Volume penjualan produk teratas</CardTitle>
                 <CardDescription>Jumlah unit terjual (hingga 8 SKU teratas)</CardDescription>
@@ -704,8 +621,8 @@ const hppCoverageGap = computed(() => Math.max(0, props.hppSummary.items_total -
             </CardContent>
         </Card>
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card class="border-0 shadow-lg">
+        <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <Card class="border border-slate-200 shadow-none">
                 <CardHeader class="pb-2">
                     <div class="flex items-center justify-between gap-2">
                         <div>
@@ -714,33 +631,31 @@ const hppCoverageGap = computed(() => Math.max(0, props.hppSummary.items_total -
                                 {{ topProducts.length }} SKU terjual di periode ini — omzet dari nilai nota, bukan harga master
                             </CardDescription>
                         </div>
-                        <div class="p-2 bg-primary/10 rounded-2xl">
+                        <div class="rounded-2xl bg-primary/10 p-2">
                             <Package class="h-5 w-5 text-primary" />
                         </div>
                     </div>
                 </CardHeader>
                 <CardContent>
-                    <div class="space-y-2 max-h-[560px] overflow-y-auto pr-1">
+                    <div class="max-h-[560px] space-y-2 overflow-y-auto pr-1">
                         <div
                             v-for="(product, index) in topProducts"
                             :key="product.id"
-                            class="flex items-center justify-between p-3 bg-slate-50 rounded-2xl"
+                            class="flex items-center justify-between rounded-2xl bg-slate-50 p-3"
                         >
-                            <div class="flex items-center gap-3 min-w-0">
-                                <div
-                                    class="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-white text-sm font-black shrink-0"
-                                >
+                            <div class="flex min-w-0 items-center gap-3">
+                                <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-black text-white">
                                     {{ index + 1 }}
                                 </div>
                                 <div class="min-w-0">
-                                    <h4 class="font-semibold text-slate-900 truncate">{{ product.name }}</h4>
+                                    <h4 class="truncate font-semibold text-slate-900">{{ product.name }}</h4>
                                     <p class="text-xs text-slate-500">{{ fmtQty(product.total_sold) }} terjual</p>
                                 </div>
                             </div>
-                            <div class="text-right shrink-0 pl-2">
+                            <div class="shrink-0 pl-2 text-right">
                                 <p class="font-bold text-slate-900 tabular-nums">{{ formatCurrency(product.total_revenue) }}</p>
                                 <p class="text-xs text-slate-500">
-                                    <span v-if="product.has_hpp" class="text-emerald-600 font-semibold">
+                                    <span v-if="product.has_hpp" class="font-semibold text-emerald-600">
                                         laba {{ formatCurrency(product.total_profit) }}
                                     </span>
                                     <span v-else>{{ formatCurrency(product.avg_price) }}/unit</span>
@@ -749,52 +664,52 @@ const hppCoverageGap = computed(() => Math.max(0, props.hppSummary.items_total -
                         </div>
                     </div>
 
-                    <div v-if="topProducts.length === 0" class="text-center py-10 text-slate-500">
-                        <Package class="h-10 w-10 mx-auto mb-3 text-slate-300" />
+                    <div v-if="topProducts.length === 0" class="py-10 text-center text-slate-500">
+                        <Package class="mx-auto mb-3 h-10 w-10 text-slate-300" />
                         <p class="font-medium">Belum ada data penjualan</p>
                     </div>
                 </CardContent>
             </Card>
 
-            <Card class="border-0 shadow-lg">
+            <Card class="border border-slate-200 shadow-none">
                 <CardHeader class="pb-2">
                     <div class="flex items-center justify-between gap-2">
                         <div>
                             <CardTitle class="text-lg font-black">Transaksi terbaru</CardTitle>
                             <CardDescription>10 transaksi terakhir di periode</CardDescription>
                         </div>
-                        <div class="p-2 bg-emerald-50 rounded-2xl">
+                        <div class="rounded-2xl bg-emerald-50 p-2">
                             <ShoppingCart class="h-5 w-5 text-emerald-600" />
                         </div>
                     </div>
                 </CardHeader>
                 <CardContent>
-                    <div class="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+                    <div class="max-h-[420px] space-y-2 overflow-y-auto pr-1">
                         <div
                             v-for="transaction in recentTransactions"
                             :key="transaction.id"
-                            class="flex items-center justify-between p-3 bg-slate-50 rounded-2xl"
+                            class="flex items-center justify-between rounded-2xl bg-slate-50 p-3"
                         >
-                            <div class="flex items-center gap-3 min-w-0">
-                                <div class="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center shrink-0">
+                            <div class="flex min-w-0 items-center gap-3">
+                                <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100">
                                     <ShoppingCart class="h-4 w-4 text-emerald-600" />
                                 </div>
                                 <div class="min-w-0">
-                                    <h4 class="font-semibold text-slate-900 truncate">
+                                    <h4 class="truncate font-semibold text-slate-900">
                                         {{ transaction.customer?.name || 'Pelanggan umum' }}
                                     </h4>
                                     <p class="text-xs text-slate-500">{{ formatDate(transaction.created_at.slice(0, 10)) }}</p>
                                 </div>
                             </div>
-                            <div class="text-right shrink-0">
+                            <div class="shrink-0 text-right">
                                 <p class="font-bold tabular-nums">{{ formatCurrency(transaction.total_amount) }}</p>
                                 <Badge variant="secondary" class="text-[10px]">{{ transaction.status }}</Badge>
                             </div>
                         </div>
                     </div>
 
-                    <div v-if="recentTransactions.length === 0" class="text-center py-10 text-slate-500">
-                        <ShoppingCart class="h-10 w-10 mx-auto mb-3 text-slate-300" />
+                    <div v-if="recentTransactions.length === 0" class="py-10 text-center text-slate-500">
+                        <ShoppingCart class="mx-auto mb-3 h-10 w-10 text-slate-300" />
                         <p class="font-medium">Belum ada transaksi di periode ini</p>
                     </div>
                 </CardContent>

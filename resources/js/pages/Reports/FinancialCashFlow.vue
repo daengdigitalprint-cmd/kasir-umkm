@@ -84,7 +84,7 @@ const formatCurrency = (n: number) =>
             operasi, investasi, dan pendanaan.
         </p>
 
-        <Card class="rounded-2xl border-slate-200 shadow-sm mb-6">
+        <Card class="rounded-2xl border-slate-200 shadow-none mb-6">
             <CardHeader class="pb-2">
                 <div class="flex items-center gap-2">
                     <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
@@ -111,7 +111,7 @@ const formatCurrency = (n: number) =>
             </CardContent>
         </Card>
 
-        <Card class="rounded-2xl border-slate-200 shadow-sm">
+        <Card class="rounded-2xl border-slate-200 shadow-none">
             <CardContent class="p-6 space-y-5">
                 <div v-for="(section, key) in { operating, investing, financing }" :key="key" class="space-y-2">
                     <div class="flex items-center justify-between border-b border-slate-200 pb-1">

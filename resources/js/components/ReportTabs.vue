@@ -1,274 +1,271 @@
-<script lang="ts">
-/**
- * Posisi indikator & scroll disimpan di level modul: setiap pindah tab, Inertia memasang ulang
- * komponen ini di halaman baru, jadi indikator melanjutkan animasi dari posisi tab sebelumnya.
- */
-const memory: { back: number | null; front: number; scrollLeft: number } = { back: null, front: 0, scrollLeft: 0 };
-</script>
-
 <script setup lang="ts">
-import { Link, router, usePage } from '@inertiajs/vue3';
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useAllowsAdvancedRetail } from '@/composables/usePlanLimits';
+import { Link, usePage } from '@inertiajs/vue3';
+import { ChevronDown, LayoutGrid, X } from 'lucide-vue-next';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
+/**
+ * Navigasi laporan: tab berisi laporan dalam kelompok yang sedang dibuka, ditambah
+ * tombol "Semua laporan" yang menampilkan seluruh laporan per kelompok beserta penjelasannya.
+ * (Dulu satu baris berisi hingga 23 tab yang harus digeser.)
+ */
 const props = defineProps<{
-    activeTab: string;
+    activeTab?: string;
+    /** Nama lama yang masih dipakai satu halaman. */
+    active?: string;
 }>();
 
 const allowsAdvancedRetail = useAllowsAdvancedRetail();
 const page = usePage();
-const pharmacyEnabled = computed(() => Boolean((page.props as { pharmacy_enabled?: boolean }).pharmacy_enabled));
-const accountingEnabled = computed(() => Boolean((page.props as { accounting_enabled?: boolean }).accounting_enabled));
-const barbershopEnabled = computed(() => Boolean((page.props as { barbershop_enabled?: boolean }).barbershop_enabled));
+const flag = (key: string) => computed(() => Boolean((page.props as Record<string, unknown>)[key]));
+const pharmacyEnabled = flag('pharmacy_enabled');
+const accountingEnabled = flag('accounting_enabled');
+const barbershopEnabled = flag('barbershop_enabled');
 
-type Tab = { label: string; href: string; key: string; financial?: boolean; advanced?: boolean; pharmacy?: boolean; barbershop?: boolean };
+type Report = {
+    key: string;
+    label: string;
+    href: string;
+    desc: string;
+    financial?: boolean;
+    advanced?: boolean;
+    pharmacy?: boolean;
+    barbershop?: boolean;
+};
+type Group = { key: string; label: string; reports: Report[] };
 
-const tabs: Tab[] = [
-    { label: 'Ringkasan', href: '/reports', key: 'ringkasan' },
-    { label: 'Penjualan', href: '/reports/sales', key: 'penjualan' },
-    { label: 'Komisi Barber', href: '/reports/commissions', key: 'komisi', advanced: true, barbershop: true },
-    { label: 'Pembelian', href: '/reports/purchases', key: 'pembelian' },
-    { label: 'Stok', href: '/reports/inventory', key: 'stok' },
-    { label: 'Pemusnahan', href: '/reports/destructions', key: 'pemusnahan', pharmacy: true },
-    { label: 'Selisih stok', href: '/reports/stock-variance', key: 'selisih-stok', advanced: true },
-    { label: 'Kartu stok', href: '/reports/stock-card', key: 'kartu-stok', advanced: true },
-    { label: 'Produksi', href: '/reports/production', key: 'produksi' },
-    { label: 'Shift kasir', href: '/reports/cash-shifts', key: 'shift', advanced: true },
-    { label: 'Neraca', href: '/financial/balance-sheet', key: 'neraca', financial: true },
-    { label: 'Rekonsiliasi', href: '/financial/reconciliation', key: 'rekonsiliasi', financial: true },
-    { label: 'Perubahan Ekuitas', href: '/financial/statement-of-equity-changes', key: 'perubahan-ekuitas', financial: true },
-    { label: 'Arus Kas Akuntansi', href: '/financial/cash-flow', key: 'arus-kas-akuntansi', financial: true },
-    { label: 'Periode', href: '/financial/accounting-periods', key: 'periode-akuntansi', financial: true },
-    { label: 'Jurnal', href: '/financial/journal', key: 'jurnal', financial: true },
-    { label: 'Neraca saldo', href: '/financial/trial-balance', key: 'neraca-saldo', financial: true },
-    { label: 'Laba rugi', href: '/financial/income-statement', key: 'laba-rugi', financial: true },
-    { label: 'Rekap PPN', href: '/reports/tax/ppn-summary', key: 'ppn', financial: true },
-    { label: 'CaLK', href: '/financial/calk', key: 'calk', financial: true },
-    { label: 'Arus Kas', href: '/reports/cash-flow', key: 'cash-flow', financial: true },
-    { label: 'Kas Masuk/Keluar', href: '/reports/cash-transactions', key: 'cash-transactions', advanced: true },
-    { label: 'Utang Usaha', href: '/reports/aging-payables', key: 'aging-payables', financial: true },
+const groups: Group[] = [
+    {
+        key: 'penjualan',
+        label: 'Penjualan',
+        reports: [
+            { key: 'ringkasan', label: 'Ringkasan', href: '/reports', desc: 'Penjualan bersih, laba kotor, produk terlaris, dan tren.' },
+            { key: 'penjualan', label: 'Penjualan', href: '/reports/sales', desc: 'Daftar transaksi dan rincian penjualan per periode.' },
+            {
+                key: 'komisi',
+                label: 'Komisi barber',
+                href: '/reports/commissions',
+                desc: 'Komisi layanan per barber.',
+                advanced: true,
+                barbershop: true,
+            },
+        ],
+    },
+    {
+        key: 'stok',
+        label: 'Stok & Produksi',
+        reports: [
+            { key: 'stok', label: 'Stok', href: '/reports/inventory', desc: 'Posisi stok dan nilai persediaan saat ini.' },
+            { key: 'kartu-stok', label: 'Kartu stok', href: '/reports/stock-card', desc: 'Riwayat keluar-masuk satu produk.', advanced: true },
+            {
+                key: 'selisih-stok',
+                label: 'Selisih stok',
+                href: '/reports/stock-variance',
+                desc: 'Selisih hasil stok opname dengan catatan sistem.',
+                advanced: true,
+            },
+            {
+                key: 'pemusnahan',
+                label: 'Pemusnahan',
+                href: '/reports/destructions',
+                desc: 'Barang rusak/kedaluwarsa yang dimusnahkan.',
+                pharmacy: true,
+            },
+            { key: 'produksi', label: 'Produksi', href: '/reports/production', desc: 'Hasil produksi dan bahan yang terpakai.' },
+        ],
+    },
+    {
+        key: 'kas',
+        label: 'Kas',
+        reports: [
+            { key: 'shift', label: 'Shift kasir', href: '/reports/cash-shifts', desc: 'Buka-tutup shift dan selisih uang laci.', advanced: true },
+            {
+                key: 'cash-transactions',
+                label: 'Kas masuk/keluar',
+                href: '/reports/cash-transactions',
+                desc: 'Uang masuk dan keluar dari laci kasir.',
+                advanced: true,
+            },
+            {
+                key: 'cash-flow',
+                label: 'Arus kas harian',
+                href: '/reports/cash-flow',
+                desc: 'Uang masuk dan keluar per hari dari semua sumber.',
+                financial: true,
+            },
+        ],
+    },
+    {
+        key: 'pembelian',
+        label: 'Pembelian & Utang',
+        reports: [
+            { key: 'pembelian', label: 'Pembelian', href: '/reports/purchases', desc: 'Pembelian barang per supplier dan periode.' },
+            {
+                key: 'aging-payables',
+                label: 'Utang usaha',
+                href: '/reports/aging-payables',
+                desc: 'Tagihan supplier yang belum dibayar dan umurnya.',
+                financial: true,
+            },
+        ],
+    },
+    {
+        key: 'akuntansi',
+        label: 'Akuntansi',
+        reports: [
+            {
+                key: 'laba-rugi',
+                label: 'Laba rugi',
+                href: '/financial/income-statement',
+                desc: 'Pendapatan dikurangi beban dalam satu periode.',
+                financial: true,
+            },
+            { key: 'neraca', label: 'Neraca', href: '/financial/balance-sheet', desc: 'Harta, utang, dan modal pada satu tanggal.', financial: true },
+            {
+                key: 'arus-kas-akuntansi',
+                label: 'Laporan arus kas',
+                href: '/financial/cash-flow',
+                desc: 'Arus kas operasi, investasi, dan pendanaan (format akuntansi).',
+                financial: true,
+            },
+            {
+                key: 'perubahan-ekuitas',
+                label: 'Perubahan modal',
+                href: '/financial/statement-of-equity-changes',
+                desc: 'Perubahan modal pemilik dalam satu periode.',
+                financial: true,
+            },
+            {
+                key: 'neraca-saldo',
+                label: 'Neraca saldo',
+                href: '/financial/trial-balance',
+                desc: 'Saldo debit-kredit setiap akun (untuk pemeriksaan).',
+                financial: true,
+            },
+            { key: 'jurnal', label: 'Jurnal', href: '/financial/journal', desc: 'Catatan jurnal otomatis dari setiap transaksi.', financial: true },
+            {
+                key: 'rekonsiliasi',
+                label: 'Rekonsiliasi',
+                href: '/financial/reconciliation',
+                desc: 'Mencocokkan saldo kas/bank dengan catatan.',
+                financial: true,
+            },
+            {
+                key: 'ppn',
+                label: 'Rekap PPN',
+                href: '/reports/tax/ppn-summary',
+                desc: 'PPN keluaran dan masukan untuk lapor pajak.',
+                financial: true,
+            },
+            { key: 'calk', label: 'CaLK', href: '/financial/calk', desc: 'Catatan atas laporan keuangan.', financial: true },
+            {
+                key: 'periode-akuntansi',
+                label: 'Periode akuntansi',
+                href: '/financial/accounting-periods',
+                desc: 'Tutup buku bulanan.',
+                financial: true,
+            },
+        ],
+    },
 ];
 
-const visibleTabs = computed(() =>
-    tabs.filter(
-        (tab) =>
-            (!tab.advanced || allowsAdvancedRetail.value) &&
-            (!tab.pharmacy || pharmacyEnabled.value) &&
-            (!tab.financial || accountingEnabled.value) &&
-            (!tab.barbershop || barbershopEnabled.value),
-    ),
-);
+const isVisible = (r: Report) =>
+    (!r.advanced || allowsAdvancedRetail.value) &&
+    (!r.pharmacy || pharmacyEnabled.value) &&
+    (!r.financial || accountingEnabled.value) &&
+    (!r.barbershop || barbershopEnabled.value);
 
-/** Tab yang baru diklik — indikator langsung bergerak tanpa menunggu halaman berikutnya selesai dimuat. */
-const pendingKey = ref<string | null>(null);
-const currentKey = computed(() => pendingKey.value ?? props.activeTab);
+const visibleGroups = computed(() => groups.map((g) => ({ ...g, reports: g.reports.filter(isVisible) })).filter((g) => g.reports.length > 0));
 
-/** ── Indikator elastis (Elastic Tabs) ── */
-const scrollRef = ref<HTMLElement | null>(null);
-const trackRef = ref<HTMLElement | null>(null);
-const indRef = ref<HTMLElement | null>(null);
-const itemEls = new Map<string, HTMLElement>();
+const activeKey = computed(() => props.activeTab ?? props.active ?? 'ringkasan');
+const activeGroup = computed(() => visibleGroups.value.find((g) => g.reports.some((r) => r.key === activeKey.value)) ?? visibleGroups.value[0]);
+const activeReport = computed(() => activeGroup.value?.reports.find((r) => r.key === activeKey.value) ?? null);
 
-const setItemRef = (key: string, el: unknown) => {
-    const node = (el as { $el?: HTMLElement } | null)?.$el ?? (el as HTMLElement | null);
-    if (node) {
-        itemEls.set(key, node);
-    } else {
-        itemEls.delete(key);
-    }
+// ── Panel "Semua laporan" ──
+const open = ref(false);
+const rootRef = ref<HTMLElement | null>(null);
+const onDocClick = (e: MouseEvent) => {
+    if (open.value && rootRef.value && !rootRef.value.contains(e.target as Node)) open.value = false;
 };
-
-const SPEED = 18;
-const LAG = 0.3;
-const BOUNCE = 0.5;
-
-const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-let front = 0;
-let back = 0;
-let vF = 0;
-let vB = 0;
-let rafId = 0;
-let resizeObserver: ResizeObserver | null = null;
-let removeStartListener: (() => void) | null = null;
-let removeFinishListener: (() => void) | null = null;
-
-const measure = (): [number, number] | null => {
-    const el = itemEls.get(currentKey.value);
-    const track = trackRef.value;
-    if (!el || !track) {
-        return null;
-    }
-    const r = el.getBoundingClientRect();
-    const w = track.getBoundingClientRect();
-    return [r.left - w.left, r.right - w.left];
+const onKey = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') open.value = false;
 };
-
-const paint = () => {
-    const ind = indRef.value;
-    if (!ind) {
-        return;
-    }
-    ind.style.transform = `translateX(${back.toFixed(1)}px)`;
-    ind.style.width = `${Math.max(4, front - back).toFixed(1)}px`;
-};
-
-const frame = () => {
-    const t = measure();
-    if (!t) {
-        rafId = 0;
-        return;
-    }
-    const [tl, tr] = t;
-    const k = SPEED * 0.012;
-    vF += (tr - front) * k;
-    vF *= BOUNCE;
-    front += vF;
-    vB += (tl - back) * (k * LAG);
-    vB *= BOUNCE;
-    back += vB;
-    paint();
-    if (Math.abs(tl - back) < 0.1 && Math.abs(tr - front) < 0.1 && Math.abs(vB) < 0.05 && Math.abs(vF) < 0.05) {
-        back = tl;
-        front = tr;
-        vB = 0;
-        vF = 0;
-        paint();
-        rafId = 0;
-        return;
-    }
-    rafId = requestAnimationFrame(frame);
-};
-
-const kick = () => {
-    if (prefersReducedMotion) {
-        const t = measure();
-        if (t) {
-            back = t[0];
-            front = t[1];
-            paint();
-        }
-        return;
-    }
-    if (!rafId) {
-        rafId = requestAnimationFrame(frame);
-    }
-};
-
-/** Geser track supaya tab aktif terlihat (berguna di layar sempit / tab di ujung kanan). */
-const revealActive = (smooth: boolean) => {
-    const scroller = scrollRef.value;
-    const el = itemEls.get(currentKey.value);
-    if (!scroller || !el) {
-        return;
-    }
-    const s = scroller.getBoundingClientRect();
-    const r = el.getBoundingClientRect();
-    const pad = 24;
-    let delta = 0;
-    if (r.left < s.left + pad) {
-        delta = r.left - s.left - pad;
-    } else if (r.right > s.right - pad) {
-        delta = r.right - s.right + pad;
-    }
-    if (delta !== 0) {
-        scroller.scrollTo({ left: scroller.scrollLeft + delta, behavior: smooth && !prefersReducedMotion ? 'smooth' : 'auto' });
-    }
-};
-
-const pathOf = (url: string | URL) => {
-    try {
-        return new URL(url.toString(), window.location.origin).pathname.replace(/\/+$/, '') || '/';
-    } catch {
-        return '';
-    }
-};
-
-onMounted(async () => {
-    await nextTick();
-    if (scrollRef.value) {
-        scrollRef.value.scrollLeft = memory.scrollLeft;
-    }
-    const t = measure();
-    if (memory.back !== null && !prefersReducedMotion) {
-        back = memory.back;
-        front = memory.front;
-        paint();
-    } else if (t) {
-        back = t[0];
-        front = t[1];
-        paint();
-    }
-    revealActive(true);
-    kick();
-
-    window.addEventListener('resize', kick);
-    if (trackRef.value && typeof ResizeObserver !== 'undefined') {
-        resizeObserver = new ResizeObserver(() => kick());
-        resizeObserver.observe(trackRef.value);
-    }
-
-    removeStartListener = router.on('start', (event) => {
-        const path = pathOf(event.detail.visit.url);
-        const tab = visibleTabs.value.find((item) => item.href === path);
-        if (tab && tab.key !== currentKey.value) {
-            pendingKey.value = tab.key;
-        }
-    });
-    // Kunjungan batal/gagal: kembalikan indikator ke menu halaman yang sedang tampil.
-    removeFinishListener = router.on('finish', () => {
-        pendingKey.value = null;
-    });
+onMounted(() => {
+    document.addEventListener('click', onDocClick);
+    document.addEventListener('keydown', onKey);
 });
-
 onBeforeUnmount(() => {
-    if (rafId) {
-        cancelAnimationFrame(rafId);
-    }
-    memory.back = back;
-    memory.front = front;
-    memory.scrollLeft = scrollRef.value?.scrollLeft ?? 0;
-    window.removeEventListener('resize', kick);
-    resizeObserver?.disconnect();
-    removeStartListener?.();
-    removeFinishListener?.();
-});
-
-watch([currentKey, visibleTabs], async () => {
-    await nextTick();
-    revealActive(true);
-    kick();
+    document.removeEventListener('click', onDocClick);
+    document.removeEventListener('keydown', onKey);
 });
 </script>
 
 <template>
-    <div class="mb-5 min-w-0 max-w-full">
-        <div ref="scrollRef" class="overflow-x-auto pb-1 [scrollbar-width:thin]">
-            <div
-                ref="trackRef"
-                class="relative inline-flex gap-1 rounded-full border border-slate-200 bg-white p-1.5 shadow-sm"
+    <div ref="rootRef" class="relative mb-4 min-w-0 flex-1">
+        <div class="flex items-center gap-2">
+            <button
+                type="button"
+                class="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300"
+                :aria-expanded="open"
+                @click.stop="open = !open"
             >
-                <!-- Indikator tab aktif yang bergerak secara elastis -->
-                <div
-                    ref="indRef"
-                    class="pointer-events-none absolute top-1.5 bottom-1.5 left-0 rounded-full bg-violet-600 shadow-md shadow-violet-200 transition-opacity duration-200"
-                    :style="{ opacity: visibleTabs.some((tab) => tab.key === currentKey) ? 1 : 0 }"
-                ></div>
+                <LayoutGrid class="h-4 w-4 text-primary" />
+                <span class="hidden sm:inline">{{ activeGroup?.label ?? 'Laporan' }}</span>
+                <span class="sm:hidden">Laporan</span>
+                <ChevronDown class="h-4 w-4 text-slate-400 transition-transform" :class="{ 'rotate-180': open }" />
+            </button>
+
+            <!-- Laporan dalam kelompok yang sedang dibuka -->
+            <nav
+                class="flex min-w-0 gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                aria-label="Laporan dalam kelompok ini"
+            >
                 <Link
-                    v-for="tab in visibleTabs"
-                    :key="tab.key"
-                    :ref="(el) => setItemRef(tab.key, el)"
-                    :href="tab.href"
-                    class="relative z-10 inline-flex items-center whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-colors duration-200 outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
-                    :class="currentKey === tab.key
-                        ? 'text-white'
-                        : tab.financial
-                            ? 'text-violet-700/80 hover:text-violet-900'
-                            : 'text-slate-500 hover:text-slate-900'"
-                    :aria-current="currentKey === tab.key ? 'page' : undefined"
+                    v-for="r in activeGroup?.reports ?? []"
+                    :key="r.key"
+                    :href="r.href"
+                    class="shrink-0 rounded-xl px-3 py-2 text-sm font-semibold whitespace-nowrap transition"
+                    :class="r.key === activeKey ? 'bg-primary text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'"
+                    :aria-current="r.key === activeKey ? 'page' : undefined"
                 >
-                    {{ tab.label }}
+                    {{ r.label }}
                 </Link>
+            </nav>
+        </div>
+        <p v-if="activeReport" class="mt-1.5 px-1 text-xs text-slate-500">{{ activeReport.desc }}</p>
+
+        <!-- Panel semua laporan -->
+        <div
+            v-if="open"
+            class="absolute top-full left-0 z-50 mt-2 max-h-[70vh] w-[min(46rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4"
+            role="dialog"
+            aria-label="Semua laporan"
+        >
+            <div class="mb-3 flex items-center justify-between">
+                <p class="font-bold text-slate-900">Semua laporan</p>
+                <button type="button" class="rounded-lg p-1 text-slate-400 hover:bg-slate-100" aria-label="Tutup" @click="open = false">
+                    <X class="h-4 w-4" />
+                </button>
+            </div>
+            <div class="grid gap-5 sm:grid-cols-2">
+                <section v-for="g in visibleGroups" :key="g.key">
+                    <p class="mb-1.5 text-[11px] font-black tracking-widest text-slate-400 uppercase">{{ g.label }}</p>
+                    <ul class="space-y-0.5">
+                        <li v-for="r in g.reports" :key="r.key">
+                            <Link
+                                :href="r.href"
+                                class="block rounded-xl px-2.5 py-2 transition"
+                                :class="r.key === activeKey ? 'bg-primary/10' : 'hover:bg-slate-50'"
+                                @click="open = false"
+                            >
+                                <span class="block text-sm font-semibold" :class="r.key === activeKey ? 'text-primary' : 'text-slate-800'">{{
+                                    r.label
+                                }}</span>
+                                <span class="block text-xs text-slate-500">{{ r.desc }}</span>
+                            </Link>
+                        </li>
+                    </ul>
+                </section>
             </div>
         </div>
     </div>

@@ -74,7 +74,7 @@ const formatRp = (n: number) => 'Rp ' + new Intl.NumberFormat('id-ID', { maximum
         <p class="text-sm text-slate-600 mb-4">Laporan arus kas harian berdasarkan data shift kasir yang sudah ditutup.</p>
 
         <!-- Filter -->
-        <Card class="rounded-2xl border-slate-200 shadow-sm mb-6">
+        <Card class="rounded-2xl border-slate-200 shadow-none mb-6">
             <CardContent class="p-4">
                 <form class="flex flex-wrap items-end gap-3" @submit.prevent="applyFilter">
                     <div class="space-y-1.5">
@@ -92,7 +92,7 @@ const formatRp = (n: number) => 'Rp ' + new Intl.NumberFormat('id-ID', { maximum
 
         <!-- Summary -->
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-            <Card class="rounded-2xl border-slate-200 shadow-sm">
+            <Card class="rounded-2xl border-slate-200 shadow-none">
                 <CardContent class="p-4">
                     <div class="flex items-center gap-3">
                         <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
@@ -105,7 +105,7 @@ const formatRp = (n: number) => 'Rp ' + new Intl.NumberFormat('id-ID', { maximum
                     </div>
                 </CardContent>
             </Card>
-            <Card class="rounded-2xl border-slate-200 shadow-sm">
+            <Card class="rounded-2xl border-slate-200 shadow-none">
                 <CardContent class="p-4">
                     <div class="flex items-center gap-3">
                         <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10">
@@ -118,7 +118,7 @@ const formatRp = (n: number) => 'Rp ' + new Intl.NumberFormat('id-ID', { maximum
                     </div>
                 </CardContent>
             </Card>
-            <Card class="rounded-2xl border-slate-200 shadow-sm">
+            <Card class="rounded-2xl border-slate-200 shadow-none">
                 <CardContent class="p-4">
                     <div class="flex items-center gap-3">
                         <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10">
@@ -131,7 +131,7 @@ const formatRp = (n: number) => 'Rp ' + new Intl.NumberFormat('id-ID', { maximum
                     </div>
                 </CardContent>
             </Card>
-            <Card class="rounded-2xl border-slate-200 shadow-sm">
+            <Card class="rounded-2xl border-slate-200 shadow-none">
                 <CardContent class="p-4">
                     <div class="flex items-center gap-3">
                         <div class="flex h-10 w-10 items-center justify-center rounded-xl" :class="summary.total_difference >= 0 ? 'bg-emerald-500/10' : 'bg-red-500/10'">
@@ -147,7 +147,7 @@ const formatRp = (n: number) => 'Rp ' + new Intl.NumberFormat('id-ID', { maximum
         </div>
 
         <!-- Detail Table -->
-        <Card class="rounded-2xl border-slate-200 shadow-sm">
+        <Card class="rounded-2xl border-slate-200 shadow-none">
             <CardHeader class="pb-2">
                 <CardTitle class="text-sm">Rincian per Shift</CardTitle>
                 <CardDescription>Menampilkan {{ shifts.length }} shift</CardDescription>

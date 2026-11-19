@@ -87,7 +87,7 @@ const valueClass = (n: number) => {
             <ReportExportButton report="selisih-stok" :params="{ date_from: dateFrom, date_to: dateTo, reason_code: reasonCode, type: type }" />
         </div>
 
-        <Card class="mb-6 border-0 shadow-md">
+        <Card class="mb-6 border border-slate-200 shadow-none">
             <CardContent class="grid gap-4 pt-6 md:grid-cols-5">
                 <div>
                     <label class="mb-1.5 block text-xs font-semibold text-slate-600">Dari tanggal</label>
@@ -133,7 +133,7 @@ const valueClass = (n: number) => {
         </Card>
 
         <div class="grid gap-4 md:grid-cols-4">
-            <Card class="rounded-2xl border-slate-200 shadow-sm">
+            <Card class="rounded-2xl border-slate-200 shadow-none">
                 <CardContent class="pt-6">
                     <p class="text-xs font-semibold tracking-wide text-slate-500 uppercase">Nilai bersih</p>
                     <p class="mt-1 text-xl font-black tabular-nums" :class="valueClass(props.summary.total_value)">
@@ -141,7 +141,7 @@ const valueClass = (n: number) => {
                     </p>
                 </CardContent>
             </Card>
-            <Card class="rounded-2xl border-slate-200 shadow-sm">
+            <Card class="rounded-2xl border-slate-200 shadow-none">
                 <CardContent class="pt-6">
                     <p class="text-xs font-semibold tracking-wide text-slate-500 uppercase">Kerugian</p>
                     <p class="mt-1 text-xl font-black text-red-600 tabular-nums">
@@ -149,7 +149,7 @@ const valueClass = (n: number) => {
                     </p>
                 </CardContent>
             </Card>
-            <Card class="rounded-2xl border-slate-200 shadow-sm">
+            <Card class="rounded-2xl border-slate-200 shadow-none">
                 <CardContent class="pt-6">
                     <p class="text-xs font-semibold tracking-wide text-slate-500 uppercase">Penambahan</p>
                     <p class="mt-1 text-xl font-black text-emerald-600 tabular-nums">
@@ -157,7 +157,7 @@ const valueClass = (n: number) => {
                     </p>
                 </CardContent>
             </Card>
-            <Card class="rounded-2xl border-slate-200 shadow-sm">
+            <Card class="rounded-2xl border-slate-200 shadow-none">
                 <CardContent class="pt-6">
                     <p class="text-xs font-semibold tracking-wide text-slate-500 uppercase">Dokumen / item</p>
                     <p class="mt-1 text-xl font-black text-slate-900">{{ props.summary.document_count }} / {{ props.summary.affected_items }}</p>
@@ -165,7 +165,7 @@ const valueClass = (n: number) => {
             </Card>
         </div>
 
-        <Card class="rounded-2xl border-slate-200 shadow-sm">
+        <Card class="rounded-2xl border-slate-200 shadow-none">
             <CardHeader>
                 <CardTitle class="text-base font-bold">Ringkasan menurut alasan</CardTitle>
                 <CardDescription>Mengetahui alasan terbesar membantu menentukan perbaikan yang paling berdampak.</CardDescription>
@@ -193,7 +193,7 @@ const valueClass = (n: number) => {
             </CardContent>
         </Card>
 
-        <Card class="rounded-2xl border-slate-200 shadow-sm">
+        <Card class="rounded-2xl border-slate-200 shadow-none">
             <CardHeader>
                 <CardTitle class="text-base font-bold">Produk dengan selisih terbesar</CardTitle>
                 <CardDescription>Diurutkan dari kerugian terbesar.</CardDescription>

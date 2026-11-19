@@ -163,7 +163,7 @@ function formatDt(iso: string) {
             </Card>
         </div>
 
-        <Card class="rounded-2xl border-slate-200 shadow-sm mb-6">
+        <Card class="rounded-2xl border-slate-200 shadow-none mb-6">
             <CardContent class="p-4">
                 <form class="flex flex-wrap items-end gap-3" @submit.prevent="applyFilter">
                     <div class="space-y-1.5">
@@ -201,7 +201,7 @@ function formatDt(iso: string) {
             </CardContent>
         </Card>
 
-        <Card class="rounded-2xl border-slate-200 shadow-sm">
+        <Card class="rounded-2xl border-slate-200 shadow-none">
             <CardHeader>
                 <CardTitle>Daftar Transaksi</CardTitle>
                 <CardDescription>{{ transactions.total }} transaksi ditemukan</CardDescription>

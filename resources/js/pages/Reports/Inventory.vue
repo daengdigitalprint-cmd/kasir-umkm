@@ -150,7 +150,7 @@ const stockBadge = (q: number | string): { text: string; class: string } | null 
 
         <!-- Ringkasan statistik stok -->
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
-            <Card class="border-0 shadow-lg">
+            <Card class="border border-slate-200 shadow-none">
                 <CardContent class="p-4 md:p-5">
                     <div class="flex items-center gap-3 mb-2">
                         <div class="p-2 bg-primary/10 rounded-xl">
@@ -163,7 +163,7 @@ const stockBadge = (q: number | string): { text: string; class: string } | null 
                 </CardContent>
             </Card>
 
-            <Card class="border-0 shadow-lg">
+            <Card class="border border-slate-200 shadow-none">
                 <CardContent class="p-4 md:p-5">
                     <div class="flex items-center gap-3 mb-2">
                         <div class="p-2 bg-emerald-50 rounded-xl">
@@ -176,7 +176,7 @@ const stockBadge = (q: number | string): { text: string; class: string } | null 
                 </CardContent>
             </Card>
 
-            <Card class="border-0 shadow-lg">
+            <Card class="border border-slate-200 shadow-none">
                 <CardContent class="p-4 md:p-5">
                     <div class="flex items-center gap-3 mb-2">
                         <div class="p-2 bg-red-50 rounded-xl">
@@ -188,7 +188,7 @@ const stockBadge = (q: number | string): { text: string; class: string } | null 
                 </CardContent>
             </Card>
 
-            <Card class="border-0 shadow-lg">
+            <Card class="border border-slate-200 shadow-none">
                 <CardContent class="p-4 md:p-5">
                     <div class="flex items-center gap-3 mb-2">
                         <div class="p-2 bg-amber-50 rounded-xl">
@@ -204,7 +204,7 @@ const stockBadge = (q: number | string): { text: string; class: string } | null 
 
         <!-- Batch expiry stats (jika batch tracking aktif) -->
         <div v-if="batch_tracking_enabled && batchExpiryStats" class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-            <Card class="border-0 shadow-md">
+            <Card class="border border-slate-200 shadow-none">
                 <CardContent class="p-3.5">
                     <div class="flex items-center gap-2 mb-1">
                         <Layers class="h-4 w-4 text-slate-500" />
@@ -213,7 +213,7 @@ const stockBadge = (q: number | string): { text: string; class: string } | null 
                     <p class="text-xl font-black text-slate-900 tabular-nums">{{ formatQty(batchExpiryStats.total_batches) }}</p>
                 </CardContent>
             </Card>
-            <Card class="border-0 shadow-md border-red-100">
+            <Card class="border border-slate-200 shadow-none border-red-100">
                 <CardContent class="p-3.5">
                     <div class="flex items-center gap-2 mb-1">
                         <XCircle class="h-4 w-4 text-red-500" />
@@ -222,7 +222,7 @@ const stockBadge = (q: number | string): { text: string; class: string } | null 
                     <p class="text-xl font-black text-red-600 tabular-nums">{{ formatQty(batchExpiryStats.expired) }}</p>
                 </CardContent>
             </Card>
-            <Card class="border-0 shadow-md border-amber-100">
+            <Card class="border border-slate-200 shadow-none border-amber-100">
                 <CardContent class="p-3.5">
                     <div class="flex items-center gap-2 mb-1">
                         <AlertTriangle class="h-4 w-4 text-amber-500" />
@@ -232,7 +232,7 @@ const stockBadge = (q: number | string): { text: string; class: string } | null 
                     <p class="text-[10px] text-slate-500 mt-0.5">≤ {{ batch_expiry_warn_days }} hari</p>
                 </CardContent>
             </Card>
-            <Card class="border-0 shadow-md border-emerald-100">
+            <Card class="border border-slate-200 shadow-none border-emerald-100">
                 <CardContent class="p-3.5">
                     <div class="flex items-center gap-2 mb-1">
                         <CheckCircle class="h-4 w-4 text-emerald-500" />
@@ -243,7 +243,7 @@ const stockBadge = (q: number | string): { text: string; class: string } | null 
             </Card>
         </div>
 
-        <Card class="border-0 shadow-lg mb-6">
+        <Card class="border border-slate-200 shadow-none mb-6">
             <CardHeader>
                 <CardTitle class="flex items-center gap-2 text-lg">
                     <Package class="h-5 w-5 text-slate-600" />
@@ -314,7 +314,7 @@ const stockBadge = (q: number | string): { text: string; class: string } | null 
             </CardContent>
         </Card>
 
-        <Card v-if="batch_tracking_enabled && batches" class="border-0 shadow-lg border-amber-100">
+        <Card v-if="batch_tracking_enabled && batches" class="border border-slate-200 shadow-none border-amber-100">
             <CardHeader>
                 <CardTitle class="flex items-center gap-2 text-lg">
                     <Layers class="h-5 w-5 text-amber-700" />

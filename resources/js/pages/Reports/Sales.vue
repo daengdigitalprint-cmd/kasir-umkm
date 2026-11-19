@@ -369,7 +369,7 @@ async function saveEditTransaction() {
         </div>
 
 
-        <Card class="border-0 shadow-md mb-6">
+        <Card class="border border-slate-200 shadow-none mb-6">
             <CardContent class="p-4 md:p-5">
                 <div class="flex flex-col gap-4 md:flex-row md:items-end md:flex-wrap">
                     <div class="space-y-2">
@@ -387,7 +387,7 @@ async function saveEditTransaction() {
             </CardContent>
         </Card>
 
-        <Card v-if="!readonly && props.barbershopEnabled && (props.barberBreakdown ?? []).length > 0" class="border-0 shadow-md mb-6">
+        <Card v-if="!readonly && props.barbershopEnabled && (props.barberBreakdown ?? []).length > 0" class="border border-slate-200 shadow-none mb-6">
             <CardHeader>
                 <CardTitle class="flex items-center gap-2">
                     <Store class="h-5 w-5 text-slate-600" />
@@ -428,7 +428,7 @@ async function saveEditTransaction() {
             </CardContent>
         </Card>
 
-        <Card v-if="hppSummary.items_with_hpp > 0" class="border-0 shadow-md mb-6">
+        <Card v-if="hppSummary.items_with_hpp > 0" class="border border-slate-200 shadow-none mb-6">
             <CardContent class="p-4 md:p-5">
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div class="rounded-xl bg-slate-50 p-4">
@@ -447,7 +447,7 @@ async function saveEditTransaction() {
             </CardContent>
         </Card>
 
-        <Card v-if="channelBreakdown.length > 0" class="border-0 shadow-md mb-6">
+        <Card v-if="channelBreakdown.length > 0" class="border border-slate-200 shadow-none mb-6">
             <CardHeader>
                 <CardTitle class="flex items-center gap-2">
                     <Store class="h-5 w-5 text-slate-600" />
@@ -497,7 +497,7 @@ async function saveEditTransaction() {
             </CardContent>
         </Card>
 
-        <Card class="border-0 shadow-lg">
+        <Card class="border border-slate-200 shadow-none">
             <CardHeader>
                 <CardTitle class="flex items-center gap-2">
                     <Receipt class="h-5 w-5 text-slate-600" />

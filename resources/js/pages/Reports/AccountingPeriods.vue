@@ -130,7 +130,7 @@ const confirmReopen = async () => {
             Tutup periode membuat jurnal penutup ke saldo laba dan mengunci jurnal pada tanggal periode tersebut.
         </p>
 
-        <Card class="mb-6 rounded-2xl border-slate-200 shadow-sm">
+        <Card class="mb-6 rounded-2xl border-slate-200 shadow-none">
             <CardHeader><CardTitle>Buat periode</CardTitle></CardHeader>
             <CardContent>
                 <form class="flex flex-wrap items-end gap-3" @submit.prevent="create">
@@ -142,7 +142,7 @@ const confirmReopen = async () => {
             </CardContent>
         </Card>
 
-        <Card class="rounded-2xl border-slate-200 shadow-sm overflow-hidden">
+        <Card class="rounded-2xl border-slate-200 shadow-none overflow-hidden">
             <CardContent class="p-0">
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">

@@ -18,6 +18,7 @@ import {
     Bike,
     Sparkles,
     LayoutGrid,
+    ChevronDown,
     ListChecks,
     Clock,
     CreditCard,
@@ -271,7 +272,6 @@ const navigationSource: NavItem[] = [
         menuKey: 'stock_movements',
         section: 'produk_stok',
         inventoryItem: true,
-        hideOnOwner: true,
     },
     {
         name: 'Penyesuaian stok',
@@ -292,7 +292,6 @@ const navigationSource: NavItem[] = [
         section: 'produk_stok',
         inventoryItem: true,
         advancedRetailOnly: true,
-        hideOnOwner: true,
         hideOnDirectStockEdit: true,
     },
     { name: 'Resep', href: '/recipes', icon: ChefHat, menuKey: 'recipes', section: 'produk_stok', recipesOnly: true },
@@ -665,7 +664,71 @@ const SECTION_META: { key: NonNullable<NavItem['section']>; label: string }[] = 
     { key: 'pengaturan', label: 'Pengaturan' },
 ];
 
-type NavRenderEntry = { kind: 'item'; key: string; item: ProcessedNavItem } | { kind: 'section'; key: string; label: string };
+type NavRenderEntry =
+    | { kind: 'item'; key: string; item: ProcessedNavItem }
+    | { kind: 'section'; key: string; label: string; collapsible?: boolean; count?: number };
+
+/**
+ * Susunan khusus pemilik usaha: menu pemantauan & manajemen di atas, menu operasional
+ * outlet (pembelian, transfer, produksi, dst.) dikumpulkan di satu seksi yang bisa dilipat.
+ */
+const viewerIsOwner = computed(() => Boolean((page.props as { abilities?: { owner?: boolean } }).abilities?.owner));
+const OWNER_SECTION_META: { key: string; label: string; collapsible?: boolean }[] = [
+    { key: 'o_ringkasan', label: 'Ringkasan' },
+    { key: 'o_keuangan', label: 'Keuangan' },
+    { key: 'o_pelanggan', label: 'Pelanggan & Promo' },
+    { key: 'o_produk', label: 'Produk' },
+    { key: 'o_tim', label: 'Tim & Outlet' },
+    { key: 'o_operasional', label: 'Operasional outlet', collapsible: true },
+    { key: 'o_lainnya', label: 'Lainnya' },
+];
+const OWNER_SECTION_BY_KEY: Record<string, string> = {
+    reports: 'o_ringkasan',
+    kpi: 'o_ringkasan',
+    expenses: 'o_keuangan',
+    receivables: 'o_keuangan',
+    customers: 'o_pelanggan',
+    loyalty: 'o_pelanggan',
+    discounts: 'o_pelanggan',
+    upsell: 'o_pelanggan',
+    products: 'o_produk',
+    product_categories: 'o_produk',
+    manage_products: 'o_produk',
+    recipes: 'o_produk',
+    stock_movements: 'o_produk',
+    manage_staff: 'o_tim',
+    manage_stores: 'o_tim',
+    attendance: 'o_tim',
+    payroll: 'o_tim',
+    activity_logs: 'o_lainnya',
+    settings: 'o_lainnya',
+    cashier_pin_settings: 'o_lainnya',
+};
+const ownerSectionOf = (item: ProcessedNavItem): string => {
+    if (item.href === '/owner/stock-monitor') return 'o_ringkasan';
+    if (item.menuKey && OWNER_SECTION_BY_KEY[item.menuKey]) return OWNER_SECTION_BY_KEY[item.menuKey];
+    // Menu bagian Pengaturan lain (mis. Bantuan) masuk "Lainnya", sisanya operasional outlet.
+    return item.section === 'pengaturan' ? 'o_lainnya' : 'o_operasional';
+};
+
+/** Seksi operasional owner terlipat secara bawaan (diingat per perangkat). */
+const OPS_KEY = 'sidebar.owner.opsOpen';
+const readOpsOpen = () => {
+    try {
+        return localStorage.getItem(OPS_KEY) === '1';
+    } catch {
+        return false;
+    }
+};
+const opsOpen = ref(readOpsOpen());
+const toggleOps = () => {
+    opsOpen.value = !opsOpen.value;
+    try {
+        localStorage.setItem(OPS_KEY, opsOpen.value ? '1' : '0');
+    } catch {
+        /* abaikan */
+    }
+};
 
 /** Item tanpa seksi (Dashboard) di atas, lalu header seksi + itemnya berurutan. */
 const renderItems = computed<NavRenderEntry[]>(() => {
@@ -675,6 +738,23 @@ const renderItems = computed<NavRenderEntry[]>(() => {
             out.push({ kind: 'item', key: item.name, item });
         }
     }
+
+    if (viewerIsOwner.value) {
+        const sectioned = navigationItems.value.filter((i) => i.section);
+        for (const meta of OWNER_SECTION_META) {
+            const sectionItems = sectioned.filter((i) => ownerSectionOf(i) === meta.key);
+            if (sectionItems.length === 0) continue;
+            out.push({ kind: 'section', key: meta.key, label: meta.label, collapsible: meta.collapsible, count: sectionItems.length });
+            // Seksi terlipat tetap dibuka bila halaman yang sedang aktif ada di dalamnya.
+            const hidden = meta.collapsible && !opsOpen.value && !sectionItems.some((i) => isCurrentRoute(i.href));
+            if (hidden) continue;
+            for (const item of sectionItems) {
+                out.push({ kind: 'item', key: item.name, item });
+            }
+        }
+        return out;
+    }
+
     for (const meta of SECTION_META) {
         const sectionItems = navigationItems.value.filter((i) => i.section === meta.key);
         if (sectionItems.length === 0) {
@@ -875,7 +955,18 @@ const subscriptionCardSoft = computed(() => {
             ></div>
             <template v-for="entry in renderItems" :key="entry.key">
                 <!-- Header seksi menu -->
-                <p v-if="entry.kind === 'section'" class="px-4 pt-6 pb-2 text-[10px] font-black tracking-[0.2em] text-slate-400 uppercase">
+                <button
+                    v-if="entry.kind === 'section' && entry.collapsible"
+                    type="button"
+                    class="flex w-full items-center gap-2 px-4 pt-6 pb-2 text-left text-[10px] font-black tracking-[0.2em] text-slate-400 uppercase hover:text-slate-600"
+                    :aria-expanded="opsOpen"
+                    @click="toggleOps"
+                >
+                    {{ entry.label }}
+                    <span class="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] tracking-normal text-slate-500">{{ entry.count }}</span>
+                    <ChevronDown class="ml-auto size-3.5 transition-transform" :class="{ 'rotate-180': opsOpen }" />
+                </button>
+                <p v-else-if="entry.kind === 'section'" class="px-4 pt-6 pb-2 text-[10px] font-black tracking-[0.2em] text-slate-400 uppercase">
                     {{ entry.label }}
                 </p>
 
