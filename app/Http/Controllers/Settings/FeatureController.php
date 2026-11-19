@@ -5,28 +5,14 @@ namespace App\Http\Controllers\Settings;
 use App\Http\Controllers\Controller;
 use App\Services\ActivityLogger;
 use App\Support\OptionalFeatures;
-use App\Support\UiMode;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
-use Inertia\Response;
 
 /**
  * Halaman "Fitur Tambahan": nyalakan fitur lanjutan satu per satu.
  */
 class FeatureController extends Controller
 {
-    public function index(Request $request): Response
-    {
-        $store = $request->user()->store;
-        abort_if(! $store, 404);
-
-        return Inertia::render('settings/Features', [
-            'groups' => OptionalFeatures::forFrontend($store),
-            'uiMode' => UiMode::of($store),
-        ]);
-    }
-
     public function update(Request $request, string $feature): RedirectResponse
     {
         $store = $request->user()->store;

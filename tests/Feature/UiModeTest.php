@@ -226,12 +226,15 @@ test('halaman fitur tambahan tampil untuk admin dan ditolak untuk kasir', functi
     $store = uiModeStore(['settings' => ['ui_mode' => 'simple']]);
 
     $this->actingAs(uiModeAdmin($store));
-    $props = $this->get('/settings/features')->assertStatus(200)->viewData('page')['props'];
-    expect($props['uiMode'])->toBe('simple')
-        ->and(collect($props['groups'])->flatMap(fn ($g) => $g['features'])->count())->toBe(count(OptionalFeatures::FEATURES));
+    // Alamat lama tetap berfungsi, diarahkan ke Pengaturan → Fitur.
+    $this->get('/settings/features')->assertRedirect('/settings/store/fitur');
+    $props = $this->get('/settings/store/fitur')->assertStatus(200)->viewData('page')['props'];
+    expect($props['ui_mode'])->toBe('simple')
+        ->and($props['section'])->toBe('fitur')
+        ->and(collect($props['featureGroups'])->flatMap(fn ($g) => $g['features'])->count())->toBe(count(OptionalFeatures::FEATURES));
 
     $this->actingAs(uiModeAdmin($store, 'cashier'));
-    $this->get('/settings/features')->assertRedirect();
+    $this->get('/settings/store/fitur')->assertRedirect();
     $this->put('/settings/features/nope', ['enabled' => true])->assertRedirect();
 });
 

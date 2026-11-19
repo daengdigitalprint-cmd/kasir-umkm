@@ -8,6 +8,7 @@ use App\Models\Organization;
 use App\Support\Accounting\AccountingFeatures;
 use App\Support\BusinessTypePresets;
 use App\Support\FnBFeatures;
+use App\Support\OptionalFeatures;
 use App\Support\PlanModules;
 use App\Support\ProductDiscountFeatures;
 use App\Support\StockAdjustmentApproval;
@@ -21,6 +22,25 @@ use Inertia\Response;
 
 class ProfileController extends Controller
 {
+    /** Bagian pengaturan toko (lihat routes/settings.php). */
+    public const STORE_SECTIONS = ['profil', 'kasir', 'fitur', 'struk', 'stok', 'backup'];
+
+    /**
+     * Pengaturan toko per bagian. Memakai halaman yang sama dengan profil akun.
+     */
+    public function editStore(Request $request, string $section): Response
+    {
+        $store = $request->user()->store;
+        abort_if(! $store, 404);
+
+        $extra = ['section' => $section];
+        if ($section === 'fitur') {
+            $extra['featureGroups'] = OptionalFeatures::forFrontend($store);
+        }
+
+        return $this->edit($request)->with($extra);
+    }
+
     /**
      * Show the user's profile settings page.
      */
@@ -143,6 +163,7 @@ class ProfileController extends Controller
             ] : null,
             'joinableOrganizations' => $joinableOrganizations,
             'businessTypes' => BusinessTypePresets::TYPES,
+            'section' => 'akun',
         ]);
     }
 

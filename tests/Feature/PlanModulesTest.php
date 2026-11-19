@@ -119,7 +119,7 @@ test('paket Gratis: menyalakan saklar modul berbayar di Pengaturan ditolak tanpa
 test('paket Gratis: props Inertia memuat menu yang terkunci', function () {
     [, $user] = makePlanStore('starter');
 
-    $props = $this->actingAs($user)->get('/settings/features')->viewData('page')['props'];
+    $props = $this->actingAs($user)->get('/settings/store/fitur')->viewData('page')['props'];
 
     expect($props['plan_locked_menus'])->toContain('kpi')
         ->and($props['plan_locked_settings'])->toContain('accounting_enabled')

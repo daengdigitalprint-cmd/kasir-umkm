@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import { Head, useForm, usePage } from '@inertiajs/vue3';
+import { useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
-import AdminLayout from '@/layouts/AdminLayout.vue';
+import SettingsShell from '@/components/settings/SettingsShell.vue';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 
-import { KeyRound, Shield, Users, Check, X, Loader2 } from 'lucide-vue-next';
-import { toastSuccess, toastWarning, toastError } from '@/lib/swal';
+import { Shield, Users, Check, X, Loader2 } from 'lucide-vue-next';
+import { toastSuccess, toastError } from '@/lib/swal';
 
 interface CashierRow {
     id: number;
@@ -85,19 +85,10 @@ function togglePos(emp: CashierRow) {
 </script>
 
 <template>
-    <AdminLayout title="Pengaturan Kasir">
-        <Head title="Pengaturan Kasir" />
-
-        <div class="mb-6">
-            <h1 class="text-2xl font-bold text-slate-900 flex items-center gap-2">
-                <KeyRound class="h-7 w-7 text-primary" />
-                Pengaturan Login Kasir
-            </h1>
-            <p class="text-sm text-slate-600 mt-1">Kelola mode login kasir dan PIN untuk shift.</p>
-        </div>
+    <SettingsShell active="pin" title="PIN kasir" description="Kasir masuk shift dengan PIN tanpa perlu keluar-masuk akun.">
 
         <div class="grid gap-6">
-            <Card class="border-0 shadow-lg">
+            <Card class="rounded-2xl border border-slate-200 shadow-none">
                 <CardHeader>
                     <CardTitle class="flex items-center gap-2">
                         <Shield class="h-5 w-5 text-primary" />
@@ -126,7 +117,7 @@ function togglePos(emp: CashierRow) {
                 </CardContent>
             </Card>
 
-            <Card v-if="isPinMode" class="border-0 shadow-lg">
+            <Card v-if="isPinMode" class="rounded-2xl border border-slate-200 shadow-none">
                 <CardHeader>
                     <CardTitle class="flex items-center gap-2">
                         <Users class="h-5 w-5 text-primary" />
@@ -255,5 +246,5 @@ function togglePos(emp: CashierRow) {
                 </div>
             </div>
         </Teleport>
-    </AdminLayout>
+    </SettingsShell>
 </template>

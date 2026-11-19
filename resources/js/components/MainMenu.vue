@@ -28,7 +28,6 @@ import {
     Gift,
     History,
     Home,
-    KeyRound,
     Layers,
     ListOrdered,
     LogOut,
@@ -468,15 +467,6 @@ const navigationSource: NavItem[] = [
     { name: 'Distribusi Produk', href: '/manage-products', icon: Package, menuKey: 'manage_products', section: 'pengaturan', storeAdminOnly: true },
     { name: 'Tim & Akses', href: '/manage-staff', icon: Users, menuKey: 'manage_staff', section: 'pengaturan', storeAdminOnly: true },
     { name: 'Pengaturan', href: '/settings', icon: Settings, menuKey: 'settings', section: 'pengaturan', storeAdminOnly: true },
-    {
-        name: 'Login Kasir',
-        href: '/settings/cashier-pin',
-        icon: KeyRound,
-        menuKey: 'cashier_pin_settings',
-        section: 'pengaturan',
-        storeAdminOnly: true,
-        cashierPinOnly: true,
-    },
     {
         name: 'Bantuan',
         href: 'https://wa.me/6285242766676?text=Halo%2C%20saya%20butuh%20bantuan%20dengan%20aplikasi%20kasir.',
@@ -1062,10 +1052,10 @@ const subscriptionCardSoft = computed(() => {
         <!-- Fitur Tambahan: nyalakan fitur lanjutan satu per satu (Mode Sederhana) -->
         <Link
             v-if="canSwitchUiMode && isSimpleMode"
-            href="/settings/features"
+            href="/settings/store/fitur"
             :class="[
                 'mx-1 mt-4 flex w-[calc(100%-0.5rem)] items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition',
-                isCurrentRoute('/settings/features')
+                isCurrentRoute('/settings/store/fitur')
                     ? 'border-violet-300 bg-violet-100 text-violet-800'
                     : 'border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100',
             ]"

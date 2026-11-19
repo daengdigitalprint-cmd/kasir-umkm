@@ -102,7 +102,7 @@ async function handleBrowserScan() {
 </script>
 
 <template>
-    <Card :class="embedded ? 'border-0 shadow-lg mb-6' : 'mb-6'">
+    <Card :class="embedded ? 'mb-6 rounded-2xl border border-slate-200 shadow-none' : 'mb-6'">
         <CardHeader v-if="showTitle">
             <CardTitle class="flex items-center gap-2 text-base">
                 <Bluetooth class="h-5 w-5" />

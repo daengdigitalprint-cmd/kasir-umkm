@@ -9,7 +9,6 @@ use App\Support\StorePlanLimits;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use Inertia\Inertia;
 use Inertia\Response;
 
 class BackupController extends Controller
@@ -17,39 +16,6 @@ class BackupController extends Controller
     public function __construct(
         private StoreBackupService $backupService
     ) {}
-
-    /**
-     * Halaman pengaturan backup (dari SettingsLayout).
-     */
-    public function index(Request $request): Response
-    {
-        $user = $request->user();
-        $store = $user->store;
-
-        $scheduledBackups = [];
-        if ($store && Storage::exists("backups/store-{$store->id}")) {
-            $files = Storage::files("backups/store-{$store->id}");
-            $scheduledBackups = collect($files)
-                ->map(fn ($path) => [
-                    'filename' => basename($path),
-                    'size' => Storage::size($path),
-                    'created_at' => Storage::lastModified($path),
-                ])
-                ->sortByDesc('created_at')
-                ->take(10)
-                ->values()
-                ->all();
-        }
-
-        return Inertia::render('settings/Backup', [
-            'store' => $store ? [
-                'id' => $store->id,
-                'name' => $store->name,
-            ] : null,
-            'scheduled_backups' => $scheduledBackups,
-            'auto_backup_enabled' => $store ? StorePlanLimits::allowsAutoBackup($store) : false,
-        ]);
-    }
 
     /**
      * Daftar riwayat pencadangan (JSON API untuk BackupTab).
