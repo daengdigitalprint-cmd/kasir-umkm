@@ -604,6 +604,8 @@ const checkoutOpen = ref(false);
 const paymentStep = ref<'method' | 'pay'>('method');
 const activePreOrderId = ref<number | null>(null);
 const activePreOrderNumber = ref<string | null>(null);
+/** Keranjang dimuat dari Open Bill (bukan pre-order): kotak keterangan pre-order tidak ditampilkan. */
+const activeFromOpenBill = ref(false);
 /** Nilai DP dari pre-order (raw); dipakai hitung sisa bayar. */
 const preOrderDepositReceived = ref(0);
 const searchQuery = ref('');
@@ -1826,6 +1828,7 @@ function hydrateFromPreOrder(h: PreOrderHydration) {
     cart.value = [];
     activePreOrderId.value = h.id;
     activePreOrderNumber.value = h.order_number;
+    activeFromOpenBill.value = false;
     preOrderDepositReceived.value = Math.max(0, Number(h.deposit_received ?? 0) || 0);
     for (const line of h.lines) {
         const product = localProducts.value.find((p) => p.id === line.product_id);
@@ -1861,6 +1864,7 @@ function hydrateFromPreOrder(h: PreOrderHydration) {
     if (cart.value.length === 0) {
         activePreOrderId.value = null;
         activePreOrderNumber.value = null;
+        activeFromOpenBill.value = false;
         preOrderDepositReceived.value = 0;
     } else {
         void nextTick(() => {
@@ -2648,6 +2652,7 @@ function resetCartState() {
     }
     activePreOrderId.value = null;
     activePreOrderNumber.value = null;
+    activeFromOpenBill.value = false;
     preOrderDepositReceived.value = 0;
     cashInputTyping.value = false;
     splitNonCashLines.value = [];
@@ -2826,6 +2831,7 @@ async function loadOpenBillToCart(bill: OpenBill) {
         customerName.value = hold.customer_name ?? '';
         activePreOrderId.value = hold.id;
         activePreOrderNumber.value = hold.transaction_number;
+        activeFromOpenBill.value = true;
 
         // Tutup drawer & buka keranjang (mobile)
         closeOpenBillsDrawer();
@@ -3438,6 +3444,7 @@ const clearCart = async () => {
     }
     activePreOrderId.value = null;
     activePreOrderNumber.value = null;
+    activeFromOpenBill.value = false;
     preOrderDepositReceived.value = 0;
     resetCreditMode();
 };
@@ -3975,7 +3982,7 @@ const sendWhatsAppInvoice = () => {
             </div>
 
             <div
-                v-if="activePreOrderId !== null && activePreOrderNumber"
+                v-if="activePreOrderId !== null && activePreOrderNumber && !activeFromOpenBill"
                 class="mx-4 mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 sm:mx-6"
             >
                 <p class="font-semibold">Pre-order {{ activePreOrderNumber }}</p>
