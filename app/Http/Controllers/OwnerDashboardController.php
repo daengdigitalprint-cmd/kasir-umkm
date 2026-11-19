@@ -22,15 +22,19 @@ class OwnerDashboardController extends Controller
         $user = auth()->user();
 
         $stores = $this->service->ownerStores($user);
-        $period = $request->string('period', 'monthly')->toString();
+        // Pilihan filter hanya outlet yang berjualan (tanpa gudang pusat/Central Kitchen).
+        $salesStores = $this->service->salesStores($user);
+        // Bawaan "bulan ini" ditampilkan per hari agar grafik tidak hanya satu batang.
+        $period = $request->string('period', 'daily')->toString();
         $startDate = $request->string('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'))->toString();
         $endDate = $request->string('end_date', Carbon::now()->format('Y-m-d'))->toString();
-        $storeId = $request->integer('store_id');
+        // Kosong/0 = semua outlet (null), bukan outlet bernomor 0.
+        $storeId = $request->integer('store_id') ?: null;
 
         $chartData = $this->service->revenueData($user, $period, $startDate, $endDate, $storeId);
 
         return Inertia::render('Owner/Dashboard', [
-            'stores' => $stores->values(),
+            'stores' => $salesStores->values(),
             'chartData' => $chartData,
             // Ringkasan SDM lintas outlet (hanya outlet dengan modul absensi aktif).
             'hr' => app(HrOverviewService::class)->forStores(
@@ -52,7 +56,8 @@ class OwnerDashboardController extends Controller
         $period = $request->string('period', 'monthly')->toString();
         $startDate = $request->string('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'))->toString();
         $endDate = $request->string('end_date', Carbon::now()->format('Y-m-d'))->toString();
-        $storeId = $request->integer('store_id');
+        // Kosong/0 = semua outlet (null), bukan outlet bernomor 0.
+        $storeId = $request->integer('store_id') ?: null;
 
         $data = $this->service->revenueData($user, $period, $startDate, $endDate, $storeId);
 
@@ -66,8 +71,9 @@ class OwnerDashboardController extends Controller
         $period = $request->string('period', 'monthly')->toString();
         $startDate = $request->string('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'))->toString();
         $endDate = $request->string('end_date', Carbon::now()->format('Y-m-d'))->toString();
+        $storeId = $request->integer('store_id') ?: null;
 
-        $data = $this->service->exportData($user, $period, $startDate, $endDate);
+        $data = $this->service->exportData($user, $period, $startDate, $endDate, $storeId);
         $filename = 'laporan-pendapatan-'.now()->format('Ymd-His').'.xlsx';
 
         return Excel::download(new OwnerRevenueExport($data), $filename);

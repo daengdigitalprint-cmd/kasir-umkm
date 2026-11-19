@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Transaction;
 use App\Models\User;
+use App\Support\StoreLocationType;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -39,6 +40,19 @@ class OwnerDashboardService
     }
 
     /**
+     * Outlet yang berjualan: gudang pusat (Central Kitchen) dikecualikan supaya
+     * tidak tampil sebagai outlet Rp 0 dan menurunkan rata-rata.
+     */
+    public function salesStores(User $user): \Illuminate\Database\Eloquent\Collection
+    {
+        return $user->stores()
+            ->select('stores.id', 'stores.name', 'stores.slug')
+            ->where(fn ($q) => $q->whereNull('stores.location_type')->orWhere('stores.location_type', '!=', StoreLocationType::CENTRAL_WAREHOUSE))
+            ->orderBy('name')
+            ->get();
+    }
+
+    /**
      * Mendapatkan data pendapatan untuk grafik.
      *
      * @return array{labels: list<string>, datasets: list<array>, summary: array<string, mixed>}
@@ -46,13 +60,16 @@ class OwnerDashboardService
     public function revenueData(User $user, string $period, string $startDate, string $endDate, ?int $storeId = null): array
     {
         $storeIds = $this->resolveStoreIds($user, $storeId);
-        $cacheKey = "owner_rev_{$user->id}_{$period}_{$startDate}_{$endDate}_".md5(implode(',', $storeIds));
+        $cacheKey = "owner_rev_v2_{$user->id}_{$period}_{$startDate}_{$endDate}_".md5(implode(',', $storeIds));
 
         return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($user, $storeIds, $period, $startDate, $endDate) {
             $start = Carbon::parse($startDate)->startOfDay();
             $end = Carbon::parse($endDate)->endOfDay();
-            $prevEnd = $start->copy()->subDay();
-            $prevStart = $this->previousPeriodStart($period, $start);
+            // Pembanding harus sebanding: panjang rentang sama, tepat sebelumnya
+            // (mis. 1–19 Nov dibanding 13–31 Okt), bukan 12 bulan/30 hari tetap.
+            $days = (int) $start->copy()->startOfDay()->diffInDays($end->copy()->startOfDay()) + 1;
+            $prevEnd = $start->copy()->subDay()->endOfDay();
+            $prevStart = $prevEnd->copy()->subDays($days - 1)->startOfDay();
 
             $stores = $this->ownerStores($user)->keyBy('id');
             $dateFormat = self::PERIOD_FORMATS[$period] ?? 'Y-m-d';
@@ -70,8 +87,8 @@ class OwnerDashboardService
             // HPP per outlet untuk menghitung laba kotor.
             $cogsByStore = $this->queryCogs($storeIds, $start, $end);
 
-            // Build labels (semua periode unik dari kedua dataset)
-            $allPeriods = collect(array_keys($currentData + $previousData))->sort()->values()->all();
+            // Label grafik: semua periode di dalam rentang terpilih saja.
+            $allPeriods = $this->periodKeysBetween($start, $end, $dateFormat);
 
             // Build per-outlet series
             $datasets = [];
@@ -145,8 +162,21 @@ class OwnerDashboardService
             $coveredRevenue = array_sum(array_column($cogsByStore, 'covered'));
             $itemRevenue = array_sum(array_column($cogsByStore, 'total'));
 
+            $totalPrev = array_sum(array_column($summary, 'previous_total'));
+            $trxNow = $this->queryTransactionCount($storeIds, $start, $end);
+            $trxPrev = $this->queryTransactionCount($storeIds, $prevStart, $prevEnd);
+
             $totals = [
                 'net_revenue' => $totalNet,
+                'previous_net_revenue' => $totalPrev,
+                // Pertumbuhan dari total semua outlet (berbobot omzet), bukan rata-rata persen per outlet.
+                'growth' => $totalPrev > 0 ? (($totalNet - $totalPrev) / $totalPrev) * 100 : null,
+                'transactions' => $trxNow,
+                'previous_transactions' => $trxPrev,
+                'avg_ticket' => $trxNow > 0 ? $totalNet / $trxNow : null,
+                'previous_avg_ticket' => $trxPrev > 0 ? $totalPrev / $trxPrev : null,
+                'busiest_hour' => $this->busiestHour($storeIds, $start, $end),
+                'busiest_weekday' => $this->busiestWeekday($storeIds, $start, $end),
                 'cogs' => $totalCogs,
                 'gross_profit' => $totalNet - $totalCogs,
                 'margin' => $totalNet > 0 ? (($totalNet - $totalCogs) / $totalNet) * 100 : null,
@@ -170,6 +200,10 @@ class OwnerDashboardService
                 'period' => $period,
                 'start_date' => $startDate,
                 'end_date' => $endDate,
+                'comparison' => [
+                    'start_date' => $prevStart->toDateString(),
+                    'end_date' => $prevEnd->toDateString(),
+                ],
             ];
         });
     }
@@ -179,9 +213,9 @@ class OwnerDashboardService
      *
      * @return list<array>
      */
-    public function exportData(User $user, string $period, string $startDate, string $endDate): array
+    public function exportData(User $user, string $period, string $startDate, string $endDate, ?int $storeId = null): array
     {
-        $storeIds = $this->resolveStoreIds($user);
+        $storeIds = $this->resolveStoreIds($user, $storeId);
         $start = Carbon::parse($startDate)->startOfDay();
         $end = Carbon::parse($endDate)->endOfDay();
         $dateFormat = self::PERIOD_FORMATS[$period] ?? 'Y-m-d';
@@ -357,7 +391,7 @@ class OwnerDashboardService
      */
     private function resolveStoreIds(User $user, ?int $specificStoreId = null): array
     {
-        $all = $user->stores()->pluck('stores.id')->toArray();
+        $all = $this->salesStores($user)->pluck('id')->map(fn ($id) => (int) $id)->all();
 
         if ($specificStoreId !== null && in_array($specificStoreId, $all, true)) {
             return [$specificStoreId];
@@ -366,15 +400,81 @@ class OwnerDashboardService
         return $all;
     }
 
-    private function previousPeriodStart(string $period, Carbon $start): Carbon
+    /**
+     * Semua kunci periode di antara dua tanggal (urut), termasuk yang tidak ada penjualan.
+     *
+     * @return list<string>
+     */
+    private function periodKeysBetween(Carbon $start, Carbon $end, string $dateFormat): array
     {
-        return match ($period) {
-            'daily' => $start->copy()->subDays(30),
-            'weekly' => $start->copy()->subWeeks(12),
-            'monthly' => $start->copy()->subMonths(12),
-            'yearly' => $start->copy()->subYears(5),
-            default => $start->copy()->subDays(30),
-        };
+        $keys = [];
+        $cursor = $start->copy()->startOfDay();
+        $last = $end->copy()->startOfDay();
+        // Batas aman agar rentang sangat panjang tidak membuat ribuan iterasi.
+        $guard = 0;
+        while ($cursor->lte($last) && $guard++ < 4000) {
+            $keys[$cursor->format($dateFormat)] = true;
+            $cursor->addDay();
+        }
+
+        return array_keys($keys);
+    }
+
+    /** @param  array<int>  $storeIds */
+    private function queryTransactionCount(array $storeIds, Carbon $start, Carbon $end): int
+    {
+        return Transaction::whereIn('store_id', $storeIds)
+            ->whereBetween('created_at', [$start, $end])
+            ->where('status', 'completed')
+            ->count();
+    }
+
+    /**
+     * Jam dengan penjualan bersih terbesar (0-23), null bila belum ada penjualan.
+     *
+     * @param  array<int>  $storeIds
+     */
+    private function busiestHour(array $storeIds, Carbon $start, Carbon $end): ?int
+    {
+        $expr = DB::getDriverName() === 'sqlite' ? "CAST(strftime('%H', created_at) AS INTEGER)" : 'HOUR(created_at)';
+
+        $row = Transaction::whereIn('store_id', $storeIds)
+            ->whereBetween('created_at', [$start, $end])
+            ->where('status', 'completed')
+            ->selectRaw("{$expr} as h, SUM(subtotal - discount_amount) as revenue")
+            ->groupBy('h')
+            ->orderByDesc('revenue')
+            ->first();
+
+        return $row ? (int) $row->h : null;
+    }
+
+    /**
+     * Hari dengan penjualan bersih terbesar: 1 = Senin … 7 = Minggu (ISO), null bila kosong.
+     *
+     * @param  array<int>  $storeIds
+     */
+    private function busiestWeekday(array $storeIds, Carbon $start, Carbon $end): ?int
+    {
+        // SQLite: 0 = Minggu … 6 = Sabtu. MySQL DAYOFWEEK: 1 = Minggu … 7 = Sabtu.
+        $isSqlite = DB::getDriverName() === 'sqlite';
+        $expr = $isSqlite ? "CAST(strftime('%w', created_at) AS INTEGER)" : 'DAYOFWEEK(created_at)';
+
+        $row = Transaction::whereIn('store_id', $storeIds)
+            ->whereBetween('created_at', [$start, $end])
+            ->where('status', 'completed')
+            ->selectRaw("{$expr} as d, SUM(subtotal - discount_amount) as revenue")
+            ->groupBy('d')
+            ->orderByDesc('revenue')
+            ->first();
+
+        if (! $row) {
+            return null;
+        }
+
+        $sundayBased = $isSqlite ? (int) $row->d : (int) $row->d - 1; // 0 = Minggu
+
+        return $sundayBased === 0 ? 7 : $sundayBased;
     }
 
     private function periodToCarbon(string $period, string $key): Carbon

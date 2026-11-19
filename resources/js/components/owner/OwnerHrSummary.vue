@@ -58,7 +58,7 @@ const open = (outlet: HrOutlet, path: string) => {
 </script>
 
 <template>
-    <section class="mb-6 rounded-2xl bg-white p-4 shadow-lg lg:p-6">
+    <section class="mb-6 rounded-2xl border border-slate-200 bg-white p-4 lg:p-6">
         <div class="flex flex-wrap items-center gap-2">
             <h2 class="text-lg font-bold text-gray-900">SDM hari ini</h2>
             <span class="text-sm text-slate-500">· {{ hr.totals.employees }} karyawan di {{ hr.outlets.length }} outlet</span>
