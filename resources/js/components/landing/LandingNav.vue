@@ -6,7 +6,7 @@ const props = defineProps<{
     maskotUrl?: string;
 }>();
 
-const maskotUrl = computed(() => props.maskotUrl ?? '/logo-kasir-umkm.png');
+const maskotUrl = computed(() => props.maskotUrl ?? '/logo-kasir-umkm.png?v=2');
 
 const waPhoneDigits = '6285242766676';
 const waPrefillMessage =

@@ -102,8 +102,8 @@
     <header class="site">
         <div class="wrap bar">
             <a class="brand" href="{{ url('/') }}" aria-label="Kasir UMKM by MaccaPOS">
-                <img src="{{ asset('logo-kasir-umkm-sm.webp') }}" alt="Logo Kasir UMKM by MaccaPOS" width="73" height="48"
-                     onerror="this.onerror=null;this.src='{{ asset('logo-kasir-umkm.png') }}'">
+                <img src="{{ asset('logo-kasir-umkm-sm.webp').'?v=2' }}" alt="Logo Kasir UMKM by MaccaPOS" width="73" height="48"
+                     onerror="this.onerror=null;this.src='{{ asset('logo-kasir-umkm.png').'?v=2' }}'">
             </a>
             <a class="btn btn-primary" href="{{ url('/') }}">Ke Beranda</a>
         </div>

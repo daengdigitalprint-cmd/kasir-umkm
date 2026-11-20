@@ -27,7 +27,7 @@ const togglePasswordVisibility = () => {
 };
 
 const buyerAssetsBase = '/buyer-assets';
-const maskotUrl = '/logo-kasir-umkm.png';
+const maskotUrl = '/logo-kasir-umkm.png?v=2';
 
 /** Muat skrip plugin template (butuh bootstrap.bundle.min untuk form & show/hide). */
 const templateScripts: string[] = [

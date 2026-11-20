@@ -47,7 +47,7 @@ const props = withDefaults(
 /** Harus sama dengan LandingSeo::HOME_TITLE (judul server untuk crawler). */
 const pageTitle = 'Aplikasi Kasir Online Gratis untuk UMKM | Kasir UMKM by MaccaPOS';
 
-const maskotUrl = props.maskotUrl ?? '/logo-kasir-umkm.png';
+const maskotUrl = props.maskotUrl ?? '/logo-kasir-umkm.png?v=2';
 
 /** Aset template Sastik (disalin ke public/sastik-assets). */
 const assetsBase = '/sastik-assets';

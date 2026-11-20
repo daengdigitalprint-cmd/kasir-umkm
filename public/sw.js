@@ -2,7 +2,7 @@
  * Service worker — cache ringan, tahan deploy (tanpa hash file build).
  * Install tidak boleh gagal total jika satu aset hilang (VPS / path berbeda).
  */
-const CACHE_NAME = 'umkm-kasir-v1.0.10';
+const CACHE_NAME = 'umkm-kasir-v1.0.11';
 const OFFLINE_URL = '/offline.html';
 
 /**

@@ -3851,7 +3851,7 @@ const sendWhatsAppInvoice = () => {
         <div class="sticky top-0 z-30 mb-4 border-b border-slate-200 bg-white/95 px-4 shadow-sm backdrop-blur-md sm:px-6">
             <div class="relative flex h-16 items-center justify-between gap-3">
                 <!-- Logo tengah — hanya mobile potret -->
-                <img src="/logo-kasir-umkm.png" alt="Kasir UMKM by MaccaPOS" class="h-10 w-auto shrink-0 sm:hidden" />
+                <img src="/logo-kasir-umkm.png?v=2" alt="Kasir UMKM by MaccaPOS" class="h-8 w-auto shrink-0 sm:hidden" />
                 <div class="flex min-w-0 items-center gap-3">
                     <button
                         type="button"
@@ -3861,7 +3861,7 @@ const sendWhatsAppInvoice = () => {
                     >
                         <ChevronLeft class="h-5 w-5" />
                     </button>
-                    <img src="/logo-kasir-umkm.png" alt="Kasir UMKM by MaccaPOS" class="hidden h-11 w-auto sm:block" />
+                    <img src="/logo-kasir-umkm.png?v=2" alt="Kasir UMKM by MaccaPOS" class="hidden h-11 w-auto sm:block" />
                 </div>
 
                 <div class="flex items-center gap-2">

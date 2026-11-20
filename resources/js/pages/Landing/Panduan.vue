@@ -28,7 +28,7 @@ const pageTitle = 'Panduan pengguna — Kasir UMKM by MaccaPOS';
 const pageDescription =
     'Panduan fitur Kasir UMKM by MaccaPOS: POS, stok, laporan, langganan, peran pengguna, dan multi-outlet.';
 
-const maskotUrl = props.maskotUrl ?? '/logo-kasir-umkm.png';
+const maskotUrl = props.maskotUrl ?? '/logo-kasir-umkm.png?v=2';
 const canonicalUrl = props.canonicalUrl ?? '';
 
 const shareImageUrl = computed(() => props.ogImageUrl ?? maskotUrl);

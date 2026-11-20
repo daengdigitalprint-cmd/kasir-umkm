@@ -17,7 +17,7 @@ const pageTitle = 'Kebijakan Refund — Kasir UMKM by MaccaPOS';
 const pageDescription =
     'Kebijakan pengembalian dana (refund) UMKM Ketentuan pengembalian dana untuk langganan Kasir UMKM by MaccaPOS.';
 
-const maskotUrl = props.maskotUrl ?? '/logo-kasir-umkm.png';
+const maskotUrl = props.maskotUrl ?? '/logo-kasir-umkm.png?v=2';
 const canonicalUrl = props.canonicalUrl ?? '';
 
 const shareImageUrl = computed(() => props.ogImageUrl ?? maskotUrl);
