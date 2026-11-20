@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { router } from '@inertiajs/vue3';
+import { useUnsavedGuard } from '@/composables/useUnsavedGuard';
 import { Loader2, Save } from 'lucide-vue-next';
-import { onBeforeUnmount, onMounted } from 'vue';
 
 /**
  * Bilah simpan yang melayang di bawah layar selama ada perubahan belum disimpan.
@@ -15,28 +14,10 @@ const props = defineProps<{
 
 const emit = defineEmits<{ save: []; discard: [] }>();
 
-const LEAVE_MESSAGE = 'Ada perubahan yang belum disimpan. Tinggalkan halaman ini? Perubahan akan hilang.';
-
-let removeBefore: (() => void) | null = null;
-const onBeforeUnload = (e: BeforeUnloadEvent) => {
-    if (!props.dirty) return;
-    e.preventDefault();
-    e.returnValue = '';
-};
-
-onMounted(() => {
-    window.addEventListener('beforeunload', onBeforeUnload);
-    removeBefore = router.on('before', (event) => {
-        // Hanya kunjungan pindah halaman (GET); kiriman form tetap jalan.
-        if (!props.dirty || props.processing || event.detail.visit.method !== 'get') return;
-        if (!window.confirm(LEAVE_MESSAGE)) return false;
-    });
-});
-
-onBeforeUnmount(() => {
-    window.removeEventListener('beforeunload', onBeforeUnload);
-    removeBefore?.();
-});
+useUnsavedGuard(
+    () => props.dirty,
+    () => Boolean(props.processing),
+);
 </script>
 
 <template>

@@ -5,8 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
-import { ArrowLeft, Package, Upload, X, Plus, Trash2, ScanLine, FolderPlus, Loader2 } from 'lucide-vue-next';
+import { ArrowLeft, ChevronDown, Package, Upload, X, Plus, Trash2, ScanLine, FolderPlus, Loader2 } from 'lucide-vue-next';
 import { ref, computed, watch, onMounted } from 'vue';
 import type { ComputedRef } from 'vue';
 import { toastWarning, toastSuccess } from '@/lib/swal';
@@ -14,7 +13,9 @@ import { useAllowsAdvancedRetail } from '@/composables/usePlanLimits';
 import BarcodeScanner from '@/components/BarcodeScanner.vue';
 import BarcodeGenerator from '@/components/BarcodeGenerator.vue';
 import OptionGroupsPicker from '@/components/products/OptionGroupsPicker.vue';
-import ProductFormModeToggle from '@/components/products/ProductFormModeToggle.vue';
+import ProductTypePicker from '@/components/products/ProductTypePicker.vue';
+import StockModePicker, { type StockMode } from '@/components/products/StockModePicker.vue';
+import { useUnsavedGuard } from '@/composables/useUnsavedGuard';
 import { useProductFormMode } from '@/composables/useProductFormMode';
 import type { OptionGroup } from '@/types/optionGroups';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -172,6 +173,7 @@ const defaultUnits = ['pcs', 'kg', 'gram', 'liter', 'ml', 'bungkus', 'botol', 'k
 const unitOptions = computed(() => [...new Set([...defaultUnits, ...props.catalogPresets.units])]);
 
 const showBarcodeScannerCreate = ref(false);
+const showBarcodeGenerator = ref(false);
 
 const form = useForm({
     name: '',
@@ -188,8 +190,10 @@ const form = useForm({
     unit: 'pcs',
     inventory_type: 'sellable',
     base_unit: 'pcs',
-    tax_rate: 11,
-    track_stock: true,
+    // Pajak dihitung dari pengaturan PPN toko, bukan per produk.
+    tax_rate: 0,
+    // Menu F&B umumnya dibuat saat dipesan: stok tidak dihitung.
+    track_stock: !(page.props as { fnb_enabled?: boolean }).fnb_enabled,
     unlimited_stock: false,
     allow_negative_stock: false,
     allows_decimal: false,
@@ -581,6 +585,47 @@ const removeImage = (index: number) => {
     imagePreviews.value.splice(index, 1);
 };
 
+// ── Jenis produk, cara stok, dan satuan ─────────────────────────────────
+const isMaterial = computed(() => form.inventory_type === 'raw_material' || form.inventory_type === 'packaging');
+
+/** Satu pilihan cara stok yang memetakan ke track_stock + unlimited_stock. */
+const stockMode = computed<StockMode>({
+    get: () => (!form.track_stock ? 'none' : form.unlimited_stock ? 'unlimited' : 'track'),
+    set: (mode) => {
+        form.track_stock = mode !== 'none';
+        form.unlimited_stock = mode === 'unlimited';
+        if (mode !== 'track') form.allow_negative_stock = false;
+        syncStockFromBatches();
+    },
+});
+
+// Bahan & kemasan selalu dihitung stoknya dan tidak punya harga jual.
+watch(
+    () => form.inventory_type,
+    (type) => {
+        if (type === 'raw_material' || type === 'packaging') {
+            stockMode.value = 'track';
+            form.price = 0;
+        }
+    },
+);
+
+/** Satuan stok tunggal: satuan dasar (resep) mengikuti satuan bila setara, selain itu dihitung pcs. */
+const baseUnitFor = (unit: string) => (Object.keys(props.baseUnits).includes(unit) ? unit : 'pcs');
+watch(
+    () => form.unit,
+    (unit) => {
+        form.base_unit = baseUnitFor(unit);
+    },
+);
+/** Satuan non-dasar (mis. botol) boleh diatur padanannya untuk resep di "Lebih lanjut". */
+const baseUnitMismatch = computed(() => !Object.keys(props.baseUnits).includes(form.unit));
+
+useUnsavedGuard(
+    () => form.isDirty,
+    () => form.processing,
+);
+
 const submit = () => {
     const finiteNum = (v: unknown, fallback: number) => {
         const n = typeof v === 'number' ? v : Number(v);
@@ -721,18 +766,13 @@ const submitAndAddAnother = () => {
             </template>
         </div>
 
-        <form @submit.prevent="submit" class="space-y-8">
-                <ProductFormModeToggle v-model="showAdvanced" />
+        <form @submit.prevent="submit" class="space-y-5">
+                <ProductTypePicker v-model="form.inventory_type" :types="inventoryTypes" />
 
-                <!-- Informasi Dasar -->
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Informasi Dasar</CardTitle>
-                        <CardDescription>
-                            Informasi utama produk
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent class="space-y-6">
+                <!-- Info dasar -->
+                <section class="rounded-2xl border border-slate-200 bg-white p-5">
+                    <h2 class="text-base font-bold text-slate-900">Info dasar</h2>
+                    <div class="mt-4 space-y-5">
                         <div class="grid gap-6 md:grid-cols-2">
                             <div class="space-y-2">
                                 <Label for="name">Nama Produk *</Label>
@@ -783,7 +823,511 @@ const submitAndAddAnother = () => {
                             </div>
                         </div>
 
-                        <div class="grid gap-6 md:grid-cols-2" v-show="showAdvanced">
+                        <div class="grid gap-6 md:grid-cols-2">
+<template v-if="!isMaterial">
+                            <div class="space-y-2">
+                                <Label for="price">Harga Jual {{ form.has_variants ? '' : '*' }}</Label>
+                                <Input
+                                    id="price"
+                                    v-model="priceDisplay"
+                                    type="text"
+                                    inputmode="decimal"
+                                    placeholder="0"
+                                    :required="!form.has_variants"
+                                />
+                                <div v-if="form.errors.price" class="text-sm text-red-600">
+                                    {{ form.errors.price }}
+                                </div>
+                                <p
+                                    v-if="profitPercent !== null"
+                                    class="text-xs font-medium"
+                                    :class="profitPercent >= 0 ? 'text-emerald-600' : 'text-red-600'"
+                                >
+                                    Keuntungan {{ profitPercent }}% dari modal
+                                </p>
+                            </div>
+</template>
+                            <div class="space-y-2" v-if="wholesaleEnabled && !isMaterial">
+                                <Label for="wholesale_price">Harga Grosir</Label>
+                                <Input
+                                    id="wholesale_price"
+                                    v-model="wholesalePriceDisplay"
+                                    type="text"
+                                    inputmode="decimal"
+                                    placeholder="0"
+                                />
+                                <p class="text-xs text-muted-foreground">Kosongkan agar pelanggan grosir tetap memakai harga jual.</p>
+                                <div v-if="form.errors.wholesale_price" class="text-sm text-red-600">
+                                    {{ form.errors.wholesale_price }}
+                                </div>
+                            </div>
+                            <div class="space-y-2">
+                                <Label for="cost_price">{{ isMaterial ? `Harga beli per ${form.unit}` : 'Harga modal (HPP)' }}</Label>
+                                <Input
+                                    id="cost_price"
+                                    v-model="costPriceDisplay"
+                                    type="text"
+                                    inputmode="decimal"
+                                    placeholder="0"
+                                />
+                                <p v-if="consumptionEnabled && estimatedHpp > 0" class="text-xs text-violet-700 font-medium">
+                                    Estimasi dari komponen: Rp {{ Math.round(estimatedHpp).toLocaleString('id-ID') }}
+                                    <span class="text-muted-foreground font-normal">(diisi otomatis, bisa diubah manual)</span>
+                                </p>
+                                <div v-if="form.errors.cost_price" class="text-sm text-red-600">
+                                    {{ form.errors.cost_price }}
+                                </div>
+                            </div>
+                        </div>
+                        <div v-if="barbershopEnabled" class="space-y-2">
+                            <Label for="service_duration_minutes">Durasi Layanan (menit)</Label>
+                            <Input
+                                id="service_duration_minutes"
+                                v-model.number="form.service_duration_minutes"
+                                type="number"
+                                min="1"
+                                max="1440"
+                                step="1"
+                                placeholder="45"
+                            />
+                            <p class="text-xs text-muted-foreground">
+                                Kosongkan jika layanan ini tidak berdurasi tetap.
+                            </p>
+                            <div v-if="form.errors.service_duration_minutes" class="text-sm text-red-600">
+                                {{ form.errors.service_duration_minutes }}
+                            </div>
+                        </div>
+
+                        <div v-if="barbershopEnabled" class="space-y-2">
+                            <Label for="barber_commission_mode">Komisi Teknisi (override)</Label>
+                            <select
+                                id="barber_commission_mode"
+                                v-model="form.barber_commission_mode"
+                                class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            >
+                                <option value="">Ikuti tarif global toko</option>
+                                <option value="percent">Persen dari harga jual (%)</option>
+                                <option value="fixed">Tarif tetap per item (Rp)</option>
+                            </select>
+                            <Input
+                                v-if="form.barber_commission_mode"
+                                id="barber_commission_value"
+                                v-model.number="form.barber_commission_value"
+                                type="number"
+                                min="0"
+                                :max="form.barber_commission_mode === 'fixed' ? 100000000 : 100"
+                                :step="form.barber_commission_mode === 'fixed' ? 1000 : 0.5"
+                                :placeholder="form.barber_commission_mode === 'fixed' ? '10000' : '40'"
+                            />
+                            <p class="text-xs text-muted-foreground">
+                                Tarif khusus produk/layanan ini. Pilih "Ikuti tarif global toko" untuk memakai pengaturan di Pengaturan > Toko.
+                            </p>
+                            <div v-if="form.errors.barber_commission_mode" class="text-sm text-red-600">
+                                {{ form.errors.barber_commission_mode }}
+                            </div>
+                            <div v-if="form.errors.barber_commission_value" class="text-sm text-red-600">
+                                {{ form.errors.barber_commission_value }}
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <Card v-if="!isMaterial" class="rounded-2xl shadow-none">
+                    <CardHeader>
+                        <CardTitle>Foto produk</CardTitle>
+                        <CardDescription>
+                            Tampil di kasir dan menu digital. Maksimal 5 foto, 2MB per foto.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent class="space-y-6">
+                        <div class="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center relative group hover:border-primary/50 transition-colors">
+                            <div class="pointer-events-none">
+                                <Upload class="h-8 w-8 mx-auto mb-2 text-gray-400 group-hover:text-primary transition-colors" />
+                                <div class="space-y-2">
+                                    <p class="text-sm text-gray-600">
+                                        Klik untuk upload atau drag & drop
+                                    </p>
+                                    <p class="text-xs text-gray-500">
+                                        PNG, JPG, GIF, WebP hingga 2MB
+                                    </p>
+                                </div>
+                            </div>
+                            <input
+                                type="file"
+                                multiple
+                                accept="image/*"
+                                @change="handleImageUpload"
+                                class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                            />
+                        </div>
+
+                        <div v-if="imagePreviews.length > 0" class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                            <div 
+                                v-for="(preview, index) in imagePreviews" 
+                                :key="index"
+                                class="relative group"
+                            >
+                                <img 
+                                    :src="preview" 
+                                    :alt="`Preview ${index + 1}`"
+                                    class="w-full h-32 object-cover rounded-lg"
+                                />
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="destructive"
+                                    class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    @click="removeImage(index)"
+                                >
+                                    <X class="h-3 w-3" />
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div v-if="form.errors.images" class="text-sm text-red-600">
+                            {{ form.errors.images }}
+                        </div>
+                        <ul
+                            v-if="imageFieldErrors.length > 0"
+                            class="text-sm text-red-600 list-disc pl-5 space-y-1"
+                        >
+                            <li v-for="(msg, idx) in imageFieldErrors" :key="idx">{{ msg }}</li>
+                        </ul>
+                    </CardContent>
+                </Card>
+
+                <!-- Stok -->
+                <section class="rounded-2xl border border-slate-200 bg-white p-5">
+                    <h2 class="text-base font-bold text-slate-900">Stok</h2>
+                    <div class="mt-4 space-y-4">
+                        <p v-if="form.is_bundle" class="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                            Stok paket dihitung dari komponennya, jadi tidak perlu diisi di sini.
+                        </p>
+                        <StockModePicker
+                            v-else
+                            v-model="stockMode"
+                            :locked-reason="form.has_variants ? 'Produk bervarian selalu menghitung stok per varian.' : null"
+                        />
+                        <div class="grid gap-6" :class="stockMode === 'track' && !form.is_bundle ? 'md:grid-cols-3' : 'md:grid-cols-3'">
+<template v-if="stockMode === 'track' && !form.is_bundle">
+                            <div class="space-y-2">
+                                <Label for="stock_quantity">Stok Awal *</Label>
+                                <Input
+                                    id="stock_quantity"
+                                    v-model.number="form.stock_quantity"
+                                    type="number"
+                                    min="0"
+                                    :step="form.allows_decimal ? 0.0001 : 1"
+                                    placeholder="0"
+                                    required
+                                    :disabled="(batchTrackingEnabled && form.track_stock) || form.has_variants || form.is_bundle"
+                                    :class="(batchTrackingEnabled && form.track_stock) || form.has_variants || form.is_bundle ? 'opacity-70' : ''"
+                                />
+                                <p v-if="form.is_bundle" class="text-xs text-muted-foreground">
+                                    Stok dihitung dari komponen paket (bukan stok induk).
+                                </p>
+                                <p v-else-if="form.has_variants" class="text-xs text-muted-foreground">
+                                    Stok diisi per varian di bawah.
+                                </p>
+                                <p v-else-if="batchTrackingEnabled && form.track_stock" class="text-xs text-muted-foreground">
+                                    Isi lewat batch di bawah (total otomatis).
+                                </p>
+                                <div v-if="form.errors.stock_quantity" class="text-sm text-red-600">
+                                    {{ form.errors.stock_quantity }}
+                                </div>
+                            </div>
+</template>
+                            <div class="space-y-2">
+                                <Label for="unit">Satuan</Label>
+                                <select
+                                    id="unit"
+                                    v-model="form.unit"
+                                    class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                    required
+                                >
+                                    <option v-for="u in unitOptions" :key="u" :value="u">{{ u }}</option>
+                                </select>
+                                <div v-if="form.errors.unit" class="text-sm text-red-600">
+                                    {{ form.errors.unit }}
+                                </div>
+                            </div>
+<template v-if="stockMode === 'track' && !form.is_bundle">
+                            <div class="space-y-2">
+                                <Label for="min_stock_level">Stok minimum <span class="font-normal text-slate-400">(opsional)</span></Label>
+                                <Input
+                                    id="min_stock_level"
+                                    v-model.number="form.min_stock_level"
+                                    type="number"
+                                    min="0"
+                                    :step="form.allows_decimal ? 0.0001 : 1"
+                                    placeholder="0"
+                                    :disabled="form.has_variants || form.is_bundle"
+                                    :class="form.has_variants || form.is_bundle ? 'opacity-70' : ''"
+                                />
+                                <p v-if="form.is_bundle" class="text-xs text-muted-foreground">
+                                    Batas stok rendah di komponen masing-masing.
+                                </p>
+                                <p v-else-if="form.has_variants" class="text-xs text-muted-foreground">
+                                    Batas stok rendah per varian (tabel varian).
+                                </p>
+                                <div v-if="form.errors.min_stock_level" class="text-sm text-red-600">
+                                    {{ form.errors.min_stock_level }}
+                                </div>
+                            </div>
+</template>
+                        </div>
+                        <label v-if="stockMode === 'track' && !form.is_bundle" class="flex items-start gap-2 text-sm text-slate-700">
+                            <input v-model="form.allow_negative_stock" type="checkbox" class="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
+                            <span>
+                                Tetap boleh dijual saat stok habis
+                                <span class="block text-xs text-slate-500">Stok bisa menjadi minus; berguna bila barang datang belum dicatat.</span>
+                            </span>
+                        </label>
+                        <div
+                            v-if="batchTrackingEnabled && form.track_stock && !form.has_variants && !form.is_bundle"
+                            class="rounded-xl border border-violet-200 bg-violet-50/60 p-4 space-y-3"
+                        >
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                    <p class="text-sm font-semibold text-violet-900">Batch & tanggal kedaluwarsa</p>
+                                    <p class="text-xs text-violet-700 mt-0.5">
+                                        Minimal satu baris. Total stok = jumlah qty batch.
+                                        <span v-if="pharmacyFieldsEnabled"> Untuk apotek, ED wajib di setiap baris.</span>
+                                    </p>
+                                </div>
+                                <Button type="button" variant="outline" size="sm" class="shrink-0" @click="addBatchRow">
+                                    <Plus class="h-4 w-4 mr-1" />
+                                    Baris batch
+                                </Button>
+                            </div>
+                            <div class="overflow-x-auto rounded-lg border border-violet-200/80 bg-white">
+                                <table class="w-full text-sm">
+                                    <thead>
+                                        <tr class="border-b bg-violet-50/80 text-left text-xs text-violet-800">
+                                            <th class="p-2 font-semibold w-[110px]">Qty</th>
+                                            <th class="p-2 font-semibold min-w-[140px]">
+                                                {{ pharmacyFieldsEnabled ? 'ED (wajib)' : 'ED (opsional)' }}
+                                            </th>
+                                            <th class="p-2 font-semibold min-w-[120px]">Kode batch</th>
+                                            <th class="p-2 w-10"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="(row, idx) in batchRows" :key="idx" class="border-b border-violet-100 last:border-0">
+                                            <td class="p-2">
+                                                <Input
+                                                    v-model.number="row.quantity_remaining"
+                                                    type="number"
+                                                    min="0"
+                                                    :step="form.allows_decimal ? 0.0001 : 1"
+                                                    class="h-9"
+                                                    @update:model-value="syncStockFromBatches"
+                                                />
+                                            </td>
+                                            <td class="p-2">
+                                                <Input v-model="row.expiry_date" type="date" class="h-9" />
+                                            </td>
+                                            <td class="p-2">
+                                                <Input v-model="row.batch_code" type="text" placeholder="—" class="h-9" />
+                                            </td>
+                                            <td class="p-2 align-middle">
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    class="h-9 w-9 p-0 text-destructive"
+                                                    :disabled="batchRows.length <= 1"
+                                                    @click="removeBatchRow(idx)"
+                                                >
+                                                    <Trash2 class="h-4 w-4" />
+                                                </Button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p class="text-xs text-violet-800 font-medium">Total stok: {{ batchStockSum }}</p>
+                            <div v-if="form.errors.batches_json" class="text-sm text-red-600">{{ form.errors.batches_json }}</div>
+                        </div>
+                    </div>
+                </section>
+
+                        <div
+                            v-if="showConsumptionBlock"
+                            class="rounded-2xl border border-slate-200 bg-white p-5 space-y-3"
+                        >
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                    <h2 class="text-base font-bold text-slate-900">Bahan yang terpakai saat terjual</h2>
+                                    <p class="text-sm text-slate-500 mt-0.5">
+                                        Mis. 1 es teh memakai 10 gram teh dan 1 gelas plastik. Stok bahan itu berkurang otomatis tiap produk ini terjual.
+                                    </p>
+                                </div>
+                                <Button
+                                    v-if="consumptionEnabled"
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    class="shrink-0"
+                                    @click="addConsumptionRow"
+                                >
+                                    <Plus class="h-4 w-4 mr-1" />
+                                    Tambah
+                                </Button>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <input
+                                    type="checkbox"
+                                    id="consumption_enabled_create"
+                                    v-model="consumptionEnabled"
+                                    class="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                                />
+                                <Label for="consumption_enabled_create" class="text-sm text-violet-900">
+                                    Produk ini memakai bahan baku saat terjual
+                                </Label>
+                            </div>
+                            <p v-if="!consumptionEnabled" class="text-xs text-violet-900/80 ml-6 -mt-1">
+                                Nonaktif: stok produk ini berkurang seperti biasa saat terjual.
+                            </p>
+                            <div v-if="consumptionEnabled" class="overflow-x-auto rounded-lg border border-violet-200/80 bg-white">
+                                <table class="w-full text-sm min-w-[420px]">
+                                    <thead>
+                                        <tr class="border-b bg-violet-50/80 text-left text-xs text-violet-950">
+                                            <th class="p-2 font-semibold min-w-[200px]">Komponen *</th>
+                                            <th class="p-2 font-semibold w-[120px]">Qty / pcs</th>
+                                            <th class="p-2 font-semibold w-[100px]">Satuan</th>
+                                            <th class="p-2 w-10"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="(row, idx) in consumptionRows" :key="idx" class="border-b border-violet-100 last:border-0">
+                                            <td class="p-2">
+                                                <select
+                                                    v-model="row.component_product_id"
+                                                    class="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                                                    @change="onConsumptionProductChange(row)"
+                                                >
+                                                    <option disabled value="">Pilih komponen</option>
+                                                    <option v-for="c in consumptionCatalogOptions()" :key="c.id" :value="c.id">
+                                                        {{ c.name }}{{ c.sku ? ` (${c.sku})` : '' }}
+                                                    </option>
+                                                </select>
+                                            </td>
+                                            <td class="p-2">
+                                                <Input
+                                                    v-model.number="row.quantity"
+                                                    type="number"
+                                                    min="0.0001"
+                                                    step="0.0001"
+                                                    class="h-9"
+                                                />
+                                            </td>
+                                            <td class="p-2 text-xs text-muted-foreground leading-9">
+                                                {{ row.base_unit || '—' }}
+                                            </td>
+                                            <td class="p-2 align-middle">
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    class="h-9 w-9 p-0 text-destructive"
+                                                    :disabled="consumptionRows.length <= 1"
+                                                    @click="removeConsumptionRow(idx)"
+                                                >
+                                                    <Trash2 class="h-4 w-4" />
+                                                </Button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div v-if="form.errors.sale_consumptions_json" class="text-sm text-red-600">
+                                {{ form.errors.sale_consumptions_json }}
+                            </div>
+                        </div>
+
+                <!-- Pilihan tambahan (grup + khusus produk) -->
+                <section v-if="!form.is_bundle && !isMaterial" class="rounded-2xl border border-slate-200 bg-white px-5 py-1">
+                    <div class="divide-y divide-slate-100">
+                <OptionGroupsPicker
+                    class="border-0 py-0 shadow-none [&>[data-slot=card-header]]:px-0 [&>[data-slot=card-content]]:px-0"
+                    v-model="selectedModifierGroupIds"
+                    :groups="modifierGroups"
+                />
+                <Card v-if="fnbModifierEnabled" class="border-0 py-0 shadow-none">
+                    <CardHeader class="px-0">
+                        <CardTitle class="text-sm">Pilihan khusus produk ini</CardTitle>
+                        <CardDescription>
+                            Tambahan yang hanya ada di produk ini dan boleh dipilih lebih dari satu. Untuk pilihan yang dipakai banyak
+                            produk (gula, es, topping), gunakan grup di atas.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent class="space-y-3 px-0">
+                        <div class="flex justify-end">
+                            <Button type="button" variant="outline" size="sm" @click="addModifierOptionRow">
+                                <Plus class="h-4 w-4 mr-1" />
+                                Opsi
+                            </Button>
+                        </div>
+                        <div v-if="modifierOptionRows.length === 0" class="text-sm text-muted-foreground">
+                            Belum ada opsi. Klik &quot;Opsi&quot; untuk menambah baris.
+                        </div>
+                        <div v-else class="overflow-x-auto rounded-lg border">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="border-b bg-muted/40 text-left">
+                                        <th class="p-2 font-semibold min-w-[140px]">Nama</th>
+                                        <th class="p-2 font-semibold w-[120px]">Harga +</th>
+                                        <th class="p-2 w-10"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="(row, idx) in modifierOptionRows" :key="idx" class="border-b last:border-0">
+                                        <td class="p-2">
+                                            <Input v-model="row.label" type="text" placeholder="Contoh: Pedas level 2" class="h-9" />
+                                        </td>
+                                        <td class="p-2">
+                                            <Input v-model.number="row.price" type="number" min="0" step="500" class="h-9" />
+                                        </td>
+                                        <td class="p-2">
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                class="h-9 w-9 p-0 text-destructive"
+                                                @click="removeModifierOptionRow(idx)"
+                                            >
+                                                <Trash2 class="h-4 w-4" />
+                                            </Button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div v-if="form.errors.modifier_options_json" class="text-sm text-red-600">
+                            {{ form.errors.modifier_options_json }}
+                        </div>
+                    </CardContent>
+                </Card>
+                    </div>
+                </section>
+
+                <!-- Lebih lanjut -->
+                <section class="rounded-2xl border border-slate-200 bg-white">
+                    <button
+                        type="button"
+                        class="flex w-full items-center justify-between gap-3 p-5 text-left"
+                        :aria-expanded="showAdvanced"
+                        @click="showAdvanced = !showAdvanced"
+                    >
+                        <span>
+                            <span class="block text-base font-bold text-slate-900">Lebih lanjut</span>
+                            <span class="block text-sm text-slate-500">SKU & barcode, deskripsi, merek, varian, paket, dan satuan resep</span>
+                        </span>
+                        <ChevronDown class="h-5 w-5 shrink-0 text-slate-400 transition-transform" :class="{ 'rotate-180': showAdvanced }" />
+                    </button>
+                    <div v-show="showAdvanced" class="space-y-6 border-t border-slate-100 p-5">
+                        <div class="grid gap-6 md:grid-cols-2">
                             <div class="space-y-2">
                                 <Label for="sku">SKU / kode produk <span class="text-gray-500 font-normal">(Opsional)</span></Label>
                                 <Input
@@ -845,8 +1389,16 @@ const submitAndAddAnother = () => {
                                 />
 
                                 <!-- Generator barcode otomatis (produk baru belum punya barcode) -->
-                                <div class="mt-2 rounded-xl border border-teal-100 bg-teal-50/30 p-3">
-                                    <p class="mb-2 text-xs font-semibold text-teal-800">Generate barcode otomatis</p>
+                                <button
+                                    v-if="!showBarcodeGenerator"
+                                    type="button"
+                                    class="text-xs font-semibold text-primary hover:underline"
+                                    @click="showBarcodeGenerator = true"
+                                >
+                                    Belum punya barcode? Buat otomatis
+                                </button>
+                                <div v-else class="mt-2 rounded-xl border border-slate-200 p-3">
+                                    <p class="mb-2 text-xs font-semibold text-slate-700">Buat barcode otomatis</p>
                                     <BarcodeGenerator
                                         :product-name="form.name"
                                         :initial-code="form.barcode"
@@ -860,8 +1412,7 @@ const submitAndAddAnother = () => {
                                 </div>
                             </div>
                         </div>
-
-                        <div class="space-y-2" v-show="showAdvanced">
+                        <div class="space-y-2">
                             <Label for="description">Deskripsi</Label>
                             <textarea
                                 id="description"
@@ -874,174 +1425,7 @@ const submitAndAddAnother = () => {
                                 {{ form.errors.description }}
                             </div>
                         </div>
-                    </CardContent>
-                </Card>
-
-                <!-- Harga dan Stok -->
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Harga dan Stok</CardTitle>
-                        <CardDescription>
-                            Informasi harga dan manajemen stok
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent class="space-y-6">
                         <div class="grid gap-6 md:grid-cols-2">
-                            <div class="space-y-2">
-                                <Label for="price">Harga Jual {{ form.has_variants ? '' : '*' }}</Label>
-                                <Input
-                                    id="price"
-                                    v-model="priceDisplay"
-                                    type="text"
-                                    inputmode="decimal"
-                                    placeholder="0"
-                                    :required="!form.has_variants"
-                                />
-                                <div v-if="form.errors.price" class="text-sm text-red-600">
-                                    {{ form.errors.price }}
-                                </div>
-                                <p
-                                    v-if="profitPercent !== null"
-                                    class="text-xs font-medium"
-                                    :class="profitPercent >= 0 ? 'text-emerald-600' : 'text-red-600'"
-                                >
-                                    Keuntungan {{ profitPercent }}% dari modal
-                                </p>
-                            </div>
-
-                            <div class="space-y-2" v-if="wholesaleEnabled" v-show="showAdvanced">
-                                <Label for="wholesale_price">Harga Grosir</Label>
-                                <Input
-                                    id="wholesale_price"
-                                    v-model="wholesalePriceDisplay"
-                                    type="text"
-                                    inputmode="decimal"
-                                    placeholder="0"
-                                />
-                                <p class="text-xs text-muted-foreground">Kosongkan agar pelanggan grosir tetap memakai harga jual.</p>
-                                <div v-if="form.errors.wholesale_price" class="text-sm text-red-600">
-                                    {{ form.errors.wholesale_price }}
-                                </div>
-                            </div>
-
-                            <div class="space-y-2">
-                                <Label for="cost_price">Harga modal</Label>
-                                <Input
-                                    id="cost_price"
-                                    v-model="costPriceDisplay"
-                                    type="text"
-                                    inputmode="decimal"
-                                    placeholder="0"
-                                />
-                                <p v-if="consumptionEnabled && estimatedHpp > 0" class="text-xs text-violet-700 font-medium">
-                                    Estimasi dari komponen: Rp {{ Math.round(estimatedHpp).toLocaleString('id-ID') }}
-                                    <span class="text-muted-foreground font-normal">(diisi otomatis, bisa diubah manual)</span>
-                                </p>
-                                <div v-if="form.errors.cost_price" class="text-sm text-red-600">
-                                    {{ form.errors.cost_price }}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="grid gap-6 md:grid-cols-2" v-show="showAdvanced">
-                            <div class="space-y-2">
-                                <Label for="inventory_type">Jenis barang *</Label>
-                                <select
-                                    id="inventory_type"
-                                    v-model="form.inventory_type"
-                                    class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                                    required
-                                >
-                                    <option v-for="(label, key) in inventoryTypes" :key="key" :value="key">{{ label }}</option>
-                                </select>
-                                <p class="text-xs text-muted-foreground">Barang jual tampil di kasir; bahan baku dan kemasan hanya dipakai untuk resep/produksi.</p>
-                                <div v-if="form.errors.inventory_type" class="text-sm text-red-600">{{ form.errors.inventory_type }}</div>
-                            </div>
-
-                            <div class="space-y-2">
-                                <Label for="base_unit">Satuan dasar stok *</Label>
-                                <select
-                                    id="base_unit"
-                                    v-model="form.base_unit"
-                                    class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                                    required
-                                >
-                                    <option v-for="(label, key) in baseUnits" :key="key" :value="key">{{ label }}</option>
-                                </select>
-                                <p class="text-xs text-muted-foreground">Satuan untuk menghitung stok (pcs, gram, kg, ml, atau liter).</p>
-                                <div v-if="form.errors.base_unit" class="text-sm text-red-600">{{ form.errors.base_unit }}</div>
-                            </div>
-                        </div>
-
-                        <div class="grid gap-6" :class="showAdvanced ? 'md:grid-cols-3' : 'md:grid-cols-2'">
-                            <div class="space-y-2">
-                                <Label for="stock_quantity">Stok Awal *</Label>
-                                <Input
-                                    id="stock_quantity"
-                                    v-model.number="form.stock_quantity"
-                                    type="number"
-                                    min="0"
-                                    :step="form.allows_decimal ? 0.0001 : 1"
-                                    placeholder="0"
-                                    required
-                                    :disabled="(batchTrackingEnabled && form.track_stock) || form.has_variants || form.is_bundle"
-                                    :class="(batchTrackingEnabled && form.track_stock) || form.has_variants || form.is_bundle ? 'opacity-70' : ''"
-                                />
-                                <p v-if="form.is_bundle" class="text-xs text-muted-foreground">
-                                    Stok dihitung dari komponen paket (bukan stok induk).
-                                </p>
-                                <p v-else-if="form.has_variants" class="text-xs text-muted-foreground">
-                                    Stok diisi per varian di bawah.
-                                </p>
-                                <p v-else-if="batchTrackingEnabled && form.track_stock" class="text-xs text-muted-foreground">
-                                    Isi lewat batch di bawah (total otomatis).
-                                </p>
-                                <div v-if="form.errors.stock_quantity" class="text-sm text-red-600">
-                                    {{ form.errors.stock_quantity }}
-                                </div>
-                            </div>
-
-                            <div class="space-y-2" v-show="showAdvanced">
-                                <Label for="min_stock_level">Stok Minimum *</Label>
-                                <Input
-                                    id="min_stock_level"
-                                    v-model.number="form.min_stock_level"
-                                    type="number"
-                                    min="0"
-                                    :step="form.allows_decimal ? 0.0001 : 1"
-                                    placeholder="0"
-                                    required
-                                    :disabled="form.has_variants || form.is_bundle"
-                                    :class="form.has_variants || form.is_bundle ? 'opacity-70' : ''"
-                                />
-                                <p v-if="form.is_bundle" class="text-xs text-muted-foreground">
-                                    Batas stok rendah di komponen masing-masing.
-                                </p>
-                                <p v-else-if="form.has_variants" class="text-xs text-muted-foreground">
-                                    Batas stok rendah per varian (tabel varian).
-                                </p>
-                                <div v-if="form.errors.min_stock_level" class="text-sm text-red-600">
-                                    {{ form.errors.min_stock_level }}
-                                </div>
-                            </div>
-
-                            <div class="space-y-2">
-                                <Label for="unit">Satuan *</Label>
-                                <select
-                                    id="unit"
-                                    v-model="form.unit"
-                                    class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                    required
-                                >
-                                    <option v-for="u in unitOptions" :key="u" :value="u">{{ u }}</option>
-                                </select>
-                                <div v-if="form.errors.unit" class="text-sm text-red-600">
-                                    {{ form.errors.unit }}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="grid gap-6 md:grid-cols-2" v-show="showAdvanced">
                             <div class="space-y-2">
                                 <Label for="brand">Merek</Label>
                                 <Input
@@ -1054,125 +1438,27 @@ const submitAndAddAnother = () => {
                                     {{ form.errors.brand }}
                                 </div>
                             </div>
-
-                            <div class="space-y-2">
-                                <Label for="tax_rate">Pajak (%)</Label>
-                                <Input
-                                    id="tax_rate"
-                                    v-model.number="form.tax_rate"
-                                    type="number"
-                                    min="0"
-                                    max="100"
-                                    step="0.01"
-                                    placeholder="11"
-                                />
-                                <div v-if="form.errors.tax_rate" class="text-sm text-red-600">
-                                    {{ form.errors.tax_rate }}
-                                </div>
+                            <div v-if="baseUnitMismatch" class="space-y-2">
+                                <Label for="base_unit">Satuan hitung untuk resep</Label>
+                                <select
+                                    id="base_unit"
+                                    v-model="form.base_unit"
+                                    class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                >
+                                    <option v-for="(label, key) in baseUnits" :key="key" :value="key">{{ label }}</option>
+                                </select>
+                                <p class="text-xs text-muted-foreground">Satuan "{{ form.unit }}" dihitung sebagai satuan ini di resep dan produksi.</p>
+                                <div v-if="form.errors.base_unit" class="text-sm text-red-600">{{ form.errors.base_unit }}</div>
                             </div>
                         </div>
-
-                        <div v-if="barbershopEnabled" class="space-y-2">
-                            <Label for="service_duration_minutes">Durasi Layanan (menit)</Label>
-                            <Input
-                                id="service_duration_minutes"
-                                v-model.number="form.service_duration_minutes"
-                                type="number"
-                                min="1"
-                                max="1440"
-                                step="1"
-                                placeholder="45"
-                            />
-                            <p class="text-xs text-muted-foreground">
-                                Kosongkan jika layanan ini tidak berdurasi tetap.
-                            </p>
-                            <div v-if="form.errors.service_duration_minutes" class="text-sm text-red-600">
-                                {{ form.errors.service_duration_minutes }}
-                            </div>
-                        </div>
-
-                        <div v-if="barbershopEnabled" class="space-y-2">
-                            <Label for="barber_commission_mode">Komisi Teknisi (override)</Label>
-                            <select
-                                id="barber_commission_mode"
-                                v-model="form.barber_commission_mode"
-                                class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                            >
-                                <option value="">Ikuti tarif global toko</option>
-                                <option value="percent">Persen dari harga jual (%)</option>
-                                <option value="fixed">Tarif tetap per item (Rp)</option>
-                            </select>
-                            <Input
-                                v-if="form.barber_commission_mode"
-                                id="barber_commission_value"
-                                v-model.number="form.barber_commission_value"
-                                type="number"
-                                min="0"
-                                :max="form.barber_commission_mode === 'fixed' ? 100000000 : 100"
-                                :step="form.barber_commission_mode === 'fixed' ? 1000 : 0.5"
-                                :placeholder="form.barber_commission_mode === 'fixed' ? '10000' : '40'"
-                            />
-                            <p class="text-xs text-muted-foreground">
-                                Tarif khusus produk/layanan ini. Pilih "Ikuti tarif global toko" untuk memakai pengaturan di Pengaturan > Toko.
-                            </p>
-                            <div v-if="form.errors.barber_commission_mode" class="text-sm text-red-600">
-                                {{ form.errors.barber_commission_mode }}
-                            </div>
-                            <div v-if="form.errors.barber_commission_value" class="text-sm text-red-600">
-                                {{ form.errors.barber_commission_value }}
-                            </div>
-                        </div>
-
-                        <div class="flex items-center space-x-2">
-                            <input
-                                type="checkbox"
-                                id="track_stock"
-                                v-model="form.track_stock"
-                                @change="(e) => {
-                                    if (!e.target.checked) form.unlimited_stock = false;
-                                    syncStockFromBatches();
-                                }"
-                                class="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                            />
-                            <Label for="track_stock">Lacak stok produk ini</Label>
-                        </div>
-
-                        <div class="flex items-center space-x-2">
-                            <input
-                                type="checkbox"
-                                id="unlimited_stock"
-                                v-model="form.unlimited_stock"
-                                :disabled="!form.track_stock"
-                                class="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                            />
-                            <Label for="unlimited_stock">Stok Tidak Terbatas</Label>
-                        </div>
-                        <p class="text-xs text-muted-foreground ml-7">
-                            Produk akan selalu tersedia tanpa batasan stok
-                        </p>
-
-                        <div class="flex items-center space-x-2" v-show="showAdvanced">
-                            <input
-                                type="checkbox"
-                                id="allow_negative_stock"
-                                v-model="form.allow_negative_stock"
-                                :disabled="form.unlimited_stock"
-                                class="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                            />
-                            <Label for="allow_negative_stock" class="text-sm" :class="{ 'opacity-50': form.unlimited_stock }">
-                                Izinkan Penjualan Stok Habis
-                            </Label>
-                        </div>
-                        <p v-show="showAdvanced" class="text-xs text-muted-foreground ml-7 -mt-2" :class="{ 'opacity-50': form.unlimited_stock }">
-                            Produk tetap bisa dijual meskipun stok habis. Stok akan menjadi negatif.
-                        </p>
-
-                        <template v-if="allowsAdvancedRetail && showAdvanced">
+                        <template v-if="allowsAdvancedRetail">
                             <div class="flex items-center space-x-2">
-                                <Checkbox
+                                <input
                                     id="allows_decimal"
-                                    v-model:checked="form.allows_decimal"
-                                    @update:checked="() => syncStockFromBatches()"
+                                    v-model="form.allows_decimal"
+                                    type="checkbox"
+                                    class="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                                    @change="syncStockFromBatches()"
                                 />
                                 <Label for="allows_decimal">Kuantitas desimal (curah: kg, liter, …)</Label>
                             </div>
@@ -1227,7 +1513,6 @@ const submitAndAddAnother = () => {
                                 Tidak bisa digabung dengan varian. Harga jual = harga yang tampil di kasir untuk satu paket.
                             </p>
                         </template>
-
                         <div
                             v-if="form.has_variants && !form.is_bundle"
                             class="rounded-xl border border-teal-200 bg-teal-50/50 p-4 space-y-3"
@@ -1299,10 +1584,7 @@ const submitAndAddAnother = () => {
                                                 />
                                             </td>
                                             <td class="p-2 align-middle">
-                                                <Checkbox
-                                                    :checked="row.is_active"
-                                                    @update:checked="(v) => row.is_active = Boolean(v)"
-                                                />
+                                                <input v-model="row.is_active" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" aria-label="Varian aktif" />
                                             </td>
                                             <td class="p-2 align-middle">
                                                 <Button
@@ -1409,181 +1691,10 @@ const submitAndAddAnother = () => {
                             <div v-if="form.errors.bundles_json" class="text-sm text-red-600">{{ form.errors.bundles_json }}</div>
                             <div v-if="form.errors.is_bundle" class="text-sm text-red-600">{{ form.errors.is_bundle }}</div>
                         </div>
+                    </div>
+                </section>
 
-                        <div
-                            v-if="showConsumptionBlock && (showAdvanced || consumptionEnabled)"
-                            class="rounded-xl border border-violet-200 bg-violet-50/50 p-4 space-y-3"
-                        >
-                            <div class="flex flex-wrap items-center justify-between gap-2">
-                                <div>
-                                    <p class="text-sm font-semibold text-violet-900">Bahan yang terpakai saat terjual</p>
-                                    <p class="text-xs text-violet-900/90 mt-0.5">
-                                        Mis. 1 es teh memakai 10 gram teh dan 1 gelas plastik. Stok bahan itu berkurang otomatis tiap produk ini terjual.
-                                    </p>
-                                </div>
-                                <Button
-                                    v-if="consumptionEnabled"
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    class="shrink-0"
-                                    @click="addConsumptionRow"
-                                >
-                                    <Plus class="h-4 w-4 mr-1" />
-                                    Tambah
-                                </Button>
-                            </div>
-                            <div class="flex items-center space-x-2">
-                                <input
-                                    type="checkbox"
-                                    id="consumption_enabled_create"
-                                    v-model="consumptionEnabled"
-                                    class="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                                />
-                                <Label for="consumption_enabled_create" class="text-sm text-violet-900">
-                                    Produk ini memakai bahan baku saat terjual
-                                </Label>
-                            </div>
-                            <p v-if="!consumptionEnabled" class="text-xs text-violet-900/80 ml-6 -mt-1">
-                                Nonaktif: stok produk ini berkurang seperti biasa saat terjual.
-                            </p>
-                            <div v-if="consumptionEnabled" class="overflow-x-auto rounded-lg border border-violet-200/80 bg-white">
-                                <table class="w-full text-sm min-w-[420px]">
-                                    <thead>
-                                        <tr class="border-b bg-violet-50/80 text-left text-xs text-violet-950">
-                                            <th class="p-2 font-semibold min-w-[200px]">Komponen *</th>
-                                            <th class="p-2 font-semibold w-[120px]">Qty / pcs</th>
-                                            <th class="p-2 font-semibold w-[100px]">Satuan</th>
-                                            <th class="p-2 w-10"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr v-for="(row, idx) in consumptionRows" :key="idx" class="border-b border-violet-100 last:border-0">
-                                            <td class="p-2">
-                                                <select
-                                                    v-model="row.component_product_id"
-                                                    class="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                                                    @change="onConsumptionProductChange(row)"
-                                                >
-                                                    <option disabled value="">Pilih komponen</option>
-                                                    <option v-for="c in consumptionCatalogOptions()" :key="c.id" :value="c.id">
-                                                        {{ c.name }}{{ c.sku ? ` (${c.sku})` : '' }}
-                                                    </option>
-                                                </select>
-                                            </td>
-                                            <td class="p-2">
-                                                <Input
-                                                    v-model.number="row.quantity"
-                                                    type="number"
-                                                    min="0.0001"
-                                                    step="0.0001"
-                                                    class="h-9"
-                                                />
-                                            </td>
-                                            <td class="p-2 text-xs text-muted-foreground leading-9">
-                                                {{ row.base_unit || '—' }}
-                                            </td>
-                                            <td class="p-2 align-middle">
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    class="h-9 w-9 p-0 text-destructive"
-                                                    :disabled="consumptionRows.length <= 1"
-                                                    @click="removeConsumptionRow(idx)"
-                                                >
-                                                    <Trash2 class="h-4 w-4" />
-                                                </Button>
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                            <div v-if="form.errors.sale_consumptions_json" class="text-sm text-red-600">
-                                {{ form.errors.sale_consumptions_json }}
-                            </div>
-                        </div>
-
-
-                        <button
-                            v-if="!showAdvanced"
-                            type="button"
-                            class="text-sm font-medium text-primary underline-offset-2 hover:underline"
-                            @click="showAdvanced = true"
-                        >
-                            + Tampilkan pengaturan lanjutan (stok minimum, pajak, varian, paket, bahan baku)
-                        </button>
-
-                        <div
-                            v-if="batchTrackingEnabled && form.track_stock && !form.has_variants && !form.is_bundle"
-                            class="rounded-xl border border-violet-200 bg-violet-50/60 p-4 space-y-3"
-                        >
-                            <div class="flex flex-wrap items-center justify-between gap-2">
-                                <div>
-                                    <p class="text-sm font-semibold text-violet-900">Batch & tanggal kedaluwarsa</p>
-                                    <p class="text-xs text-violet-700 mt-0.5">
-                                        Minimal satu baris. Total stok = jumlah qty batch.
-                                        <span v-if="pharmacyFieldsEnabled"> Untuk apotek, ED wajib di setiap baris.</span>
-                                    </p>
-                                </div>
-                                <Button type="button" variant="outline" size="sm" class="shrink-0" @click="addBatchRow">
-                                    <Plus class="h-4 w-4 mr-1" />
-                                    Baris batch
-                                </Button>
-                            </div>
-                            <div class="overflow-x-auto rounded-lg border border-violet-200/80 bg-white">
-                                <table class="w-full text-sm">
-                                    <thead>
-                                        <tr class="border-b bg-violet-50/80 text-left text-xs text-violet-800">
-                                            <th class="p-2 font-semibold w-[110px]">Qty</th>
-                                            <th class="p-2 font-semibold min-w-[140px]">
-                                                {{ pharmacyFieldsEnabled ? 'ED (wajib)' : 'ED (opsional)' }}
-                                            </th>
-                                            <th class="p-2 font-semibold min-w-[120px]">Kode batch</th>
-                                            <th class="p-2 w-10"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr v-for="(row, idx) in batchRows" :key="idx" class="border-b border-violet-100 last:border-0">
-                                            <td class="p-2">
-                                                <Input
-                                                    v-model.number="row.quantity_remaining"
-                                                    type="number"
-                                                    min="0"
-                                                    :step="form.allows_decimal ? 0.0001 : 1"
-                                                    class="h-9"
-                                                    @update:model-value="syncStockFromBatches"
-                                                />
-                                            </td>
-                                            <td class="p-2">
-                                                <Input v-model="row.expiry_date" type="date" class="h-9" />
-                                            </td>
-                                            <td class="p-2">
-                                                <Input v-model="row.batch_code" type="text" placeholder="—" class="h-9" />
-                                            </td>
-                                            <td class="p-2 align-middle">
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    class="h-9 w-9 p-0 text-destructive"
-                                                    :disabled="batchRows.length <= 1"
-                                                    @click="removeBatchRow(idx)"
-                                                >
-                                                    <Trash2 class="h-4 w-4" />
-                                                </Button>
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                            <p class="text-xs text-violet-800 font-medium">Total stok: {{ batchStockSum }}</p>
-                            <div v-if="form.errors.batches_json" class="text-sm text-red-600">{{ form.errors.batches_json }}</div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card v-if="pharmacyFieldsEnabled">
+                <Card v-if="pharmacyFieldsEnabled" class="rounded-2xl shadow-none">
                     <CardHeader>
                         <CardTitle>Apotek — klasifikasi &amp; izin edar</CardTitle>
                         <CardDescription>
@@ -1624,160 +1735,21 @@ const submitAndAddAnother = () => {
                     </CardContent>
                 </Card>
 
-                <OptionGroupsPicker
-                    v-if="!form.is_bundle"
-                    v-model="selectedModifierGroupIds"
-                    :groups="modifierGroups"
-                />
-
-                <Card v-if="fnbModifierEnabled && !form.is_bundle">
-                    <CardHeader>
-                        <CardTitle>Pilihan khusus produk ini</CardTitle>
-                        <CardDescription>
-                            Tambahan yang hanya ada di produk ini dan boleh dipilih lebih dari satu. Untuk pilihan yang dipakai banyak
-                            produk (gula, es, topping), gunakan grup di atas.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent class="space-y-3">
-                        <div class="flex justify-end">
-                            <Button type="button" variant="outline" size="sm" @click="addModifierOptionRow">
-                                <Plus class="h-4 w-4 mr-1" />
-                                Opsi
-                            </Button>
-                        </div>
-                        <div v-if="modifierOptionRows.length === 0" class="text-sm text-muted-foreground">
-                            Belum ada opsi. Klik &quot;Opsi&quot; untuk menambah baris.
-                        </div>
-                        <div v-else class="overflow-x-auto rounded-lg border">
-                            <table class="w-full text-sm">
-                                <thead>
-                                    <tr class="border-b bg-muted/40 text-left">
-                                        <th class="p-2 font-semibold min-w-[140px]">Nama</th>
-                                        <th class="p-2 font-semibold w-[120px]">Harga +</th>
-                                        <th class="p-2 w-10"></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr v-for="(row, idx) in modifierOptionRows" :key="idx" class="border-b last:border-0">
-                                        <td class="p-2">
-                                            <Input v-model="row.label" type="text" placeholder="Contoh: Pedas level 2" class="h-9" />
-                                        </td>
-                                        <td class="p-2">
-                                            <Input v-model.number="row.price" type="number" min="0" step="500" class="h-9" />
-                                        </td>
-                                        <td class="p-2">
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="sm"
-                                                class="h-9 w-9 p-0 text-destructive"
-                                                @click="removeModifierOptionRow(idx)"
-                                            >
-                                                <Trash2 class="h-4 w-4" />
-                                            </Button>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <div v-if="form.errors.modifier_options_json" class="text-sm text-red-600">
-                            {{ form.errors.modifier_options_json }}
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <!-- Gambar Produk -->
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Gambar Produk</CardTitle>
-                        <CardDescription>
-                            Upload gambar produk (maksimal 5 gambar, 2MB per gambar)
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent class="space-y-6">
-                        <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center relative group hover:border-primary/50 transition-colors">
-                            <div class="pointer-events-none">
-                                <Upload class="h-12 w-12 mx-auto mb-4 text-gray-400 group-hover:text-primary transition-colors" />
-                                <div class="space-y-2">
-                                    <p class="text-sm text-gray-600">
-                                        Klik untuk upload atau drag & drop
-                                    </p>
-                                    <p class="text-xs text-gray-500">
-                                        PNG, JPG, GIF, WebP hingga 2MB
-                                    </p>
-                                </div>
-                            </div>
-                            <input
-                                type="file"
-                                multiple
-                                accept="image/*"
-                                @change="handleImageUpload"
-                                class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                            />
-                        </div>
-
-                        <div v-if="imagePreviews.length > 0" class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                            <div 
-                                v-for="(preview, index) in imagePreviews" 
-                                :key="index"
-                                class="relative group"
-                            >
-                                <img 
-                                    :src="preview" 
-                                    :alt="`Preview ${index + 1}`"
-                                    class="w-full h-32 object-cover rounded-lg"
-                                />
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="destructive"
-                                    class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    @click="removeImage(index)"
-                                >
-                                    <X class="h-3 w-3" />
-                                </Button>
-                            </div>
-                        </div>
-
-                        <div v-if="form.errors.images" class="text-sm text-red-600">
-                            {{ form.errors.images }}
-                        </div>
-                        <ul
-                            v-if="imageFieldErrors.length > 0"
-                            class="text-sm text-red-600 list-disc pl-5 space-y-1"
-                        >
-                            <li v-for="(msg, idx) in imageFieldErrors" :key="idx">{{ msg }}</li>
-                        </ul>
-                    </CardContent>
-                </Card>
-
-                <!-- Actions -->
-                <div class="flex gap-4">
-                    <Button 
-                        type="submit" 
-                        :disabled="form.processing"
-                        class="flex-1"
-                    >
-                        <Package class="h-4 w-4 mr-2" />
-                        {{ form.processing ? 'Menyimpan...' : 'Simpan Produk' }}
+                <!-- Bilah simpan melayang -->
+                <div class="h-20" aria-hidden="true" />
+                <div
+                    class="fixed right-4 bottom-[5.5rem] left-4 z-40 flex items-center justify-end gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 lg:bottom-4 lg:left-auto lg:w-auto"
+                >
+                    <Button type="button" variant="ghost" as="a" href="/products">Batal</Button>
+                    <Button type="button" :disabled="form.processing" variant="outline" @click="submitAndAddAnother">
+                        <Plus class="mr-1 h-4 w-4" />
+                        <span class="hidden sm:inline">Simpan &amp; tambah lagi</span>
+                        <span class="sm:hidden">Lagi</span>
                     </Button>
-                    <Button 
-                        type="button" 
-                        :disabled="form.processing"
-                        variant="outline" 
-                        class="flex-1"
-                        @click="submitAndAddAnother"
-                    >
-                        <Plus class="h-4 w-4 mr-2" />
-                        {{ form.processing ? 'Menyimpan...' : 'Simpan & Tambah Lagi' }}
-                    </Button>
-                    <Button 
-                        type="button" 
-                        variant="ghost" 
-                        as="a" 
-                        href="/products"
-                    >
-                        Batal
+                    <Button type="submit" :disabled="form.processing">
+                        <Loader2 v-if="form.processing" class="mr-1 h-4 w-4 animate-spin" />
+                        <Package v-else class="mr-1 h-4 w-4" />
+                        {{ form.processing ? 'Menyimpan…' : 'Simpan produk' }}
                     </Button>
                 </div>
             </form>
