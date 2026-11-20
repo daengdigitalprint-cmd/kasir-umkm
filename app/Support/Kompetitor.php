@@ -117,6 +117,20 @@ final class Kompetitor
                 'best_for' => 'Usaha yang sudah memakai ekosistem Accurate',
                 'consider' => 'Biaya bertambah dengan add-on',
             ],
+            'kasir-aja' => [
+                'free' => 'Gratis: transaksi tanpa batas, satu outlet, katalog terbatas',
+                'price' => 'Premium Rp149.000 / outlet / bulan (belum pajak)',
+                'billing' => 'Per outlet',
+                'best_for' => 'Usaha yang butuh QRIS terintegrasi, aplikasi iOS, toko online, atau PPOB',
+                'consider' => 'Fitur khusus apotek, laundry, dan barbershop tidak tercantum di halaman harga',
+            ],
+            'esb' => [
+                'free' => 'Basic mulai dari Rp0 (syarat & ketentuan berlaku)',
+                'price' => 'Advanced mulai dari Rp499.000 / bulan',
+                'billing' => 'Basic & Advanced "mulai dari"; Enterprise sesuai kebutuhan',
+                'best_for' => 'Restoran dan kafe multi-cabang yang butuh integrasi ojol, pembayaran digital, dan ERP',
+                'consider' => 'Khusus bisnis kuliner; harga detail lewat konsultasi',
+            ],
         ];
 
         $out = [];
@@ -786,6 +800,141 @@ final class Kompetitor
                     ['Apa alternatif Accurate POS untuk UMKM?', 'Kasir UMKM by MaccaPOS punya paket {free} gratis dan paket {paid} {paid_price} per bulan, tanpa biaya per perangkat, dengan meja dan QR meja untuk usaha F&B.'],
                     ['Berapa harga Accurate POS?', 'Menurut halaman harga Accurate POS, Paket Dasar Rp222.000 per bulan termasuk PPN 11%, dengan add-on Multi Outlet Rp222.000, Multi Device Rp22.200, Table Management Rp55.500, dan pengguna back office Rp22.200 per bulan.'],
                     ['Apakah Kasir UMKM terhubung dengan Accurate Online?', 'Belum. Kasir UMKM punya laporan keuangan sendiri (laba rugi, neraca, jurnal) dan bisa mengekspor laporan ke Excel atau PDF.'],
+                ],
+            ],
+
+            'kasir-aja' => [
+                'slug' => 'alternatif-kasiraja',
+                'name' => 'KasirAja',
+                'checked_at' => '2026-11-20',
+                'checked_label' => '20 November 2026',
+                'sources' => [
+                    ['label' => 'halaman harga KasirAja', 'url' => 'https://kasiraja.id/harga-aplikasi-kasir-murah'],
+                    ['label' => 'syarat & ketentuan KasirAja', 'url' => 'https://kasiraja.id/terms-and-conditon'],
+                ],
+                'h1' => 'Alternatif KasirAja: paket berbayar lebih hemat dan fitur khusus jenis usaha',
+                'description' => 'Mencari alternatif KasirAja? Bandingkan paket gratis, harga Premium per outlet, dan fitur apotek, laundry, serta barbershop dengan Kasir UMKM by MaccaPOS.',
+                'lead' => 'KasirAja adalah aplikasi kasir Indonesia dengan paket Gratis dan paket Premium Rp149.000 per outlet per bulan. Keduanya sama-sama punya paket gratis, jadi perbedaannya ada di harga paket berbayar dan fitur khusus jenis usaha. Berikut perbandingan yang jujur, termasuk kapan KasirAja justru lebih cocok.',
+                'tldr' => [
+                    ['Harga', 'paket {paid} Kasir UMKM {paid_price} per outlet per bulan. Paket Premium KasirAja Rp149.000 per outlet per bulan.'],
+                    ['Fitur usaha', 'Kasir UMKM punya mode apotek, order laundry, dan komisi kapster.'],
+                    ['KasirAja lebih unggul', 'bila Anda butuh QRIS terintegrasi dengan notifikasi pembayaran, aplikasi iOS, toko online, atau penjualan pulsa & PPOB.'],
+                ],
+                'reasons' => [
+                    ['Ingin paket berbayar lebih hemat', 'Paket Premium KasirAja Rp149.000 per outlet per bulan, belum termasuk pajak menurut syarat & ketentuannya.'],
+                    ['Butuh fitur khas jenis usaha', 'Seperti mode apotek dengan batch, kedaluwarsa, dan nomor resep, order laundry, atau komisi kapster.'],
+                    ['Ingin mencoba kasir dari browser', 'Kasir UMKM bisa dibuka dari browser HP, tablet, atau laptop tanpa memasang aplikasi.'],
+                ],
+                'compare' => [
+                    ['Paket gratis', 'Paket {free}: transaksi tanpa batas, {free_limits}', 'Gratis: transaksi tanpa batas, satu outlet, katalog produk terbatas, laporan standar'],
+                    ['Harga paket berbayar', '{paid}: {paid_price} / outlet / bulan', 'Premium: Rp149.000 / outlet / bulan (belum pajak)'],
+                    ['Outlet tambahan', 'Add-on {outlet_addon} / outlet / bulan', 'Harga Premium per outlet'],
+                    ['Pembayaran QRIS', 'Catat pembayaran QRIS (gambar QRIS statis milik toko)', 'QR pembayaran dibuat dari aplikasi, dengan notifikasi saat pembayaran sukses'],
+                    ['Fitur restoran', 'QR meja, layar dapur, resep & HPP (paket {paid})', 'QR table, aplikasi dapur & waiters, resep produk tercantum'],
+                    ['Pesanan GoFood / GrabFood', 'Dicatat manual sebagai channel penjualan beserta komisinya', 'Pencatatan GrabFood & GoFood terpisah'],
+                    ['Perangkat', 'Browser (HP, tablet, laptop) dan aplikasi Android', 'Aplikasi KasirAja POS iOS dan Android'],
+                    ['Fitur usaha khusus', 'Mode apotek, laundry, barbershop, produksi', 'Tidak tercantum di halaman harga'],
+                ],
+                'source_note' => 'Syarat & ketentuan KasirAja menyebut uji coba gratis 14 hari dan biaya belum termasuk pajak.',
+                'cost' => [
+                    'title' => 'Contoh biaya bulanan: 2 outlet',
+                    'sub' => 'Usaha dengan dua outlet yang memakai paket berbayar.',
+                    'outlets' => 2,
+                    'theirs_title' => 'KasirAja (paket Premium)',
+                    'theirs' => [
+                        ['Premium outlet 1', 'Rp149.000'],
+                        ['Premium outlet 2', 'Rp149.000'],
+                    ],
+                    'theirs_total' => 'Rp298.000 / bulan',
+                    'theirs_note' => 'Belum termasuk pajak. Fitur Premium KasirAja dan paket {paid} tidak identik.',
+                    'ours' => [
+                        ['Paket {paid} (outlet 1)', '{paid_price}'],
+                        ['Outlet tambahan', '{outlet_addon}'],
+                    ],
+                    'ours_note' => 'Dalam Rupiah, tanpa biaya per karyawan atau perangkat.',
+                ],
+                'strengths' => [
+                    ['QRIS terintegrasi', 'QR pembayaran dibuat dari aplikasi dan outlet mendapat notifikasi saat pembayaran sukses.'],
+                    ['Aplikasi iOS & Android', 'Syarat & ketentuannya menyebut aplikasi KasirAja POS untuk iOS dan Android.'],
+                    ['Toko online & PPOB', 'Paket Premium mencantumkan toko online serta penjualan pulsa & PPOB.'],
+                    ['Fitur restoran lengkap', 'Aplikasi dapur, aplikasi waiters, reservasi, dan pesanan online dengan kurir tercantum di halaman F&B-nya.'],
+                ],
+                'fit_us' => [
+                    'Ingin paket berbayar dengan biaya per outlet yang lebih ringan',
+                    'Butuh mode apotek, laundry, atau komisi kapster',
+                    'Ingin kasir bisa dibuka dari browser di perangkat apa pun',
+                    'Ingin menghitung produksi dan HPP dari resep',
+                ],
+                'faq' => [
+                    ['Apa alternatif KasirAja?', 'Kasir UMKM by MaccaPOS juga punya paket {free} gratis selamanya, dengan paket {paid} {paid_price} per outlet per bulan dan fitur khusus apotek, laundry, serta barbershop.'],
+                    ['Berapa harga KasirAja?', 'Menurut halaman harga KasirAja, paket Gratis untuk satu outlet dan paket Premium Rp149.000 per outlet per bulan. Syarat & ketentuannya menyebut biaya belum termasuk pajak.'],
+                    ['Apakah QRIS Kasir UMKM terhubung otomatis seperti KasirAja?', 'Belum. Kasir UMKM menampilkan gambar QRIS statis milik toko Anda dan mencatat metode pembayarannya; pengecekan dana masuk dilakukan di aplikasi bank atau e-wallet Anda.'],
+                ],
+            ],
+
+            'esb' => [
+                'slug' => 'alternatif-esb',
+                'name' => 'ESB',
+                'checked_at' => '2026-11-20',
+                'checked_label' => '20 November 2026',
+                'sources' => [
+                    ['label' => 'halaman harga ESB', 'url' => 'https://www.esb.id/id/pricing'],
+                ],
+                'h1' => 'Alternatif ESB: aplikasi kasir untuk kuliner dan usaha lainnya',
+                'description' => 'Mencari alternatif ESB POS? Bandingkan paket, harga, dan fitur restoran dengan Kasir UMKM by MaccaPOS, yang juga melayani toko, apotek, laundry, dan barbershop.',
+                'lead' => 'ESB adalah sistem kasir dan ERP khusus bisnis kuliner, dengan paket Basic mulai Rp0 (syarat & ketentuan berlaku), Advanced mulai Rp499.000 per bulan, dan Enterprise sesuai kebutuhan. Bila usaha Anda kuliner kecil yang belum butuh ERP, atau bukan usaha kuliner, berikut perbandingan yang jujur, termasuk kapan ESB justru lebih cocok.',
+                'tldr' => [
+                    ['Fokus usaha', 'ESB dirancang untuk bisnis kuliner. Kasir UMKM melayani kuliner sekaligus toko, apotek, laundry, dan barbershop.'],
+                    ['Harga', 'paket {paid} Kasir UMKM {paid_price} per outlet per bulan. ESB Advanced mulai Rp499.000 per bulan; Basic mulai Rp0 dengan syarat & ketentuan.'],
+                    ['ESB lebih unggul', 'bila Anda restoran multi-cabang yang butuh integrasi GoFood, GrabFood, ShopeeFood, pembayaran digital terintegrasi, dan modul ERP.'],
+                ],
+                'reasons' => [
+                    ['Usaha bukan kuliner', 'ESB menyebut solusinya untuk bisnis kuliner. Toko, apotek, laundry, atau barbershop butuh fitur yang berbeda.'],
+                    ['Belum butuh ERP', 'Paket Advanced dan Enterprise ESB menyasar restoran multi-cabang dan restoran besar dengan modul ERP.'],
+                    ['Ingin harga yang jelas di awal', 'Paket Basic ESB "mulai dari Rp0" dengan syarat & ketentuan berlaku, dan Enterprise sesuai kebutuhan lewat konsultasi.'],
+                ],
+                'compare' => [
+                    ['Paket awal', 'Paket {free} gratis: transaksi tanpa batas, {free_limits}', 'Basic: mulai dari Rp0 / bulan (syarat & ketentuan berlaku)'],
+                    ['Paket berikutnya', '{paid}: {paid_price} / outlet / bulan', 'Advanced: mulai dari Rp499.000 / bulan; Enterprise: sesuai kebutuhan'],
+                    ['Jenis usaha', 'Kuliner, toko, apotek, laundry, barbershop', 'Bisnis kuliner (restoran & kafe)'],
+                    ['Meja, split bill, pesan sendiri', 'Meja, split bill, pesan lewat QR meja (paket {paid})', 'Table management, split bill, self order tercantum di tabel fitur'],
+                    ['Pesanan GoFood / GrabFood / ShopeeFood', 'Dicatat manual sebagai channel penjualan beserta komisinya', 'Integrasi GoFood, GrabFood & ShopeeFood tercantum'],
+                    ['Pembayaran digital', 'Catat pembayaran QRIS (gambar QRIS statis milik toko)', 'QRIS, kartu, e-wallet, Alipay & WeChat Pay tercantum'],
+                    ['Laporan & ERP', 'Laporan penjualan, stok, laba rugi, neraca', 'Hingga 100+ laporan; modul Simple & Full ERP'],
+                ],
+                'source_note' => 'Rincian fitur per paket ESB ada di tabel fitur di halaman harganya.',
+                'cost' => [
+                    'title' => 'Contoh: restoran 2 cabang',
+                    'sub' => 'Restoran dengan dua cabang yang butuh pengelolaan dari satu akun.',
+                    'outlets' => 2,
+                    'theirs_title' => 'ESB (paket Advanced)',
+                    'theirs' => [
+                        ['Paket Advanced', 'Mulai Rp499.000'],
+                    ],
+                    'theirs_total' => 'Mulai Rp499.000 / bulan',
+                    'theirs_note' => 'Halaman harga ESB menyebut "mulai dari"; hubungi ESB untuk harga sesuai jumlah cabang. Fitur Advanced dan paket {paid} tidak identik.',
+                    'ours' => [
+                        ['Paket {paid} (cabang 1)', '{paid_price}'],
+                        ['Cabang tambahan', '{outlet_addon}'],
+                    ],
+                    'ours_note' => 'Dalam Rupiah, tanpa biaya per karyawan atau perangkat.',
+                ],
+                'strengths' => [
+                    ['Khusus kuliner', 'Fitur restoran mendalam: merge & link table, move item & table, batas stok menu, customer display.'],
+                    ['Integrasi ojol & pembayaran', 'Integrasi GoFood, GrabFood & ShopeeFood serta pembayaran digital termasuk Alipay & WeChat Pay.'],
+                    ['ERP untuk restoran besar', 'Jurnal penjualan & persediaan otomatis, 100+ laporan, serta modul Simple & Full ERP.'],
+                    ['Skala multi-cabang', 'Paket Advanced dan Enterprise dirancang untuk restoran multi-cabang dan restoran besar.'],
+                ],
+                'fit_us' => [
+                    'Usaha bukan kuliner: toko, apotek, laundry, atau barbershop',
+                    'Kuliner kecil yang belum butuh modul ERP',
+                    'Ingin harga per outlet yang jelas tanpa konsultasi',
+                    'Ingin mulai dengan paket gratis tanpa batas waktu',
+                ],
+                'faq' => [
+                    ['Apa alternatif ESB untuk usaha kecil?', 'Kasir UMKM by MaccaPOS punya paket {free} gratis dan paket {paid} {paid_price} per outlet per bulan, dengan QR meja, layar dapur, serta resep & HPP untuk usaha kuliner.'],
+                    ['Berapa harga ESB?', 'Menurut halaman harga ESB, paket Basic mulai dari Rp0 per bulan (syarat & ketentuan berlaku), Advanced mulai dari Rp499.000 per bulan, dan Enterprise sesuai kebutuhan.'],
+                    ['Apakah Kasir UMKM bisa untuk usaha selain kuliner?', 'Bisa. Selain kuliner, Kasir UMKM punya mode untuk toko kelontong dan retail, apotek, laundry, barbershop, dan bakery.'],
                 ],
             ],
         ];
