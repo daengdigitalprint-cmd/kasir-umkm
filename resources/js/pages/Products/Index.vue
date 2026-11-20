@@ -211,12 +211,14 @@ const isMaterial = (p: Product) => p.inventory_type === 'raw_material' || p.inve
 function priceInfo(p: Product): { main: string; sub: string | null; muted: boolean } {
     const cost = Number(p.cost_price ?? 0);
     if (isMaterial(p)) {
+        // Staf tanpa akses biaya: harga beli disembunyikan server, jangan tampilkan "belum diisi".
+        if (!canViewCost.value) return { main: '—', sub: null, muted: true };
         return cost > 0
             ? { main: rupiah(cost), sub: `harga beli / ${p.unit || 'satuan'}`, muted: false }
             : { main: 'Harga beli belum diisi', sub: null, muted: true };
     }
     const price = Number(p.price ?? 0);
-    if (cost > 0 && price > 0) {
+    if (canViewCost.value && cost > 0 && price > 0) {
         const margin = Math.round(((price - cost) / price) * 100);
         return { main: rupiah(price), sub: `HPP ${rupiah(cost)} · margin ${margin}%`, muted: false };
     }
@@ -423,6 +425,7 @@ function submitImport() {
 
 const page = usePage();
 const barbershopEnabled = computed(() => Boolean((page.props as { barbershop_enabled?: boolean }).barbershop_enabled));
+const canViewCost = computed(() => Boolean((page.props as { abilities?: { view_cost?: boolean } }).abilities?.view_cost));
 const sampleServicesForm = useForm({});
 function addSampleServices() {
     sampleServicesForm.post('/products/sample-services', { preserveScroll: true });

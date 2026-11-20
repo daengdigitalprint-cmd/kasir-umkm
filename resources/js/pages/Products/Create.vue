@@ -90,6 +90,8 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const page = usePage();
+/** Staf tanpa akses biaya (gudang/kasir/dapur): field HPP/harga beli & margin disembunyikan. */
+const canViewCost = computed(() => Boolean((page.props as { abilities?: { view_cost?: boolean } }).abilities?.view_cost));
 const allowsAdvancedRetail = useAllowsAdvancedRetail();
 
 // Daftar kategori lokal reaktif — bisa ditambah langsung lewat popup tanpa reload.
@@ -823,7 +825,7 @@ const submitAndAddAnother = () => {
                             </div>
                         </div>
 
-                        <div class="grid gap-6 md:grid-cols-2">
+                        <div v-if="!isMaterial || canViewCost" class="grid gap-6 md:grid-cols-2">
 <template v-if="!isMaterial">
                             <div class="space-y-2">
                                 <Label for="price">Harga Jual {{ form.has_variants ? '' : '*' }}</Label>
@@ -839,7 +841,7 @@ const submitAndAddAnother = () => {
                                     {{ form.errors.price }}
                                 </div>
                                 <p
-                                    v-if="profitPercent !== null"
+                                    v-if="canViewCost && profitPercent !== null"
                                     class="text-xs font-medium"
                                     :class="profitPercent >= 0 ? 'text-emerald-600' : 'text-red-600'"
                                 >
@@ -861,7 +863,7 @@ const submitAndAddAnother = () => {
                                     {{ form.errors.wholesale_price }}
                                 </div>
                             </div>
-                            <div class="space-y-2">
+                            <div v-if="canViewCost" class="space-y-2">
                                 <Label for="cost_price">{{ isMaterial ? `Harga beli per ${form.unit}` : 'Harga modal (HPP)' }}</Label>
                                 <Input
                                     id="cost_price"
@@ -1538,7 +1540,7 @@ const submitAndAddAnother = () => {
                                             <th class="p-2 font-semibold w-[100px]">Barcode</th>
                                             <th class="p-2 font-semibold w-[120px]">Harga</th>
                                             <th v-if="props.wholesaleEnabled" class="p-2 font-semibold w-[110px]">Grosir</th>
-                                            <th class="p-2 font-semibold w-[110px]">HPP</th>
+                                            <th v-if="canViewCost" class="p-2 font-semibold w-[110px]">HPP</th>
                                             <th class="p-2 font-semibold w-[80px]">Stok</th>
                                             <th class="p-2 font-semibold w-[80px]">Min</th>
                                             <th class="p-2 font-semibold w-[70px]">Aktif</th>
@@ -1562,7 +1564,7 @@ const submitAndAddAnother = () => {
                                             <td v-if="props.wholesaleEnabled" class="p-2">
                                                 <Input v-model.number="row.wholesale_price" type="number" min="0" step="100" class="h-9" />
                                             </td>
-                                            <td class="p-2">
+                                            <td v-if="canViewCost" class="p-2">
                                                 <Input v-model.number="row.cost_price" type="number" min="0" step="100" class="h-9" />
                                             </td>
                                             <td class="p-2">

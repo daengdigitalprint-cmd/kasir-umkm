@@ -3,9 +3,9 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { confirmDelete, modalError, toastSuccess } from '@/lib/swal';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { ChefHat, Factory, Info, MoreVertical, Pencil, Plus, Trash2, X } from 'lucide-vue-next';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 
 interface ProductTiny {
     id: number;
@@ -38,6 +38,9 @@ defineProps<{
     recipes: Paginated<RecipeRow>;
     currentStore: { id: number; name: string };
 }>();
+
+const page = usePage();
+const canViewCost = computed(() => Boolean((page.props as { abilities?: { view_cost?: boolean } }).abilities?.view_cost));
 
 const rupiah = (v: number) => `Rp${Number(v).toLocaleString('id-ID', { maximumFractionDigits: Math.abs(v) >= 100 ? 0 : 2 })}`;
 const fmtQty = (v: string | number) => Number(v).toLocaleString('id-ID', { maximumFractionDigits: 2 });
@@ -115,7 +118,7 @@ async function deleteRecipe(recipe: RecipeRow) {
             <div v-if="recipes.data.length === 0" class="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
                 <ChefHat class="mx-auto h-10 w-10 text-slate-300" />
                 <p class="mt-3 font-semibold text-slate-800">Belum ada resep produksi</p>
-                <p class="mt-1 text-sm text-slate-500">Buat resep pertama, lalu catat produksinya agar stok dan HPP terhitung.</p>
+                <p class="mt-1 text-sm text-slate-500">Buat resep pertama, lalu catat produksinya agar stok{{ canViewCost ? ' dan HPP' : '' }} terhitung.</p>
                 <Button as-child class="mt-4 rounded-xl">
                     <Link href="/recipes/create">Buat resep pertama</Link>
                 </Button>
@@ -147,7 +150,7 @@ async function deleteRecipe(recipe: RecipeRow) {
                     </Link>
 
                     <div class="flex items-center gap-3 pl-13 sm:pl-0">
-                        <div class="flex-1 text-sm sm:w-36 sm:flex-none sm:text-right">
+                        <div v-if="canViewCost" class="flex-1 text-sm sm:w-36 sm:flex-none sm:text-right">
                             <div class="font-semibold text-slate-900 tabular-nums">
                                 {{ rupiah(r.unit_cost) }}<span class="text-xs font-normal text-slate-500">/{{ r.output_unit ?? 'satuan' }}</span>
                             </div>

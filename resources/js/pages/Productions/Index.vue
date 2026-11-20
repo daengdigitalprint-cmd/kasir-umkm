@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Factory, Eye } from 'lucide-vue-next';
+import { computed } from 'vue';
 
 interface RecipeTiny {
     id: number;
@@ -44,6 +45,9 @@ defineProps<{
     currentStore: { id: number; name: string };
     statusFilter?: string | null;
 }>();
+
+const page = usePage();
+const canViewCost = computed(() => Boolean((page.props as { abilities?: { view_cost?: boolean } }).abilities?.view_cost));
 
 const formatWhen = (iso: string) =>
     new Date(iso).toLocaleString('id-ID', {
@@ -167,7 +171,7 @@ function filterByStatus(status: string) {
                                     </div>
                                 </div>
                                 <div class="flex flex-col items-end gap-1 shrink-0">
-                                    <span class="text-xs font-mono text-slate-700">{{ formatRp(b.total_cost) }}</span>
+                                    <span v-if="canViewCost" class="text-xs font-mono text-slate-700">{{ formatRp(b.total_cost) }}</span>
                                     <Button as-child variant="ghost" size="sm" class="h-8 w-8 p-0">
                                         <Link :href="`/productions/${b.id}`"><Eye class="h-4 w-4" /></Link>
                                     </Button>

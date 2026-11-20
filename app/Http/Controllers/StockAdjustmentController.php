@@ -9,6 +9,7 @@ use App\Models\StockAdjustmentLine;
 use App\Support\Accounting\JournalPoster;
 use App\Support\AdjustmentStockOperations;
 use App\Support\BatchTracking;
+use App\Support\CostVisibility;
 use App\Support\InventoryCosting;
 use App\Support\PharmacyFeatures;
 use App\Support\ProductQuantity;
@@ -19,7 +20,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
-use Inertia\Inertia;
 use Inertia\Response;
 
 /**
@@ -50,7 +50,7 @@ class StockAdjustmentController extends Controller
             $query->where('reason_code', $request->input('reason_code'));
         }
 
-        return Inertia::render('StockAdjustments/Index', [
+        return CostVisibility::render('StockAdjustments/Index', [
             'adjustments' => $query->latest()->paginate(20)->withQueryString(),
             'filters' => [
                 'status' => $request->input('status'),
@@ -92,7 +92,7 @@ class StockAdjustmentController extends Controller
                 'cost_price', 'allows_decimal', 'has_variants',
             ]);
 
-        return Inertia::render('StockAdjustments/Create', [
+        return CostVisibility::render('StockAdjustments/Create', [
             'products' => $products,
             'batchTrackingEnabled' => BatchTracking::enabled($store),
             'pharmacyFieldsEnabled' => PharmacyFeatures::enabled($store),
@@ -389,7 +389,7 @@ class StockAdjustmentController extends Controller
         $isOwnDocument = (int) $stockAdjustment->created_by === (int) $user->id;
         $blockedBySegregation = StockAdjustmentApproval::segregationOfDuties($store) && $isOwnDocument;
 
-        return Inertia::render('StockAdjustments/Show', [
+        return CostVisibility::render('StockAdjustments/Show', [
             'adjustment' => $stockAdjustment,
             'reasonLabel' => StockAdjustment::reasonLabel((string) $stockAdjustment->reason_code),
             'statusLabel' => StockAdjustment::statusLabel((string) $stockAdjustment->status),

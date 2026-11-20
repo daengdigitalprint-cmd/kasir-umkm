@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, ref } from 'vue';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -49,6 +49,9 @@ interface LineDraft {
     expiry_date: string;
     line_notes: string;
 }
+
+const page = usePage();
+const canViewCost = computed(() => Boolean((page.props as { abilities?: { view_cost?: boolean } }).abilities?.view_cost));
 
 const form = useForm({
     reason_code: '',
@@ -397,7 +400,7 @@ function submit() {
                                     <p class="tabular-nums text-slate-700">
                                         {{ formatQty(Number(optionOf(line)?.stock ?? 0)) }} → <b>{{ formatQty(newStock(line) ?? 0) }}</b>
                                     </p>
-                                    <p class="text-xs font-semibold tabular-nums" :class="valueClass(lineValue(line))">{{ formatRupiah(lineValue(line)) }}</p>
+                                    <p v-if="canViewCost" class="text-xs font-semibold tabular-nums" :class="valueClass(lineValue(line))">{{ formatRupiah(lineValue(line)) }}</p>
                                 </template>
                             </div>
                             <button
@@ -437,8 +440,8 @@ function submit() {
         <div class="sticky bottom-0 z-20 -mx-4 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-2xl sm:border">
             <div class="mx-auto flex flex-wrap items-center justify-between gap-3" style="max-width: 80rem">
                 <p class="text-sm text-slate-600">
-                    <b class="text-slate-900">{{ readyLines.length }}</b> produk siap ·
-                    <span class="font-bold tabular-nums" :class="valueClass(totalValue)">{{ formatRupiah(totalValue) }}</span>
+                    <b class="text-slate-900">{{ readyLines.length }}</b> produk siap<template v-if="canViewCost"> ·
+                    <span class="font-bold tabular-nums" :class="valueClass(totalValue)">{{ formatRupiah(totalValue) }}</span></template>
                     <span v-if="blockingLines.length > 0" class="ml-2 font-semibold text-amber-700">· {{ blockingLines.length }} belum lengkap</span>
                 </p>
                 <div class="flex gap-2">

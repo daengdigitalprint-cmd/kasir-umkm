@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ArrowLeft, Factory, CheckCircle, XCircle } from 'lucide-vue-next';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { modalError } from '@/lib/swal';
 
 interface ProductTiny {
@@ -58,6 +58,9 @@ const props = defineProps<{
     canComplete: boolean;
     canCancel: boolean;
 }>();
+
+const page = usePage();
+const canViewCost = computed(() => Boolean((page.props as { abilities?: { view_cost?: boolean } }).abilities?.view_cost));
 
 const showCancelForm = ref(false);
 const cancelReason = ref('');
@@ -201,8 +204,8 @@ async function cancelBatch() {
                                     <th class="px-3 py-2">Bahan</th>
                                     <th class="px-3 py-2 text-right">Diperlukan</th>
                                     <th class="px-3 py-2 text-right">Dikonsumsi</th>
-                                    <th class="px-3 py-2 text-right">HPP/unit</th>
-                                    <th class="px-3 py-2 text-right">Total</th>
+                                    <th v-if="canViewCost" class="px-3 py-2 text-right">HPP/unit</th>
+                                    <th v-if="canViewCost" class="px-3 py-2 text-right">Total</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100">
@@ -216,10 +219,10 @@ async function cancelBatch() {
                                     </td>
                                     <td class="px-3 py-2 text-right font-mono text-xs">{{ stripZeros(ln.quantity_required) }}</td>
                                     <td class="px-3 py-2 text-right font-mono text-xs font-semibold">{{ stripZeros(ln.quantity_consumed) }}</td>
-                                    <td class="px-3 py-2 text-right font-mono text-xs text-slate-600">
+                                    <td v-if="canViewCost" class="px-3 py-2 text-right font-mono text-xs text-slate-600">
                                         {{ ln.unit_cost_snapshot ? formatRp(ln.unit_cost_snapshot) : '—' }}
                                     </td>
-                                    <td class="px-3 py-2 text-right font-mono text-xs text-slate-600">
+                                    <td v-if="canViewCost" class="px-3 py-2 text-right font-mono text-xs text-slate-600">
                                         {{ ln.total_cost ? formatRp(ln.total_cost) : '—' }}
                                     </td>
                                 </tr>
@@ -228,7 +231,7 @@ async function cancelBatch() {
                     </div>
 
                     <!-- Cost summary -->
-                    <div class="rounded-xl bg-slate-50 border border-slate-100 p-4 space-y-2 text-sm">
+                    <div v-if="canViewCost" class="rounded-xl bg-slate-50 border border-slate-100 p-4 space-y-2 text-sm">
                         <div class="flex justify-between">
                             <span class="text-slate-600">Total biaya bahan</span>
                             <strong class="font-mono text-slate-900">{{ formatRp(batch.total_cost || totalLinesCost) }}</strong>

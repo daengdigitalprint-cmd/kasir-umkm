@@ -21,6 +21,7 @@ use App\Support\BaseUnit;
 use App\Support\BatchTracking;
 use App\Support\BusinessTypePresets;
 use App\Support\CacheKeys;
+use App\Support\CostVisibility;
 use App\Support\InventoryType;
 use App\Support\ModifierOptions;
 use App\Support\PharmacyFeatures;
@@ -140,7 +141,7 @@ class ProductController extends Controller
             ->where('unlimited_stock', false)
             ->count();
 
-        return Inertia::render('Products/Index', [
+        return CostVisibility::render('Products/Index', [
             'products' => $products,
             'store' => $store,
             'categories' => $categories,
@@ -171,6 +172,11 @@ class ProductController extends Controller
     /** Unduh seluruh produk toko sebagai file Excel yang formatnya sama dengan template impor. */
     public function exportExcel()
     {
+        if (! CostVisibility::canSee(auth()->user())) {
+            return redirect()->route('products.index')
+                ->with('error', 'Ekspor & impor produk memuat HPP, hanya untuk pemilik, admin, atau manajer.');
+        }
+
         $store = auth()->user()->store;
 
         if (! $store) {
@@ -199,6 +205,11 @@ class ProductController extends Controller
     /** Unduh produk plus komponen (recipe & consumption) untuk backup/restore lengkap. */
     public function exportWithComponents()
     {
+        if (! CostVisibility::canSee(auth()->user())) {
+            return redirect()->route('products.index')
+                ->with('error', 'Ekspor & impor produk memuat HPP, hanya untuk pemilik, admin, atau manajer.');
+        }
+
         $store = auth()->user()->store;
 
         if (! $store) {
@@ -255,6 +266,11 @@ class ProductController extends Controller
     /** Proses file impor produk: menambah produk baru dan memperbarui produk yang sudah ada. */
     public function importStore(Request $request, ProductImportService $service)
     {
+        if (! CostVisibility::canSee(auth()->user())) {
+            return redirect()->route('products.index')
+                ->with('error', 'Ekspor & impor produk memuat HPP, hanya untuk pemilik, admin, atau manajer.');
+        }
+
         $store = auth()->user()->store;
 
         if (! $store) {
@@ -365,7 +381,7 @@ class ProductController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'sort_order']);
 
-        return Inertia::render('Products/Create', [
+        return CostVisibility::render('Products/Create', [
             'store' => $store,
             'wholesaleEnabled' => (bool) ($store->settings['wholesale_enabled'] ?? false),
             'productCategories' => $productCategories,
@@ -563,7 +579,8 @@ class ProductController extends Controller
         ]);
         $normalizedSaleConsumptions = $this->normalizeSaleConsumptions($saleConsumptionTarget, $store, $saleConsumptionRows);
 
-        $initialCost = isset($validated['cost_price']) && is_numeric($validated['cost_price'])
+        // Staf tanpa akses HPP tidak mengisi HPP: biarkan kosong untuk dilengkapi pengelola/pembelian.
+        $initialCost = CostVisibility::canSee($request->user()) && isset($validated['cost_price']) && is_numeric($validated['cost_price'])
             ? (float) $validated['cost_price']
             : null;
         if ($this->hasProductionOutputConsumption($normalizedSaleConsumptions)) {
@@ -725,7 +742,7 @@ class ProductController extends Controller
 
         $product->load('store');
 
-        return Inertia::render('Products/Show', [
+        return CostVisibility::render('Products/Show', [
             'product' => $product,
         ]);
     }
@@ -849,7 +866,7 @@ class ProductController extends Controller
                 ->all();
         }
 
-        return Inertia::render('Products/Edit', [
+        return CostVisibility::render('Products/Edit', [
             'product' => $productData,
             'purchaseUnits' => $product->units()->get(['id', 'name', 'factor', 'is_purchase_default'])
                 ->map(fn ($u) => ['name' => $u->name, 'factor' => (float) $u->factor, 'is_purchase_default' => $u->is_purchase_default])
@@ -1138,6 +1155,11 @@ class ProductController extends Controller
 
         if (! $hasVariants && ! $isBundle && BatchTracking::enabled($product->store) && ! $dataToUpdate['track_stock']) {
             ProductBatch::where('product_id', $product->id)->delete();
+        }
+
+        // Staf tanpa akses HPP tidak melihat kolom HPP di form: pertahankan nilai yang ada.
+        if (! CostVisibility::canSee($request->user())) {
+            unset($dataToUpdate['cost_price'], $dataToUpdate['average_cost']);
         }
 
         $saleConsumptionRows = $this->decodeSaleConsumptionsJson($request->input('sale_consumptions_json')) ?? [];
@@ -1634,7 +1656,7 @@ class ProductController extends Controller
                     'store_id' => $store->id,
                     'product_id' => $product->id,
                 ]);
-            $variant->fill([
+            $fill = [
                 'name' => $r['name'],
                 'sku' => $r['sku'],
                 'barcode' => $r['barcode'],
@@ -1645,7 +1667,12 @@ class ProductController extends Controller
                 'min_stock_level' => $r['min_stock_level'],
                 'is_active' => $r['is_active'],
                 'sort_order' => $r['sort_order'],
-            ]);
+            ];
+            // Varian lama yang disimpan staf tanpa akses HPP: HPP-nya tidak ikut diubah.
+            if ($r['id'] && ! CostVisibility::canSee(auth()->user())) {
+                unset($fill['cost_price']);
+            }
+            $variant->fill($fill);
             $variant->save();
             $keptVariantIds[] = $variant->id;
         }

@@ -3,8 +3,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import AdminLayout from '@/layouts/AdminLayout.vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
 import { ArrowLeft, ChefHat, Edit, Factory } from 'lucide-vue-next';
+import { computed } from 'vue';
 
 interface ProductTiny {
     id: number;
@@ -45,6 +46,9 @@ defineProps<{
     totalIngredientCost: string;
     unitCostPerOutput: string;
 }>();
+
+const page = usePage();
+const canViewCost = computed(() => Boolean((page.props as { abilities?: { view_cost?: boolean } }).abilities?.view_cost));
 
 const fmtQty = (v: string | number) => {
     const n = Number(v);
@@ -144,8 +148,8 @@ const inventoryTypeLabels: Record<string, string> = {
                                         <th class="p-3">#</th>
                                         <th class="p-3">Bahan</th>
                                         <th class="p-3 text-right">Jumlah</th>
-                                        <th class="p-3 text-right">Harga beli</th>
-                                        <th class="p-3 text-right">Biaya</th>
+                                        <th v-if="canViewCost" class="p-3 text-right">Harga beli</th>
+                                        <th v-if="canViewCost" class="p-3 text-right">Biaya</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -159,13 +163,13 @@ const inventoryTypeLabels: Record<string, string> = {
                                             </div>
                                         </td>
                                         <td class="p-3 text-right font-mono font-semibold">{{ fmtQty(ing.quantity) }} {{ ing.base_unit ?? '' }}</td>
-                                        <td class="p-3 text-right font-mono text-xs text-slate-600">
+                                        <td v-if="canViewCost" class="p-3 text-right font-mono text-xs text-slate-600">
                                             <template v-if="unitCostOf(ing.product) > 0"
                                                 >{{ formatRp(unitCostOf(ing.product)) }}/{{ ing.base_unit ?? '' }}</template
                                             >
                                             <span v-else class="text-amber-700">Belum diisi</span>
                                         </td>
-                                        <td class="p-3 text-right font-mono font-semibold text-slate-900">
+                                        <td v-if="canViewCost" class="p-3 text-right font-mono font-semibold text-slate-900">
                                             {{ formatRp(Number(ing.quantity) * unitCostOf(ing.product)) }}
                                         </td>
                                     </tr>
@@ -175,7 +179,7 @@ const inventoryTypeLabels: Record<string, string> = {
                     </div>
 
                     <!-- Cost summary -->
-                    <div class="space-y-2 rounded-xl border border-slate-100 bg-slate-50 p-4 text-sm">
+                    <div v-if="canViewCost" class="space-y-2 rounded-xl border border-slate-100 bg-slate-50 p-4 text-sm">
                         <div class="flex justify-between">
                             <span class="text-slate-600">Modal bahan sekali produksi</span>
                             <strong class="font-mono text-slate-900">{{ formatRp(totalIngredientCost) }}</strong>

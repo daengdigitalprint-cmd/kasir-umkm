@@ -6,6 +6,7 @@ use App\Models\Product;
 use App\Models\StockAdjustment;
 use App\Models\StockAdjustmentLine;
 use App\Support\AdjustmentStockOperations;
+use App\Support\CostVisibility;
 use App\Support\InventoryCosting;
 use App\Support\ProductQuantity;
 use App\Support\StorePlanLimits;
@@ -14,7 +15,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
-use Inertia\Inertia;
 use Inertia\Response;
 
 /**
@@ -37,7 +37,7 @@ class StockRepackController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'sku', 'barcode', 'unit', 'stock_quantity', 'average_cost', 'cost_price', 'allows_decimal']);
 
-        return Inertia::render('StockAdjustments/Repack', [
+        return CostVisibility::render('StockAdjustments/Repack', [
             'products' => $products,
             'recent' => $this->recentPairs($store->id),
         ]);

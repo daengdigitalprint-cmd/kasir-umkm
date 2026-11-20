@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -54,6 +54,9 @@ const props = defineProps<{
     canReceive: boolean;
     canCancel: boolean;
 }>();
+
+const page = usePage();
+const canViewCost = computed(() => Boolean((page.props as { abilities?: { view_cost?: boolean } }).abilities?.view_cost));
 
 const showCancelForm = ref(false);
 const cancelReason = ref('');
@@ -415,8 +418,8 @@ const fmtQty = (val: string | number) => {
                                     <th class="px-3 py-2">Produk tujuan</th>
                                     <th class="px-3 py-2 text-right">Qty</th>
                                     <th v-if="hasDiscrepancy" class="px-3 py-2 text-right">Diterima</th>
-                                    <th class="px-3 py-2 text-right">HPP/unit</th>
-                                    <th class="px-3 py-2 text-right">Total</th>
+                                    <th v-if="canViewCost" class="px-3 py-2 text-right">HPP/unit</th>
+                                    <th v-if="canViewCost" class="px-3 py-2 text-right">Total</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100">
@@ -449,10 +452,10 @@ const fmtQty = (val: string | number) => {
                                         </template>
                                         <span v-else class="text-xs text-slate-400">Sesuai</span>
                                     </td>
-                                    <td class="px-3 py-2 text-right font-mono text-xs text-slate-600">
+                                    <td v-if="canViewCost" class="px-3 py-2 text-right font-mono text-xs text-slate-600">
                                         {{ ln.unit_cost_snapshot ? `Rp${Number(ln.unit_cost_snapshot).toLocaleString('id-ID')}` : '—' }}
                                     </td>
-                                    <td class="px-3 py-2 text-right font-mono text-xs text-slate-600">
+                                    <td v-if="canViewCost" class="px-3 py-2 text-right font-mono text-xs text-slate-600">
                                         {{ ln.total_cost_snapshot ? `Rp${Number(ln.total_cost_snapshot).toLocaleString('id-ID')}` : '—' }}
                                     </td>
                                 </tr>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { computed, reactive, ref, watch } from 'vue';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -95,6 +95,9 @@ function useRecent(r: RecentPair) {
     applyRememberedRatio();
 }
 
+const page = usePage();
+const canViewCost = computed(() => Boolean((page.props as { abilities?: { view_cost?: boolean } }).abilities?.view_cost));
+
 // ── Pratinjau ──
 const sourceQty = computed(() => Number(form.source_quantity) || 0);
 const outputQty = computed(() => Number(form.output_quantity) || 0);
@@ -139,8 +142,8 @@ function submit() {
                 <div>
                     <h1 class="flex items-center gap-2 text-2xl font-black text-slate-900"><Boxes class="h-6 w-6" /> Pecah kemasan</h1>
                     <p class="mt-1 text-sm text-slate-600">
-                        Kemasan besar dipecah jadi kemasan kecil, mis. 1 kg kacang → 72 bungkus 15 gr. HPP kemasan kecil
-                        dihitung otomatis dari harga kemasan besar.
+                        Kemasan besar dipecah jadi kemasan kecil, mis. 1 kg kacang → 72 bungkus 15 gr.<template v-if="canViewCost"> HPP kemasan kecil
+                        dihitung otomatis dari harga kemasan besar.</template>
                     </p>
                 </div>
             </div>
@@ -170,7 +173,7 @@ function submit() {
                             <span>
                                 <span class="block font-semibold text-slate-900">{{ source.name }}</span>
                                 <span class="text-xs text-slate-500">
-                                    Stok {{ formatQty(Number(source.stock_quantity)) }} {{ source.unit }} · HPP {{ formatRupiah(sourceCost) }}/{{ source.unit ?? 'satuan' }}
+                                    Stok {{ formatQty(Number(source.stock_quantity)) }} {{ source.unit }}<template v-if="canViewCost"> · HPP {{ formatRupiah(sourceCost) }}/{{ source.unit ?? 'satuan' }}</template>
                                 </span>
                             </span>
                             <button type="button" class="rounded p-1 text-slate-400 hover:text-slate-700" @click="clearPick('source')"><X class="h-4 w-4" /></button>
@@ -274,7 +277,7 @@ function submit() {
             <!-- Ringkasan -->
             <Card class="rounded-2xl border-slate-200 shadow-sm">
                 <CardContent class="space-y-3 pt-6">
-                    <div v-if="source && output && !problem" class="grid gap-3 text-sm md:grid-cols-3">
+                    <div v-if="source && output && !problem" class="grid gap-3 text-sm" :class="canViewCost ? 'md:grid-cols-3' : 'md:grid-cols-2'">
                         <div class="rounded-xl bg-slate-50 p-3">
                             <p class="text-xs text-slate-500">{{ source.name }}</p>
                             <p class="font-bold tabular-nums text-slate-900">
@@ -287,14 +290,14 @@ function submit() {
                                 {{ formatQty(Number(output.stock_quantity)) }} → {{ formatQty(Number(output.stock_quantity) + outputQty) }} {{ output.unit }}
                             </p>
                         </div>
-                        <div class="rounded-xl bg-cyan-50 p-3">
+                        <div v-if="canViewCost" class="rounded-xl bg-cyan-50 p-3">
                             <p class="text-xs text-cyan-800">HPP hasil</p>
                             <p class="font-bold tabular-nums text-cyan-900">{{ formatRupiah(outputUnitCost, outputUnitCost < 100 ? 2 : 0) }} / {{ output.unit ?? 'satuan' }}</p>
                             <p class="text-[11px] text-cyan-700">nilai berpindah {{ formatRupiah(transferValue) }}</p>
                         </div>
                     </div>
                     <p v-else-if="problem" class="text-sm font-semibold text-amber-700">{{ problem }}</p>
-                    <p v-if="sourceCost === 0 && source" class="text-xs text-amber-700">
+                    <p v-if="canViewCost && sourceCost === 0 && source" class="text-xs text-amber-700">
                         HPP {{ source.name }} masih 0, sehingga HPP hasilnya juga 0. Isi harga modal produk itu dulu bila perlu.
                     </p>
 

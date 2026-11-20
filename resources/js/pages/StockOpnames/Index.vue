@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,6 +29,9 @@ const props = defineProps<{
     filters: { status: string | null };
     statusLabels: Record<string, string>;
 }>();
+
+const page = usePage();
+const canViewCost = computed(() => Boolean((page.props as { abilities?: { view_cost?: boolean } }).abilities?.view_cost));
 
 const statusClass: Record<string, string> = {
     draft: 'bg-amber-100 text-amber-800',
@@ -132,7 +136,7 @@ function filterByStatus(status: string) {
                                 <tr class="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
                                     <th class="py-3 pr-4 font-semibold">Nomor</th>
                                     <th class="py-3 pr-4 font-semibold">Item dihitung</th>
-                                    <th class="py-3 pr-4 text-right font-semibold">Nilai selisih</th>
+                                    <th v-if="canViewCost" class="py-3 pr-4 text-right font-semibold">Nilai selisih</th>
                                     <th class="py-3 pr-4 font-semibold">Status</th>
                                     <th class="py-3 pr-4 font-semibold">Dibuka</th>
                                     <th class="py-3 font-semibold">Oleh</th>
@@ -146,7 +150,7 @@ function filterByStatus(status: string) {
                                         </Link>
                                     </td>
                                     <td class="py-3 pr-4 text-slate-600">{{ row.lines_count }} produk</td>
-                                    <td class="py-3 pr-4 text-right font-bold tabular-nums" :class="valueClass(row.total_variance_value)">
+                                    <td v-if="canViewCost" class="py-3 pr-4 text-right font-bold tabular-nums" :class="valueClass(row.total_variance_value)">
                                         {{ formatRupiah(row.total_variance_value) }}
                                     </td>
                                     <td class="py-3 pr-4">

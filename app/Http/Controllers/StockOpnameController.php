@@ -14,6 +14,7 @@ use App\Services\StockOpnameImportService;
 use App\Support\Accounting\JournalPoster;
 use App\Support\AdjustmentStockOperations;
 use App\Support\BatchTracking;
+use App\Support\CostVisibility;
 use App\Support\InventoryCosting;
 use App\Support\InventoryType;
 use App\Support\OpnameCounting;
@@ -62,7 +63,7 @@ class StockOpnameController extends Controller
             $query->where('status', $request->input('status'));
         }
 
-        return Inertia::render('StockOpnames/Index', [
+        return CostVisibility::render('StockOpnames/Index', [
             'opnames' => $query->latest()->paginate(20)->withQueryString(),
             'filters' => ['status' => $request->input('status')],
             'statusLabels' => [
@@ -219,7 +220,7 @@ class StockOpnameController extends Controller
         $blockedBySegregation = StockAdjustmentApproval::segregationOfDuties($store) && $isOwnDocument;
         $isPending = $stockOpname->status === StockAdjustment::STATUS_PENDING_APPROVAL;
 
-        return Inertia::render('StockOpnames/Show', [
+        return CostVisibility::render('StockOpnames/Show', [
             'opname' => $stockOpname,
             'statusLabel' => StockAdjustment::statusLabel((string) $stockOpname->status),
             'canPost' => $stockOpname->isDraft() && $canReview,

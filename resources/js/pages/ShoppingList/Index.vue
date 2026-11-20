@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -31,6 +31,9 @@ const props = defineProps<{
     canRequestStock?: boolean;
     store: { id: number; name: string; currency: string; location_label?: string };
 }>();
+
+const page = usePage();
+const canViewCost = computed(() => Boolean((page.props as { abilities?: { view_cost?: boolean } }).abilities?.view_cost));
 
 // Jumlah beli & centang bisa diubah sebelum dijadikan pembelian.
 const quantities = ref<Record<string, number>>(Object.fromEntries(props.items.map((i) => [i.key, i.suggested_quantity])));
@@ -198,7 +201,7 @@ async function copyList() {
                                     <th class="p-3">Barang</th>
                                     <th class="p-3">Stok / Minimum</th>
                                     <th class="p-3">Jumlah beli</th>
-                                    <th class="p-3 text-right">Perkiraan biaya</th>
+                                    <th v-if="canViewCost" class="p-3 text-right">Perkiraan biaya</th>
                                     <th class="p-3">Supplier terakhir</th>
                                 </tr>
                             </thead>
@@ -245,7 +248,7 @@ async function copyList() {
                                             <span class="text-slate-500">{{ item.unit }}</span>
                                         </div>
                                     </td>
-                                    <td class="p-3 text-right tabular-nums text-slate-700">
+                                    <td v-if="canViewCost" class="p-3 text-right tabular-nums text-slate-700">
                                         {{ item.unit_cost > 0 ? fmtMoney((quantities[item.key] ?? 0) * item.unit_cost) : '—' }}
                                     </td>
                                     <td class="p-3 text-slate-600">{{ item.last_supplier_name || '—' }}</td>
@@ -253,7 +256,7 @@ async function copyList() {
                             </tbody>
                         </table>
                     </div>
-                    <p class="mt-3 text-xs text-slate-500">
+                    <p v-if="canViewCost" class="mt-3 text-xs text-slate-500">
                         Perkiraan biaya memakai HPP rata-rata saat ini. Harga sebenarnya diisi di form Pembelian.
                     </p>
                 </CardContent>
@@ -267,7 +270,7 @@ async function copyList() {
             <div class="mx-auto flex flex-wrap items-center justify-between gap-3" style="max-width: 90rem">
                 <div class="text-sm">
                     <span class="font-bold text-slate-900">{{ chosenItems.length }} barang dipilih</span>
-                    <span class="ml-2 text-slate-600">Perkiraan {{ fmtMoney(estimatedTotal) }}</span>
+                    <span v-if="canViewCost" class="ml-2 text-slate-600">Perkiraan {{ fmtMoney(estimatedTotal) }}</span>
                 </div>
                 <div class="flex gap-2">
                     <Button variant="outline" class="rounded-xl" :disabled="chosenItems.length === 0" @click="copyList">

@@ -17,6 +17,7 @@ use App\Support\Accounting\ChartOfAccountsBootstrap;
 use App\Support\Accounting\JournalPoster;
 use App\Support\BarbershopFeatures;
 use App\Support\BatchTracking;
+use App\Support\CostVisibility;
 use App\Support\PharmacyFeatures;
 use App\Support\StoreLocationType;
 use App\Support\StorePlanLimits;
@@ -1071,7 +1072,7 @@ class ReportController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
-        return Inertia::render('StockOverview/Index', [
+        return CostVisibility::render('StockOverview/Index', [
             'store' => [
                 'id' => $selectedStore->id,
                 'name' => $selectedStore->name,

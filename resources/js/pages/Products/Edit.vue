@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useForm, router, Link } from '@inertiajs/vue3';
+import { useForm, router, Link, usePage } from '@inertiajs/vue3';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -619,6 +619,10 @@ function buildSaleConsumptionsPayload(): string {
     return JSON.stringify(payload);
 }
 
+const page = usePage();
+/** Staf tanpa akses biaya (gudang/kasir/dapur): field HPP/harga beli disembunyikan. */
+const canViewCost = computed(() => Boolean((page.props as { abilities?: { view_cost?: boolean } }).abilities?.view_cost));
+
 /** Estimasi HPP dari total biaya komponen konsumsi penjualan (qty × average_cost). */
 const estimatedHpp = computed<number>(() => {
     if (!consumptionEnabled.value) return 0;
@@ -1200,7 +1204,7 @@ const submit = () => {
                                 </div>
                             </div>
                         </div>
-                        <div class="grid gap-6 md:grid-cols-2">
+                        <div v-if="!isMaterial || canViewCost" class="grid gap-6 md:grid-cols-2">
 <template v-if="!isMaterial">
                             <div class="space-y-2">
                                 <Label for="price">Harga Jual {{ form.has_variants ? '' : '*' }}</Label>
@@ -1229,7 +1233,7 @@ const submit = () => {
                                     {{ form.errors.wholesale_price }}
                                 </div>
                             </div>
-                            <div class="space-y-2">
+                            <div v-if="canViewCost" class="space-y-2">
                                 <Label for="cost_price">{{ isMaterial ? `Harga beli per ${form.unit || 'satuan'}` : 'Harga modal (HPP)' }}</Label>
                                 <Input
                                     id="cost_price"
@@ -1923,7 +1927,7 @@ const submit = () => {
                                                 <th class="p-2 font-semibold w-[100px]">Barcode</th>
                                                 <th class="p-2 font-semibold w-[120px]">Harga</th>
                                                 <th class="p-2 font-semibold w-[120px]">Grosir</th>
-                                                <th class="p-2 font-semibold w-[110px]">HPP</th>
+                                                <th v-if="canViewCost" class="p-2 font-semibold w-[110px]">HPP</th>
                                                 <th class="p-2 font-semibold w-[80px]">Stok</th>
                                                 <th class="p-2 font-semibold w-[80px]">Min</th>
                                                 <th class="p-2 font-semibold w-[70px]">Aktif</th>
@@ -1947,7 +1951,7 @@ const submit = () => {
                                                 <td v-if="props.wholesaleEnabled" class="p-2">
                                                     <Input v-model.number="row.wholesale_price" type="number" min="0" step="100" class="h-9" />
                                                 </td>
-                                                <td class="p-2">
+                                                <td v-if="canViewCost" class="p-2">
                                                     <Input v-model.number="row.cost_price" type="number" min="0" step="100" class="h-9" />
                                                 </td>
                                                 <td class="p-2">

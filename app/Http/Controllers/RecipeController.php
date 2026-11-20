@@ -6,13 +6,13 @@ use App\Models\Product;
 use App\Models\Recipe;
 use App\Models\RecipeIngredient;
 use App\Support\BaseUnit;
+use App\Support\CostVisibility;
 use App\Support\InventoryType;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-use Inertia\Inertia;
 use Inertia\Response;
 
 class RecipeController extends Controller
@@ -40,7 +40,7 @@ class RecipeController extends Controller
             return $r;
         });
 
-        return Inertia::render('Recipes/Index', [
+        return CostVisibility::render('Recipes/Index', [
             'recipes' => $recipes,
             'currentStore' => ['id' => $store->id, 'name' => $store->name],
         ]);
@@ -64,7 +64,7 @@ class RecipeController extends Controller
         // Output: production_output
         $outputs = $products->filter(fn (Product $p) => InventoryType::isProductionOutput($p))->values();
 
-        return Inertia::render('Recipes/Create', [
+        return CostVisibility::render('Recipes/Create', [
             'store' => ['id' => $store->id, 'name' => $store->name],
             'ingredients' => $ingredients,
             'outputs' => $outputs,
@@ -223,7 +223,7 @@ class RecipeController extends Controller
         $totalCost = $recipe->totalIngredientCost();
         $unitCost = $recipe->unitCostPerOutput();
 
-        return Inertia::render('Recipes/Show', [
+        return CostVisibility::render('Recipes/Show', [
             'recipe' => $recipe,
             'totalIngredientCost' => $totalCost,
             'unitCostPerOutput' => $unitCost,
@@ -249,7 +249,7 @@ class RecipeController extends Controller
         $ingredients = $products->filter(fn (Product $p) => InventoryType::usableAsIngredient($p))->values();
         $outputs = $products->filter(fn (Product $p) => InventoryType::isProductionOutput($p))->values();
 
-        return Inertia::render('Recipes/Edit', [
+        return CostVisibility::render('Recipes/Edit', [
             'recipe' => $recipe,
             'ingredients' => $ingredients,
             'outputs' => $outputs,

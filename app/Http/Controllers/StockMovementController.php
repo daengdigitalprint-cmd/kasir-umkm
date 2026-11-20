@@ -3,9 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\StockMovement;
+use App\Support\CostVisibility;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
-use Inertia\Inertia;
 
 class StockMovementController extends Controller
 {
@@ -56,7 +56,7 @@ class StockMovementController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'sku']);
 
-        return Inertia::render('StockMovements/Index', [
+        return CostVisibility::render('StockMovements/Index', [
             'movements' => $movements,
             'products' => $products,
             'filters' => [

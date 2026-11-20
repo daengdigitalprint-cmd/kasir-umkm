@@ -162,6 +162,8 @@ class HandleInertiaRequests extends Middleware
                 // Pengelola SDM (absensi & gaji): owner, admin, manajer — sama dengan otorisasi server.
                 'manage_hr' => $user ? ($user->isSuperAdmin() || in_array($user->getRoleForActiveStore(), ['admin', 'manager', 'owner'], true)) : false,
                 'owner' => $user?->canAccessOwnerPanel() ?? false,
+                // HPP, biaya rata-rata, nilai stok: hanya pengelola (lihat App\Support\CostVisibility).
+                'view_cost' => \App\Support\CostVisibility::canSee($user),
             ],
             'allowed_menus' => $user?->allowedMenus() ?? [],
             'fnb_enabled' => $activeStore ? FnBFeatures::enabled($activeStore) : false,

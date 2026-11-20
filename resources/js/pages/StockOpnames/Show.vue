@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, router, useForm } from '@inertiajs/vue3';
+import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -102,6 +102,9 @@ const props = defineProps<{
     imports: ImportPayload[];
     excelMovedLines?: MovedLine[];
 }>();
+
+const page = usePage();
+const canViewCost = computed(() => Boolean((page.props as { abilities?: { view_cost?: boolean } }).abilities?.view_cost));
 
 const isPendingApproval = computed(() => props.opname.status === 'pending_approval');
 const approveForm = useForm({});
@@ -765,7 +768,7 @@ const formatWhen = (iso: string | null) =>
                     <CardContent class="pt-6">
                         <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Selisih</p>
                         <p class="mt-1 text-xl font-black text-slate-900">{{ affectedCount }} produk</p>
-                        <p class="text-sm font-bold tabular-nums" :class="valueClass(totalValue)">{{ formatRupiah(totalValue) }}</p>
+                        <p v-if="canViewCost" class="text-sm font-bold tabular-nums" :class="valueClass(totalValue)">{{ formatRupiah(totalValue) }}</p>
                     </CardContent>
                 </Card>
                 <Card v-if="showSystemQty" class="rounded-2xl border-slate-200 shadow-sm">
@@ -1018,7 +1021,7 @@ const formatWhen = (iso: string | null) =>
                                     <th v-if="showSystemQty" class="py-3 pr-4 text-right font-semibold">Stok sistem</th>
                                     <th class="py-3 pr-4 text-right font-semibold">Jumlah fisik</th>
                                     <th v-if="showSystemQty" class="py-3 pr-4 text-right font-semibold">Selisih</th>
-                                    <th v-if="showSystemQty" class="py-3 pr-4 text-right font-semibold">Nilai</th>
+                                    <th v-if="showSystemQty && canViewCost" class="py-3 pr-4 text-right font-semibold">Nilai</th>
                                     <th class="py-3 font-semibold">Catatan</th>
                                 </tr>
                             </thead>
@@ -1085,7 +1088,7 @@ const formatWhen = (iso: string | null) =>
                                         </template>
                                     </td>
                                     <td
-                                        v-if="showSystemQty"
+                                        v-if="showSystemQty && canViewCost"
                                         class="py-3 pr-4 text-right font-semibold tabular-nums whitespace-nowrap"
                                         :class="valueClass(varianceValue(row.id, row.counted_quantity))"
                                     >
@@ -1159,7 +1162,7 @@ const formatWhen = (iso: string | null) =>
                         <span class="text-slate-600">Ada selisih</span>
                         <span class="font-bold text-slate-900">{{ affectedCount }} produk</span>
                     </div>
-                    <div class="flex justify-between">
+                    <div v-if="canViewCost" class="flex justify-between">
                         <span class="text-slate-600">Nilai selisih</span>
                         <span class="font-bold tabular-nums" :class="valueClass(totalValue)">{{ formatRupiah(totalValue) }}</span>
                     </div>

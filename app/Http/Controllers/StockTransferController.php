@@ -8,6 +8,7 @@ use App\Models\StockTransfer;
 use App\Models\StockTransferLine;
 use App\Models\Store;
 use App\Models\User;
+use App\Support\CostVisibility;
 use App\Support\InventoryCosting;
 use App\Support\ProductQuantity;
 use App\Support\StorePlanLimits;
@@ -18,7 +19,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
@@ -73,7 +73,7 @@ class StockTransferController extends Controller
             ->where('status', StockTransfer::STATUS_SENT)
             ->count();
 
-        return Inertia::render('StockTransfers/Index', [
+        return CostVisibility::render('StockTransfers/Index', [
             'transfers' => $transfers,
             'currentStore' => ['id' => $store->id, 'name' => $store->name],
             'canCreateTransfer' => StorePlanLimits::allowsAdvancedRetailFeatures($store),
@@ -117,7 +117,7 @@ class StockTransferController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'sku', 'barcode', 'unit', 'stock_quantity', 'allows_decimal']);
 
-        return Inertia::render('StockTransfers/Create', [
+        return CostVisibility::render('StockTransfers/Create', [
             'sourceStore' => [
                 'id' => $store->id,
                 'name' => $store->name,
@@ -359,7 +359,7 @@ class StockTransferController extends Controller
             && ($this->canOperateAt($user, (int) $stockTransfer->from_store_id)
                 || $this->canOperateAt($user, (int) $stockTransfer->to_store_id));
 
-        return Inertia::render('StockTransfers/Show', [
+        return CostVisibility::render('StockTransfers/Show', [
             'transfer' => $stockTransfer,
             'canSend' => $canSend,
             'canReceive' => $canReceive,

@@ -7,6 +7,7 @@ use App\Models\ProductionBatch;
 use App\Models\ProductionBatchLine;
 use App\Models\Recipe;
 use App\Models\StockMovement;
+use App\Support\CostVisibility;
 use App\Support\InventoryCosting;
 use App\Support\ProductQuantity;
 use App\Support\StorePlanLimits;
@@ -14,7 +15,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-use Inertia\Inertia;
 use Inertia\Response;
 
 class ProductionController extends Controller
@@ -37,7 +37,7 @@ class ProductionController extends Controller
 
         $batches = $query->latest()->paginate(20)->withQueryString();
 
-        return Inertia::render('Productions/Index', [
+        return CostVisibility::render('Productions/Index', [
             'batches' => $batches,
             'currentStore' => ['id' => $store->id, 'name' => $store->name],
             'statusFilter' => $request->input('status'),
@@ -69,7 +69,7 @@ class ProductionController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'sku', 'stock_quantity', 'base_unit', 'average_cost']);
 
-        return Inertia::render('Productions/Create', [
+        return CostVisibility::render('Productions/Create', [
             'store' => ['id' => $store->id, 'name' => $store->name],
             'recipes' => $recipes,
             'products' => $products,
@@ -230,7 +230,7 @@ class ProductionController extends Controller
             'created_at' => $productionBatch->created_at->toIso8601String(),
         ];
 
-        return Inertia::render('Productions/Show', [
+        return CostVisibility::render('Productions/Show', [
             'batch' => $batchData,
             'totalLinesCost' => $totalLinesCost,
             'canComplete' => $productionBatch->isDraft()

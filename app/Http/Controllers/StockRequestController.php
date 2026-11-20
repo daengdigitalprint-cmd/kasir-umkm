@@ -9,10 +9,10 @@ use App\Models\Store;
 use App\Models\User;
 use App\Support\AutoStockRequest;
 use App\Support\CentralKitchenModule;
+use App\Support\CostVisibility;
 use App\Support\StoreLocationType;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
 use Inertia\Response;
 
 /**
@@ -52,7 +52,7 @@ class StockRequestController extends Controller
                 'created_at' => $r->created_at?->toIso8601String(),
             ]);
 
-        return Inertia::render('StockRequests/Index', [
+        return CostVisibility::render('StockRequests/Index', [
             'requests' => $requests,
             'tab' => $tab,
             'store' => ['id' => $store->id, 'name' => $store->name, 'is_central_warehouse' => StoreLocationType::isCentralWarehouse($store)],
@@ -86,7 +86,7 @@ class StockRequestController extends Controller
             }
         }
 
-        return Inertia::render('StockRequests/Create', [
+        return CostVisibility::render('StockRequests/Create', [
             'store' => ['id' => $store->id, 'name' => $store->name],
             'suppliers' => $suppliers->map(fn (Store $s) => [
                 'id' => $s->id,
@@ -148,7 +148,7 @@ class StockRequestController extends Controller
             'lines.supplierProduct:id,name,sku,base_unit,allows_decimal,stock_quantity',
         ]);
 
-        return Inertia::render('StockRequests/Show', [
+        return CostVisibility::render('StockRequests/Show', [
             'request' => [
                 'id' => $stockRequest->id,
                 'request_number' => $stockRequest->request_number,

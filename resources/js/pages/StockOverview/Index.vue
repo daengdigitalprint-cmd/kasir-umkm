@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, ChevronRight, Eye, Flame, Package, AlertTriangle, SearchIcon } from 'lucide-vue-next';
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 
 interface Product {
     id: number;
@@ -57,6 +57,9 @@ const props = defineProps<{
 }>();
 
 type StockFilter = 'low' | 'out' | 'restock' | null;
+
+const page = usePage();
+const canViewCost = computed(() => Boolean((page.props as { abilities?: { view_cost?: boolean } }).abilities?.view_cost));
 
 const searchQuery = ref(props.search);
 const activeCategoryId = ref<number | null>(props.categoryId);
@@ -221,8 +224,8 @@ const formatStock = (row: Product) => {
                         <p class="text-xs font-medium text-slate-500">Total Qty Stok</p>
                         <p class="text-lg font-bold text-slate-900">{{ fmtNum(stats.total_qty) }}</p>
                     </div>
-                    <div class="h-8 w-px bg-slate-200" />
-                    <div>
+                    <div v-if="canViewCost" class="h-8 w-px bg-slate-200" />
+                    <div v-if="canViewCost">
                         <p class="text-xs font-medium text-slate-500">Total Nilai Stok</p>
                         <p class="text-lg font-bold text-slate-900">{{ fmtCurrency(stats.total_value) }}</p>
                     </div>
@@ -341,8 +344,8 @@ const formatStock = (row: Product) => {
                                     <th class="px-4 py-3 text-right">Stok</th>
                                     <th class="px-4 py-3 text-right">Min. Stok</th>
                                     <th class="px-4 py-3 text-center">Status</th>
-                                    <th class="px-4 py-3 text-right">HPP / unit</th>
-                                    <th class="px-4 py-3 text-right">Nilai</th>
+                                    <th v-if="canViewCost" class="px-4 py-3 text-right">HPP / unit</th>
+                                    <th v-if="canViewCost" class="px-4 py-3 text-right">Nilai</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100">
@@ -365,15 +368,15 @@ const formatStock = (row: Product) => {
                                             {{ stockStatus(p).label }}
                                         </Badge>
                                     </td>
-                                    <td class="px-4 py-3 text-right text-slate-600">
+                                    <td v-if="canViewCost" class="px-4 py-3 text-right text-slate-600">
                                         {{ fmtCurrency(p.average_cost ?? p.cost_price ?? 0) }}
                                     </td>
-                                    <td class="px-4 py-3 text-right font-semibold text-slate-900">
+                                    <td v-if="canViewCost" class="px-4 py-3 text-right font-semibold text-slate-900">
                                         {{ fmtCurrency(Number(p.stock_quantity) * Number(p.average_cost ?? p.cost_price ?? 0)) }}
                                     </td>
                                 </tr>
                                 <tr v-if="products.data.length === 0">
-                                    <td colspan="6" class="px-4 py-12 text-center text-slate-500">
+                                    <td :colspan="canViewCost ? 6 : 4" class="px-4 py-12 text-center text-slate-500">
                                         Tidak ada produk atau pencarian tidak ditemukan.
                                     </td>
                                 </tr>

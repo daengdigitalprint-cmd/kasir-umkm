@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -44,6 +44,9 @@ const props = defineProps<{
     canApprove?: boolean;
     segregationBlocked?: boolean;
 }>();
+
+const page = usePage();
+const canViewCost = computed(() => Boolean((page.props as { abilities?: { view_cost?: boolean } }).abilities?.view_cost));
 
 const showCancel = ref(false);
 
@@ -187,8 +190,8 @@ function submitCancel() {
                 </div>
             </div>
 
-            <div class="grid gap-4 md:grid-cols-4">
-                <Card class="rounded-2xl border-slate-200 shadow-sm">
+            <div class="grid gap-4" :class="canViewCost ? 'md:grid-cols-4' : 'md:grid-cols-3'">
+                <Card v-if="canViewCost" class="rounded-2xl border-slate-200 shadow-sm">
                     <CardContent class="pt-6">
                         <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Nilai selisih</p>
                         <p class="mt-1 text-xl font-black tabular-nums" :class="valueClass(props.adjustment.total_variance_value)">
@@ -240,8 +243,8 @@ function submitCancel() {
                                 <th class="py-3 pr-4 text-right font-semibold">Stok sistem</th>
                                 <th class="py-3 pr-4 text-right font-semibold">Jumlah fisik</th>
                                 <th class="py-3 pr-4 text-right font-semibold">Selisih</th>
-                                <th class="py-3 pr-4 text-right font-semibold">HPP satuan</th>
-                                <th class="py-3 pr-4 text-right font-semibold">Nilai</th>
+                                <th v-if="canViewCost" class="py-3 pr-4 text-right font-semibold">HPP satuan</th>
+                                <th v-if="canViewCost" class="py-3 pr-4 text-right font-semibold">Nilai</th>
                                 <th class="py-3 font-semibold">Catatan</th>
                             </tr>
                         </thead>
@@ -264,10 +267,10 @@ function submitCancel() {
                                     {{ Number(line.variance_quantity) > 0 ? '+' : '' }}{{ formatQty(line.variance_quantity) }}
                                     <span class="text-xs font-normal text-slate-400">{{ line.product?.unit }}</span>
                                 </td>
-                                <td class="py-3 pr-4 text-right tabular-nums text-slate-500">
+                                <td v-if="canViewCost" class="py-3 pr-4 text-right tabular-nums text-slate-500">
                                     Rp{{ Math.round(Number(line.unit_cost)).toLocaleString('id-ID') }}
                                 </td>
-                                <td class="py-3 pr-4 text-right font-semibold tabular-nums" :class="valueClass(line.variance_value)">
+                                <td v-if="canViewCost" class="py-3 pr-4 text-right font-semibold tabular-nums" :class="valueClass(line.variance_value)">
                                     {{ formatRupiah(line.variance_value) }}
                                 </td>
                                 <td class="py-3 text-slate-500">{{ line.line_notes ?? '—' }}</td>

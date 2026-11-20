@@ -3,10 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Support\CentralKitchenModule;
+use App\Support\CostVisibility;
 use App\Support\ShoppingList;
 use App\Support\StoreLocationType;
 use App\Support\StorePlanLimits;
-use Inertia\Inertia;
 
 /**
  * F2 — Daftar Belanja: barang di bawah Stok Minimum + saran jumlah beli,
@@ -33,7 +33,7 @@ class ShoppingListController extends Controller
         $routedToWarehouse = StoreLocationType::mustRoutePurchaseThroughCentralWarehouse($store)
             && ! PurchaseController::allowsLocalPurchase($store);
 
-        return Inertia::render('ShoppingList/Index', [
+        return CostVisibility::render('ShoppingList/Index', [
             'items' => ShoppingList::items($store),
             'canPurchase' => ! $routedToWarehouse,
             // F6: minta ke lokasi lain dalam grup (Gudang Pusat Pro).

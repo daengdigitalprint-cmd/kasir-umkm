@@ -7,11 +7,11 @@ use App\Models\PreOrder;
 use App\Models\PreOrderLine;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Support\CostVisibility;
 use App\Support\ProductQuantity;
 use App\Support\StorePlanLimits;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Inertia\Inertia;
 
 class PreOrderController extends Controller
 {
@@ -49,7 +49,7 @@ class PreOrderController extends Controller
                 'created_at' => $o->created_at?->toIso8601String(),
             ]);
 
-        return Inertia::render('PreOrders/Index', [
+        return CostVisibility::render('PreOrders/Index', [
             'preOrders' => $orders,
             'store' => [
                 'id' => $store->id,
@@ -86,7 +86,7 @@ class PreOrderController extends Controller
                 'track_stock', 'modifier_options',
             ]);
 
-        return Inertia::render('PreOrders/Create', [
+        return CostVisibility::render('PreOrders/Create', [
             'customers' => $customers,
             'products' => $products,
             'store' => [
@@ -230,7 +230,7 @@ class PreOrderController extends Controller
 
         $preOrder->load(['lines', 'customer:id,name', 'user:id,name', 'fulfilledTransaction:id,transaction_number,total_amount']);
 
-        return Inertia::render('PreOrders/Show', [
+        return CostVisibility::render('PreOrders/Show', [
             'preOrder' => [
                 'id' => $preOrder->id,
                 'order_number' => $preOrder->order_number,
