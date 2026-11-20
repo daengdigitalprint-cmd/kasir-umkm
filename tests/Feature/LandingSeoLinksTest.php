@@ -45,6 +45,20 @@ it('mengganti daftar artikel di HTML prerender dengan artikel terbaru', function
         ->and($html)->not->toContain('<h3 class="lp-blog-title">Artikel</h3>');
 });
 
+it('menampilkan thumbnail artikel di HTML prerender', function () {
+    if (! is_file(LandingSeo::landingPrerenderPath())) {
+        $this->markTestSkipped('Prerender landing belum dibuat.');
+    }
+
+    $artikel = buatArtikel('Cara Stok Opname', 'stok-opname');
+    $artikel->update(['featured_image' => 'articles/contoh.png', 'featured_image_alt' => 'Ilustrasi stok opname']);
+
+    $html = LandingSeo::landingPrerenderHtml();
+
+    expect($html)->toContain('<span class="lp-blog-thumb"><img src="'.asset('storage/articles/contoh.png').'" alt="Ilustrasi stok opname"')
+        ->and(LandingSeo::latestArticles()[0]['image'])->toBe(asset('storage/articles/contoh.png'));
+});
+
 it('membuang bagian blog di prerender bila belum ada artikel terbit', function () {
     if (! is_file(LandingSeo::landingPrerenderPath())) {
         $this->markTestSkipped('Prerender landing belum dibuat.');

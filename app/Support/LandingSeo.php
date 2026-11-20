@@ -146,7 +146,7 @@ final class LandingSeo
     /**
      * Artikel blog terbaru untuk bagian "Tips" di beranda (prop latestArticles).
      *
-     * @return list<array{title: string, url: string, excerpt: ?string, date: ?string}>
+     * @return list<array{title: string, url: string, excerpt: ?string, date: ?string, image: ?string, image_alt: ?string, image_width: ?int, image_height: ?int}>
      */
     public static function latestArticles(int $limit = 3): array
     {
@@ -155,13 +155,22 @@ final class LandingSeo
                 ->published()
                 ->orderByDesc('published_at')
                 ->limit($limit)
-                ->get(['title', 'slug', 'excerpt', 'published_at'])
-                ->map(fn (\App\Models\Article $a): array => [
-                    'title' => (string) $a->title,
-                    'url' => $a->publicUrl(),
-                    'excerpt' => filled($a->excerpt) ? \Illuminate\Support\Str::limit(strip_tags((string) $a->excerpt), 160) : null,
-                    'date' => $a->published_at?->locale('id')->translatedFormat('j F Y'),
-                ])
+                ->get(['title', 'slug', 'excerpt', 'published_at', 'featured_image', 'featured_image_alt', 'focus_keyword'])
+                ->map(function (\App\Models\Article $a): array {
+                    $image = $a->featuredImageUrl();
+                    $dim = $image ? $a->featuredImageDimensions() : null;
+
+                    return [
+                        'title' => (string) $a->title,
+                        'url' => $a->publicUrl(),
+                        'excerpt' => filled($a->excerpt) ? \Illuminate\Support\Str::limit(strip_tags((string) $a->excerpt), 160) : null,
+                        'date' => $a->published_at?->locale('id')->translatedFormat('j F Y'),
+                        'image' => $image,
+                        'image_alt' => $image ? $a->featuredImageAlt() : null,
+                        'image_width' => $dim['width'] ?? null,
+                        'image_height' => $dim['height'] ?? null,
+                    ];
+                })
                 ->values()
                 ->all();
         } catch (\Throwable) {
@@ -190,11 +199,20 @@ final class LandingSeo
 
         $items = '';
         foreach ($articles as $a) {
+            // Struktur harus sama dengan template LandingBlog.vue.
+            $thumb = $a['image']
+                ? '<span class="lp-blog-thumb"><img src="'.e($a['image']).'" alt="'.e((string) $a['image_alt']).'"'
+                    .($a['image_width'] && $a['image_height'] ? ' width="'.(int) $a['image_width'].'" height="'.(int) $a['image_height'].'"' : '')
+                    .' loading="lazy" decoding="async"></span>'
+                : '';
+
             $items .= '<li class="lp-blog-card"><a href="'.e($a['url']).'" class="lp-blog-link">'
+                .$thumb
+                .'<div class="lp-blog-body">'
                 .($a['date'] ? '<span class="lp-blog-date">'.e($a['date']).'</span>' : '')
                 .'<h3 class="lp-blog-title">'.e($a['title']).'</h3>'
                 .($a['excerpt'] ? '<p class="lp-blog-excerpt">'.e($a['excerpt']).'</p>' : '')
-                .'<span class="lp-blog-more">Baca artikel &rarr;</span></a></li>';
+                .'<span class="lp-blog-more">Baca artikel &rarr;</span></div></a></li>';
         }
 
         return (string) preg_replace_callback(

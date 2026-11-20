@@ -14,6 +14,10 @@ export type LandingArticle = {
     url: string;
     excerpt: string | null;
     date: string | null;
+    image?: string | null;
+    image_alt?: string | null;
+    image_width?: number | null;
+    image_height?: number | null;
 };
 
 defineProps<{
@@ -24,17 +28,30 @@ defineProps<{
 <template>
     <section v-if="articles.length" class="lp-blog pt-130" id="blog">
         <div class="mxw-1330 container">
-            <div class="sec-title text-center mb-50">
+            <div class="sec-title text-center lp-blog-head">
                 <h2 class="title">Tips Kasir, Stok &amp; Keuangan untuk UMKM</h2>
                 <p class="lp-blog-sub">Panduan praktis dari blog Kasir UMKM by MaccaPOS untuk usaha yang lebih rapi.</p>
             </div>
+            <!-- Struktur kartu harus sama dengan LandingSeo::injectLatestArticles(). -->
             <ul class="lp-blog-grid">
                 <li v-for="article in articles" :key="article.url" class="lp-blog-card">
                     <a :href="article.url" class="lp-blog-link">
-                        <span v-if="article.date" class="lp-blog-date">{{ article.date }}</span>
-                        <h3 class="lp-blog-title">{{ article.title }}</h3>
-                        <p v-if="article.excerpt" class="lp-blog-excerpt">{{ article.excerpt }}</p>
-                        <span class="lp-blog-more">Baca artikel &rarr;</span>
+                        <span v-if="article.image" class="lp-blog-thumb">
+                            <img
+                                :src="article.image"
+                                :alt="article.image_alt ?? ''"
+                                :width="article.image_width ?? undefined"
+                                :height="article.image_height ?? undefined"
+                                loading="lazy"
+                                decoding="async"
+                            />
+                        </span>
+                        <div class="lp-blog-body">
+                            <span v-if="article.date" class="lp-blog-date">{{ article.date }}</span>
+                            <h3 class="lp-blog-title">{{ article.title }}</h3>
+                            <p v-if="article.excerpt" class="lp-blog-excerpt">{{ article.excerpt }}</p>
+                            <span class="lp-blog-more">Baca artikel &rarr;</span>
+                        </div>
                     </a>
                 </li>
             </ul>
@@ -46,8 +63,13 @@ defineProps<{
 </template>
 
 <style>
+/* Jarak judul ke kartu (kelas mb-* bawaan template tidak ada di landing.min.css). */
+.lp-blog-head {
+    margin-bottom: 48px;
+}
 .lp-blog-sub {
-    margin-top: 12px;
+    margin: 14px auto 0;
+    max-width: 620px;
     color: #4b5563;
 }
 .lp-blog-grid {
@@ -65,7 +87,7 @@ defineProps<{
     display: flex;
     flex-direction: column;
     height: 100%;
-    padding: 28px;
+    overflow: hidden;
     border: 1px solid #e5e7eb;
     border-radius: 20px;
     background: #fff;
@@ -78,6 +100,30 @@ defineProps<{
 .lp-blog-link:hover {
     border-color: #0891b2;
     box-shadow: 0 10px 30px rgba(8, 145, 178, 0.12);
+}
+/* Thumbnail seragam 16:9 agar tinggi kartu sejajar walau ukuran gambar berbeda. */
+.lp-blog-thumb {
+    display: block;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    background: #f4f4f8;
+    border-bottom: 1px solid #e5e7eb;
+}
+.lp-blog-thumb img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.35s ease;
+}
+.lp-blog-link:hover .lp-blog-thumb img {
+    transform: scale(1.04);
+}
+.lp-blog-body {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    padding: 24px 26px 26px;
 }
 .lp-blog-date {
     font-size: 14px;
@@ -118,8 +164,11 @@ defineProps<{
         grid-template-columns: 1fr;
         padding: 0;
     }
-    .lp-blog-link {
-        padding: 22px;
+    .lp-blog-body {
+        padding: 20px 22px 22px;
+    }
+    .lp-blog-head {
+        margin-bottom: 32px;
     }
 }
 </style>
