@@ -411,8 +411,8 @@ const formatCurrency = (amount: number) => {
 
 /** Hilangkan trailing .0000 dari angka desimal database. */
 const fmtQty = (val: string | number) => {
-    const num = Number(val);
-    return Number.isInteger(num) ? num.toString() : num.toFixed(4).replace(/\.?0+$/, '');
+    // Pemisah ribuan Indonesia (6.000), maksimal 4 desimal untuk satuan berat/volume.
+    return Number(val).toLocaleString('id-ID', { maximumFractionDigits: 4 });
 };
 
 /** Omset bulan lalu (dari backend, range startOfMonth - endOfMonth bulan sebelumnya). */

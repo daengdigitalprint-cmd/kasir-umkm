@@ -43,7 +43,7 @@ const formatDateTime = (iso: string | null) => {
                 <div>
                     <h1 class="text-2xl font-black text-slate-900">Retur ke pemasok</h1>
                     <p class="text-sm text-slate-600 mt-1">
-                        Catat pengembalian barang ke supplier — stok berkurang dan tercatat sebagai retur pembelian (Fase E3).
+                        Catat pengembalian barang ke supplier — stok berkurang dan tercatat sebagai retur pembelian.
                     </p>
                 </div>
                 <div class="flex flex-wrap gap-2">

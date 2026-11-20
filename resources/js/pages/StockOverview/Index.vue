@@ -137,8 +137,9 @@ const stockStatus = (row: Product) => {
 
 const formatStock = (row: Product) => {
     const v = Number(row.stock_quantity);
-    if (row.allows_decimal) return v.toFixed(4).replace(/\.?0+$/, '');
-    return String(v);
+    return row.allows_decimal
+        ? v.toLocaleString('id-ID', { maximumFractionDigits: 4 })
+        : v.toLocaleString('id-ID', { maximumFractionDigits: 0 });
 };
 </script>
 
@@ -170,48 +171,48 @@ const formatStock = (row: Product) => {
             </div>
 
             <!-- Stats Cards -->
-            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
                 <Card class="rounded-2xl border-slate-200 shadow-sm">
-                    <CardContent class="flex items-center gap-4 p-4">
-                        <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100">
+                    <CardContent class="flex items-center gap-3 p-3 sm:gap-4 sm:p-4">
+                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl sm:h-12 sm:w-12 bg-blue-100">
                             <Package class="h-6 w-6 text-blue-600" />
                         </div>
                         <div>
                             <p class="text-xs font-medium text-slate-500">Total Produk</p>
-                            <p class="text-2xl font-bold text-slate-900">{{ stats.total }}</p>
+                            <p class="text-xl font-bold text-slate-900 sm:text-2xl">{{ stats.total }}</p>
                         </div>
                     </CardContent>
                 </Card>
                 <Card class="rounded-2xl border-slate-200 shadow-sm">
-                    <CardContent class="flex items-center gap-4 p-4">
-                        <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100">
+                    <CardContent class="flex items-center gap-3 p-3 sm:gap-4 sm:p-4">
+                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl sm:h-12 sm:w-12 bg-emerald-100">
                             <Package class="h-6 w-6 text-emerald-600" />
                         </div>
                         <div>
                             <p class="text-xs font-medium text-slate-500">Stok Aman</p>
-                            <p class="text-2xl font-bold text-slate-900">{{ stats.in_stock }}</p>
+                            <p class="text-xl font-bold text-slate-900 sm:text-2xl">{{ stats.in_stock }}</p>
                         </div>
                     </CardContent>
                 </Card>
                 <Card class="rounded-2xl border-slate-200 shadow-sm">
-                    <CardContent class="flex items-center gap-4 p-4">
-                        <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100">
+                    <CardContent class="flex items-center gap-3 p-3 sm:gap-4 sm:p-4">
+                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl sm:h-12 sm:w-12 bg-amber-100">
                             <AlertTriangle class="h-6 w-6 text-amber-600" />
                         </div>
                         <div>
                             <p class="text-xs font-medium text-slate-500">Stok Menipis</p>
-                            <p class="text-2xl font-bold text-slate-900">{{ stats.low_stock }}</p>
+                            <p class="text-xl font-bold text-slate-900 sm:text-2xl">{{ stats.low_stock }}</p>
                         </div>
                     </CardContent>
                 </Card>
                 <Card class="rounded-2xl border-slate-200 shadow-sm">
-                    <CardContent class="flex items-center gap-4 p-4">
-                        <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-red-100">
+                    <CardContent class="flex items-center gap-3 p-3 sm:gap-4 sm:p-4">
+                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl sm:h-12 sm:w-12 bg-red-100">
                             <Package class="h-6 w-6 text-red-600" />
                         </div>
                         <div>
                             <p class="text-xs font-medium text-slate-500">Stok Habis</p>
-                            <p class="text-2xl font-bold text-slate-900">{{ stats.out_of_stock }}</p>
+                            <p class="text-xl font-bold text-slate-900 sm:text-2xl">{{ stats.out_of_stock }}</p>
                         </div>
                     </CardContent>
                 </Card>
@@ -336,7 +337,32 @@ const formatStock = (row: Product) => {
                         </button>
                     </div>
 
-                    <div class="overflow-x-auto rounded-xl border border-slate-100">
+                    <!-- HP: kartu per produk (semua kolom penting terlihat tanpa geser) -->
+                    <ul class="space-y-2 md:hidden">
+                        <li v-for="p in products.data" :key="'m-' + p.id" class="rounded-xl border border-slate-200 bg-white p-3">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0">
+                                    <p class="truncate font-medium text-slate-900">{{ p.name }}</p>
+                                    <p v-if="p.sku" class="truncate text-xs text-slate-500">SKU {{ p.sku }}</p>
+                                </div>
+                                <Badge :class="stockStatus(p).class + ' shrink-0 rounded-lg'" variant="outline">{{ stockStatus(p).label }}</Badge>
+                            </div>
+                            <div class="mt-2 flex items-baseline justify-between gap-3 text-sm">
+                                <span>
+                                    <span class="font-mono text-base font-bold text-slate-900">{{ formatStock(p) }}</span>
+                                    <span class="text-slate-500"> {{ p.unit }}</span>
+                                </span>
+                                <span class="text-xs text-slate-500">Min. {{ fmtNum(p.min_stock_level) }}</span>
+                            </div>
+                            <p v-if="canViewCost" class="mt-1 text-xs text-slate-500">
+                                Nilai {{ fmtCurrency(Number(p.stock_quantity) * Number(p.average_cost ?? p.cost_price ?? 0)) }}
+                            </p>
+                        </li>
+                        <li v-if="products.data.length === 0" class="py-10 text-center text-sm text-slate-500">
+                            Tidak ada produk atau pencarian tidak ditemukan.
+                        </li>
+                    </ul>
+                    <div class="hidden overflow-x-auto rounded-xl border border-slate-100 md:block">
                         <table class="w-full text-left text-sm">
                             <thead class="bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
                                 <tr>

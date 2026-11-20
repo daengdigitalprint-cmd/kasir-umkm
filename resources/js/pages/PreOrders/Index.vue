@@ -62,7 +62,7 @@ function formatDate(d: string | null) {
                     <ClipboardList class="h-7 w-7 text-amber-600" />
                     Pre-order &amp; DP
                 </h1>
-                <p class="text-sm text-slate-600 mt-1">{{ store.name }} — pesanan terjadwal &amp; cake custom (C4)</p>
+                <p class="text-sm text-slate-600 mt-1">{{ store.name }} — pesanan terjadwal &amp; kue pesanan khusus</p>
             </div>
             <Button as="a" href="/pre-orders/create" class="rounded-xl inline-flex items-center gap-2 w-fit">
                 <Plus class="h-4 w-4" />

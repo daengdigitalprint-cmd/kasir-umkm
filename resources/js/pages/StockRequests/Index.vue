@@ -192,7 +192,35 @@ onBeforeUnmount(() => {
                         <p v-if="tab === 'incoming'">Belum ada permintaan dari lokasi lain.</p>
                         <p v-else>Belum ada permintaan yang Anda kirim.</p>
                     </div>
-                    <div v-else class="overflow-x-auto rounded-xl border border-slate-100">
+                    <!-- HP: kartu per permintaan -->
+                    <ul v-if="requests.data.length > 0" class="space-y-2 md:hidden">
+                        <li v-for="r in requests.data" :key="'m-' + r.id">
+                            <Link
+                                :href="`/stock-requests/${r.id}`"
+                                class="block rounded-xl border p-3"
+                                :class="r.status === 'requested' && tab === 'incoming' ? 'border-amber-200 bg-amber-50/60' : 'border-slate-200 bg-white'"
+                            >
+                                <span class="flex items-start justify-between gap-3">
+                                    <span class="min-w-0">
+                                        <span class="block truncate text-sm font-semibold text-slate-900">
+                                            {{ tab === 'incoming' ? 'Dari' : 'Ke' }} {{ tab === 'incoming' ? r.from_store?.name : r.to_store?.name }}
+                                        </span>
+                                        <span class="block truncate font-mono text-xs text-teal-700">{{ r.request_number }}</span>
+                                    </span>
+                                    <span class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold" :class="statusClass[r.status] ?? 'bg-slate-100'">
+                                        {{ r.status_label }}
+                                    </span>
+                                </span>
+                                <span class="mt-2 block text-xs text-slate-500">
+                                    {{ r.lines_count }} barang · {{ formatWhen(r.created_at) }}
+                                    <template v-if="r.is_automatic"> · Otomatis</template>
+                                    <template v-else-if="r.requester"> · {{ r.requester }}</template>
+                                    <template v-if="r.transfer"> · Transfer {{ r.transfer.transfer_number }}</template>
+                                </span>
+                            </Link>
+                        </li>
+                    </ul>
+                    <div v-if="requests.data.length > 0" class="hidden overflow-x-auto rounded-xl border border-slate-100 md:block">
                         <table class="w-full text-sm">
                             <thead>
                                 <tr class="border-b bg-slate-50 text-left text-xs font-bold uppercase tracking-wide text-slate-600">

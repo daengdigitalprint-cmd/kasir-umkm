@@ -11,7 +11,7 @@ import { getInitials } from '@/composables/useInitials';
 import { resolveProfileImageSrc } from '@/lib/profileAvatar';
 import { toastWarning } from '@/lib/swal';
 import { Head, Link, usePage, router } from '@inertiajs/vue3';
-import { BarChart3, Bell, CalendarCheck, Crown, History, Home, Menu, Package, Settings, ShoppingCart, Store, Users, UsersRound, X, PanelLeft, Shirt, ReceiptText, Clock, ArrowRightLeft } from 'lucide-vue-next';
+import { BarChart3, Bell, CalendarCheck, Crown, History, Home, Menu, Package, Settings, ShoppingCart, Store, Users, UsersRound, X, PanelLeft, Shirt, ReceiptText, Clock, ArrowRightLeft, Boxes, ClipboardCheck } from 'lucide-vue-next';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
 interface AccessibleStoreRow {
@@ -91,6 +91,13 @@ const isOwner = computed(() => Boolean((page.props as { abilities?: { owner?: bo
 const isCashier = computed(() => Boolean((page.props as { abilities?: { cashier?: boolean } }).abilities?.cashier));
 const laundryEnabled = computed(() => Boolean((page.props as { laundry_enabled?: boolean }).laundry_enabled));
 const attendanceEnabled = computed(() => Boolean((page.props as { attendance_enabled?: boolean }).attendance_enabled));
+
+// --- Navigasi bawah HP khusus admin gudang: tugas harian gudang dalam satu ketukan ---
+const isWarehouseStaff = computed(() => (page.props as { auth?: { active_role?: string } }).auth?.active_role === 'warehouse');
+const allowedMenuKeys = computed(() => (page.props as { allowed_menus?: string[] }).allowed_menus ?? []);
+/** Ikuti Tim & Akses: menu yang dicabut tidak tampil (daftar kosong = mode lama, semua tampil). */
+const menuAllowed = (key: string) => allowedMenuKeys.value.length === 0 || allowedMenuKeys.value.includes(key);
+const incomingTransfers = computed(() => Number((page.props as { incoming_transfer_count?: number }).incoming_transfer_count ?? 0));
 /** Menu bawah owner: SDM + jumlah pengajuan menunggu di semua outlet. */
 const ownerHrPending = computed(() => {
     const p = (page.props as { pending_hr_requests?: { leave?: number; overtime?: number; total?: number } }).pending_hr_requests;
@@ -733,6 +740,48 @@ const isCurrentRoute = (href: string) => {
                     <Button v-else :as="Link" href="/settings" variant="ghost" :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/settings') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']">
                         <Settings class="!h-6 !w-6 mb-1" />
                         <span class="text-[10px] font-bold">Setelan</span>
+                    </Button>
+                </div>
+            </div>
+
+            <!-- Admin gudang: Beranda · Stok · Transfer (tengah) · Opname · Riwayat -->
+            <div v-else-if="isWarehouseStaff" class="flex items-center justify-between h-20 px-2 sm:px-6">
+                <div class="flex items-center space-x-1">
+                    <Button :as="Link" href="/dashboard" variant="ghost" :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/dashboard') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']">
+                        <Home class="!h-6 !w-6 mb-1" />
+                        <span class="text-[10px] font-bold">Beranda</span>
+                    </Button>
+                    <Button v-if="menuAllowed('stock_overview')" :as="Link" href="/stock-overview" variant="ghost" :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/stock-overview') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']">
+                        <Boxes class="!h-6 !w-6 mb-1" />
+                        <span class="text-[10px] font-bold">Stok</span>
+                    </Button>
+                </div>
+
+                <!-- Transfer stok (tombol tengah), dengan penanda kiriman yang menunggu diterima -->
+                <div v-if="menuAllowed('stock_transfers')" class="flex flex-col items-center relative -top-6">
+                    <Button
+                        :as="Link"
+                        href="/stock-transfers"
+                        aria-label="Transfer stok"
+                        class="relative flex flex-col items-center justify-center h-16 w-16 rounded-full shadow-lg shadow-primary/30 bg-primary hover:bg-primary/90 text-white border-[6px] border-white"
+                    >
+                        <ArrowRightLeft class="!h-6 !w-6" />
+                        <span
+                            v-if="incomingTransfers > 0"
+                            class="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white"
+                        >{{ incomingTransfers }}</span>
+                    </Button>
+                    <span class="mt-0.5 text-[10px] font-bold text-slate-600">Transfer</span>
+                </div>
+
+                <div class="flex items-center space-x-1">
+                    <Button v-if="menuAllowed('stock_opnames')" :as="Link" href="/stock-opnames" variant="ghost" :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/stock-opnames') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']">
+                        <ClipboardCheck class="!h-6 !w-6 mb-1" />
+                        <span class="text-[10px] font-bold">Opname</span>
+                    </Button>
+                    <Button v-if="menuAllowed('stock_movements')" :as="Link" href="/stock-movements" variant="ghost" :class="['flex flex-col items-center justify-center h-16 w-16 px-1', isCurrentRoute('/stock-movements') ? 'text-primary' : 'text-slate-400 hover:text-slate-700']">
+                        <History class="!h-6 !w-6 mb-1" />
+                        <span class="text-[10px] font-bold">Riwayat</span>
                     </Button>
                 </div>
             </div>

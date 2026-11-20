@@ -141,7 +141,31 @@ const formatDateTime = (iso: string | null) => {
                             <Link href="/purchases/create">Tambah pembelian pertama</Link>
                         </Button>
                     </div>
-                    <div v-else class="overflow-x-auto rounded-xl border border-slate-100">
+                    <!-- HP: kartu per pembelian (tabel 8 kolom tidak muat di layar sempit) -->
+                    <ul v-if="purchases.length > 0" class="space-y-2 md:hidden">
+                        <li v-for="p in purchases" :key="'m-' + p.id" class="rounded-xl border border-slate-200 bg-white p-3">
+                            <div class="flex items-start justify-between gap-3">
+                                <Link :href="`/purchases/${p.id}`" class="min-w-0">
+                                    <span class="block truncate font-mono text-sm font-semibold text-teal-700">{{ p.purchase_number }}</span>
+                                    <span class="block truncate text-sm text-slate-800">{{ p.supplier_name || 'Tanpa supplier' }}</span>
+                                </Link>
+                                <span class="shrink-0 text-right">
+                                    <span class="block text-sm font-bold text-slate-900">{{ rupiah(p.total_amount) }}</span>
+                                    <span v-if="p.is_paid" class="mt-0.5 inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">Lunas</span>
+                                    <span v-else class="mt-0.5 block text-[11px] font-semibold text-amber-700">Sisa {{ rupiah(p.total_amount - p.amount_paid) }}</span>
+                                </span>
+                            </div>
+                            <div class="mt-2 flex items-center justify-between gap-2 text-xs text-slate-500">
+                                <span class="min-w-0 truncate">
+                                    {{ formatDateTime(p.purchased_at) }} · {{ p.lines_count }} barang<template v-if="p.user_name"> · {{ p.user_name }}</template>
+                                </span>
+                                <span v-if="!p.is_paid" class="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="DUE_TONE_CLASS[dueStatus(p.due_date).tone]">
+                                    {{ dueStatus(p.due_date).label }}
+                                </span>
+                            </div>
+                        </li>
+                    </ul>
+                    <div v-if="purchases.length > 0" class="hidden overflow-x-auto rounded-xl border border-slate-100 md:block">
                         <table class="w-full text-sm">
                             <thead>
                                 <tr class="border-b bg-slate-50 text-left text-xs font-bold text-slate-600 uppercase tracking-wide">

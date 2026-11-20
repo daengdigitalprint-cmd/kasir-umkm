@@ -78,13 +78,13 @@ function filterByStatus(status: string) {
 </script>
 
 <template>
-    <Head title="Stock opname" />
+    <Head title="Stok Opname" />
 
-    <AdminLayout title="Stock opname">
+    <AdminLayout title="Stok Opname">
         <div class="mx-auto space-y-6 pb-8" style="max-width: 90rem">
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                    <h1 class="text-2xl font-black text-slate-900">Stock opname</h1>
+                    <h1 class="text-2xl font-black text-slate-900">Stok Opname</h1>
                     <p class="mt-1 text-sm text-slate-600">
                         Hitung fisik barang secara berkala. Sistem membekukan stok saat sesi dibuka, lalu menghitung selisihnya.
                     </p>
