@@ -16,15 +16,14 @@ final class LandingSeo
      */
     public static function maskotAssetUrl(): string
     {
-        // Logo tampil ±150–180px; versi 360px WebP (15 KB) menggantikan PNG
-        // 3194px (260 KB). Dibuat oleh scripts/optimize-landing-images.py.
-        $small = public_path('logo-macca-sm.webp');
+        // Logo Kasir UMKM by MaccaPOS: versi 360px WebP untuk tampilan, PNG 1200px sebagai cadangan.
+        $small = public_path('logo-kasir-umkm-sm.webp');
         if (is_file($small)) {
-            return asset('logo-macca-sm.webp').'?v='.filemtime($small);
+            return asset('logo-kasir-umkm-sm.webp').'?v='.filemtime($small);
         }
 
-        $path = public_path('logo-macca.png');
-        $url = asset('logo-macca.png');
+        $path = public_path('logo-kasir-umkm.png');
+        $url = asset('logo-kasir-umkm.png');
 
         return is_file($path) ? $url.'?v='.filemtime($path) : $url;
     }

@@ -48,7 +48,7 @@
         header.site { border-bottom: 1px solid var(--line); background: #fff; }
         header.site .bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 72px; }
         .brand { display: flex; align-items: center; gap: 10px; }
-        .brand img { height: 36px; width: auto; }
+        .brand img { height: 48px; width: auto; }
         .btn {
             display: inline-flex; align-items: center; justify-content: center; gap: 8px;
             font-family: var(--font-display); font-weight: 700; font-size: 14px;
@@ -102,8 +102,8 @@
     <header class="site">
         <div class="wrap bar">
             <a class="brand" href="{{ url('/') }}" aria-label="Kasir UMKM by MaccaPOS">
-                <img src="{{ asset('logo-macca-sm.webp') }}" alt="Logo Kasir UMKM by MaccaPOS" width="144" height="36"
-                     onerror="this.onerror=null;this.src='{{ asset('logo-macca.png') }}'">
+                <img src="{{ asset('logo-kasir-umkm-sm.webp') }}" alt="Logo Kasir UMKM by MaccaPOS" width="73" height="48"
+                     onerror="this.onerror=null;this.src='{{ asset('logo-kasir-umkm.png') }}'">
             </a>
             <a class="btn btn-primary" href="{{ url('/') }}">Ke Beranda</a>
         </div>

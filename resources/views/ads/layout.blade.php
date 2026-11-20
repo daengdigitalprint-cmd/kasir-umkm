@@ -132,7 +132,7 @@
 <body>
     <header class="top">
         <div class="wrap">
-            <img src="{{ asset('logo-macca-sm.webp') }}" width="360" height="117" alt="MaccaPOS — Kasir UMKM">
+            <img src="{{ asset('logo-kasir-umkm-sm.webp') }}" width="360" height="238" alt="MaccaPOS — Kasir UMKM">
             <span class="mono">@yield('top_note', 'Aplikasi kasir untuk UMKM')</span>
         </div>
     </header>

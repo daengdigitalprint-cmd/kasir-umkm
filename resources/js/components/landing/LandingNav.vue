@@ -6,7 +6,7 @@ const props = defineProps<{
     maskotUrl?: string;
 }>();
 
-const maskotUrl = computed(() => props.maskotUrl ?? '/logo-macca.png');
+const maskotUrl = computed(() => props.maskotUrl ?? '/logo-kasir-umkm.png');
 
 const waPhoneDigits = '6285242766676';
 const waPrefillMessage =
@@ -26,7 +26,7 @@ const waPanelOpen = ref(false);
                     <div class="header__wrap border-btm ul_li_between pos-rel">
                         <div class="xb-header-logo">
                             <Link href="/" class="logo d-flex align-items-center">
-                                <img :src="maskotUrl" alt="logo Kasir UMKM by MaccaPOS" width="148" height="48" style="height: 48px; width: auto" />
+                                <img :src="maskotUrl" alt="logo Kasir UMKM by MaccaPOS" width="85" height="56" style="height: 56px; width: auto" />
                             </Link>
                         </div>
                         <div class="main-menu__wrap navbar navbar-expand-lg p-0">
@@ -76,7 +76,7 @@ const waPanelOpen = ref(false);
                             <div class="xb-menu-close xb-hide-xl xb-close"></div>
                             <div class="xb-logo-mobile xb-hide-xl">
                                 <Link href="/" class="logo d-flex align-items-center">
-                                    <img :src="maskotUrl" alt="logo Kasir UMKM by MaccaPOS" width="148" height="48" style="height: 48px; width: auto" />
+                                    <img :src="maskotUrl" alt="logo Kasir UMKM by MaccaPOS" width="85" height="56" style="height: 56px; width: auto" />
                                 </Link>
                             </div>
                             <nav class="xb-header-nav">

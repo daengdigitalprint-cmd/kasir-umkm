@@ -17,7 +17,7 @@ const pageTitle = 'Kebijakan Privasi — Kasir UMKM by MaccaPOS';
 const pageDescription =
     'Kebijakan privasi Kasir UMKM by MaccaPOS — bagaimana kami mengumpulkan, menggunakan, dan melindungi data pribadi Anda sesuai standar Google Play dan peraturan perlindungan data Indonesia.';
 
-const maskotUrl = props.maskotUrl ?? '/logo-macca.png';
+const maskotUrl = props.maskotUrl ?? '/logo-kasir-umkm.png';
 const canonicalUrl = props.canonicalUrl ?? '';
 
 const shareImageUrl = computed(() => props.ogImageUrl ?? maskotUrl);

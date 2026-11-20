@@ -29,7 +29,7 @@ const togglePasswordConfirmationVisibility = () => {
 };
 
 const buyerAssetsBase = '/buyer-assets';
-const maskotUrl = '/logo-macca.png';
+const maskotUrl = '/logo-kasir-umkm.png';
 
 /** Muat skrip plugin template (butuh bootstrap.bundle.min untuk form & show/hide). */
 const templateScripts: string[] = [

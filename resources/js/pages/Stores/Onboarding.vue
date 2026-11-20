@@ -72,7 +72,7 @@ const firstName = props.userName.trim().split(/\s+/)[0] ?? '';
     <div class="min-h-screen bg-gradient-to-br from-[#f3fbec] via-white to-[#eef7e6] px-4 py-8 sm:py-12">
         <div class="mx-auto w-full max-w-xl">
             <div class="mb-6 text-center">
-                <img src="/logo-macca.png" alt="Kasir UMKM by MaccaPOS" class="mx-auto h-14 w-auto" />
+                <img src="/logo-kasir-umkm.png" alt="Kasir UMKM by MaccaPOS" class="mx-auto h-14 w-auto" />
             </div>
 
             <div class="rounded-2xl border border-[#A0EA71]/25 bg-white p-5 shadow-lg shadow-slate-200/60 sm:p-8">

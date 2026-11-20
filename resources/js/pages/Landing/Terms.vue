@@ -17,7 +17,7 @@ const pageTitle = 'Syarat & Ketentuan — Kasir UMKM by MaccaPOS';
 const pageDescription =
     'Syarat dan ketentuan penggunaan layanan Kasir UMKM by MaccaPOS — aturan penggunaan aplikasi kasir untuk UMKM.';
 
-const maskotUrl = props.maskotUrl ?? '/logo-macca.png';
+const maskotUrl = props.maskotUrl ?? '/logo-kasir-umkm.png';
 const canonicalUrl = props.canonicalUrl ?? '';
 
 const shareImageUrl = computed(() => props.ogImageUrl ?? maskotUrl);

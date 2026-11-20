@@ -310,7 +310,7 @@ const isCurrentRoute = (href: string) => {
             <div class="px-4 py-3">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-3">
-                        <img src="/logo-macca.png" alt="logo" style="height:47px;width:auto" />
+                        <img src="/logo-kasir-umkm.png" alt="Kasir UMKM by MaccaPOS" style="height:58px;width:auto" />
                     </div>
                     <div class="flex items-center gap-2">
                         <Button
@@ -439,7 +439,7 @@ const isCurrentRoute = (href: string) => {
             >
                 <div class="px-3 py-5">
                     <div class="mb-5">
-                        <img src="/logo-macca.png" alt="logo" style="height:42px;width:auto" />
+                        <img src="/logo-kasir-umkm.png" alt="Kasir UMKM by MaccaPOS" style="height:46px;width:auto" />
                     </div>
                     <div v-if="accessibleStores.length > 1" class="mb-5 pb-5 border-b border-slate-100">
                         <label
@@ -486,7 +486,7 @@ const isCurrentRoute = (href: string) => {
                 <div class="p-6">
                     <div class="flex items-center justify-between mb-8">
                         <div class="flex items-center gap-3">
-                            <img src="/logo-macca.png" alt="logo" style="height:47px;width:auto" />
+                            <img src="/logo-kasir-umkm.png" alt="Kasir UMKM by MaccaPOS" style="height:58px;width:auto" />
                         </div>
                         <Button 
                             @click="closeMobileMenu" 

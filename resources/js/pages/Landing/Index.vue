@@ -47,7 +47,7 @@ const props = withDefaults(
 /** Harus sama dengan LandingSeo::HOME_TITLE (judul server untuk crawler). */
 const pageTitle = 'Aplikasi Kasir Online Gratis untuk UMKM | Kasir UMKM by MaccaPOS';
 
-const maskotUrl = props.maskotUrl ?? '/logo-macca.png';
+const maskotUrl = props.maskotUrl ?? '/logo-kasir-umkm.png';
 
 /** Aset template Sastik (disalin ke public/sastik-assets). */
 const assetsBase = '/sastik-assets';
@@ -300,7 +300,7 @@ onUnmounted(() => {
         <div id="preloader" class="xb-loader">
             <div class="xb-loader-inner">
                 <div class="xb-loader-logo">
-                    <img :src="maskotUrl" alt="" width="180" height="58" />
+                    <img :src="maskotUrl" alt="" width="120" height="79" />
                 </div>
             </div>
         </div>
