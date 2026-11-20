@@ -17,6 +17,7 @@ class AlternatifController extends Controller
         return view('alternatif.show', [
             'k' => $data,
             'pricing' => LandingPricing::payload(),
+            'others' => array_values(array_filter(Kompetitor::all(), fn (array $o) => $o['key'] !== $kompetitor)),
         ]);
     }
 }

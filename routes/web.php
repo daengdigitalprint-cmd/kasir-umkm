@@ -49,8 +49,7 @@ Route::get('/sitemap.xml', function () {
     ];
 
     // Halaman alternatif kompetitor (lastmod = tanggal data kompetitor terakhir dicek).
-    foreach (['loyverse'] as $kompetitorKey) {
-        $kompetitor = \App\Support\Kompetitor::find($kompetitorKey);
+    foreach (\App\Support\Kompetitor::all() as $kompetitor) {
         $urls[] = [
             'loc' => url('/'.$kompetitor['slug']),
             'changefreq' => 'monthly',
@@ -114,10 +113,12 @@ foreach (\App\Support\JenisUsaha::slugs() as $jenisUsahaSlug) {
         ->name('jenis-usaha.'.$jenisUsahaSlug);
 }
 
-// ── Halaman alternatif kompetitor (SEO): /alternatif-loyverse ──
-Route::get('/alternatif-loyverse', [App\Http\Controllers\AlternatifController::class, 'show'])
-    ->defaults('kompetitor', 'loyverse')
-    ->name('alternatif.loyverse');
+// ── Halaman alternatif kompetitor (SEO): /alternatif-loyverse, /alternatif-moka-pos, /alternatif-pawoon ──
+foreach (\App\Support\Kompetitor::all() as $kompetitorPage) {
+    Route::get('/'.$kompetitorPage['slug'], [App\Http\Controllers\AlternatifController::class, 'show'])
+        ->defaults('kompetitor', $kompetitorPage['key'])
+        ->name('alternatif.'.$kompetitorPage['key']);
+}
 
 // Server yang meneruskan path apa adanya (mis. Herd lokal) melihat "/index.php" sebagai path.
 Route::get('/index.php', fn () => redirect('/', 301));

@@ -162,7 +162,7 @@ final class JenisUsaha
                     ['q' => 'Apakah bisa dipakai untuk restoran dengan banyak meja?', 'a' => 'Bisa. Pesanan disimpan per meja sebagai open bill, bisa ditambah kapan saja, dan dibayar di akhir. Dengan fitur Scan Meja, setiap meja juga punya QR menu digital.'],
                     ['q' => 'Apakah dapur bisa menerima pesanan tanpa kertas?', 'a' => 'Bisa, dengan layar antrean dapur di paket GrowUp. Anda juga bisa memakai printer dapur terpisah dari printer kasir.'],
                     ['q' => 'Bagaimana dengan service charge dan pajak restoran?', 'a' => 'Persentase service charge dan pajak bisa diatur di pengaturan, lalu otomatis dihitung di setiap transaksi dan tampil di struk.'],
-                    ['q' => 'Apakah terhubung ke GoFood atau GrabFood?', 'a' => 'Belum. Pesanan antar yang tersedia saat ini adalah pengantaran dengan kurir sendiri, lengkap dengan ongkir dan status pengantaran.'],
+                    ['q' => 'Apakah terhubung ke GoFood atau GrabFood?', 'a' => 'Belum terhubung otomatis. Penjualan GoFood, GrabFood, dan ShopeeFood bisa dicatat manual sebagai channel penjualan beserta potongan komisinya, dan pesanan antar sendiri bisa dicatat lengkap dengan ongkir dan status pengantaran.'],
                     ['q' => 'Bisakah melihat menu yang paling menguntungkan?', 'a' => 'Bisa. Dengan resep dan HPP per menu, Anda bisa membandingkan harga jual dengan modal, dan laporan penjualan menunjukkan menu terlaris.'],
                 ],
                 'article_keywords' => ['restoran', 'rumah makan', 'warung makan', 'HPP', 'menu digital'],

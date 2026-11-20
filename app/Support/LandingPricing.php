@@ -69,6 +69,9 @@ final class LandingPricing
                 'yearly_label' => $yearlyPrice !== null ? self::formatPrice($yearlyPrice) : '',
                 'max_stores' => self::limit($monthly?->max_stores) ?? 1,
                 'outlet_addon_label' => self::formatPrice(\App\Services\OutletAddOnService::PRICE_PER_OUTLET_MONTHLY),
+                // Angka mentah untuk hitungan contoh biaya (halaman alternatif kompetitor).
+                'monthly_amount' => $monthlyPrice,
+                'outlet_addon_amount' => \App\Services\OutletAddOnService::PRICE_PER_OUTLET_MONTHLY,
             ],
             // Dipakai untuk coretan "Hemat N Bulan"; null bila tahunan tidak
             // lebih murah, supaya landing tidak menjanjikan diskon yang tidak ada.

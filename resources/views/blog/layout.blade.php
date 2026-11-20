@@ -317,7 +317,9 @@
                     <a href="{{ url('/privacy') }}">Kebijakan Privasi</a>
                     <a href="{{ url('/refund') }}">Kebijakan Refund</a>
                     <a href="{{ url('/panduan') }}">Panduan</a>
-                    <a href="{{ url('/alternatif-loyverse') }}">Alternatif Loyverse</a>
+                    @foreach (\App\Support\Kompetitor::all() as $alt)
+                        <a href="{{ url('/'.$alt['slug']) }}">Alternatif {{ $alt['name'] }}</a>
+                    @endforeach
                 </nav>
             </div>
         </div>

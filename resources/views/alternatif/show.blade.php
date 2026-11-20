@@ -1,26 +1,38 @@
 @extends('blog.layout')
 
 {{--
-    Halaman "Alternatif [kompetitor]". Fakta kompetitor diambil dari App\Support\Kompetitor
-    (bertanggal + bersumber). Fakta Kasir UMKM harus sesuai fitur yang benar-benar ada.
+    Halaman "Alternatif [kompetitor]". Seluruh isi (fakta kompetitor bertanggal + bersumber)
+    ada di App\Support\Kompetitor; placeholder harga Kasir UMKM diisi lewat \App\Support\Kompetitor::fill().
 --}}
 
 @php
     /** @var array<string, mixed> $k */
+    $fill = fn (string $t): string => \App\Support\Kompetitor::fill($t, $k, $pricing);
     $canonical = url('/'.$k['slug']);
     $title = 'Alternatif '.$k['name'].' untuk UMKM Indonesia | Kasir UMKM';
-    $description = 'Mencari alternatif '.$k['name'].'? Bandingkan harga dan fitur dengan Kasir UMKM by MaccaPOS: harga dalam Rupiah, tanpa biaya per karyawan, fitur usaha lokal.';
+    $description = $k['description'];
     $jsonFlags = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE;
     $og = \App\Support\LandingSeo::openGraphImage();
     $paid = $pricing['paid'];
+    $cost = $k['cost'];
 
-    $faq = [
-        ['q' => 'Apa alternatif '.$k['name'].' untuk UMKM di Indonesia?', 'a' => 'Kasir UMKM by MaccaPOS adalah aplikasi kasir buatan Indonesia dengan harga dalam Rupiah. Paket Starter gratis, dan paket '.$paid['name'].' '.($paid['monthly_label'] !== '' ? $paid['monthly_label'].' per bulan ' : '').'per outlet tanpa biaya tambahan per karyawan.'],
-        ['q' => 'Apakah '.$k['name'].' gratis?', 'a' => 'Menurut halaman harga '.$k['name'].' (per '.$k['checked_label'].'), Loyverse POS, Dashboard, layar dapur, dan layar pelanggan gratis. Riwayat penjualan tanpa batas, manajemen karyawan, dan manajemen stok lanjutan adalah fasilitas tambahan berbayar dalam dolar AS.'],
-        ['q' => 'Bisakah data barang dari '.$k['name'].' dipindahkan?', 'a' => 'Bisa lewat spreadsheet. Siapkan daftar barang (nama, harga, stok, barcode) dalam file Excel, lalu impor dengan template impor produk di Kasir UMKM. Riwayat transaksi lama tidak ikut dipindahkan.'],
-        ['q' => 'Apakah Kasir UMKM punya aplikasi iPhone?', 'a' => 'Kasir UMKM berjalan di browser HP (termasuk iPhone), tablet, dan laptop. Aplikasi yang diinstal dari toko aplikasi saat ini tersedia untuk Android.'],
-        ['q' => 'Bagaimana kalau usaha saya punya beberapa cabang?', 'a' => 'Di Kasir UMKM, setiap outlet tambahan adalah add-on berbayar'.($paid['outlet_addon_label'] ? ' '.$paid['outlet_addon_label'].' per bulan' : '').', dan stok bisa ditransfer antar outlet. Di '.$k['name'].', mengelola beberapa toko tercantum gratis, tetapi fasilitas tambahan dihitung per toko.'],
-    ];
+    // Total contoh biaya Kasir UMKM: paket berbayar + outlet tambahan.
+    if (! empty($cost['ours_total'])) {
+        $oursTotal = $fill($cost['ours_total']);
+    } elseif ($paid['monthly_amount'] !== null) {
+        $oursTotal = \App\Support\LandingPricing::formatPrice($paid['monthly_amount'] + max(0, $cost['outlets'] - 1) * $paid['outlet_addon_amount']).' / bulan';
+    } else {
+        $oursTotal = 'Lihat harga';
+    }
+
+    // FAQ umum (berlaku untuk semua kompetitor) ditambah FAQ khusus kompetitor.
+    $faq = array_merge(
+        array_map(fn ($f) => ['q' => $fill($f[0]), 'a' => $fill($f[1])], $k['faq']),
+        [
+            ['q' => $fill('Bisakah data barang dari {name} dipindahkan?'), 'a' => 'Bisa lewat spreadsheet. Siapkan daftar barang (nama, harga, stok, barcode) dalam file Excel, lalu impor dengan template impor produk di Kasir UMKM. Riwayat transaksi lama tidak ikut dipindahkan.'],
+            ['q' => 'Apakah Kasir UMKM punya aplikasi iPhone?', 'a' => 'Kasir UMKM berjalan di browser HP (termasuk iPhone), tablet, dan laptop. Aplikasi yang diinstal dari toko aplikasi saat ini tersedia untuk Android.'],
+        ],
+    );
 
     $schema = [
         '@context' => 'https://schema.org',
@@ -54,21 +66,7 @@
         ],
     ];
 
-    // Baris perbandingan: [aspek, Kasir UMKM, kompetitor]. Kolom kompetitor hanya berisi yang tercantum di situs mereka.
-    $rows = [
-        ['Kasir (POS) & struk', 'Gratis (paket '.$pricing['free']['name'].')', 'Gratis'],
-        ['Batas paket gratis', 'Transaksi tanpa batas, '.$pricing['free']['max_stores'].' outlet'.($pricing['free']['max_products'] ? ', '.$pricing['free']['max_products'].' produk' : '').($pricing['free']['max_customers'] ? ', '.$pricing['free']['max_customers'].' pelanggan' : ''), 'Lihat situs '.$k['name']],
-        ['Mata uang tagihan', 'Rupiah', 'Dolar AS (USD), belum termasuk pajak'],
-        ['Karyawan & hak akses', 'Termasuk paket '.$paid['name'].' (kasir, gudang, manajer, admin), tanpa biaya per karyawan', 'Add-on $5 USD / bulan per karyawan'],
-        ['Stok lanjutan (pembelian, opname)', 'Termasuk paket '.$paid['name'], 'Add-on $25 USD / bulan per toko'],
-        ['Rentang laporan penjualan', 'Hingga 1 tahun per laporan (paket '.$paid['name'].')', 'Riwayat tanpa batas: add-on $9 USD / bulan per toko'],
-        ['Beberapa toko / outlet', 'Add-on'.($paid['outlet_addon_label'] ? ' '.$paid['outlet_addon_label'].' / bulan' : '').' per outlet', 'Gratis (add-on dihitung per toko)'],
-        ['Layar dapur (KDS)', 'Termasuk paket '.$paid['name'], 'Gratis'],
-        ['Layar pelanggan (CDS)', 'Belum tersedia', 'Gratis'],
-    ];
-
-    // Fitur usaha lokal di Kasir UMKM. Kolom kompetitor sengaja tidak diisi "tidak ada":
-    // kami hanya bisa menyatakan tidak menemukannya di situs mereka.
+    // Fitur usaha lokal Kasir UMKM (sama untuk semua halaman alternatif).
     $local = [
         ['title' => 'Utang pelanggan & cicilan', 'desc' => 'Catat transaksi bayar belakangan, cicilan, dan jatuh tempo per pelanggan.', 'href' => '/aplikasi-kasir-toko-kelontong'],
         ['title' => 'Apotek: batch, FEFO, nomor resep', 'desc' => 'Stok per batch dengan kedaluwarsa, batch terdekat terjual dulu, obat resep meminta nomor resep.', 'href' => '/aplikasi-kasir-apotek'],
@@ -101,6 +99,7 @@
         .alt-hero { background: var(--primary-muted); border-bottom: 1px solid var(--line); padding: 8px 0 44px; }
         .alt-hero h1 { font-size: clamp(30px, 4.6vw, 46px); margin: 14px 0 14px; max-width: 860px; }
         .alt-hero .lead { color: var(--muted); font-size: 18px; margin: 0 0 22px; max-width: 760px; }
+        .alt-acts { display: flex; flex-wrap: wrap; gap: 10px; }
         .alt-tldr { background: #fff; border: 1px solid var(--line); border-radius: 20px; padding: 22px 24px; margin-top: 26px; max-width: 860px; }
         .alt-tldr h2 { font-size: 16px; margin: 0 0 10px; }
         .alt-tldr ul { margin: 0; padding-left: 20px; color: #3b3a4a; }
@@ -116,7 +115,7 @@
         .alt-table thead th { background: var(--container); font-family: var(--font-display); font-size: 14px; }
         .alt-table thead th.us { background: var(--primary-soft); color: var(--primary-dark); }
         .alt-table td.us { background: #faf9ff; font-weight: 600; }
-        .alt-table tr:last-child td { border-bottom: 0; }
+        .alt-table tr:last-child td, .alt-table tr:last-child th { border-bottom: 0; }
         .alt-source { font-size: 13px; color: var(--muted); margin: 10px 0 0; }
 
         .alt-grid { display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr); }
@@ -134,6 +133,7 @@
         @media (min-width: 760px) { .alt-cost { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
         .alt-cost .line { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px dashed var(--line); font-size: 15px; color: #3b3a4a; }
         .alt-cost .total { display: flex; justify-content: space-between; gap: 12px; padding-top: 12px; font-family: var(--font-display); font-weight: 800; font-size: 20px; }
+        .alt-cost .note { margin-top: 10px; font-size: 13px; }
 
         .alt-steps { counter-reset: s; list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
         .alt-steps li { counter-increment: s; display: flex; gap: 14px; align-items: flex-start; background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; color: #3b3a4a; }
@@ -146,6 +146,9 @@
         .faq-item summary::after { content: '+'; color: var(--primary); font-size: 22px; line-height: 1; flex: none; }
         .faq-item[open] summary::after { content: '−'; }
         .faq-item p { margin: 12px 0 0; color: #4a4860; font-size: 15.5px; }
+        .alt-links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+        .alt-links a { background: #fff; border: 1px solid var(--line); color: var(--ink); font-weight: 600; font-size: 14.5px; padding: 10px 16px; border-radius: 999px; }
+        .alt-links a:hover { border-color: var(--primary); color: var(--primary); }
         .alt-disclaimer { margin-top: 30px; font-size: 13px; color: var(--muted); }
     </style>
 @endsection
@@ -158,13 +161,9 @@
                 <span>Alternatif {{ $k['name'] }}</span>
             </nav>
             <span class="pill" style="margin-top: 18px">Diperbarui {{ $k['checked_label'] }}</span>
-            <h1>Alternatif {{ $k['name'] }}: aplikasi kasir dengan harga Rupiah untuk UMKM Indonesia</h1>
-            <p class="lead">
-                {{ $k['name'] }} adalah aplikasi kasir gratis yang populer. Banyak pemilik usaha mulai mencari alternatif saat butuh fitur
-                berbayarnya, karena biaya tambahan dihitung dalam dolar per toko dan per karyawan. Berikut perbandingan yang jujur,
-                termasuk kapan {{ $k['name'] }} justru lebih cocok.
-            </p>
-            <div class="ju-acts" style="display:flex;flex-wrap:wrap;gap:10px">
+            <h1>{{ $k['h1'] }}</h1>
+            <p class="lead">{{ $k['lead'] }}</p>
+            <div class="alt-acts">
                 <a class="btn btn-primary" href="{{ url('/register') }}">Coba Kasir UMKM gratis</a>
                 <a class="btn btn-ghost" href="#perbandingan">Lihat perbandingan</a>
             </div>
@@ -172,9 +171,9 @@
             <div class="alt-tldr">
                 <h2>Ringkasnya</h2>
                 <ul>
-                    <li><strong>Harga:</strong> paket {{ $paid['name'] }} Kasir UMKM {{ $paid['monthly_label'] !== '' ? $paid['monthly_label'].' per bulan' : '' }} dalam Rupiah, sudah termasuk karyawan dan stok lanjutan. Di {{ $k['name'] }}, keduanya add-on berbayar dalam USD.</li>
-                    <li><strong>Fitur lokal:</strong> Kasir UMKM punya utang pelanggan, mode apotek, order laundry, dan komisi kapster.</li>
-                    <li><strong>{{ $k['name'] }} lebih unggul</strong> bila Anda butuh banyak toko gratis, layar pelanggan, atau aplikasi iPhone.</li>
+                    @foreach ($k['tldr'] as $t)
+                        <li><strong>{{ $t[0] }}:</strong> {{ $fill($t[1]) }}</li>
+                    @endforeach
                 </ul>
             </div>
         </div>
@@ -185,18 +184,12 @@
             <h2>Kenapa pemilik usaha mencari alternatif {{ $k['name'] }}</h2>
             <p class="sub">Alasan yang paling sering muncul saat usaha mulai berkembang.</p>
             <div class="alt-grid three">
-                <div class="alt-box">
-                    <h3>Biaya tambahan dalam dolar</h3>
-                    <p>Fasilitas tambahan {{ $k['name'] }} ditagih dalam USD dan belum termasuk pajak, sehingga biaya bulanan dalam Rupiah ikut kurs.</p>
-                </div>
-                <div class="alt-box">
-                    <h3>Biaya naik seiring jumlah karyawan</h3>
-                    <p>Manajemen karyawan {{ $k['name'] }} dihitung per karyawan. Semakin banyak kasir, semakin besar biayanya.</p>
-                </div>
-                <div class="alt-box">
-                    <h3>Butuh fitur khas usaha Indonesia</h3>
-                    <p>Seperti catatan utang pelanggan warung, nomor resep di apotek, atau order laundry kiloan dengan DP.</p>
-                </div>
+                @foreach ($k['reasons'] as $r)
+                    <div class="alt-box">
+                        <h3>{{ $r[0] }}</h3>
+                        <p>{{ $fill($r[1]) }}</p>
+                    </div>
+                @endforeach
             </div>
         </div>
     </section>
@@ -215,45 +208,44 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach ($rows as $row)
+                        @foreach ($k['compare'] as $row)
                             <tr>
                                 <th scope="row">{{ $row[0] }}</th>
-                                <td class="us">{{ $row[1] }}</td>
-                                <td>{{ $row[2] }}</td>
+                                <td class="us">{{ $fill($row[1]) }}</td>
+                                <td>{{ $fill($row[2]) }}</td>
                             </tr>
                         @endforeach
                     </tbody>
                 </table>
             </div>
             <p class="alt-source">
-                Sumber data {{ $k['name'] }}: <a href="{{ $k['source'] }}" rel="nofollow noopener" target="_blank">halaman harga {{ $k['name'] }}</a>,
-                dicek {{ $k['checked_label'] }}. {{ $k['addon_trial'] }} Harga bisa berubah sewaktu-waktu.
+                Sumber data {{ $k['name'] }}:
+                @foreach ($k['sources'] as $src)<a href="{{ $src['url'] }}" rel="nofollow noopener" target="_blank">{{ $src['label'] }}</a>{{ $loop->last ? '' : ', ' }}@endforeach,
+                dicek {{ $k['checked_label'] }}. {{ $k['source_note'] }} Harga bisa berubah sewaktu-waktu.
             </p>
         </div>
     </section>
 
     <section class="alt-sec">
         <div class="wrap">
-            <h2>Contoh biaya bulanan: 1 toko, 3 karyawan</h2>
-            <p class="sub">Toko yang ingin akun terpisah untuk 3 karyawan, laporan penjualan panjang, dan pengelolaan stok lengkap (pembelian & opname).</p>
+            <h2>{{ $cost['title'] }}</h2>
+            <p class="sub">{{ $fill($cost['sub']) }}</p>
             <div class="alt-cost">
                 <div class="alt-box">
-                    <h3>{{ $k['name'] }} (add-on yang dibutuhkan)</h3>
-                    <div class="line"><span>Loyverse POS</span><span>Gratis</span></div>
-                    <div class="line"><span>Riwayat penjualan tanpa batas</span><span>$9 USD</span></div>
-                    <div class="line"><span>Manajemen karyawan × 3</span><span>$15 USD</span></div>
-                    <div class="line"><span>Manajemen stok barang</span><span>$25 USD</span></div>
-                    <div class="total"><span>Total</span><span>$49 USD / bulan</span></div>
-                    <p style="margin-top:10px;font-size:13px">Belum termasuk pajak, ditagih dalam USD (nilai Rupiah mengikuti kurs).</p>
+                    <h3>{{ $cost['theirs_title'] }}</h3>
+                    @foreach ($cost['theirs'] as $line)
+                        <div class="line"><span>{{ $fill($line[0]) }}</span><span>{{ $fill($line[1]) }}</span></div>
+                    @endforeach
+                    <div class="total"><span>Total</span><span>{{ $cost['theirs_total'] }}</span></div>
+                    <p class="note">{{ $fill($cost['theirs_note']) }}</p>
                 </div>
                 <div class="alt-box fit">
-                    <h3>Kasir UMKM (paket {{ $paid['name'] }})</h3>
-                    <div class="line"><span>Kasir & struk</span><span>Termasuk</span></div>
-                    <div class="line"><span>Laporan penjualan (rentang hingga 1 tahun)</span><span>Termasuk</span></div>
-                    <div class="line"><span>Akun karyawan & hak akses</span><span>Termasuk</span></div>
-                    <div class="line"><span>Pembelian & stok opname</span><span>Termasuk</span></div>
-                    <div class="total"><span>Total</span><span>{{ $paid['monthly_label'] !== '' ? $paid['monthly_label'] : 'Lihat harga' }} / bulan</span></div>
-                    <p style="margin-top:10px;font-size:13px">Dalam Rupiah. Absensi & payroll karyawan tersedia sebagai add-on terpisah.</p>
+                    <h3>Kasir UMKM by MaccaPOS</h3>
+                    @foreach ($cost['ours'] as $line)
+                        <div class="line"><span>{{ $fill($line[0]) }}</span><span>{{ $fill($line[1]) }}</span></div>
+                    @endforeach
+                    <div class="total"><span>Total</span><span>{{ $oursTotal }}</span></div>
+                    <p class="note">{{ $fill($cost['ours_note']) }}</p>
                 </div>
             </div>
         </div>
@@ -262,7 +254,7 @@
     <section class="alt-sec">
         <div class="wrap">
             <h2>Fitur usaha lokal di Kasir UMKM</h2>
-            <p class="sub">Fitur ini tidak kami temukan di halaman fitur dan harga {{ $k['name'] }} per {{ $k['checked_label'] }}. Silakan cek langsung bila fitur ini penting bagi Anda.</p>
+            <p class="sub">Fitur khusus jenis usaha yang ada di Kasir UMKM. Bila fitur ini penting bagi Anda, cek juga ketersediaannya langsung di situs {{ $k['name'] }}.</p>
             <div class="alt-grid three">
                 @foreach ($local as $f)
                     <div class="alt-box">
@@ -282,19 +274,17 @@
                 <div class="alt-box fit">
                     <h3>Pilih Kasir UMKM bila</h3>
                     <ul>
-                        <li>Ingin biaya tetap dalam Rupiah, tanpa hitungan per karyawan</li>
-                        <li>Punya beberapa kasir atau staf gudang dalam satu outlet</li>
-                        <li>Butuh utang pelanggan, mode apotek, laundry, atau komisi kapster</li>
-                        <li>Ingin menghitung HPP dan produksi dari resep</li>
+                        @foreach ($k['fit_us'] as $item)
+                            <li>{{ $fill($item) }}</li>
+                        @endforeach
                     </ul>
                 </div>
                 <div class="alt-box">
                     <h3>{{ $k['name'] }} mungkin lebih cocok bila</h3>
                     <ul>
                         @foreach ($k['strengths'] as $s)
-                            <li><strong>{{ $s['title'] }}:</strong> {{ $s['desc'] }}</li>
+                            <li><strong>{{ $s[0] }}:</strong> {{ $s[1] }}</li>
                         @endforeach
-                        <li><strong>Hanya butuh fitur dasar:</strong> kasir dan stok dasar ({{ $k['free_inventory'] }}) tanpa add-on.</li>
                     </ul>
                 </div>
             </div>
@@ -325,6 +315,16 @@
                     </details>
                 @endforeach
             </div>
+
+            @if (count($others))
+                <h2 style="margin-top: 44px">Perbandingan lainnya</h2>
+                <div class="alt-links">
+                    @foreach ($others as $o)
+                        <a href="{{ url('/'.$o['slug']) }}">Alternatif {{ $o['name'] }}</a>
+                    @endforeach
+                </div>
+            @endif
+
             <p class="alt-disclaimer">
                 {{ $k['name'] }} adalah merek milik pemiliknya. Kasir UMKM by MaccaPOS tidak berafiliasi dengan {{ $k['name'] }}.
                 Informasi {{ $k['name'] }} diambil dari situs resminya per {{ $k['checked_label'] }}. Jika ada yang tidak akurat,
