@@ -5,7 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Truck, Plus, ArrowRight, Undo2, Trash2 } from 'lucide-vue-next';
 import { confirmDelete, toastSuccess } from '@/lib/swal';
-import { ref } from 'vue';
+import { DUE_TONE_CLASS, dueStatus, rupiah } from '@/composables/useReceivables';
+import { computed, ref } from 'vue';
 
 interface PurchaseRow {
     id: number;
@@ -15,12 +16,21 @@ interface PurchaseRow {
     lines_count: number;
     supplier_name?: string | null;
     user_name?: string | null;
+    total_amount: number;
+    amount_paid: number;
+    is_paid: boolean;
+    due_date: string | null;
 }
 
-defineProps<{
+const props = defineProps<{
     purchases: PurchaseRow[];
+    status?: string;
+    unpaidSummary?: { count: number; total: number; overdue: number };
     store: { id: number; name: string; currency: string };
 }>();
+
+const showUnpaid = (on: boolean) => router.get('/purchases', on ? { status: 'unpaid' } : {}, { preserveScroll: true, replace: true });
+const isUnpaidTab = computed(() => props.status === 'unpaid');
 
 const isDeletingId = ref<number | null>(null);
 
@@ -56,7 +66,7 @@ const formatDateTime = (iso: string | null) => {
                 <div>
                     <h1 class="text-2xl font-black text-slate-900">Pembelian &amp; masuk stok</h1>
                     <p class="text-sm text-slate-600 mt-1">
-                        Catat pembelian barang — stok produk bertambah dan tercatat di riwayat stok (Fase B5).
+                        Catat pembelian barang dari supplier. Stok bertambah otomatis, dan pembelian bayar tempo tercatat sebagai utang.
                     </p>
                 </div>
                 <div class="flex flex-wrap gap-2">
@@ -82,7 +92,7 @@ const formatDateTime = (iso: string | null) => {
                 </div>
             </div>
 
-            <Card class="rounded-2xl border-slate-200 shadow-sm">
+            <Card class="rounded-2xl border-slate-200 shadow-none">
                 <CardHeader>
                     <div class="flex items-center gap-2">
                         <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-500/10">
@@ -93,10 +103,40 @@ const formatDateTime = (iso: string | null) => {
                             <CardDescription>100 entri terakhir</CardDescription>
                         </div>
                     </div>
+                    <div class="mt-3 flex flex-wrap items-center gap-2">
+                        <button
+                            type="button"
+                            class="rounded-lg px-3 py-1.5 text-sm font-semibold"
+                            :class="!isUnpaidTab ? 'bg-primary text-white' : 'text-slate-500 hover:bg-slate-100'"
+                            @click="showUnpaid(false)"
+                        >
+                            Semua
+                        </button>
+                        <button
+                            type="button"
+                            class="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold"
+                            :class="isUnpaidTab ? 'bg-primary text-white' : 'text-slate-500 hover:bg-slate-100'"
+                            @click="showUnpaid(true)"
+                        >
+                            Belum lunas
+                            <span
+                                v-if="unpaidSummary?.count"
+                                class="rounded-full px-1.5 text-xs"
+                                :class="isUnpaidTab ? 'bg-white/20' : 'bg-amber-100 text-amber-700'"
+                                >{{ unpaidSummary.count }}</span
+                            >
+                        </button>
+                        <p v-if="unpaidSummary?.count" class="text-sm text-slate-500">
+                            Utang ke supplier <strong class="text-slate-800">{{ rupiah(unpaidSummary.total) }}</strong>
+                            <span v-if="unpaidSummary.overdue" class="text-red-600"> · {{ unpaidSummary.overdue }} lewat tempo</span>
+                            ·
+                            <Link href="/reports/aging-payables" class="font-semibold text-primary hover:underline">Laporan utang usaha</Link>
+                        </p>
+                    </div>
                 </CardHeader>
                 <CardContent>
                     <div v-if="purchases.length === 0" class="text-center py-12 text-slate-500">
-                        <p>Belum ada pembelian.</p>
+                        <p>{{ isUnpaidTab ? 'Tidak ada pembelian yang belum lunas.' : 'Belum ada pembelian.' }}</p>
                         <Button as-child variant="outline" class="mt-4 rounded-xl">
                             <Link href="/purchases/create">Tambah pembelian pertama</Link>
                         </Button>
@@ -109,6 +149,8 @@ const formatDateTime = (iso: string | null) => {
                                     <th class="p-3">Tanggal</th>
                                     <th class="p-3">Supplier</th>
                                     <th class="p-3">Jumlah Produk</th>
+                                    <th class="p-3 text-right">Total</th>
+                                    <th class="p-3">Pembayaran</th>
                                     <th class="p-3">Oleh</th>
                                     <th class="p-3 text-right">Aksi</th>
                                 </tr>
@@ -127,6 +169,16 @@ const formatDateTime = (iso: string | null) => {
                                     <td class="p-3 text-slate-600">{{ formatDateTime(p.purchased_at) }}</td>
                                     <td class="p-3">{{ p.supplier_name || '—' }}</td>
                                     <td class="p-3">{{ p.lines_count }}</td>
+                                    <td class="p-3 text-right font-semibold text-slate-900">{{ rupiah(p.total_amount) }}</td>
+                                    <td class="p-3">
+                                        <span v-if="p.is_paid" class="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">Lunas</span>
+                                        <span v-else class="flex flex-col gap-0.5">
+                                            <span class="text-xs font-semibold text-amber-700">Sisa {{ rupiah(p.total_amount - p.amount_paid) }}</span>
+                                            <span class="w-fit rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="DUE_TONE_CLASS[dueStatus(p.due_date).tone]">
+                                                {{ dueStatus(p.due_date).label }}
+                                            </span>
+                                        </span>
+                                    </td>
                                     <td class="p-3 text-slate-600">{{ p.user_name || '—' }}</td>
                                     <td class="p-3 text-right">
                                         <Button

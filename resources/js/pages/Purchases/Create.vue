@@ -325,6 +325,24 @@ const form = useForm({
     supplier_tax_invoice_no: '',
 });
 
+// ── Pembayaran: lunas sekarang atau bayar tempo (utang ke supplier) ─────
+const PURCHASE_PAY_METHODS = [
+    { value: 'cash', label: 'Tunai' },
+    { value: 'transfer', label: 'Transfer' },
+    { value: 'ewallet', label: 'E-Wallet' },
+] as const;
+const plusDays = (days: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0, 10);
+};
+const payMode = ref<'paid' | 'credit'>('paid');
+const payMethod = ref<'cash' | 'transfer' | 'ewallet'>('cash');
+const dueDate = ref(plusDays(14));
+const downPayment = ref<number | ''>('');
+const payError = ref('');
+
+
 // Daftar Belanja → form terisi: tiap barang jadi satu baris dengan jumlah saran.
 if (props.prefill) {
     for (const item of props.prefill.lines) {
@@ -796,7 +814,23 @@ function submit() {
         void modalError('Belum ada isi', 'Cari dan tambahkan minimal satu barang atau biaya.');
         return;
     }
+    payError.value = '';
+    const dp = payMode.value === 'credit' ? Math.max(0, Number(downPayment.value) || 0) : 0;
+    if (payMode.value === 'credit') {
+        if (!dueDate.value) {
+            payError.value = 'Isi tanggal jatuh tempo pembayaran ke supplier.';
+            return;
+        }
+        if (dp >= grandTotal.value && grandTotal.value > 0) {
+            payError.value = 'Uang muka sama dengan total. Pilih "Lunas sekarang" saja.';
+            return;
+        }
+    }
     form.transform(() => ({
+        is_paid: payMode.value === 'paid',
+        payment_method: payMethod.value,
+        amount_paid: payMode.value === 'paid' ? undefined : dp,
+        due_date: payMode.value === 'credit' ? dueDate.value : null,
         supplier_id: form.supplier_id,
         purchased_at: form.purchased_at,
         notes: form.notes,
@@ -1305,9 +1339,87 @@ function submit() {
                                 <span class="font-mono tabular-nums">{{ formatIDR(Number(form.ppn_amount) || 0) }}</span>
                             </div>
                             <div class="flex justify-between border-t pt-1 font-bold text-slate-900">
-                                <span>Total dibayar</span>
+                                <span>Total pembelian</span>
                                 <span class="font-mono tabular-nums">{{ formatIDR(grandTotal) }}</span>
                             </div>
+                            <template v-if="payMode === 'credit'">
+                                <div class="flex justify-between text-slate-600">
+                                    <span>Dibayar sekarang</span>
+                                    <span class="font-mono tabular-nums">{{ formatIDR(Math.min(Number(downPayment) || 0, grandTotal)) }}</span>
+                                </div>
+                                <div class="flex justify-between font-bold text-amber-700">
+                                    <span>Sisa utang ke supplier</span>
+                                    <span class="font-mono tabular-nums">{{ formatIDR(Math.max(0, grandTotal - (Number(downPayment) || 0))) }}</span>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- Pembayaran -->
+                        <div v-if="lineDrafts.length > 0 || chargeDrafts.length > 0" class="space-y-3 rounded-xl border border-slate-200 p-3">
+                            <p class="text-sm font-semibold text-slate-800">Pembayaran ke supplier</p>
+                            <div class="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Cara bayar">
+                                <button
+                                    v-for="m in [
+                                        { key: 'paid', label: 'Lunas sekarang', desc: 'Dibayar penuh hari ini' },
+                                        { key: 'credit', label: 'Bayar tempo', desc: 'Dicatat sebagai utang' },
+                                    ] as const"
+                                    :key="m.key"
+                                    type="button"
+                                    role="radio"
+                                    :aria-checked="payMode === m.key"
+                                    class="rounded-xl border px-3 py-2 text-left transition"
+                                    :class="payMode === m.key ? 'border-primary bg-primary/5' : 'border-slate-200 hover:border-slate-300'"
+                                    @click="payMode = m.key"
+                                >
+                                    <span class="block text-sm font-semibold" :class="payMode === m.key ? 'text-primary' : 'text-slate-800'">{{ m.label }}</span>
+                                    <span class="block text-xs text-slate-500">{{ m.desc }}</span>
+                                </button>
+                            </div>
+                            <div v-if="payMode === 'credit'" class="grid gap-3 sm:grid-cols-2">
+                                <div class="space-y-1.5">
+                                    <Label for="due_date">Jatuh tempo</Label>
+                                    <Input id="due_date" v-model="dueDate" type="date" :min="form.purchased_at" class="h-10" />
+                                    <div class="flex gap-1.5">
+                                        <button
+                                            v-for="d in [7, 14, 30]"
+                                            :key="d"
+                                            type="button"
+                                            class="rounded-lg border border-slate-200 px-2 py-0.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                                            @click="dueDate = plusDays(d)"
+                                        >
+                                            {{ d }} hari
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="space-y-1.5">
+                                    <Label for="down_payment">Uang muka <span class="font-normal text-slate-400">(opsional)</span></Label>
+                                    <Input id="down_payment" v-model.number="downPayment" type="number" min="0" step="any" placeholder="0" class="h-10" />
+                                </div>
+                            </div>
+                            <div v-if="payMode === 'paid' || (Number(downPayment) || 0) > 0" class="space-y-1.5">
+                                <span class="text-xs font-semibold text-slate-600">{{ payMode === 'paid' ? 'Dibayar dengan' : 'Uang muka dibayar dengan' }}</span>
+                                <div class="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Metode bayar">
+                                    <button
+                                        v-for="m in PURCHASE_PAY_METHODS"
+                                        :key="m.value"
+                                        type="button"
+                                        role="radio"
+                                        :aria-checked="payMethod === m.value"
+                                        class="rounded-xl border px-3 py-1.5 text-sm font-semibold transition"
+                                        :class="payMethod === m.value ? 'border-primary bg-primary/5 text-primary' : 'border-slate-200 text-slate-600 hover:border-slate-300'"
+                                        @click="payMethod = m.value"
+                                    >
+                                        {{ m.label }}
+                                    </button>
+                                </div>
+                            </div>
+                            <p v-if="payMode === 'credit'" class="text-xs text-slate-500">
+                                Sisa utang tampil di laporan Utang usaha. Cicilan dicatat lewat tombol "Catat Pembayaran" di detail pembelian.
+                            </p>
+                            <p v-if="payError" class="text-sm text-red-600">{{ payError }}</p>
+                            <p v-for="k in ['due_date', 'amount_paid', 'payment_method', 'is_paid']" :key="k" v-show="(form.errors as Record<string, string>)[k]" class="text-sm text-red-600">
+                                {{ (form.errors as Record<string, string>)[k] }}
+                            </p>
                         </div>
 
                         <p v-if="(form.errors as Record<string, string>)['lines']" class="text-sm text-red-600">{{ (form.errors as Record<string, string>)['lines'] }}</p>

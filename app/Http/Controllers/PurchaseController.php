@@ -43,7 +43,7 @@ class PurchaseController extends Controller
             && (bool) ($store->settings['is_allow_local_purchase'] ?? false);
     }
 
-    public function index()
+    public function index(Request $request)
     {
         $store = auth()->user()->store;
 
@@ -62,9 +62,14 @@ class PurchaseController extends Controller
                 ->with('warning', 'Paket Starter tidak mencakup modul pembelian. Upgrade ke paket GrowUp di halaman langganan.');
         }
 
+        // Filter "Belum lunas" = pembelian bayar tempo yang masih ada sisa utang ke supplier.
+        $status = $request->input('status') === 'unpaid' ? 'unpaid' : 'all';
+        $unpaid = $store->purchases()->where('is_paid', false);
+
         $purchases = $store->purchases()
             ->with(['supplier:id,name', 'user:id,name'])
             ->withCount('lines')
+            ->when($status === 'unpaid', fn ($q) => $q->where('is_paid', false)->orderByRaw('CASE WHEN due_date IS NULL THEN 1 ELSE 0 END')->orderBy('due_date'))
             ->latest('purchased_at')
             ->limit(100)
             ->get()
@@ -76,10 +81,20 @@ class PurchaseController extends Controller
                 'lines_count' => $p->lines_count,
                 'supplier_name' => $p->supplier?->name,
                 'user_name' => $p->user?->name,
+                'total_amount' => (float) $p->total_amount,
+                'amount_paid' => (float) $p->amount_paid,
+                'is_paid' => (bool) ($p->is_paid ?? true),
+                'due_date' => $p->due_date?->format('Y-m-d'),
             ]);
 
         return Inertia::render('Purchases/Index', [
             'purchases' => $purchases,
+            'status' => $status,
+            'unpaidSummary' => [
+                'count' => (clone $unpaid)->count(),
+                'total' => round((float) (clone $unpaid)->sum(DB::raw('total_amount - amount_paid')), 2),
+                'overdue' => (clone $unpaid)->whereDate('due_date', '<', now()->toDateString())->count(),
+            ],
             'store' => $this->storePayload($store),
         ]);
     }
@@ -590,8 +605,8 @@ class PurchaseController extends Controller
             ? 'Pembelian tercatat dan stok bertambah.'
             : 'Biaya pembelian tercatat sebagai pengeluaran.';
 
-        // Pembelian lokal outlet yang dilunasi tunai: catat pengeluaran dari kas kasir aktif.
-        if (self::allowsLocalPurchase($store) && $purchase->is_paid && $purchase->payment_method === 'cash') {
+        // Pembelian lokal outlet yang dibayar tunai (lunas atau uang muka): catat pengeluaran dari kas kasir aktif.
+        if (self::allowsLocalPurchase($store) && (float) $purchase->amount_paid > 0 && $purchase->payment_method === 'cash') {
             $openShift = CashShift::query()
                 ->where('store_id', $store->id)
                 ->where('user_id', $userId)
@@ -605,7 +620,7 @@ class PurchaseController extends Controller
                     'cash_shift_id' => $openShift->id,
                     'type' => CashTransaction::TYPE_OUT,
                     'category' => CashTransaction::CATEGORY_EXPENSE,
-                    'amount' => $purchase->total_amount,
+                    'amount' => min((float) $purchase->amount_paid, (float) $purchase->total_amount),
                     'party_name' => $purchase->supplier?->name,
                     'notes' => 'Pembelian lokal '.$purchase->purchase_number,
                 ]);

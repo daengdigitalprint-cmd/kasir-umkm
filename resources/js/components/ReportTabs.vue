@@ -105,7 +105,8 @@ const groups: Group[] = [
                 label: 'Utang usaha',
                 href: '/reports/aging-payables',
                 desc: 'Tagihan supplier yang belum dibayar dan umurnya.',
-                financial: true,
+                // Tidak perlu modul Akuntansi: datanya dari pembelian bayar tempo.
+                advanced: true,
             },
         ],
     },
