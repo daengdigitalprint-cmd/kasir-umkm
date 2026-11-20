@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\InventoryMenuAccess;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -23,6 +24,10 @@ class EnsureStockViewRole
         if (! $user->canUsePointOfSale() && ! $user->canAccessInventory()) {
             return redirect()->route('dashboard')
                 ->with('error', 'Akses ditolak. Halaman ini hanya untuk kasir, admin, manajer, atau admin gudang.');
+        }
+
+        if (InventoryMenuAccess::deniedForWarehouse($user, $request->route()?->getName())) {
+            return EnsureInventoryRole::denyMenu();
         }
 
         return $next($request);
