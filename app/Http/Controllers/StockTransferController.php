@@ -52,14 +52,35 @@ class StockTransferController extends Controller
             $query->where('status', $request->input('status'));
         }
 
-        $transfers = $query->latest()->paginate(20)->withQueryString();
+        // Arah dilihat dari toko aktif. "incoming" = masih menunggu diterima di toko ini.
+        $direction = in_array($request->input('direction'), ['in', 'out', 'incoming'], true) ? $request->input('direction') : null;
+        match ($direction) {
+            'in' => $query->where('to_store_id', $store->id),
+            'out' => $query->where('from_store_id', $store->id),
+            'incoming' => $query->where('to_store_id', $store->id)->where('status', StockTransfer::STATUS_SENT),
+            default => null,
+        };
+
+        $transfers = $query
+            // Yang menunggu diterima di toko ini selalu di paling atas.
+            ->orderByRaw('CASE WHEN to_store_id = ? AND status = ? THEN 0 ELSE 1 END', [$store->id, StockTransfer::STATUS_SENT])
+            ->latest()
+            ->paginate(20)
+            ->withQueryString();
+
+        $incomingCount = StockTransfer::query()
+            ->where('to_store_id', $store->id)
+            ->where('status', StockTransfer::STATUS_SENT)
+            ->count();
 
         return Inertia::render('StockTransfers/Index', [
             'transfers' => $transfers,
             'currentStore' => ['id' => $store->id, 'name' => $store->name],
             'canCreateTransfer' => StorePlanLimits::allowsAdvancedRetailFeatures($store),
             'statusFilter' => $request->input('status'),
+            'directionFilter' => $direction,
             'discrepancyFilter' => $request->boolean('discrepancy'),
+            'incomingCount' => $incomingCount,
         ]);
     }
 
@@ -104,6 +125,8 @@ class StockTransferController extends Controller
             ],
             'destStores' => $destStores->map(fn (Store $s) => ['id' => $s->id, 'name' => $s->name])->values()->all(),
             'products' => $products,
+            // Boleh langsung kirim (stok asal berkurang) tanpa membuka draft dulu.
+            'canSendNow' => $this->canOperateAt($user, (int) $store->id),
         ]);
     }
 
@@ -180,6 +203,7 @@ class StockTransferController extends Controller
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.from_product_id' => ['required', 'integer', 'exists:products,id'],
             'lines.*.quantity' => ['required', 'numeric', 'min:0.0001'],
+            'send_now' => ['sometimes', 'boolean'],
         ]);
 
         $toStore = Store::query()->whereKey($validated['to_store_id'])->firstOrFail();
@@ -292,6 +316,16 @@ class StockTransferController extends Controller
             return back()->withInput()->with('error', $e->getMessage());
         }
 
+        // "Kirim sekarang": langsung kirim draft yang baru dibuat (stok asal berkurang).
+        if ($request->boolean('send_now') && $this->canOperateAt($user, (int) $transfer->from_store_id)) {
+            try {
+                return $this->send($request, $transfer);
+            } catch (ValidationException $e) {
+                return redirect()->route('stock-transfers.show', $transfer)
+                    ->with('error', 'Draft tersimpan, tetapi belum bisa dikirim: '.collect($e->errors())->flatten()->first());
+            }
+        }
+
         return redirect()->route('stock-transfers.show', $transfer)
             ->with('success', 'Draft transfer berhasil disimpan. Stok belum berubah — kirim saat siap.');
     }
@@ -319,16 +353,11 @@ class StockTransferController extends Controller
             'lines.toProduct:id,name,sku,unit,base_unit',
         ]);
 
-        $canSend = $stockTransfer->isDraft()
-            && $user->isMemberOfStore($stockTransfer->from_store_id)
-            && ($user->isAdmin() || $user->isManager());
-
-        $canReceive = $stockTransfer->isSent()
-            && $user->isMemberOfStore($stockTransfer->to_store_id)
-            && ($user->isAdmin() || $user->isManager());
-
+        $canSend = $stockTransfer->isDraft() && $this->canOperateAt($user, (int) $stockTransfer->from_store_id);
+        $canReceive = $stockTransfer->isSent() && $this->canOperateAt($user, (int) $stockTransfer->to_store_id);
         $canCancel = ($stockTransfer->isDraft() || $stockTransfer->isSent())
-            && ($user->isAdmin() || $user->isManager());
+            && ($this->canOperateAt($user, (int) $stockTransfer->from_store_id)
+                || $this->canOperateAt($user, (int) $stockTransfer->to_store_id));
 
         return Inertia::render('StockTransfers/Show', [
             'transfer' => $stockTransfer,
@@ -388,9 +417,9 @@ class StockTransferController extends Controller
             abort(403, 'Hanya anggota toko asal yang dapat mengirim transfer.');
         }
 
-        // Hanya admin atau manager yang dapat mengirim transfer
-        if (! $user->isAdmin() && ! $user->isManager()) {
-            abort(403, 'Hanya admin atau manager yang dapat mengirim transfer.');
+        // Owner, admin, manajer, atau admin gudang di toko ASAL yang boleh mengirim.
+        if (! $this->canOperateAt($user, (int) $stockTransfer->from_store_id)) {
+            abort(403, 'Hanya owner, admin, manajer, atau admin gudang toko asal yang dapat mengirim transfer.');
         }
 
         try {
@@ -462,9 +491,9 @@ class StockTransferController extends Controller
             abort(403, 'Hanya anggota toko tujuan yang dapat menerima transfer.');
         }
 
-        // Hanya admin atau manager yang dapat menerima transfer
-        if (! $user->isAdmin() && ! $user->isManager()) {
-            abort(403, 'Hanya admin atau manager yang dapat menerima transfer.');
+        // Owner, admin, manajer, atau admin gudang di toko TUJUAN yang boleh menerima.
+        if (! $this->canOperateAt($user, (int) $stockTransfer->to_store_id)) {
+            abort(403, 'Hanya owner, admin, manajer, atau admin gudang toko tujuan yang dapat menerima transfer.');
         }
 
         // F5: jumlah diterima per baris (opsional). Tanpa isian = diterima penuh (perilaku lama).
@@ -613,9 +642,10 @@ class StockTransferController extends Controller
             abort(403, 'Anda tidak punya akses ke transfer ini.');
         }
 
-        // Hanya admin atau manager yang dapat membatalkan transfer
-        if (! $user->isAdmin() && ! $user->isManager()) {
-            abort(403, 'Hanya admin atau manager yang dapat membatalkan transfer.');
+        // Pengelola di toko asal atau tujuan yang boleh membatalkan.
+        if (! $this->canOperateAt($user, (int) $stockTransfer->from_store_id)
+            && ! $this->canOperateAt($user, (int) $stockTransfer->to_store_id)) {
+            abort(403, 'Hanya owner, admin, manajer, atau admin gudang toko terkait yang dapat membatalkan transfer.');
         }
 
         try {
@@ -769,6 +799,36 @@ class StockTransferController extends Controller
         }
 
         return $user->isOwner() || $user->isAdmin() || $user->isManager() || $user->isWarehouseStaff();
+    }
+
+    /** Peran yang boleh mengirim / menerima / membatalkan transfer di sebuah toko. */
+    private const OPERATOR_ROLES = ['owner', 'admin', 'manager', 'warehouse'];
+
+    /**
+     * Boleh menjalankan transfer di toko tertentu: peran di TOKO ITU (bukan toko yang
+     * sedang aktif) harus owner/admin/manajer/admin gudang. Owner grup usaha juga boleh
+     * untuk outlet dalam grupnya walau tidak terdaftar sebagai anggota outlet tersebut.
+     */
+    private function canOperateAt(User $user, int $storeId): bool
+    {
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        $role = $user->stores()->where('stores.id', $storeId)->first()?->pivot?->role;
+        if ($role === null && (int) $user->store_id === $storeId) {
+            $role = $user->role;
+        }
+        if (in_array($role, self::OPERATOR_ROLES, true)) {
+            return true;
+        }
+
+        $organizationId = Store::query()->whereKey($storeId)->value('organization_id');
+
+        return $organizationId !== null && $user->stores()
+            ->wherePivot('role', 'owner')
+            ->where('stores.organization_id', $organizationId)
+            ->exists();
     }
 
     /** Fase F1: stok hanya mengalir dalam satu `organization_id`. */

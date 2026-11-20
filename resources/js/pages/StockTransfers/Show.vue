@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ArrowLeft, ArrowRightLeft, Send, CheckCircle, XCircle, FileText } from 'lucide-vue-next';
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import { modalError } from '@/lib/swal';
 
 interface ProductTiny {
@@ -94,6 +94,11 @@ function sendTransfer() {
 
 // F5: jumlah diterima per baris (default = jumlah dikirim) + alasan bila kurang.
 const showReceiveForm = ref(false);
+const receiveFormRef = ref<HTMLElement | null>(null);
+function openReceiveForm() {
+    showReceiveForm.value = true;
+    void nextTick(() => receiveFormRef.value?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+}
 const receivedQty = ref<Record<number, number>>(
     Object.fromEntries(props.transfer.lines.map((ln) => [ln.id, Number(ln.quantity)])),
 );
@@ -205,7 +210,39 @@ const fmtQty = (val: string | number) => {
                 </Button>
             </div>
 
-            <Card class="rounded-2xl border-slate-200 shadow-sm">
+            <!-- Langkah berikutnya, ditaruh paling atas agar tidak terlewat -->
+            <div
+                v-if="transfer.status === 'sent' || transfer.status === 'draft'"
+                class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3"
+                :class="canReceive || canSend ? 'border-primary/30 bg-primary/5' : 'border-slate-200 bg-white'"
+            >
+                <p class="text-sm text-slate-700">
+                    <template v-if="transfer.status === 'sent' && canReceive">
+                        <strong class="text-slate-900">Barang sedang dikirim ke {{ transfer.to_store.name }}.</strong>
+                        Cocokkan jumlah yang datang, lalu terima agar stok bertambah.
+                    </template>
+                    <template v-else-if="transfer.status === 'sent'">
+                        Menunggu diterima oleh <strong class="text-slate-900">{{ transfer.to_store.name }}</strong>. Stok tujuan bertambah setelah diterima.
+                    </template>
+                    <template v-else-if="canSend">
+                        <strong class="text-slate-900">Masih draft.</strong> Stok belum berubah sampai transfer dikirim.
+                    </template>
+                    <template v-else>Masih draft. Pengelola {{ transfer.from_store.name }} yang akan mengirimnya.</template>
+                </p>
+                <Button
+                    v-if="transfer.status === 'sent' && canReceive && !showReceiveForm"
+                    class="rounded-xl"
+                    :disabled="processing"
+                    @click="openReceiveForm"
+                >
+                    Terima barang
+                </Button>
+                <Button v-else-if="transfer.status === 'draft' && canSend" class="rounded-xl" :disabled="processing" @click="sendTransfer">
+                    Kirim sekarang
+                </Button>
+            </div>
+
+            <Card class="rounded-2xl border-slate-200 shadow-none">
                 <CardHeader>
                     <div class="flex items-center gap-2">
                         <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/10">
@@ -289,7 +326,7 @@ const fmtQty = (val: string | number) => {
                     </div>
 
                     <!-- F5: form terima — cek jumlah yang benar-benar tiba -->
-                    <div v-if="canReceive && showReceiveForm" class="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+                    <div v-if="canReceive && showReceiveForm" ref="receiveFormRef" class="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
                         <div>
                             <p class="text-sm font-semibold text-emerald-900">Cek barang yang tiba</p>
                             <p class="text-xs text-emerald-800">

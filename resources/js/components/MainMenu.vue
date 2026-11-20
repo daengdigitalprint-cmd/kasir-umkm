@@ -501,6 +501,7 @@ const navigationItems = computed((): ProcessedNavItem[] => {
     const deliveryEnabled = Boolean((page.props as { delivery_enabled?: boolean }).delivery_enabled);
     const upsellEnabled = Boolean((page.props as { upsell_enabled?: boolean }).upsell_enabled);
     const pendingStockRequests = Number((page.props as { pending_stock_requests?: number }).pending_stock_requests ?? 0);
+    const incomingTransferCount = Number((page.props as { incoming_transfer_count?: number }).incoming_transfer_count ?? 0);
     const cashierPinEnabled = String((page.props as { cashier_login_mode?: string }).cashier_login_mode ?? 'email') === 'pin';
     const accountingEnabled = Boolean((page.props as { accounting_enabled?: boolean }).accounting_enabled);
     const receivablesEnabled = Boolean((page.props as { receivables_enabled?: boolean }).receivables_enabled);
@@ -615,6 +616,10 @@ const navigationItems = computed((): ProcessedNavItem[] => {
         if (item.menuKey === 'stock_requests' && pendingStockRequests > 0) {
             return [{ ...item, pendingCount: pendingStockRequests }];
         }
+        // Badge kiriman antar outlet yang menunggu diterima
+        if (item.href === '/stock-transfers' && incomingTransferCount > 0) {
+            return [{ ...item, pendingCount: incomingTransferCount }];
+        }
         if (item.menuKey === 'kitchen_queue' && pendingKitchenOrderCount > 0) {
             return [{ ...item, pendingCount: pendingKitchenOrderCount }];
         }
@@ -656,7 +661,7 @@ const SECTION_META: { key: NonNullable<NavItem['section']>; label: string }[] = 
 
 type NavRenderEntry =
     | { kind: 'item'; key: string; item: ProcessedNavItem }
-    | { kind: 'section'; key: string; label: string; collapsible?: boolean; count?: number };
+    | { kind: 'section'; key: string; label: string; collapsible?: boolean; count?: number; pending?: number };
 
 /**
  * Susunan khusus pemilik usaha: menu pemantauan & manajemen di atas, menu operasional
@@ -734,7 +739,14 @@ const renderItems = computed<NavRenderEntry[]>(() => {
         for (const meta of OWNER_SECTION_META) {
             const sectionItems = sectioned.filter((i) => ownerSectionOf(i) === meta.key);
             if (sectionItems.length === 0) continue;
-            out.push({ kind: 'section', key: meta.key, label: meta.label, collapsible: meta.collapsible, count: sectionItems.length });
+            out.push({
+                kind: 'section',
+                key: meta.key,
+                label: meta.label,
+                collapsible: meta.collapsible,
+                count: sectionItems.length,
+                pending: sectionItems.reduce((n, i) => n + (i.pendingCount ?? 0), 0),
+            });
             // Seksi terlipat tetap dibuka bila halaman yang sedang aktif ada di dalamnya.
             const hidden = meta.collapsible && !opsOpen.value && !sectionItems.some((i) => isCurrentRoute(i.href));
             if (hidden) continue;
@@ -953,7 +965,13 @@ const subscriptionCardSoft = computed(() => {
                     @click="toggleOps"
                 >
                     {{ entry.label }}
-                    <span class="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] tracking-normal text-slate-500">{{ entry.count }}</span>
+                    <span
+                        v-if="entry.pending"
+                        class="rounded-full bg-amber-500 px-1.5 py-0.5 text-[9px] tracking-normal text-white"
+                        :title="`${entry.pending} perlu ditindaklanjuti`"
+                        >{{ entry.pending }}</span
+                    >
+                    <span v-else class="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] tracking-normal text-slate-500">{{ entry.count }}</span>
                     <ChevronDown class="ml-auto size-3.5 transition-transform" :class="{ 'rotate-180': opsOpen }" />
                 </button>
                 <p v-else-if="entry.kind === 'section'" class="px-4 pt-6 pb-2 text-[10px] font-black tracking-[0.2em] text-slate-400 uppercase">

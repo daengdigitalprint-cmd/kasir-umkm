@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { Head, Link, router } from '@inertiajs/vue3';
 import AdminLayout from '@/layouts/AdminLayout.vue';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { ArrowRightLeft, Plus, ArrowRight } from 'lucide-vue-next';
+import { Head, Link, router } from '@inertiajs/vue3';
+import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, ChevronRight, PackageCheck, Plus } from 'lucide-vue-next';
+import { computed } from 'vue';
 
 interface StoreTiny {
     id: number;
@@ -17,7 +16,6 @@ interface TransferRow {
     created_at: string;
     sent_at: string | null;
     received_at: string | null;
-    cancelled_at: string | null;
     notes: string | null;
     lines_count: number;
     discrepancy_lines_count?: number;
@@ -26,224 +24,196 @@ interface TransferRow {
     user: { id: number; name: string } | null;
 }
 
-interface Paginated<T> {
-    data: T[];
-    links: { url: string | null; label: string; active: boolean }[];
-    meta: Record<string, unknown>;
-}
-
 const props = withDefaults(
     defineProps<{
-        transfers: Paginated<TransferRow>;
+        transfers: { data: TransferRow[]; links: { url: string | null; label: string; active: boolean }[] };
         currentStore: { id: number; name: string };
         canCreateTransfer?: boolean;
         statusFilter?: string | null;
+        directionFilter?: string | null;
         discrepancyFilter?: boolean;
+        incomingCount?: number;
     }>(),
-    { canCreateTransfer: true, statusFilter: null, discrepancyFilter: false },
+    { canCreateTransfer: true, statusFilter: null, directionFilter: null, discrepancyFilter: false, incomingCount: 0 },
 );
 
 const formatWhen = (iso: string) =>
-    new Date(iso).toLocaleString('id-ID', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-    });
+    new Date(iso).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
-const roleLabel = (row: TransferRow) => {
-    if (row.from_store.id === props.currentStore.id) return 'Keluar';
-    if (row.to_store.id === props.currentStore.id) return 'Masuk';
-    return '—';
-};
+const isIncoming = (t: TransferRow) => t.to_store.id === props.currentStore.id;
 
-const statusConfig: Record<string, { label: string; class: string }> = {
-    draft: { label: 'Draft', class: 'bg-slate-100 text-slate-700' },
-    sent: { label: 'Dikirim', class: 'bg-amber-100 text-amber-800' },
-    received: { label: 'Diterima', class: 'bg-emerald-100 text-emerald-800' },
-    cancelled: { label: 'Dibatalkan', class: 'bg-red-100 text-red-700' },
-};
+/** Status dari sudut pandang toko aktif. */
+function statusOf(t: TransferRow): { label: string; class: string } {
+    if (t.status === 'sent') {
+        return isIncoming(t)
+            ? { label: 'Menunggu diterima', class: 'bg-amber-100 text-amber-800' }
+            : { label: 'Dalam perjalanan', class: 'bg-sky-100 text-sky-800' };
+    }
+    return (
+        (
+            {
+                draft: { label: 'Draft', class: 'bg-slate-100 text-slate-600' },
+                received: { label: 'Diterima', class: 'bg-emerald-100 text-emerald-800' },
+                cancelled: { label: 'Dibatalkan', class: 'bg-red-50 text-red-700' },
+            } as Record<string, { label: string; class: string }>
+        )[t.status] ?? { label: t.status, class: 'bg-slate-100 text-slate-600' }
+    );
+}
 
-const statusFilters = [
-    { value: '', label: 'Semua' },
-    { value: 'draft', label: 'Draft' },
-    { value: 'sent', label: 'Dikirim' },
-    { value: 'received', label: 'Diterima' },
-    { value: 'cancelled', label: 'Dibatalkan' },
-];
+type FilterKey = 'all' | 'incoming' | 'in' | 'out' | 'draft' | 'discrepancy';
+const activeFilter = computed<FilterKey>(() => {
+    if (props.discrepancyFilter) return 'discrepancy';
+    if (props.directionFilter === 'incoming') return 'incoming';
+    if (props.directionFilter === 'in') return 'in';
+    if (props.directionFilter === 'out') return 'out';
+    if (props.statusFilter === 'draft') return 'draft';
+    return 'all';
+});
 
-function filterByStatus(status: string, discrepancy = props.discrepancyFilter) {
+function setFilter(key: FilterKey) {
     const params: Record<string, string> = {};
-    if (status) params.status = status;
-    if (discrepancy) params.discrepancy = '1';
-    router.get('/stock-transfers', params, { preserveState: true, replace: true });
+    if (key === 'incoming' || key === 'in' || key === 'out') params.direction = key;
+    if (key === 'draft') params.status = 'draft';
+    if (key === 'discrepancy') params.discrepancy = '1';
+    router.get('/stock-transfers', params, { preserveState: true, preserveScroll: true, replace: true });
 }
 
-// F5: tampilkan hanya transfer yang barangnya tiba kurang dari yang dikirim.
-function toggleDiscrepancy() {
-    filterByStatus(props.statusFilter ?? '', !props.discrepancyFilter);
-}
+const FILTERS = computed(() => [
+    { key: 'all' as const, label: 'Semua' },
+    { key: 'incoming' as const, label: 'Perlu diterima', count: props.incomingCount },
+    { key: 'in' as const, label: 'Masuk' },
+    { key: 'out' as const, label: 'Keluar' },
+    { key: 'draft' as const, label: 'Draft' },
+    { key: 'discrepancy' as const, label: 'Ada selisih' },
+]);
 </script>
 
 <template>
     <Head title="Transfer stok" />
 
     <AdminLayout title="Transfer stok">
-        <div class="mx-auto space-y-6 pb-8" style="max-width: 90rem">
+        <div class="mx-auto max-w-5xl space-y-4">
             <div class="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                    <h1 class="text-2xl font-black text-slate-900">Transfer antar outlet</h1>
-                    <p class="text-sm text-slate-600 mt-1">
-                        Stok dikurangi saat dikirim dari <strong>{{ currentStore.name }}</strong>, dan bertambah saat diterima outlet tujuan.
-                    </p>
-                </div>
-                <Button v-if="props.canCreateTransfer" as-child class="rounded-xl">
-                    <Link href="/stock-transfers/create" class="inline-flex items-center gap-2">
-                        <Plus class="h-4 w-4" />
-                        Transfer baru
-                        <ArrowRight class="h-4 w-4 opacity-80" />
-                    </Link>
-                </Button>
-                <p
-                    v-else
-                    class="max-w-md rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+                <p class="text-sm text-slate-500">
+                    Kirim stok antar outlet dalam satu grup. Stok berkurang saat dikirim dan bertambah saat diterima outlet tujuan.
+                </p>
+                <Link
+                    v-if="canCreateTransfer"
+                    href="/stock-transfers/create"
+                    class="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90"
                 >
-                    Paket Starter tidak mencakup transfer antar outlet. Pilih paket GrowUp di
-                    <Link href="/subscription" class="font-bold text-amber-950 underline">Langganan</Link>.
+                    <Plus class="h-4 w-4" /> Transfer baru
+                </Link>
+                <p v-else class="text-sm text-slate-600">
+                    Transfer antar outlet tersedia di paket GrowUp.
+                    <Link href="/subscription" class="font-semibold text-primary hover:underline">Lihat paket</Link>
                 </p>
             </div>
 
-            <Card class="rounded-2xl border-slate-200 shadow-sm">
-                <CardHeader>
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-2">
-                            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/10">
-                                <ArrowRightLeft class="h-5 w-5 text-violet-700" />
-                            </div>
-                            <div>
-                                <CardTitle>Riwayat transfer</CardTitle>
-                                <CardDescription>Transfer yang melibatkan toko aktif Anda</CardDescription>
-                            </div>
-                        </div>
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    <!-- Filter status -->
-                    <div class="flex flex-wrap gap-2 mb-4">
-                        <button
-                            v-for="f in statusFilters"
-                            :key="f.value"
-                            class="rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors"
-                            :class="
-                                statusFilter === f.value || (!statusFilter && f.value === '')
-                                    ? 'bg-violet-100 text-violet-800'
-                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                            "
-                            @click="filterByStatus(f.value)"
-                        >
-                            {{ f.label }}
-                        </button>
-                        <button
-                            class="rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors"
-                            :class="discrepancyFilter ? 'bg-red-100 text-red-800' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
-                            @click="toggleDiscrepancy"
-                        >
-                            Ada selisih
-                        </button>
-                    </div>
+            <!-- Kiriman yang menunggu diterima di toko ini -->
+            <button
+                v-if="incomingCount > 0 && activeFilter !== 'incoming'"
+                type="button"
+                class="flex w-full items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-left hover:bg-amber-100/60"
+                @click="setFilter('incoming')"
+            >
+                <PackageCheck class="h-5 w-5 shrink-0 text-amber-600" />
+                <span class="flex-1 text-sm text-amber-900">
+                    <strong>{{ incomingCount }} kiriman menunggu diterima</strong> di {{ currentStore.name }}. Terima agar stoknya bertambah.
+                </span>
+                <ChevronRight class="h-4 w-4 text-amber-500" />
+            </button>
 
-                    <div v-if="transfers.data.length === 0" class="text-center py-12 text-slate-500">
-                        <p>Belum ada transfer.</p>
-                        <Button as-child variant="outline" class="mt-4 rounded-xl">
-                            <Link href="/stock-transfers/create">Buat transfer pertama</Link>
-                        </Button>
-                    </div>
-                    <div v-else class="overflow-x-auto rounded-xl border border-slate-100">
-                        <table class="w-full text-sm">
-                            <thead>
-                                <tr class="border-b bg-slate-50 text-left text-xs font-bold text-slate-600 uppercase tracking-wide">
-                                    <th class="p-3">Nomor</th>
-                                    <th class="p-3">Waktu</th>
-                                    <th class="p-3">Dari → Ke</th>
-                                    <th class="p-3">Status</th>
-                                    <th class="p-3">Peran</th>
-                                    <th class="p-3">Baris</th>
-                                    <th class="p-3">Oleh</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr
-                                    v-for="t in transfers.data"
-                                    :key="t.id"
-                                    class="border-b border-slate-100 last:border-0 hover:bg-slate-50/80"
-                                >
-                                    <td class="p-3 font-mono font-semibold text-slate-900">
-                                        <Link :href="`/stock-transfers/${t.id}`" class="text-violet-700 hover:underline">
-                                            {{ t.transfer_number }}
-                                        </Link>
-                                    </td>
-                                    <td class="p-3 text-slate-600 whitespace-nowrap">{{ formatWhen(t.created_at) }}</td>
-                                    <td class="p-3">
-                                        <span class="text-slate-800">{{ t.from_store.name }}</span>
-                                        <span class="text-slate-400 mx-1">→</span>
-                                        <span class="text-slate-800">{{ t.to_store.name }}</span>
-                                    </td>
-                                    <td class="p-3">
-                                        <span
-                                            class="inline-flex rounded-lg px-2 py-0.5 text-xs font-bold"
-                                            :class="statusConfig[t.status]?.class ?? 'bg-slate-100 text-slate-600'"
-                                        >
-                                            {{ statusConfig[t.status]?.label ?? t.status }}
-                                        </span>
-                                    </td>
-                                    <td class="p-3">
-                                        <span
-                                            class="inline-flex rounded-lg px-2 py-0.5 text-xs font-bold"
-                                            :class="
-                                                roleLabel(t) === 'Keluar'
-                                                    ? 'bg-amber-100 text-amber-900'
-                                                    : 'bg-emerald-100 text-emerald-900'
-                                            "
-                                        >
-                                            {{ roleLabel(t) }}
-                                        </span>
-                                    </td>
-                                    <td class="p-3">
-                                        {{ t.lines_count }}
-                                        <span
-                                            v-if="t.discrepancy_lines_count"
-                                            class="ml-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700"
-                                        >
-                                            {{ t.discrepancy_lines_count }} selisih
-                                        </span>
-                                    </td>
-                                    <td class="p-3 text-slate-600">{{ t.user?.name ?? '—' }}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
+            <section class="rounded-2xl border border-slate-200 bg-white">
+                <div class="flex gap-1 overflow-x-auto border-b border-slate-100 px-3 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <button
+                        v-for="f in FILTERS"
+                        :key="f.key"
+                        type="button"
+                        class="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold whitespace-nowrap transition"
+                        :class="activeFilter === f.key ? 'bg-primary text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'"
+                        @click="setFilter(f.key)"
+                    >
+                        {{ f.label }}
+                        <span
+                            v-if="f.count"
+                            class="rounded-full px-1.5 text-xs"
+                            :class="activeFilter === f.key ? 'bg-white/20' : 'bg-amber-100 text-amber-700'"
+                            >{{ f.count }}</span
+                        >
+                    </button>
+                </div>
 
-                    <div v-if="transfers.links.length > 3" class="flex flex-wrap justify-center gap-1 pt-4">
+                <div v-if="!transfers.data.length" class="px-6 py-14 text-center">
+                    <ArrowRightLeft class="mx-auto mb-3 h-8 w-8 text-slate-300" />
+                    <p class="font-semibold text-slate-700">
+                        {{ activeFilter === 'all' ? 'Belum ada transfer' : 'Tidak ada transfer di daftar ini' }}
+                    </p>
+                    <Link
+                        v-if="activeFilter === 'all' && canCreateTransfer"
+                        href="/stock-transfers/create"
+                        class="mt-3 inline-block text-sm font-semibold text-primary hover:underline"
+                    >
+                        Buat transfer pertama
+                    </Link>
+                </div>
+
+                <ul v-else class="divide-y divide-slate-100">
+                    <li v-for="t in transfers.data" :key="t.id">
                         <Link
-                            v-for="(l, i) in transfers.links"
-                            :key="i"
-                            :href="l.url || '#'"
-                            class="min-w-9 rounded-lg px-3 py-1.5 text-sm"
-                            :class="
-                                l.active
-                                    ? 'bg-primary text-white'
-                                    : l.url
-                                      ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                                      : 'cursor-not-allowed text-slate-300'
-                            "
-                            preserve-state
+                            :href="`/stock-transfers/${t.id}`"
+                            class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50"
+                            :class="{ 'bg-amber-50/40': t.status === 'sent' && isIncoming(t) }"
                         >
-                            <span v-html="l.label" />
+                            <span
+                                class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+                                :class="isIncoming(t) ? 'bg-emerald-50 text-emerald-600' : 'bg-sky-50 text-sky-600'"
+                                :title="isIncoming(t) ? 'Masuk' : 'Keluar'"
+                            >
+                                <ArrowDownLeft v-if="isIncoming(t)" class="h-4 w-4" />
+                                <ArrowUpRight v-else class="h-4 w-4" />
+                            </span>
+                            <span class="min-w-0 flex-1">
+                                <span class="block truncate text-sm font-semibold text-slate-900">
+                                    {{ isIncoming(t) ? `Dari ${t.from_store.name}` : `Ke ${t.to_store.name}` }}
+                                </span>
+                                <span class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+                                    <span class="font-mono">{{ t.transfer_number }}</span>
+                                    <span>· {{ formatWhen(t.created_at) }}</span>
+                                    <span>· {{ t.lines_count }} barang</span>
+                                    <span v-if="t.user">· {{ t.user.name }}</span>
+                                </span>
+                            </span>
+                            <span class="flex shrink-0 flex-col items-end gap-1">
+                                <span class="rounded-full px-2 py-0.5 text-xs font-semibold" :class="statusOf(t).class">{{ statusOf(t).label }}</span>
+                                <span
+                                    v-if="t.discrepancy_lines_count"
+                                    class="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700"
+                                >
+                                    {{ t.discrepancy_lines_count }} selisih
+                                </span>
+                            </span>
+                            <ChevronRight class="h-4 w-4 shrink-0 text-slate-300" />
                         </Link>
-                    </div>
-                </CardContent>
-            </Card>
+                    </li>
+                </ul>
+
+                <div v-if="transfers.links.length > 3" class="flex flex-wrap justify-center gap-1 border-t border-slate-100 px-4 py-3">
+                    <Link
+                        v-for="(l, i) in transfers.links"
+                        :key="i"
+                        :href="l.url || '#'"
+                        class="min-w-8 rounded-lg px-2.5 py-1 text-sm"
+                        :class="
+                            l.active ? 'bg-primary text-white' : l.url ? 'text-slate-600 hover:bg-slate-100' : 'cursor-not-allowed text-slate-300'
+                        "
+                        preserve-state
+                        preserve-scroll
+                    >
+                        <span v-html="l.label" />
+                    </Link>
+                </div>
+            </section>
         </div>
     </AdminLayout>
 </template>

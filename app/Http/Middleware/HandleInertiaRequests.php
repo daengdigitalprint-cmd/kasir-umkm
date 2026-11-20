@@ -181,6 +181,10 @@ class HandleInertiaRequests extends Middleware
             'pending_stock_requests' => fn () => $activeStore && \App\Support\CentralKitchenModule::enabled($activeStore)
                 ? \App\Models\StockRequest::query()->where('to_store_id', $activeStore->id)->where('status', 'requested')->count()
                 : 0,
+            // Badge menu Transfer stok: kiriman antar outlet yang menunggu diterima di toko aktif.
+            'incoming_transfer_count' => fn () => $activeStore
+                ? \App\Models\StockTransfer::query()->where('to_store_id', $activeStore->id)->where('status', 'sent')->count()
+                : 0,
             // Badge menu SDM: pengajuan cuti/lembur yang menunggu persetujuan (hanya untuk back-office).
             'pending_hr_requests' => fn () => $this->pendingHrRequests($user, $activeStore),
             // Saklar modul berbayar selalu lewat PlanModules::settingOn (mati bila dikunci paket Gratis).
