@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Customer;
 use App\Models\Store;
+use App\Models\Transaction;
 use App\Support\LoyaltySettings;
 use App\Support\StorePlanLimits;
 use Illuminate\Http\Request;
@@ -15,7 +16,13 @@ class CustomerController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    /**
+     * Daftar pelanggan: cari & halaman di server, filter cepat, urutan, dan sisa utang.
+     *
+     * filter: debt (punya utang) | inactive (tidak datang > 30 hari) | new (baru bulan ini) | wholesale (grosir)
+     * sort:   recent (terakhir datang) | spent (belanja terbanyak) | name
+     */
+    public function index(Request $request)
     {
         $user = auth()->user();
         $store = $user->store;
@@ -25,13 +32,77 @@ class CustomerController extends Controller
                 ->with('error', 'Anda perlu membuat toko terlebih dahulu.');
         }
 
-        $customers = $store->customers()
-            ->withCount('transactions')
-            ->latest()
-            ->paginate(20);
+        $search = trim((string) $request->input('search', ''));
+        $filter = in_array($request->input('filter'), ['debt', 'inactive', 'new', 'wholesale'], true) ? $request->input('filter') : '';
+        $sort = in_array($request->input('sort'), ['recent', 'spent', 'name'], true) ? $request->input('sort') : 'recent';
+        $inactiveSince = now()->subDays(30);
+
+        // Sisa utang per pelanggan (bon belum lunas).
+        $debtSub = fn () => Transaction::query()
+            ->selectRaw('COALESCE(SUM(total_amount - amount_paid), 0)')
+            ->whereColumn('transactions.customer_id', 'customers.id')
+            ->where('status', 'completed')
+            ->whereIn('payment_status', ['partial', 'unpaid']);
+
+        $query = $store->customers()
+            ->select('customers.*')
+            ->selectSub($debtSub(), 'outstanding_debt')
+            ->withCount(['transactions' => fn ($q) => $q->where('status', 'completed')]);
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+
+        match ($filter) {
+            'debt' => $query->whereExists(fn ($q) => $q->selectRaw('1')->from('transactions')
+                ->whereColumn('transactions.customer_id', 'customers.id')
+                ->where('status', 'completed')
+                ->whereIn('payment_status', ['partial', 'unpaid'])),
+            'inactive' => $query->whereNotNull('last_purchase_at')->where('last_purchase_at', '<', $inactiveSince),
+            'new' => $query->where('customers.created_at', '>=', now()->startOfMonth()),
+            'wholesale' => $query->where('customer_type', 'grosir'),
+            default => null,
+        };
+
+        match ($sort) {
+            'spent' => $query->orderByDesc('total_spent'),
+            'name' => $query->orderBy('name'),
+            default => $query->orderByRaw('CASE WHEN last_purchase_at IS NULL THEN 1 ELSE 0 END')
+                ->orderByDesc('last_purchase_at')
+                ->orderByDesc('customers.created_at'),
+        };
+
+        $customers = $query->paginate(20)->withQueryString()->through(fn (Customer $c) => [
+            'id' => $c->id,
+            'name' => $c->name,
+            'phone' => $c->phone,
+            'email' => $c->email,
+            'customer_type' => $c->customer_type,
+            'total_spent' => (float) $c->total_spent,
+            'visits' => (int) $c->transactions_count,
+            'last_purchase_at' => $c->last_purchase_at?->toIso8601String(),
+            'points_balance' => (int) $c->points_balance,
+            'outstanding_debt' => round((float) $c->outstanding_debt, 2),
+        ]);
+
+        $base = fn () => $store->customers();
 
         return Inertia::render('Customers/Index', [
             'customers' => $customers,
+            'filters' => ['search' => $search, 'filter' => $filter, 'sort' => $sort],
+            'counts' => [
+                'all' => $base()->count(),
+                'debt' => $base()->whereExists(fn ($q) => $q->selectRaw('1')->from('transactions')
+                    ->whereColumn('transactions.customer_id', 'customers.id')
+                    ->where('status', 'completed')
+                    ->whereIn('payment_status', ['partial', 'unpaid']))->count(),
+                'inactive' => $base()->whereNotNull('last_purchase_at')->where('last_purchase_at', '<', $inactiveSince)->count(),
+                'new' => $base()->where('created_at', '>=', now()->startOfMonth())->count(),
+            ],
             'store' => [
                 'id' => $store->id,
                 'name' => $store->name,

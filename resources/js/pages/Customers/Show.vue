@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
-import { useForm } from '@inertiajs/vue3';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Users, Phone, MapPin, Mail, Calendar, ArrowLeft, Edit, ShoppingBag, Gift, Star, CreditCard, AlertTriangle, CheckCircle2, Copy, Check } from 'lucide-vue-next';
+import { Users, Phone, MapPin, Mail, Calendar, ArrowLeft, Edit, ShoppingBag, Gift, Star, CreditCard, Copy, Check, HandCoins, MessageCircle } from 'lucide-vue-next';
 import { router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import { confirmDialog } from '@/lib/swal';
+import ReceivablePaymentDialog from '@/components/receivables/ReceivablePaymentDialog.vue';
+import { DUE_TONE_CLASS, dueStatus, reminderLink } from '@/composables/useReceivables';
 
 const referralCopied = ref(false);
 
@@ -128,8 +129,9 @@ const paymentMethodLabel = (method: string) => {
     return map[method] ?? method;
 };
 
-const totalSpent = () =>
-    props.transactions.data.reduce((sum, t) => sum + Number(t.total_amount), 0);
+/** Jumlah seluruh transaksi (paginator Laravel menaruh total di tingkat atas). */
+const transactionCount = computed(() => (props.transactions as unknown as { total?: number }).total ?? props.transactions.data.length);
+const totalSpent = () => Number((props.customer as { total_spent?: number | string }).total_spent ?? 0);
 
 const ledgerTypeLabel = (type: string) => {
     const map: Record<string, string> = {
@@ -163,41 +165,30 @@ const redeemReward = async (reward: LoyaltyReward) => {
     );
 };
 
-// ─── Pelunasan piutang ────────────────────────────────────────────────────────
-const selectedReceivable = ref<Receivable | null>(null);
-const paymentFormOpen = ref(false);
-
-const paymentForm = useForm({
-    transaction_id: 0,
-    amount: 0,
-    payment_method: 'cash' as 'cash' | 'card' | 'ewallet' | 'transfer' | 'other',
-    received_at: new Date().toISOString().slice(0, 10),
-    reference_number: '',
-    notes: '',
-    idempotency_key: '',
-});
-
-function openPaymentForm(receivable: Receivable) {
-    selectedReceivable.value = receivable;
-    paymentForm.transaction_id = receivable.id;
-    paymentForm.amount = receivable.outstanding;
-    paymentForm.payment_method = 'cash';
-    paymentForm.received_at = new Date().toISOString().slice(0, 10);
-    paymentForm.reference_number = '';
-    paymentForm.notes = '';
-    paymentForm.idempotency_key = `rp-${receivable.id}-${Date.now()}`;
-    paymentFormOpen.value = true;
+// ─── Pelunasan piutang (dialog yang sama dengan halaman Piutang) ──────────────
+/** null = terima sekaligus (dibagi ke bon tertua); berisi bon = bayar bon itu saja. */
+const payTarget = ref<Receivable | null>(null);
+const payOpen = ref(false);
+function openPayAll() {
+    payTarget.value = null;
+    payOpen.value = true;
 }
-
-function submitPayment() {
-    paymentForm.post('/receivable-payments', {
-        preserveScroll: true,
-        onSuccess: () => {
-            paymentFormOpen.value = false;
-            selectedReceivable.value = null;
-        },
-    });
+function openPayBill(r: Receivable) {
+    payTarget.value = r;
+    payOpen.value = true;
 }
+const earliestDue = computed(() => props.receivables.find((r) => r.debt_due_at)?.debt_due_at ?? null);
+const waReminder = computed(() =>
+    props.totalOutstanding > 0
+        ? reminderLink({
+              phone: props.customer.phone,
+              customerName: props.customer.name,
+              storeName: props.store.name,
+              amount: props.totalOutstanding,
+              dueAt: earliestDue.value,
+          })
+        : null,
+);
 </script>
 
 <template>
@@ -223,7 +214,7 @@ function submitPayment() {
             </div>
 
             <!-- Info pelanggan -->
-            <Card class="rounded-2xl border border-slate-200 shadow-sm">
+            <Card class="rounded-2xl border border-slate-200 shadow-none">
                 <CardContent class="p-5">
                     <div class="flex items-center gap-4 mb-4">
                         <div class="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
@@ -270,13 +261,13 @@ function submitPayment() {
 
             <!-- Ringkasan -->
             <div class="grid grid-cols-2 gap-3">
-                <Card class="rounded-2xl border border-slate-200 shadow-sm">
+                <Card class="rounded-2xl border border-slate-200 shadow-none">
                     <CardContent class="p-4 text-center">
                         <p class="text-xs text-slate-400 mb-1">Total Transaksi</p>
-                        <p class="text-2xl font-black text-slate-900">{{ transactions.meta?.total ?? transactions.data.length }}</p>
+                        <p class="text-2xl font-black text-slate-900">{{ transactionCount }}</p>
                     </CardContent>
                 </Card>
-                <Card class="rounded-2xl border border-slate-200 shadow-sm">
+                <Card class="rounded-2xl border border-slate-200 shadow-none">
                     <CardContent class="p-4 text-center">
                         <p class="text-xs text-slate-400 mb-1">Total Belanja</p>
                         <p class="text-lg font-black text-slate-900">Rp {{ formatCurrency(totalSpent()) }}</p>
@@ -284,142 +275,66 @@ function submitPayment() {
                 </Card>
             </div>
 
-            <!-- Piutang -->
-            <Card v-if="receivables.length > 0 || totalOutstanding > 0" class="rounded-2xl border border-orange-200 shadow-sm">
+            <!-- Utang pelanggan -->
+            <Card v-if="receivables.length > 0" class="rounded-2xl border border-slate-200 shadow-none">
                 <CardHeader class="px-5 pt-5 pb-3">
-                    <CardTitle class="text-base font-black text-slate-900 flex items-center justify-between gap-2">
-                        <span class="flex items-center gap-2">
-                            <CreditCard class="h-4 w-4 text-orange-500" />
-                            Piutang Aktif
-                        </span>
-                        <span v-if="totalOutstanding > 0" class="text-sm font-bold text-orange-600 bg-orange-50 px-2.5 py-1 rounded-full">
-                            Rp {{ formatCurrency(totalOutstanding) }}
-                        </span>
-                    </CardTitle>
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                        <CardTitle class="flex items-center gap-2 text-base font-bold text-slate-900">
+                            <CreditCard class="h-4 w-4 text-slate-400" />
+                            Utang belum lunas
+                        </CardTitle>
+                        <span class="text-lg font-bold text-red-600">Rp {{ formatCurrency(totalOutstanding) }}</span>
+                    </div>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                        <Button size="sm" class="gap-1.5 rounded-xl" @click="openPayAll"><HandCoins class="h-4 w-4" /> Terima pembayaran</Button>
+                        <a
+                            v-if="waReminder"
+                            :href="waReminder"
+                            target="_blank"
+                            rel="noopener"
+                            class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-1.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-50"
+                        >
+                            <MessageCircle class="h-4 w-4" /> Ingatkan via WA
+                        </a>
+                    </div>
                 </CardHeader>
                 <CardContent class="px-5 pb-5">
-                    <div v-if="receivables.length === 0" class="text-center py-4 text-slate-400 text-sm">
-                        Tidak ada piutang aktif.
-                    </div>
-                    <div v-else class="space-y-3">
-                        <div
-                            v-for="r in receivables"
-                            :key="r.id"
-                            :class="['p-3 rounded-xl border', r.is_overdue ? 'border-red-200 bg-red-50' : 'border-orange-100 bg-orange-50/40']"
-                        >
-                            <div class="flex items-start justify-between gap-2 mb-2">
-                                <div>
-                                    <p class="text-sm font-bold text-slate-800">{{ r.transaction_number }}</p>
-                                    <p class="text-xs text-slate-400 mt-0.5">{{ formatDate(r.created_at) }}</p>
-                                </div>
-                                <div class="text-right shrink-0">
-                                    <p class="text-sm font-black text-orange-700">Rp {{ formatCurrency(r.outstanding) }}</p>
-                                    <p class="text-xs text-slate-400">dari Rp {{ formatCurrency(r.total_amount) }}</p>
-                                </div>
-                            </div>
-                            <div class="flex items-center justify-between gap-2">
-                                <div class="flex items-center gap-2 text-xs">
-                                    <span v-if="r.is_overdue" class="flex items-center gap-1 text-red-600 font-medium">
-                                        <AlertTriangle class="h-3 w-3" /> Lewat jatuh tempo
-                                    </span>
-                                    <span v-else-if="r.debt_due_at" class="text-slate-500">
-                                        Jatuh tempo: {{ formatDate(r.debt_due_at) }}
-                                    </span>
-                                    <Badge variant="secondary" class="text-xs">{{ r.payment_status === 'unpaid' ? 'Belum Bayar' : 'Sebagian' }}</Badge>
-                                </div>
-                                <Button size="sm" class="h-7 px-3 text-xs rounded-lg" @click="openPaymentForm(r)">
-                                    Catat Bayar
-                                </Button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Link ke detail piutang masing-masing -->
-                    <p class="mt-3 text-center text-xs text-slate-400">
-                        <a :href="`/receivables?customer_id=${customer.id}`" class="text-primary hover:underline">Lihat semua riwayat piutang →</a>
+                    <ul class="divide-y divide-slate-100">
+                        <li v-for="r in receivables" :key="r.id" class="flex items-center gap-3 py-2.5">
+                            <Link :href="`/receivables/${r.id}`" class="min-w-0 flex-1">
+                                <span class="block truncate text-sm font-semibold text-slate-800">{{ r.transaction_number }}</span>
+                                <span class="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                                    {{ formatDate(r.created_at) }}
+                                    <span class="rounded-full px-2 py-0.5 font-semibold" :class="DUE_TONE_CLASS[dueStatus(r.debt_due_at).tone]">{{ dueStatus(r.debt_due_at).label }}</span>
+                                </span>
+                            </Link>
+                            <span class="shrink-0 text-right">
+                                <span class="block text-sm font-bold" :class="r.is_overdue ? 'text-red-600' : 'text-slate-900'">Rp {{ formatCurrency(r.outstanding) }}</span>
+                                <span class="block text-xs text-slate-400">dari Rp {{ formatCurrency(r.total_amount) }}</span>
+                            </span>
+                            <Button size="sm" variant="outline" class="h-8 shrink-0 rounded-lg px-2.5 text-xs" @click="openPayBill(r)">Bayar</Button>
+                        </li>
+                    </ul>
+                    <p class="mt-3 text-center text-xs">
+                        <Link :href="`/receivables/customers/${customer.id}`" class="font-semibold text-primary hover:underline">Riwayat utang & pembayaran →</Link>
                     </p>
                 </CardContent>
             </Card>
 
-            <!-- Modal form pelunasan -->
-            <div v-if="paymentFormOpen" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-                <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
-                    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-                        <h3 class="font-black text-slate-900">Catat Pembayaran Piutang</h3>
-                        <button type="button" class="text-gray-400 hover:text-gray-600 p-1" @click="paymentFormOpen = false">✕</button>
-                    </div>
-                    <div class="px-5 py-4 space-y-4">
-                        <div v-if="selectedReceivable" class="p-3 bg-orange-50 rounded-xl text-sm">
-                            <p class="font-semibold text-slate-700">{{ selectedReceivable.transaction_number }}</p>
-                            <p class="text-orange-700 font-bold mt-0.5">Sisa piutang: Rp {{ formatCurrency(selectedReceivable.outstanding) }}</p>
-                        </div>
-
-                        <div class="space-y-1.5">
-                            <label class="text-sm font-medium text-gray-700">Jumlah Dibayar (Rp)</label>
-                            <input
-                                v-model.number="paymentForm.amount"
-                                type="number"
-                                :max="selectedReceivable?.outstanding ?? 0"
-                                class="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                            />
-                            <p v-if="paymentForm.errors.amount" class="text-xs text-red-600">{{ paymentForm.errors.amount }}</p>
-                        </div>
-
-                        <div class="space-y-1.5">
-                            <label class="text-sm font-medium text-gray-700">Metode Pembayaran</label>
-                            <div class="grid grid-cols-3 gap-1.5">
-                                <button
-                                    v-for="m in [{ key: 'cash', label: 'Tunai' }, { key: 'transfer', label: 'Transfer' }, { key: 'ewallet', label: 'E-Wallet' }, { key: 'card', label: 'Kartu' }, { key: 'other', label: 'Lainnya' }]"
-                                    :key="m.key"
-                                    type="button"
-                                    :class="['h-9 rounded-lg border text-xs font-medium transition-colors', paymentForm.payment_method === m.key ? 'bg-primary text-white border-primary' : 'border-gray-300 text-gray-700 hover:bg-gray-50']"
-                                    @click="paymentForm.payment_method = m.key as any"
-                                >{{ m.label }}</button>
-                            </div>
-                        </div>
-
-                        <div class="space-y-1.5">
-                            <label class="text-sm font-medium text-gray-700">Tanggal Diterima</label>
-                            <input
-                                v-model="paymentForm.received_at"
-                                type="date"
-                                class="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                            />
-                        </div>
-
-                        <div class="space-y-1.5">
-                            <label class="text-sm font-medium text-gray-700">No. Referensi <span class="font-normal text-gray-400">(Opsional)</span></label>
-                            <input
-                                v-model="paymentForm.reference_number"
-                                type="text"
-                                placeholder="Nomor bukti / referensi transfer"
-                                class="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                            />
-                        </div>
-
-                        <div class="space-y-1.5">
-                            <label class="text-sm font-medium text-gray-700">Catatan <span class="font-normal text-gray-400">(Opsional)</span></label>
-                            <textarea
-                                v-model="paymentForm.notes"
-                                rows="2"
-                                class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
-                            ></textarea>
-                        </div>
-                    </div>
-                    <div class="flex gap-2 px-5 pb-5">
-                        <Button variant="outline" class="flex-1" @click="paymentFormOpen = false">Batal</Button>
-                        <Button class="flex-1" :disabled="paymentForm.processing || paymentForm.amount <= 0" @click="submitPayment">
-                            <div v-if="paymentForm.processing" class="h-4 w-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                            {{ paymentForm.processing ? 'Memproses...' : 'Catat Pembayaran' }}
-                        </Button>
-                    </div>
-                </div>
-            </div>
+            <ReceivablePaymentDialog
+                :open="payOpen"
+                :title="payTarget ? `Bayar ${payTarget.transaction_number}` : `Terima pembayaran dari ${customer.name}`"
+                :outstanding="payTarget ? payTarget.outstanding : totalOutstanding"
+                :submit-url="payTarget ? '/receivable-payments' : `/receivables/customers/${customer.id}/payments`"
+                :extra="payTarget ? { transaction_id: payTarget.id } : undefined"
+                :bills="payTarget ? undefined : receivables"
+                @close="payOpen = false"
+            />
 
             <!-- Loyalitas & Poin -->
             <template v-if="loyalty.enabled">
                 <div class="grid grid-cols-3 gap-3">
-                    <Card class="rounded-2xl border border-amber-200 bg-amber-50 shadow-sm">
+                    <Card class="rounded-2xl border border-amber-200 bg-amber-50 shadow-none">
                         <CardContent class="p-4 text-center">
                             <p class="text-xs text-amber-600 mb-1 flex items-center justify-center gap-1">
                                 <Star class="h-3 w-3" /> Saldo Poin
@@ -427,13 +342,13 @@ function submitPayment() {
                             <p class="text-2xl font-black text-amber-700">{{ loyalty.points_balance }}</p>
                         </CardContent>
                     </Card>
-                    <Card class="rounded-2xl border border-slate-200 shadow-sm">
+                    <Card class="rounded-2xl border border-slate-200 shadow-none">
                         <CardContent class="p-4 text-center">
                             <p class="text-xs text-slate-400 mb-1">Total Diperoleh</p>
                             <p class="text-lg font-black text-slate-900">{{ loyalty.points_earned_total }}</p>
                         </CardContent>
                     </Card>
-                    <Card class="rounded-2xl border border-slate-200 shadow-sm">
+                    <Card class="rounded-2xl border border-slate-200 shadow-none">
                         <CardContent class="p-4 text-center">
                             <p class="text-xs text-slate-400 mb-1">Total Ditukar</p>
                             <p class="text-lg font-black text-slate-900">{{ loyalty.points_redeemed_total }}</p>
@@ -442,7 +357,7 @@ function submitPayment() {
                 </div>
 
                 <!-- Tukar hadiah -->
-                <Card class="rounded-2xl border border-slate-200 shadow-sm">
+                <Card class="rounded-2xl border border-slate-200 shadow-none">
                     <CardHeader class="px-5 pt-5 pb-3">
                         <CardTitle class="text-base font-black text-slate-900 flex items-center gap-2">
                             <Gift class="h-4 w-4 text-primary" />
@@ -480,7 +395,7 @@ function submitPayment() {
                 </Card>
 
                 <!-- Riwayat poin -->
-                <Card class="rounded-2xl border border-slate-200 shadow-sm">
+                <Card class="rounded-2xl border border-slate-200 shadow-none">
                     <CardHeader class="px-5 pt-5 pb-3">
                         <CardTitle class="text-base font-black text-slate-900 flex items-center gap-2">
                             <Star class="h-4 w-4 text-primary" />
@@ -517,7 +432,7 @@ function submitPayment() {
             </template>
 
             <!-- Riwayat transaksi -->
-            <Card class="rounded-2xl border border-slate-200 shadow-sm">
+            <Card class="rounded-2xl border border-slate-200 shadow-none">
                 <CardHeader class="px-5 pt-5 pb-3">
                     <CardTitle class="text-base font-black text-slate-900 flex items-center gap-2">
                         <ShoppingBag class="h-4 w-4 text-primary" />

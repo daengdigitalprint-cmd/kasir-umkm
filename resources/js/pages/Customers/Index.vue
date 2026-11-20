@@ -1,349 +1,338 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
-import { logout } from '@/routes';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { 
-    Users, 
-    Plus, 
-    Search, 
-    Edit, 
-    Trash2, 
-    Eye,
-    Store,
-    Grid3X3,
-    List,
-    Phone,
-    MapPin,
-    Calendar,
-    DollarSign,
-    Home,
-    Settings,
-    LogOut,
-    Menu,
-    X,
-    Package,
-    BarChart3,
-    ShoppingCart
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { reminderLink, rupiah, waNumber } from '@/composables/useReceivables';
+import AdminLayout from '@/layouts/AdminLayout.vue';
+import { alertInfo, confirmDelete } from '@/lib/swal';
+import { Head, Link, router } from '@inertiajs/vue3';
+import {
+    AlertTriangle,
+    ArrowDownUp,
+    ChevronLeft,
+    ChevronRight,
+    Clock,
+    MessageCircle,
+    MoreVertical,
+    Pencil,
+    Plus,
+    Search,
+    Sparkles,
+    Star,
+    Trash2,
+    UserPlus,
+    Users,
 } from 'lucide-vue-next';
-import { ref, computed } from 'vue';
+import { ref, watch } from 'vue';
 
-interface Customer {
+interface CustomerRow {
     id: number;
     name: string;
-    email: string;
-    phone: string;
-    address: string;
-    total_purchases: number;
-    last_purchase: string | null;
-    created_at: string;
+    phone: string | null;
+    email: string | null;
+    customer_type: string | null;
+    total_spent: number;
+    visits: number;
+    last_purchase_at: string | null;
+    points_balance: number;
+    outstanding_debt: number;
 }
 
-interface Props {
-    customers: Customer[] | {
-        data: Customer[];
-        links: any[];
-        meta: any;
+const props = defineProps<{
+    customers: {
+        data: CustomerRow[];
+        total: number;
+        current_page: number;
+        last_page: number;
+        from: number | null;
+        to: number | null;
     };
-    store: {
-        id: number;
-        name: string;
-        currency: string;
-    };
-}
+    filters: { search: string; filter: string; sort: string };
+    counts: { all: number; debt: number; inactive: number; new: number };
+    store: { id: number; name: string };
+}>();
 
-const props = defineProps<Props>();
+// ── Cari, filter, urutan (di server) ────────────────────────────────────
+const search = ref(props.filters.search ?? '');
+const sortKey = ref(props.filters.sort ?? 'recent');
 
-const searchQuery = ref('');
-const viewMode = ref<'grid' | 'list'>('list');
-
-// Mobile menu state
-const isMobileMenuOpen = ref(false);
-
-// Safe access to customers data
-const customersList = computed(() => {
-    if (Array.isArray(props.customers)) {
-        return props.customers;
-    }
-    return props.customers?.data || [];
-});
-
-const customersMeta = computed(() => {
-    if (Array.isArray(props.customers)) {
-        return { total: props.customers.length };
-    }
-    return props.customers?.meta || { total: 0 };
-});
-
-const filteredCustomers = computed(() => {
-    if (!searchQuery.value) return customersList.value;
-    
-    const query = searchQuery.value.toLowerCase();
-    return customersList.value.filter(customer => 
-        customer.name.toLowerCase().includes(query) ||
-        customer.email.toLowerCase().includes(query) ||
-        customer.phone.includes(query) ||
-        customer.address.toLowerCase().includes(query)
+function visit(params: { filter?: string; sort?: string; search?: string; page?: number }) {
+    const filter = params.filter ?? props.filters.filter;
+    const sort = params.sort ?? sortKey.value;
+    const q = params.search ?? search.value;
+    router.get(
+        '/customers',
+        {
+            search: q || undefined,
+            filter: filter || undefined,
+            sort: sort === 'recent' ? undefined : sort,
+            page: params.page && params.page > 1 ? params.page : undefined,
+        },
+        { preserveState: true, preserveScroll: true, replace: true },
     );
+}
+
+let timer: ReturnType<typeof setTimeout> | null = null;
+watch(search, (v) => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => visit({ search: v, page: 1 }), 350);
 });
+watch(sortKey, (v) => visit({ sort: v, page: 1 }));
 
+const QUICK = [
+    { key: '', label: 'Semua', icon: Users, countKey: 'all' as const },
+    { key: 'debt', label: 'Punya utang', icon: AlertTriangle, countKey: 'debt' as const },
+    { key: 'inactive', label: 'Lama tidak datang', icon: Clock, countKey: 'inactive' as const },
+    { key: 'new', label: 'Baru bulan ini', icon: Sparkles, countKey: 'new' as const },
+];
 
-// Toggle mobile menu
-const toggleMobileMenu = () => {
-    isMobileMenuOpen.value = !isMobileMenuOpen.value;
-};
+// ── Tampilan baris ──────────────────────────────────────────────────────
+function lastVisit(iso: string | null): string {
+    if (!iso) return 'Belum pernah belanja';
+    const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+    if (days <= 0) return 'Datang hari ini';
+    if (days === 1) return 'Datang kemarin';
+    if (days < 30) return `Datang ${days} hari lalu`;
+    const months = Math.floor(days / 30);
+    return `Datang ${months} bulan lalu`;
+}
+const isInactive = (iso: string | null) => !!iso && Date.now() - new Date(iso).getTime() > 30 * 86_400_000;
 
-// Close mobile menu
-const closeMobileMenu = () => {
-    isMobileMenuOpen.value = false;
-};
+function waLink(c: CustomerRow): string | null {
+    if (c.outstanding_debt > 0) {
+        return reminderLink({ phone: c.phone, customerName: c.name, storeName: props.store.name, amount: c.outstanding_debt, dueAt: null });
+    }
+    const n = waNumber(c.phone);
+    return n ? `https://wa.me/${n}` : null;
+}
 
-// Format currency helper
-const formatCurrency = (amount: number | null | undefined) => {
-    const safeAmount = amount || 0;
-    return new Intl.NumberFormat('id-ID', {
-        style: 'decimal',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-    }).format(safeAmount);
-};
-
-// Format date helper
-const formatDate = (dateString: string | null) => {
-    if (!dateString) return 'Belum ada';
-    return new Date(dateString).toLocaleDateString('id-ID', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-    });
-};
-
-
-import AdminLayout from '@/layouts/AdminLayout.vue';
+async function destroy(c: CustomerRow) {
+    const note =
+        c.outstanding_debt > 0
+            ? `Pelanggan ini masih punya utang ${rupiah(c.outstanding_debt)}. Pelanggan yang sudah pernah bertransaksi tidak bisa dihapus.`
+            : c.visits > 0
+              ? 'Pelanggan yang sudah pernah bertransaksi tidak bisa dihapus agar riwayat penjualan tetap utuh.'
+              : `«${c.name}» akan dihapus permanen.`;
+    if (c.visits > 0 || c.outstanding_debt > 0) {
+        await alertInfo('Tidak bisa dihapus', note);
+        return;
+    }
+    if (await confirmDelete('Hapus pelanggan?', note)) {
+        router.delete(`/customers/${c.id}`, { preserveScroll: true });
+    }
+}
 </script>
 
-
 <template>
-    <AdminLayout title="Manajemen Pelanggan">
-        <!-- F9: segmen pelanggan -->
-        <Link
-            href="/customers/segments"
-            class="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-gradient-to-r from-rose-50 to-amber-50 px-4 py-3 hover:border-rose-300 lg:mb-6"
-        >
-            <span>
-                <span class="block font-bold text-slate-900">Segmen Pelanggan</span>
-                <span class="block text-sm text-slate-600">Lihat siapa yang setia, yang baru, dan yang mulai jarang datang, lalu sapa lewat WhatsApp.</span>
-            </span>
-            <span class="shrink-0 rounded-lg bg-white px-3 py-1.5 text-sm font-semibold text-rose-700 shadow-sm">Buka →</span>
-        </Link>
-        
-        <!-- Search and Filters -->
-                    <Card class="border-0 shadow-lg mb-4 lg:mb-6">
-                        <CardContent class="p-4 lg:p-6">
-                            <div class="flex flex-col lg:flex-row gap-3 lg:gap-4">
-                                <!-- Search -->
-                                <div class="flex-1">
-                                    <div class="relative">
-                                        <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                                        <Input
-                                            v-model="searchQuery"
-                                            placeholder="Cari pelanggan berdasarkan nama, email, telepon..."
-                                            class="pl-10 h-10 lg:h-12 border-gray-300 focus:border-primary/70 focus:ring-primary/70 text-sm lg:text-base"
-                                        />
-                                    </div>
-                                </div>
-                                
-                                <!-- View Mode Toggle - Hidden on mobile -->
-                                <div class="hidden lg:flex items-center gap-2">
-                                    <Button
-                                        :variant="viewMode === 'grid' ? 'default' : 'outline'"
-                                        size="sm"
-                                        @click="viewMode = 'grid'"
-                                        class="h-8 px-3 text-xs"
+    <Head title="Pelanggan" />
+
+    <AdminLayout title="Pelanggan">
+        <template #header-actions>
+            <Link
+                href="/customers/create"
+                class="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90"
+            >
+                <Plus class="h-4 w-4" /> Tambah pelanggan
+            </Link>
+        </template>
+        <template #mobile-header-actions>
+            <Link
+                href="/customers/create"
+                class="inline-flex items-center gap-1 rounded-lg bg-primary px-2.5 py-1.5 text-xs font-semibold text-white"
+                aria-label="Tambah pelanggan"
+            >
+                <Plus class="h-3.5 w-3.5" /> Tambah
+            </Link>
+        </template>
+
+        <div class="mx-auto max-w-5xl space-y-4">
+            <!-- Ringkasan yang bisa diklik -->
+            <div class="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <button
+                    v-for="q in QUICK"
+                    :key="q.key"
+                    type="button"
+                    :aria-pressed="filters.filter === q.key"
+                    class="flex shrink-0 items-center gap-2 rounded-2xl border px-4 py-2.5 transition"
+                    :class="filters.filter === q.key ? 'border-primary bg-primary/5' : 'border-slate-200 bg-white hover:border-slate-300'"
+                    @click="visit({ filter: q.key, page: 1 })"
+                >
+                    <component
+                        :is="q.icon"
+                        class="h-4 w-4"
+                        :class="filters.filter === q.key ? 'text-primary' : q.key === 'debt' && counts.debt > 0 ? 'text-red-500' : 'text-slate-400'"
+                    />
+                    <span class="text-sm font-semibold text-slate-700">{{ q.label }}</span>
+                    <span
+                        class="rounded-full px-2 py-0.5 text-xs font-bold"
+                        :class="
+                            filters.filter === q.key
+                                ? 'bg-primary text-white'
+                                : q.key === 'debt' && counts.debt > 0
+                                  ? 'bg-red-50 text-red-700'
+                                  : 'bg-slate-100 text-slate-600'
+                        "
+                        >{{ counts[q.countKey] }}</span
+                    >
+                </button>
+            </div>
+
+            <section class="rounded-2xl border border-slate-200 bg-white">
+                <div class="flex flex-col gap-2 border-b border-slate-100 p-3 sm:flex-row">
+                    <div class="relative flex-1">
+                        <Search class="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                        <input
+                            v-model="search"
+                            type="search"
+                            placeholder="Cari nama, nomor HP, atau email"
+                            class="h-10 w-full rounded-xl border border-slate-200 bg-white pr-3 pl-9 text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
+                        />
+                    </div>
+                    <div class="relative sm:w-56">
+                        <ArrowDownUp class="pointer-events-none absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                        <select
+                            v-model="sortKey"
+                            aria-label="Urutkan"
+                            class="h-10 w-full rounded-xl border border-slate-200 bg-white pr-3 pl-8 text-sm text-slate-700 focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
+                        >
+                            <option value="recent">Terakhir datang</option>
+                            <option value="spent">Belanja terbanyak</option>
+                            <option value="name">Nama A–Z</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between px-4 pt-3 pb-1 text-xs text-slate-500">
+                    <span>{{ customers.total }} pelanggan</span>
+                    <Link href="/customers/segments" class="font-semibold text-primary hover:underline">Lihat segmen pelanggan →</Link>
+                </div>
+
+                <!-- Kosong -->
+                <div v-if="!customers.data.length" class="px-6 py-14 text-center">
+                    <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100">
+                        <Users class="h-5 w-5 text-slate-400" />
+                    </div>
+                    <template v-if="filters.search || filters.filter">
+                        <p class="font-semibold text-slate-700">Tidak ada pelanggan yang cocok</p>
+                        <button
+                            type="button"
+                            class="mt-2 text-sm font-semibold text-primary hover:underline"
+                            @click="
+                                search = '';
+                                visit({ filter: '', search: '', page: 1 });
+                            "
+                        >
+                            Hapus pencarian & filter
+                        </button>
+                    </template>
+                    <template v-else>
+                        <p class="font-semibold text-slate-700">Belum ada pelanggan</p>
+                        <p class="mt-1 text-sm text-slate-500">Pelanggan juga bisa ditambahkan langsung dari kasir saat transaksi.</p>
+                        <Link
+                            href="/customers/create"
+                            class="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white"
+                        >
+                            <UserPlus class="h-4 w-4" /> Tambah pelanggan pertama
+                        </Link>
+                    </template>
+                </div>
+
+                <!-- Daftar -->
+                <ul v-else class="divide-y divide-slate-100">
+                    <li v-for="c in customers.data" :key="c.id" class="flex items-center gap-3 px-4 py-3">
+                        <Link :href="`/customers/${c.id}`" class="flex min-w-0 flex-1 items-center gap-3">
+                            <span
+                                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary"
+                            >
+                                {{ c.name.trim().charAt(0).toUpperCase() || '?' }}
+                            </span>
+                            <span class="min-w-0 flex-1">
+                                <span class="flex items-center gap-1.5">
+                                    <span class="truncate text-sm font-semibold text-slate-900">{{ c.name }}</span>
+                                    <span
+                                        v-if="c.customer_type === 'grosir'"
+                                        class="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600"
+                                        >Grosir</span
                                     >
-                                        <Grid3X3 class="h-3 w-3 mr-1" />
-                                        Grid
-                                    </Button>
-                                    <Button
-                                        :variant="viewMode === 'list' ? 'default' : 'outline'"
-                                        size="sm"
-                                        @click="viewMode = 'list'"
-                                        class="h-8 px-3 text-xs"
+                                </span>
+                                <span class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+                                    <span v-if="c.phone">{{ c.phone }}</span>
+                                    <span :class="isInactive(c.last_purchase_at) ? 'text-amber-600' : ''">· {{ lastVisit(c.last_purchase_at) }}</span>
+                                    <span v-if="c.points_balance > 0" class="inline-flex items-center gap-0.5"
+                                        >· <Star class="h-3 w-3 text-amber-500" /> {{ c.points_balance }} poin</span
                                     >
-                                        <List class="h-3 w-3 mr-1" />
-                                        List
-                                    </Button>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    <!-- Customers List -->
-                    <Card class="border-0 shadow-lg mb-8 lg:mb-6">
-                        <CardHeader class="pb-3 lg:pb-4 px-4 lg:px-6">
-                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                <div>
-                                    <CardTitle class="text-lg lg:text-xl font-bold text-gray-900">Daftar Pelanggan</CardTitle>
-                                    <CardDescription class="text-sm lg:text-base text-gray-600">
-                                        {{ filteredCustomers.length }} dari {{ customersMeta.total || 0 }} pelanggan
-                                    </CardDescription>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <Users class="h-4 w-4 lg:h-5 lg:w-5 text-gray-400" />
-                                    <span class="text-xs lg:text-sm text-gray-500">{{ viewMode === 'grid' ? 'Grid' : 'List' }} View</span>
-                                </div>
-                            </div>
-                        </CardHeader>
-
-                        <CardContent class="px-4 lg:px-6">
-                    <!-- Grid View - Only on desktop -->
-                    <div v-if="viewMode === 'grid'" class="hidden lg:grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
-                                <Card 
-                                    v-for="customer in filteredCustomers" 
-                                    :key="customer.id"
-                                    class="hover:shadow-lg transition-all duration-200 border-0 shadow-md"
+                                </span>
+                            </span>
+                            <span class="shrink-0 text-right">
+                                <span class="block text-sm font-semibold text-slate-900">{{ rupiah(c.total_spent) }}</span>
+                                <span class="block text-xs text-slate-400">{{ c.visits }}× belanja</span>
+                                <span
+                                    v-if="c.outstanding_debt > 0"
+                                    class="mt-0.5 inline-block rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700"
                                 >
-                                    <CardContent class="p-3 md:p-4">
-                                        <div class="flex items-center gap-3 mb-3 md:mb-4">
-                                            <div class="w-10 h-10 md:w-12 md:h-12 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
-                                                <Users class="h-5 w-5 md:h-6 md:w-6 text-primary" />
-                                            </div>
-                                            <div class="flex-1 min-w-0">
-                                                <h3 class="font-semibold text-sm md:text-base text-gray-900 truncate">{{ customer.name }}</h3>
-                                                <p class="text-xs md:text-sm text-gray-500 truncate">{{ customer.email }}</p>
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="space-y-2 mb-3 md:mb-4">
-                                            <div class="flex items-center gap-2 text-xs md:text-sm text-gray-600">
-                                                <Phone class="h-3 w-3 md:h-4 md:w-4 flex-shrink-0" />
-                                                <span class="truncate">{{ customer.phone }}</span>
-                                            </div>
-                                            <div class="flex items-center gap-2 text-xs md:text-sm text-gray-600">
-                                                <MapPin class="h-3 w-3 md:h-4 md:w-4 flex-shrink-0" />
-                                                <span class="truncate">{{ customer.address }}</span>
-                                            </div>
-                                            <div class="flex items-center gap-2 text-xs md:text-sm text-gray-600">
-                                                <DollarSign class="h-3 w-3 md:h-4 md:w-4 flex-shrink-0" />
-                                                <span class="truncate">Total: {{ formatCurrency(customer.total_purchases) }}</span>
-                                            </div>
-                                            <div class="flex items-center gap-2 text-xs md:text-sm text-gray-600">
-                                                <Calendar class="h-3 w-3 md:h-4 md:w-4 flex-shrink-0" />
-                                                <span class="truncate">Terakhir: {{ formatDate(customer.last_purchase) }}</span>
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="flex gap-1 md:gap-2">
-                                            <Button 
-                                                as="a"
-                                                :href="`/customers/${customer.id}`"
-                                                variant="outline"
-                                                size="sm"
-                                                class="flex-1 h-7 md:h-8 text-xs"
-                                            >
-                                                <Eye class="h-3 w-3 mr-1" />
-                                                <span class="hidden sm:inline">Lihat</span>
-                                            </Button>
-                                            <Button 
-                                                as="a"
-                                                :href="`/customers/${customer.id}/edit`"
-                                                variant="outline"
-                                                size="sm"
-                                                class="flex-1 h-7 md:h-8 text-xs"
-                                            >
-                                                <Edit class="h-3 w-3 mr-1" />
-                                                <span class="hidden sm:inline">Edit</span>
-                                            </Button>
-                                            <Button 
-                                                variant="outline"
-                                                size="sm"
-                                                class="h-7 w-7 md:h-8 md:w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                            >
-                                                <Trash2 class="h-3 w-3" />
-                                            </Button>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            </div>
-
-                            <!-- List View -->
-                            <div v-else class="space-y-3">
-                                <div 
-                                    v-for="customer in filteredCustomers" 
-                                    :key="customer.id"
-                                    class="flex items-center gap-3 sm:gap-4 p-3 lg:p-4 bg-gray-50 rounded-2xl border hover:bg-gray-100 transition-colors"
+                                    Utang {{ rupiah(c.outstanding_debt) }}
+                                </span>
+                            </span>
+                        </Link>
+                        <a
+                            v-if="waLink(c)"
+                            :href="waLink(c)!"
+                            target="_blank"
+                            rel="noopener"
+                            class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-emerald-600 hover:bg-emerald-50"
+                            :title="c.outstanding_debt > 0 ? 'Ingatkan utang via WhatsApp' : 'Chat WhatsApp'"
+                            :aria-label="`WhatsApp ${c.name}`"
+                        >
+                            <MessageCircle class="h-4 w-4" />
+                        </a>
+                        <span v-else class="h-9 w-9 shrink-0" aria-hidden="true" />
+                        <DropdownMenu>
+                            <DropdownMenuTrigger as-child>
+                                <button
+                                    type="button"
+                                    class="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                                    :aria-label="`Aksi ${c.name}`"
                                 >
-                                    <div class="w-16 h-16 sm:w-12 sm:h-12 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
-                                        <Users class="h-8 w-8 sm:h-6 sm:w-6 text-primary" />
-                                    </div>
-                                    
-                                    <div class="flex-1 min-w-0">
-                                        <h3 class="font-semibold text-gray-900 truncate text-sm sm:text-base">{{ customer.name }}</h3>
-                                        <p class="text-xs sm:text-sm text-gray-500 truncate mt-1">{{ customer.email }}</p>
-                                        <div class="flex items-center gap-2 mt-2">
-                                            <span class="flex items-center gap-1 text-xs text-gray-500">
-                                                <Phone class="h-3 w-3" />
-                                                {{ customer.phone }}
-                                            </span>
-                                            <span class="text-xs text-gray-400">•</span>
-                                            <span class="flex items-center gap-1 text-xs text-gray-500">
-                                                <DollarSign class="h-3 w-3" />
-                                                {{ formatCurrency(customer.total_purchases) }}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="flex gap-2 flex-shrink-0">
-                                        <Button 
-                                            as="a"
-                                            :href="`/customers/${customer.id}`"
-                                            variant="outline"
-                                            size="sm"
-                                            class="h-8 w-8 p-0"
-                                        >
-                                            <Eye class="h-3 w-3" />
-                                        </Button>
-                                        <Button 
-                                            as="a"
-                                            :href="`/customers/${customer.id}/edit`"
-                                            variant="outline"
-                                            size="sm"
-                                            class="h-8 w-8 p-0"
-                                        >
-                                            <Edit class="h-3 w-3" />
-                                        </Button>
-                                        <Button 
-                                            variant="outline"
-                                            size="sm"
-                                            class="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                        >
-                                            <Trash2 class="h-3 w-3" />
-                                        </Button>
-                                    </div>
-                                </div>
-                            </div>
+                                    <MoreVertical class="h-4 w-4" />
+                                </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" class="w-40">
+                                <DropdownMenuItem as-child>
+                                    <Link :href="`/customers/${c.id}/edit`" class="flex cursor-pointer items-center gap-2"
+                                        ><Pencil class="h-4 w-4" /> Ubah</Link
+                                    >
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem class="flex cursor-pointer items-center gap-2 text-red-600" @click="destroy(c)">
+                                    <Trash2 class="h-4 w-4" /> Hapus
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </li>
+                </ul>
 
-                            <!-- Empty State -->
-                            <div v-if="filteredCustomers.length === 0" class="text-center py-8 lg:py-12">
-                                <div class="p-4 bg-gray-100 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-                                    <Users class="h-8 w-8 text-gray-400" />
-                                </div>
-                                <p class="text-gray-500 text-base lg:text-lg">Tidak ada pelanggan ditemukan</p>
-                                <p class="text-gray-400 text-xs lg:text-sm mt-2">
-                                    {{ searchQuery ? 'Coba kata kunci pencarian yang berbeda' : 'Mulai dengan menambahkan pelanggan pertama Anda' }}
-                                </p>
-                                <Button 
-                                    v-if="!searchQuery"
-                                    as="a" 
-                                    href="/customers/create" 
-                                    class="mt-4 bg-primary hover:bg-primary/90 text-white text-sm lg:text-base"
-                                >
-                                    <Plus class="h-4 w-4 mr-2" />
-                                    Tambah Pelanggan Pertama
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
+                <div v-if="customers.last_page > 1" class="flex items-center justify-between border-t border-slate-100 px-4 py-3">
+                    <p class="text-xs text-slate-500">{{ customers.from }}–{{ customers.to }} dari {{ customers.total }}</p>
+                    <div class="flex gap-1">
+                        <button
+                            type="button"
+                            class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-40"
+                            :disabled="customers.current_page <= 1"
+                            aria-label="Sebelumnya"
+                            @click="visit({ page: customers.current_page - 1 })"
+                        >
+                            <ChevronLeft class="h-4 w-4" />
+                        </button>
+                        <button
+                            type="button"
+                            class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-40"
+                            :disabled="customers.current_page >= customers.last_page"
+                            aria-label="Berikutnya"
+                            @click="visit({ page: customers.current_page + 1 })"
+                        >
+                            <ChevronRight class="h-4 w-4" />
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </div>
     </AdminLayout>
 </template>
