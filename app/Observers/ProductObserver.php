@@ -3,6 +3,7 @@
 namespace App\Observers;
 
 use App\Models\Product;
+use App\Models\ProductCategory;
 use App\Support\CacheKeys;
 
 /**
@@ -11,6 +12,25 @@ use App\Support\CacheKeys;
  */
 class ProductObserver
 {
+    /**
+     * Nama kategori (kolom `category`) selalu mengikuti kategori terpilih
+     * (`product_category_id`). Diskon per kategori & laporan membaca nama ini,
+     * sedangkan kasir mengelompokkan menu memakai id-nya.
+     */
+    public function saving(Product $product): void
+    {
+        if ($product->product_category_id === null) {
+            return;
+        }
+
+        if ($product->isDirty('product_category_id') || blank($product->category)) {
+            $name = ProductCategory::query()->whereKey($product->product_category_id)->value('name');
+            if ($name !== null) {
+                $product->category = $name;
+            }
+        }
+    }
+
     public function created(Product $product): void
     {
         $this->flush($product);

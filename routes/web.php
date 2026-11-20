@@ -292,6 +292,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('product-categories.index');
         Route::post('product-categories', [App\Http\Controllers\ProductController::class, 'productCategoriesStore'])
             ->name('product-categories.store');
+        Route::post('product-categories/reorder', [App\Http\Controllers\ProductController::class, 'productCategoriesReorder'])
+            ->name('product-categories.reorder');
         Route::post('product-categories/quick', [App\Http\Controllers\ProductController::class, 'productCategoriesQuickStore'])
             ->name('product-categories.quick-store');
         Route::match(['put', 'patch'], 'product-categories/{product_category}', [App\Http\Controllers\ProductController::class, 'productCategoriesUpdate'])

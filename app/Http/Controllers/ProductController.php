@@ -67,6 +67,7 @@ class ProductController extends Controller
         $productsQuery = $store->products()
             ->with('store')
             ->with(['variants' => fn ($q) => $q->where('is_active', true)->orderBy('sort_order')->orderBy('id')])
+            ->with('productCategory:id,name')
             // Produk yang sudah pernah terjual sebaiknya dinonaktifkan, bukan dihapus.
             ->withExists('transactionItems as has_sales');
 
@@ -117,23 +118,20 @@ class ProductController extends Controller
 
         $products->getCollection()->transform(function ($product) {
             $product->image_url = $product->getImageUrlAttribute();
+            // Nama kategori diambil dari kategori terpilih bila kolom nama belum terisi.
+            $product->category = $product->productCategory?->name ?? $product->category;
+            $product->unsetRelation('productCategory');
 
             return $product;
         });
 
-        // Daftar kategori unik yang dipakai di toko ini (cached — daftar master)
-        $categories = Cache::remember(
-            CacheKeys::productCategories((int) $store->id),
-            CacheKeys::MASTER_TTL_SECONDS,
-            fn () => $store->products()
-                ->whereNotNull('category')
-                ->where('category', '!=', '')
-                ->distinct()
-                ->pluck('category')
-                ->sort()
-                ->values()
-                ->all()
-        );
+        // Pilihan filter kategori: daftar master kategori toko, sesuai urutan di halaman Kategori.
+        $categories = ProductCategory::query()
+            ->where('store_id', $store->id)
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->pluck('name')
+            ->all();
 
         // Jumlah produk stok rendah di seluruh toko (konsisten dengan dashboard)
         $lowStockCount = $store->products()
@@ -2283,14 +2281,19 @@ class ProductController extends Controller
         $this->authorizeInventoryProductCategoriesAccess();
 
         $validated = $request->validate([
-            'name' => 'required|string|max:100',
+            'name' => ['required', 'string', 'max:100', Rule::unique('product_categories', 'name')->where('store_id', $store->id)],
             'sort_order' => 'nullable|integer|min:0|max:65535',
+        ], [
+            'name.unique' => 'Kategori dengan nama ini sudah ada.',
         ]);
 
         ProductCategory::query()->create([
             'store_id' => $store->id,
             'name' => trim($validated['name']),
-            'sort_order' => (int) ($validated['sort_order'] ?? 0),
+            // Tanpa urutan: taruh di paling akhir.
+            'sort_order' => isset($validated['sort_order'])
+                ? (int) $validated['sort_order']
+                : $this->nextCategorySortOrder($store),
         ]);
 
         return redirect()->route('product-categories.index')
@@ -2331,7 +2334,7 @@ class ProductController extends Controller
         $category = ProductCategory::query()->create([
             'store_id' => $store->id,
             'name' => $name,
-            'sort_order' => 0,
+            'sort_order' => $this->nextCategorySortOrder($store),
         ]);
 
         return response()->json([
@@ -2345,8 +2348,15 @@ class ProductController extends Controller
         $this->authorizeProductCategoryForUserStore($productCategory);
 
         $validated = $request->validate([
-            'name' => 'required|string|max:100',
+            'name' => [
+                'required', 'string', 'max:100',
+                Rule::unique('product_categories', 'name')
+                    ->where('store_id', $productCategory->store_id)
+                    ->ignore($productCategory->id),
+            ],
             'sort_order' => 'nullable|integer|min:0|max:65535',
+        ], [
+            'name.unique' => 'Kategori dengan nama ini sudah ada.',
         ]);
 
         $oldName = $productCategory->name;
@@ -2365,20 +2375,62 @@ class ProductController extends Controller
             ->with('success', 'Kategori diperbarui.');
     }
 
-    public function productCategoriesDestroy(ProductCategory $productCategory)
+    public function productCategoriesDestroy(Request $request, ProductCategory $productCategory)
     {
         $this->authorizeProductCategoryForUserStore($productCategory);
 
-        Product::query()
+        // Opsional: pindahkan produknya ke kategori lain di toko yang sama.
+        $moveTo = null;
+        if ($request->filled('move_to')) {
+            $moveTo = ProductCategory::query()
+                ->where('store_id', $productCategory->store_id)
+                ->whereKeyNot($productCategory->id)
+                ->find((int) $request->input('move_to'));
+            abort_if(! $moveTo, 422, 'Kategori tujuan tidak ditemukan.');
+        }
+
+        $moved = Product::query()
             ->where('product_category_id', $productCategory->id)
             ->update([
-                'product_category_id' => null,
-                'category' => null,
+                'product_category_id' => $moveTo?->id,
+                'category' => $moveTo?->name,
             ]);
 
         $productCategory->delete();
+        Cache::forget(CacheKeys::productCategories((int) $productCategory->store_id));
 
         return redirect()->route('product-categories.index')
-            ->with('success', 'Kategori dihapus.');
+            ->with('success', $moveTo && $moved > 0
+                ? "Kategori dihapus. {$moved} produk dipindah ke «{$moveTo->name}»."
+                : 'Kategori dihapus.');
+    }
+
+    /**
+     * Simpan urutan kategori hasil geser (daftar id dari atas ke bawah).
+     */
+    public function productCategoriesReorder(Request $request): RedirectResponse
+    {
+        $store = $request->user()->store;
+        abort_if(! $store, 404);
+        $this->authorizeInventoryProductCategoriesAccess();
+
+        $ids = $request->validate(['ids' => 'required|array|max:500', 'ids.*' => 'integer'])['ids'];
+
+        $owned = ProductCategory::query()->where('store_id', $store->id)->whereIn('id', $ids)->pluck('id')->all();
+        $position = 0;
+        foreach ($ids as $id) {
+            if (! in_array((int) $id, $owned, true)) {
+                continue;
+            }
+            $position += 10;
+            ProductCategory::query()->whereKey($id)->update(['sort_order' => $position]);
+        }
+
+        return back();
+    }
+
+    private function nextCategorySortOrder(Store $store): int
+    {
+        return (int) ProductCategory::query()->where('store_id', $store->id)->max('sort_order') + 10;
     }
 }
