@@ -212,7 +212,7 @@ onUnmounted(() => {
                                         <h2 class="lp-panduan-card-title">Prosedur Pengajuan Refund</h2>
                                         <p class="lp-panduan-card-intro">Untuk mengajukan pengembalian dana, silakan ikuti langkah-langkah berikut:</p>
                                         <ul class="lp-panduan-bullets">
-                                            <li><i class="fa-solid fa-circle-check"></i><span><strong>Langkah 1:</strong> Hubungi tim support kami via email ke <a href="mailto:support@umkmkasir.com">support@umkmkasir.com</a> atau WhatsApp <a href="https://wa.me/6285242766676" target="_blank" rel="noopener noreferrer">+62 852-4276-6676</a>.</span></li>
+                                            <li><i class="fa-solid fa-circle-check"></i><span><strong>Langkah 1:</strong> Hubungi tim support kami via email ke <a href="mailto:info@kasirumkm.web.id">info@kasirumkm.web.id</a> atau WhatsApp <a href="https://wa.me/6285242766676" target="_blank" rel="noopener noreferrer">+62 852-4276-6676</a>.</span></li>
                                             <li><i class="fa-solid fa-circle-check"></i><span><strong>Langkah 2:</strong> Sertakan informasi: nama akun, email terdaftar, tanggal pembayaran, bukti transfer, dan alasan refund.</span></li>
                                             <li><i class="fa-solid fa-circle-check"></i><span><strong>Langkah 3:</strong> Tim kami akan memverifikasi dalam 1x24 jam kerja dan memberikan konfirmasi via email.</span></li>
                                             <li><i class="fa-solid fa-circle-check"></i><span><strong>Langkah 4:</strong> Jika disetujui, dana akan dikembalikan ke rekening/asal pembayaran dalam waktu maksimal 7 hari kerja.</span></li>
@@ -252,7 +252,7 @@ onUnmounted(() => {
                                         <h2 class="lp-panduan-card-title">Penyelesaian Sengketa</h2>
                                         <p class="lp-panduan-card-intro">
                                             Jika Anda tidak puas dengan keputusan refund, Anda dapat mengajukan banding
-                                            dengan mengirimkan email berisi penjelasan detail ke <a href="mailto:support@umkmkasir.com">support@umkmkasir.com</a>.
+                                            dengan mengirimkan email berisi penjelasan detail ke <a href="mailto:info@kasirumkm.web.id">info@kasirumkm.web.id</a>.
                                             Kami berkomitmen untuk menyelesaikan setiap sengketa secara musyawarah dalam waktu 14 hari kerja.
                                         </p>
                                     </article>
@@ -274,7 +274,7 @@ onUnmounted(() => {
                                             Untuk pertanyaan terkait kebijakan refund, silakan hubungi kami:
                                         </p>
                                         <ul class="lp-panduan-bullets">
-                                            <li><i class="fa-regular fa-envelope"></i><span><strong>Email:</strong> <a href="mailto:support@umkmkasir.com">support@umkmkasir.com</a></span></li>
+                                            <li><i class="fa-regular fa-envelope"></i><span><strong>Email:</strong> <a href="mailto:info@kasirumkm.web.id">info@kasirumkm.web.id</a></span></li>
                                             <li><i class="fa-brands fa-whatsapp"></i><span><strong>WhatsApp:</strong> <a href="https://wa.me/6285242766676" target="_blank" rel="noopener noreferrer">+62 852-4276-6676</a></span></li>
                                             <li><i class="fa-regular fa-clock"></i><span><strong>Jam operasional:</strong> Senin–Jumat, 08.00–17.00 WIB</span></li>
                                         </ul>

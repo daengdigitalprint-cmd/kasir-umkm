@@ -80,7 +80,7 @@ const navLinks: { label: string; href: string }[] = [
                                         <span><i class="fa-solid fa-phone"></i></span><a href="tel:+6285242766676">+62 852-4276-6676</a>
                                     </li>
                                     <li>
-                                        <span><i class="fa-solid fa-envelope"></i></span><a href="mailto:info@umkmkasir.id">info@umkmkasir.id</a>
+                                        <span><i class="fa-solid fa-envelope"></i></span><a href="mailto:info@kasirumkm.web.id">info@kasirumkm.web.id</a>
                                     </li>
                                     <li>
                                         <span><i class="fa-solid fa-location-dot"></i></span
@@ -159,7 +159,7 @@ const navLinks: { label: string; href: string }[] = [
                             />
                         </svg>
                     </span>
-                    <a class="xb-overlay" href="mailto:info@umkmkasir.id" aria-label="Kirim email ke Kasir UMKM by MaccaPOS"></a>
+                    <a class="xb-overlay" href="mailto:info@kasirumkm.web.id" aria-label="Kirim email ke Kasir UMKM by MaccaPOS"></a>
                 </div>
                 <div class="xb-social-media-item fs-social-media-item ul_li_between">
                     <div class="xb-item--holder ul_li">

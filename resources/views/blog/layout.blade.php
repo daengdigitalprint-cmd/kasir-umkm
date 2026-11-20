@@ -268,9 +268,9 @@
                             <span class="badge-ic">@include('blog.partials.icon', ['name' => 'phone', 'class' => 'ic-md'])</span>
                             <span>+62 852-4276-6676</span>
                         </a>
-                        <a class="row" href="mailto:info@umkmkasir.id">
+                        <a class="row" href="mailto:info@kasirumkm.web.id">
                             <span class="badge-ic">@include('blog.partials.icon', ['name' => 'mail', 'class' => 'ic-md'])</span>
-                            <span>info@umkmkasir.id</span>
+                            <span>info@kasirumkm.web.id</span>
                         </a>
                         <span class="row">
                             <span class="badge-ic">@include('blog.partials.icon', ['name' => 'map-pin', 'class' => 'ic-md'])</span>
@@ -288,7 +288,7 @@
                         <span class="lbl">@include('blog.partials.icon', ['name' => 'whatsapp', 'class' => 'ic-sm']) WhatsApp</span>
                         @include('blog.partials.icon', ['name' => 'arrow-up-right', 'class' => 'ic-sm'])
                     </a>
-                    <a href="mailto:info@umkmkasir.id">
+                    <a href="mailto:info@kasirumkm.web.id">
                         <span class="lbl">@include('blog.partials.icon', ['name' => 'mail', 'class' => 'ic-sm']) Email</span>
                         @include('blog.partials.icon', ['name' => 'arrow-up-right', 'class' => 'ic-sm'])
                     </a>

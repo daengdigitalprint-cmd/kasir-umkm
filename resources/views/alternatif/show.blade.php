@@ -329,7 +329,7 @@
             <p class="alt-disclaimer">
                 {{ $k['name'] }} adalah merek milik pemiliknya. Kasir UMKM by MaccaPOS tidak berafiliasi dengan {{ $k['name'] }}.
                 Informasi {{ $k['name'] }} diambil dari situs resminya per {{ $k['checked_label'] }}. Jika ada yang tidak akurat,
-                hubungi kami di info@umkmkasir.id.
+                hubungi kami di info@kasirumkm.web.id.
             </p>
         </div>
     </section>

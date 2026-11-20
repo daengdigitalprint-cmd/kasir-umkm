@@ -147,8 +147,8 @@ Sama dengan Pitch A, tetapi paragraf kedua dibuka dengan:
 
 ## 7. Yang perlu Anda siapkan sebelum mengajukan
 
-1. **Email berdomain situs** (mis. `info@kasirumkm.web.id`). G2, Capterra, dan SaaSHub memverifikasi
-   lewat email berdomain produk. Email sekarang (`info@umkmkasir.id`) domainnya berbeda.
+1. **Email berdomain situs:** sudah diputuskan `info@kasirumkm.web.id` (20 Nov 2026). Pasang layanan email di domain
+   (record MX) supaya alamat ini bisa menerima email; G2, Capterra, dan SaaSHub memverifikasi lewat email ini.
 2. **Logo persegi 1024×1024** dan **logo SVG**.
 3. **5–8 screenshot asli produk** ukuran 1920×1080: kasir, stok, laporan, QR meja, layar dapur, mode
    apotek. Yang ada sekarang gambar mockup marketing.

@@ -340,7 +340,7 @@ onUnmounted(() => {
                                             Jika Anda memiliki pertanyaan terkait Syarat dan Ketentuan ini, silakan hubungi kami:
                                         </p>
                                         <ul class="lp-panduan-bullets">
-                                            <li><i class="fa-regular fa-envelope"></i><span><strong>Email:</strong> <a href="mailto:support@umkmkasir.com">support@umkmkasir.com</a></span></li>
+                                            <li><i class="fa-regular fa-envelope"></i><span><strong>Email:</strong> <a href="mailto:info@kasirumkm.web.id">info@kasirumkm.web.id</a></span></li>
                                             <li><i class="fa-brands fa-whatsapp"></i><span><strong>WhatsApp:</strong> <a href="https://wa.me/6285242766676" target="_blank" rel="noopener noreferrer">+62 852-4276-6676</a></span></li>
                                             <li><i class="fa-regular fa-clock"></i><span><strong>Jam operasional:</strong> Senin–Jumat, 08.00–17.00 WIB</span></li>
                                         </ul>

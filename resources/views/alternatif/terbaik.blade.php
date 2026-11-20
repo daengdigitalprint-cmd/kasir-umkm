@@ -282,7 +282,7 @@
             </div>
             <p class="tb-disclaimer">
                 Semua merek adalah milik pemiliknya masing-masing. Kasir UMKM by MaccaPOS tidak berafiliasi dengan aplikasi lain di halaman ini.
-                Jika ada informasi yang tidak akurat, hubungi kami di info@umkmkasir.id.
+                Jika ada informasi yang tidak akurat, hubungi kami di info@kasirumkm.web.id.
             </p>
         </div>
     </section>

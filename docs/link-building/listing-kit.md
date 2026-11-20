@@ -20,7 +20,7 @@ Diperbarui: 20 November 2026. Harga di sini mengikuti produksi (cek ulang di htt
 | Kebijakan refund | https://kasirumkm.web.id/refund |
 | Panduan | https://kasirumkm.web.id/panduan |
 | Aplikasi Android | https://play.google.com/store/apps/details?id=com.kasirumkm.idea |
-| Email kontak | info@umkmkasir.id |
+| Email kontak | info@kasirumkm.web.id |
 | WhatsApp bisnis | +62 852-4276-6676 (nomor yang sudah tampil di situs) |
 | Jam layanan | Senin–Jumat, 08.00–17.00 WITA |
 | Negara / bahasa | Indonesia / Bahasa Indonesia |
@@ -32,9 +32,7 @@ Diperbarui: 20 November 2026. Harga di sini mengikuti produksi (cek ulang di htt
 | Add-on | Outlet tambahan Rp85.000 / bulan; Absensi & Payroll; Gudang Pusat (Central Kitchen) |
 | Uji coba | Paket Starter gratis tanpa batas waktu (tidak perlu kartu kredit) |
 
-**Catatan email:** domain email (`umkmkasir.id`) berbeda dari domain situs (`kasirumkm.web.id`). Beberapa
-direktori (G2, Capterra) memverifikasi bahwa email pendaftar memakai domain situs. Siapkan alamat
-`info@kasirumkm.web.id` atau sejenisnya bila diminta.
+**Catatan email:** email kontak sekarang memakai domain situs (`info@kasirumkm.web.id`), syarat verifikasi G2, Capterra, dan SaaSHub. Pastikan kotak masuknya aktif (record MX domain sudah dipasang) sebelum mendaftar.
 
 ## Fitur utama (pilih 5–8 sesuai form)
 
