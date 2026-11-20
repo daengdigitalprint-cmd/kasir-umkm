@@ -464,7 +464,7 @@ const navigationSource: NavItem[] = [
     },
     // ── Pengaturan ──
     { name: 'Tambah Outlet/Gudang', href: '/stores/create', icon: Building2, menuKey: 'manage_stores', section: 'pengaturan', storeAdminOnly: true },
-    { name: 'Distribusi Produk', href: '/manage-products', icon: Package, menuKey: 'manage_products', section: 'pengaturan', storeAdminOnly: true },
+    { name: 'Salin Produk', href: '/manage-products', icon: Package, menuKey: 'manage_products', section: 'pengaturan', storeAdminOnly: true },
     { name: 'Tim & Akses', href: '/manage-staff', icon: Users, menuKey: 'manage_staff', section: 'pengaturan', storeAdminOnly: true },
     { name: 'Pengaturan', href: '/settings', icon: Settings, menuKey: 'settings', section: 'pengaturan', storeAdminOnly: true },
     {

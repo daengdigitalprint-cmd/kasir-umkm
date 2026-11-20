@@ -97,9 +97,11 @@ const form = useForm({
     email: '',
     currency: 'IDR',
     timezone: 'Asia/Jakarta',
-    organization_mode: 'new' as 'new' | 'join',
+    // Pemilik yang sudah punya grup hampir selalu menambah lokasi ke grup itu:
+    // gabung jadi bawaan supaya outlet baru tidak terpisah (transfer & laporan grup tetap tersambung).
+    organization_mode: (props.joinableOrganizations.length > 0 ? 'join' : 'new') as 'new' | 'join',
     organization_name: '',
-    organization_id: null as number | null,
+    organization_id: (props.joinableOrganizations.length > 0 ? props.joinableOrganizations[0].id : null) as number | null,
     copy_products: false,
 });
 
@@ -114,6 +116,22 @@ watch(() => form.organization_mode, (mode) => {
 const selectedCentralWarehouse = computed(() => {
     if (form.organization_mode !== 'join' || !form.organization_id) return null;
     return props.centralWarehouses?.[form.organization_id] ?? null;
+});
+
+// Kuota grup yang dipilih: outlet baru tidak bisa dibuat bila kuota penuh (Gudang Pusat tidak dihitung).
+const selectedQuota = computed(() =>
+    form.organization_mode === 'join' && form.organization_id
+        ? (quotaSummary.value.find((g) => g.id === form.organization_id) ?? null)
+        : null,
+);
+const outletQuotaFull = computed(() => form.location_type === 'outlet' && selectedQuota.value?.isFull === true);
+
+// Satu grup hanya boleh punya satu Gudang Pusat.
+const centralWarehouseTaken = computed(() => selectedCentralWarehouse.value !== null);
+watch(centralWarehouseTaken, (taken) => {
+    if (taken && form.location_type === 'central_warehouse') {
+        form.location_type = 'outlet';
+    }
 });
 
 watch(canJoinExistingGroup, (ok) => {
@@ -154,7 +172,7 @@ const labelClass = 'text-sm font-semibold text-slate-700 flex items-center gap-2
 </script>
 
 <template>
-    <AdminLayout title="Buat toko">
+    <AdminLayout :title="hasExistingStores ? 'Tambah outlet atau gudang' : 'Buat toko'">
         <template #mobile-header-actions>
             <Button variant="ghost" size="sm" as-child class="rounded-xl text-slate-600">
                 <Link href="/dashboard" class="inline-flex items-center justify-center" aria-label="Kembali ke dashboard">
@@ -181,14 +199,37 @@ const labelClass = 'text-sm font-semibold text-slate-700 flex items-center gap-2
                         <Store class="h-7 w-7" />
                     </div>
                     <div class="min-w-0">
-                        <p class="text-[10px] font-black uppercase tracking-[0.2em] text-primary/80 mb-1">Langkah pertama</p>
-                        <h2 class="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Buat toko baru</h2>
-                        <p class="text-sm text-slate-600 mt-2 leading-relaxed">
-                            Isi profil toko Anda. Nanti semua fitur POS, stok, dan laporan akan memakai data ini — bisa diubah di
-                            pengaturan.
-                        </p>
+                        <template v-if="hasExistingStores">
+                            <p class="text-[10px] font-black uppercase tracking-[0.2em] text-primary/80 mb-1">Outlet &amp; gudang</p>
+                            <h2 class="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Tambah outlet atau gudang</h2>
+                            <p class="text-sm text-slate-600 mt-2 leading-relaxed">
+                                Lokasi baru masuk ke grup usaha Anda, jadi stok bisa ditransfer dan laporannya bisa digabung.
+                            </p>
+                        </template>
+                        <template v-else>
+                            <p class="text-[10px] font-black uppercase tracking-[0.2em] text-primary/80 mb-1">Langkah pertama</p>
+                            <h2 class="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Buat toko baru</h2>
+                            <p class="text-sm text-slate-600 mt-2 leading-relaxed">
+                                Isi profil toko Anda. Nanti semua fitur POS, stok, dan laporan akan memakai data ini — bisa diubah di
+                                pengaturan.
+                            </p>
+                        </template>
                     </div>
                 </div>
+            </div>
+
+            <!-- Kuota penuh: beri tahu SEBELUM form diisi, bukan setelah gagal simpan -->
+            <div v-if="outletQuotaFull && selectedQuota" class="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 sm:px-6">
+                <p class="text-sm font-bold text-amber-900">
+                    Kuota outlet grup {{ selectedQuota.name }} sudah penuh ({{ selectedQuota.used }} dari {{ selectedQuota.limit }})
+                </p>
+                <p class="mt-1 text-sm text-amber-800">
+                    Beli outlet tambahan (Rp85.000/outlet) dulu untuk menambah outlet.
+                    <template v-if="!selectedQuota.hasWarehouse">Gudang Pusat tetap bisa dibuat karena tidak dihitung dalam kuota.</template>
+                </p>
+                <Button as-child size="sm" class="mt-3 rounded-xl bg-amber-500 text-white hover:bg-amber-600">
+                    <Link href="/subscription/checkout-outlet">Beli outlet tambahan</Link>
+                </Button>
             </div>
 
             <Card class="border-0 shadow-lg shadow-slate-200/60 rounded-2xl overflow-hidden">
@@ -247,13 +288,21 @@ const labelClass = 'text-sm font-semibold text-slate-700 flex items-center gap-2
                         <div class="space-y-2">
                             <Label for="location_type" class="text-sm font-semibold text-slate-700">Tipe lokasi *</Label>
                             <select id="location_type" v-model="form.location_type" required :class="selectClass">
-                                <option v-for="(label, key) in locationTypes" :key="key" :value="key">
-                                    {{ label }}
+                                <option
+                                    v-for="(label, key) in locationTypes"
+                                    :key="key"
+                                    :value="key"
+                                    :disabled="key === 'central_warehouse' && centralWarehouseTaken"
+                                >
+                                    {{ label }}{{ key === 'central_warehouse' && centralWarehouseTaken ? ' (sudah ada di grup ini)' : '' }}
                                 </option>
                             </select>
                             <p class="text-xs text-slate-500 leading-relaxed">
                                 <strong>Outlet</strong> melayani penjualan POS. <strong>Gudang Pusat</strong> menampung pembelian bahan
                                 dari supplier lalu mengirimnya ke outlet. Satu grup usaha hanya boleh punya satu Gudang Pusat.
+                            </p>
+                            <p v-if="centralWarehouseTaken && selectedCentralWarehouse" class="text-xs text-slate-500">
+                                Grup ini sudah punya Gudang Pusat: <strong>{{ selectedCentralWarehouse.name }}</strong>.
                             </p>
                             <p v-if="form.errors.location_type" class="text-sm text-red-600">{{ form.errors.location_type }}</p>
                         </div>
@@ -421,7 +470,7 @@ const labelClass = 'text-sm font-semibold text-slate-700 flex items-center gap-2
                             </div>
                             <div v-else-if="form.organization_mode === 'join' && form.organization_id && !selectedCentralWarehouse" class="p-4 rounded-xl bg-amber-50 border border-amber-200">
                                 <p class="text-xs text-amber-700">
-                                    Grup ini belum memiliki Gudang Pusat. Produk harus dibuat manual atau melalui halaman Kelola Produk.
+                                    Grup ini belum memiliki Gudang Pusat. Produk harus dibuat manual atau melalui halaman Salin Produk.
                                 </p>
                             </div>
                         </div>
@@ -437,11 +486,16 @@ const labelClass = 'text-sm font-semibold text-slate-700 flex items-center gap-2
                             </Button>
                             <Button
                                 type="submit"
-                                :disabled="form.processing"
+                                :disabled="form.processing || outletQuotaFull"
                                 class="h-12 rounded-xl bg-primary text-primary-foreground shadow-md shadow-primary/25 hover:bg-primary/90 sm:flex-1 font-bold"
                             >
                                 <Store class="h-5 w-5 mr-2" />
-                                {{ form.processing ? 'Membuat toko…' : 'Buat toko' }}
+                                <template v-if="form.processing">Menyimpan…</template>
+                                <template v-else-if="outletQuotaFull">Kuota outlet penuh</template>
+                                <template v-else-if="hasExistingStores">
+                                    {{ form.location_type === 'central_warehouse' ? 'Tambah Gudang Pusat' : 'Tambah outlet' }}
+                                </template>
+                                <template v-else>Buat toko</template>
                             </Button>
                         </div>
                     </form>

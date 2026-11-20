@@ -59,35 +59,48 @@ const submitCreate = async () => {
     });
 };
 
-// --- Ubah peran ---
-const memberRoles = ref<Record<number, StoreRole>>({});
-
-watch(
-    () => props.store?.team_members,
-    (list) => {
-        const next: Record<number, StoreRole> = {};
-        for (const m of list ?? []) next[m.id] = m.role as StoreRole;
-        memberRoles.value = next;
-    },
-    { immediate: true },
-);
-
-function roleDirty(m: TeamMember): boolean {
-    return memberRoles.value[m.id] !== m.role;
-}
-
-async function saveRole(memberId: number) {
-    const slug = props.store?.slug;
-    if (!slug) return;
-    const member = props.store.team_members?.find((m) => m.id === memberId);
-    if (!(await confirmDialog('Ubah peran?', `Peran "${member?.name ?? ''}" akan diubah ke ${roleLabel(memberRoles.value[memberId])}.`, { confirmText: 'Simpan', icon: 'question' }))) return;
-    router.patch(`/stores/${slug}/members/${memberId}`, { role: memberRoles.value[memberId] }, { preserveScroll: true });
-}
-
+// --- Peran ---
 function roleLabel(role: string): string {
     const map: Record<string, string> = { admin: 'Admin', manager: 'Manajer', cashier: 'Kasir', kitchen: 'Dapur', warehouse: 'Admin gudang', owner: 'Pemilik (Owner)', barber: 'Barber' };
     return map[role] ?? role;
 }
+
+/** Keterangan singkat tiap peran, ditampilkan di bawah pilihan peran. */
+const ROLE_DESCRIPTIONS: Record<string, string> = {
+    admin: 'Akses penuh toko: penjualan, stok, laporan, pengaturan, dan tim.',
+    manager: 'Operasional, stok, dan laporan. Tidak mengubah pengaturan toko dan tim.',
+    cashier: 'Jualan di kasir (POS), shift kas, dan cek stok.',
+    kitchen: 'Melihat dan menyelesaikan antrean pesanan dapur.',
+    warehouse: 'Stok, transfer, stok opname, dan pembelian. Tidak melihat HPP dan laporan keuangan.',
+    barber: 'Melayani antrean dan transaksi layanan.',
+    owner: 'Pemilik usaha: semua outlet di grup, laporan, dan langganan.',
+};
+function roleDescription(role: string): string {
+    return ROLE_DESCRIPTIONS[role] ?? '';
+}
+
+/** Peran Dapur/Barber hanya relevan bila modulnya aktif di toko ini. */
+const sharedFlag = (key: string) => Boolean((page.props as Record<string, unknown>)[key]);
+const kitchenRelevant = computed(() => sharedFlag('fnb_enabled') || sharedFlag('kitchen_queue_enabled'));
+const barberRelevant = computed(() => sharedFlag('barbershop_enabled'));
+
+const baseRoles = computed<StoreRole[]>(() => {
+    const roles: StoreRole[] = ['admin', 'manager', 'cashier'];
+    if (kitchenRelevant.value) roles.push('kitchen');
+    roles.push('warehouse');
+    if (barberRelevant.value) roles.push('barber');
+    return roles;
+});
+
+/** Pilihan peran untuk form; peran saat ini selalu ikut agar tidak hilang saat diedit. */
+function roleOptionsFor(current?: string): StoreRole[] {
+    const roles = [...baseRoles.value];
+    if (canShowOwnerOption.value) roles.push('owner');
+    if (current && !roles.includes(current as StoreRole)) roles.push(current as StoreRole);
+    return roles;
+}
+
+const permRoles = computed<StoreRole[]>(() => [...baseRoles.value, 'owner']);
 
 // --- Edit anggota (nama, email, peran, kata sandi opsional) ---
 const editingMember = ref<TeamMember | null>(null);
@@ -298,7 +311,7 @@ watch(activeTab, (tab) => {
                                 <CardTitle class="text-base font-bold text-gray-900">Daftar Anggota</CardTitle>
                                 <CardDescription class="text-xs">
                                     Anggota dengan akses ke toko <strong>{{ store.name }}</strong>.
-                                    Ubah peran lalu simpan. Minimal satu admin harus tetap ada.
+                                    Klik Edit untuk mengubah nama, peran, atau kata sandi. Minimal satu admin harus tetap ada.
                                 </CardDescription>
                             </div>
                         </div>
@@ -341,17 +354,12 @@ watch(activeTab, (tab) => {
                                 <div class="space-y-1">
                                     <Label for="create-role" class="text-xs">Peran</Label>
                                     <select id="create-role" v-model="createForm.role" class="flex h-9 w-full rounded-lg border border-gray-200 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
-                                        <option value="admin">Admin</option>
-                                        <option value="manager">Manajer</option>
-                                        <option value="cashier">Kasir</option>
-                                        <option value="kitchen">Dapur</option>
-                                        <option value="warehouse">Admin gudang</option>
-                                        <option value="barber">Barber</option>
-                                        <option value="owner" v-if="canShowOwnerOption">Pemilik (Owner)</option>
+                                        <option v-for="r in roleOptionsFor()" :key="r" :value="r">{{ roleLabel(r) }}</option>
                                     </select>
                                     <p v-if="createForm.errors.role" class="text-xs text-red-600">{{ createForm.errors.role }}</p>
                                 </div>
                             </div>
+                            <p class="text-xs text-slate-600"><strong>{{ roleLabel(createForm.role) }}:</strong> {{ roleDescription(createForm.role) }}</p>
                             <div class="flex gap-2 justify-end">
                                 <Button type="button" variant="ghost" size="sm" @click="showCreateForm = false" class="text-xs">Batal</Button>
                                 <Button type="submit" :disabled="createForm.processing" size="sm" class="gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700">
@@ -375,28 +383,12 @@ watch(activeTab, (tab) => {
                                 <p class="text-gray-500 break-all text-xs mt-0.5">{{ m.email }}</p>
                             </div>
                             <div class="flex flex-wrap items-center gap-2 shrink-0">
-                                <select
-                                    v-model="memberRoles[m.id]"
-                                    class="flex h-10 min-w-[10rem] rounded-lg border border-gray-200 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                <span
+                                    class="inline-flex h-8 items-center rounded-full bg-primary/10 px-3 text-xs font-bold text-primary"
+                                    :title="roleDescription(m.role)"
                                 >
-                                    <option value="admin">Admin</option>
-                                    <option value="manager">Manajer</option>
-                                    <option value="cashier">Kasir</option>
-                                    <option value="kitchen">Dapur</option>
-                                    <option value="warehouse">Admin gudang</option>
-                                    <option value="barber">Barber</option>
-                                    <option value="owner" v-if="canShowOwnerOption">Pemilik (Owner)</option>
-                                </select>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    class="h-10"
-                                    :disabled="!roleDirty(m)"
-                                    @click="saveRole(m.id)"
-                                >
-                                    Simpan
-                                </Button>
+                                    {{ roleLabel(m.role) }}
+                                </span>
                                 <Button
                                     type="button"
                                     variant="outline"
@@ -447,14 +439,9 @@ watch(activeTab, (tab) => {
                     <div class="space-y-1">
                         <Label for="edit-role" class="text-xs">Peran</Label>
                         <select id="edit-role" v-model="editForm.role" class="flex h-9 w-full rounded-lg border border-gray-200 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
-                            <option value="admin">Admin</option>
-                            <option value="manager">Manajer</option>
-                            <option value="cashier">Kasir</option>
-                            <option value="kitchen">Dapur</option>
-                            <option value="warehouse">Admin gudang</option>
-                            <option value="barber">Barber</option>
-                            <option value="owner" v-if="canShowOwnerOption">Pemilik (Owner)</option>
+                            <option v-for="r in roleOptionsFor(editingMember?.role)" :key="r" :value="r">{{ roleLabel(r) }}</option>
                         </select>
+                        <p class="text-xs text-slate-500">{{ roleDescription(editForm.role) }}</p>
                         <p v-if="editForm.errors.role" class="text-xs text-red-600">{{ editForm.errors.role }}</p>
                     </div>
                     <div class="grid gap-3 sm:grid-cols-2">
@@ -499,7 +486,7 @@ watch(activeTab, (tab) => {
                     <div class="flex flex-wrap items-center gap-2 mb-4">
                         <span class="text-xs font-bold text-slate-500">Pilih Peran:</span>
                         <button
-                            v-for="r in ['admin', 'manager', 'cashier', 'kitchen', 'warehouse', 'owner', 'barber']"
+                            v-for="r in permRoles"
                             :key="r"
                             type="button"
                             @click="selectedPermRole = r"
@@ -530,6 +517,12 @@ watch(activeTab, (tab) => {
                                 {{ selectedVisibleCount }}/{{ visibleMenus.length }} aktif
                             </span>
                         </div>
+                        <p class="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                            <strong>{{ roleLabel(selectedPermRole) }}:</strong> {{ roleDescription(selectedPermRole) }}
+                            <template v-if="selectedPermRole === 'admin' || selectedPermRole === 'owner'">
+                                Peran ini tetap punya akses penuh; centang di sini hanya mengatur menu yang tampil di sidebar.
+                            </template>
+                        </p>
 
                         <div v-for="group in menuGroups" :key="group.name" class="space-y-2">
                             <p class="text-[11px] font-bold tracking-wide text-slate-500 uppercase">{{ group.name }}</p>

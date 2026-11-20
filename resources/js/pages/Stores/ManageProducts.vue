@@ -72,19 +72,19 @@ const copyTypeOptions = [
     {
         value: 'raw_material',
         label: 'Salin Bahan Baku',
-        description: 'Menyalin produk bahan mentah & kemasan (raw material, packaging). Cocok untuk outlet yang baru mulai produksi.',
+        description: 'Bahan baku dan kemasan. Cocok untuk outlet yang baru mulai produksi.',
         icon: Package,
     },
     {
         value: 'sellable',
         label: 'Salin Produk Jual',
-        description: 'Menyalin produk yang dijual di POS & hasil produksi (sellable, production_output) beserta komponen menunya. Pastikan bahan baku sudah ada di outlet tujuan.',
+        description: 'Menu yang dijual di kasir dan hasil produksi, beserta komponennya. Bahan bakunya harus sudah ada di outlet tujuan.',
         icon: Package,
     },
     {
         value: 'all',
         label: 'Salin Semua',
-        description: 'Menyalin seluruh produk aktif dari sumber (bahan baku + produk jual) lengkap dengan varian, komponen menu, dan resep. Paling lengkap.',
+        description: 'Semua produk aktif (bahan baku dan menu jual) lengkap dengan varian, komponen, dan resep. Paling lengkap.',
         icon: Package,
     },
 ];
@@ -184,8 +184,8 @@ watch(copyType, () => { copyResult.value = null; });
 </script>
 
 <template>
-    <Head title="Kelola Produk" />
-    <AdminLayout title="Kelola Produk">
+    <Head title="Salin Produk" />
+    <AdminLayout title="Salin Produk">
         <template #header-actions>
             <Button variant="outline" size="sm" as-child class="rounded-xl">
                 <a href="/dashboard" class="inline-flex items-center gap-2">
@@ -208,9 +208,10 @@ watch(copyType, () => { copyResult.value = null; });
                 <div class="flex items-start gap-3">
                     <Building2 class="h-5 w-5 text-emerald-600 mt-0.5 shrink-0" />
                     <div>
-                        <p class="text-sm font-bold text-emerald-900">Salin Produk ke Outlet</p>
+                        <p class="text-sm font-bold text-emerald-900">Salin produk ke outlet lain</p>
                         <p class="text-xs text-emerald-700 mt-1">
-                            Pilih sumber, jenis penyalinan, dan outlet tujuan untuk menyalin produk.
+                            Pilih sumber, jenis produk, lalu outlet tujuan. Produk yang sudah ada di outlet tujuan dilewati, tidak
+                            ditimpa. Stok awal di outlet tujuan 0.
                         </p>
                     </div>
                 </div>
@@ -360,7 +361,9 @@ watch(copyType, () => { copyResult.value = null; });
                             class="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
                         >
                             <Send class="h-4 w-4 mr-2" />
-                            {{ loading ? 'Menyalin...' : `${copyTypeLabel} ke ${selectedOutlets.size} Outlet` }}
+                            <template v-if="loading">Menyalin...</template>
+                            <template v-else-if="selectedOutlets.size === 0">Pilih outlet tujuan dulu</template>
+                            <template v-else>{{ copyTypeLabel }} ke {{ selectedOutlets.size }} outlet</template>
                         </Button>
                     </div>
                 </CardContent>
