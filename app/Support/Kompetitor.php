@@ -145,6 +145,13 @@ final class Kompetitor
                 'best_for' => 'Usaha F&B dan retail yang sudah memakai software akuntansi Mekari Jurnal',
                 'consider' => 'Keunggulan utamanya terasa bila memakai Mekari Jurnal',
             ],
+            'kasironline' => [
+                'free' => 'Gratis: 1 toko, 2 pengguna, laporan 31 hari terakhir',
+                'price' => 'Pro Rp99.000 / toko / bulan (belum pajak)',
+                'billing' => 'Per toko; cabang & layar dapur di Business Rp249.000',
+                'best_for' => 'Toko yang butuh QRIS terintegrasi dan struk atau laporan lewat WhatsApp',
+                'consider' => 'Cabang, layar dapur, dan absensi ada di paket Business',
+            ],
         ];
 
         $out = [];
@@ -1086,6 +1093,75 @@ final class Kompetitor
                     ['Apakah Jurnal POS sama dengan Mekari POS?', 'Ya. Situs Jurnal kini menautkan fitur POS-nya ke Mekari POS, aplikasi kasir yang tersambung ke software akuntansi Mekari Jurnal.'],
                     ['Berapa harga Mekari POS?', 'Menurut halaman harga Mekari POS, paket Essentials Rp299.000 dan Plus Rp399.000 per bulan, belum termasuk PPN, dengan diskon hingga 30% untuk pengguna baru berlangganan 1 tahun. Paket POS 360 lewat konsultasi.'],
                     ['Apa alternatif Jurnal POS untuk UMKM?', 'Kasir UMKM by MaccaPOS punya paket {free} gratis dan paket {paid} {paid_price} per outlet per bulan, lengkap dengan laporan laba rugi, neraca, dan jurnal di dalam aplikasi.'],
+                ],
+            ],
+
+            'kasironline' => [
+                'slug' => 'alternatif-kasironline',
+                'name' => 'KasirOnline',
+                'checked_at' => '2026-11-20',
+                'checked_label' => '20 November 2026',
+                'sources' => [
+                    ['label' => 'halaman KasirOnline', 'url' => 'https://kasironline.com/'],
+                ],
+                'h1' => 'Alternatif KasirOnline: fitur restoran dan cabang tanpa naik ke paket termahal',
+                'description' => 'Mencari alternatif KasirOnline? Bandingkan paket gratis, harga Pro dan Business, layar dapur, serta biaya cabang dengan Kasir UMKM by MaccaPOS.',
+                'lead' => 'KasirOnline adalah aplikasi kasir dengan paket Gratis, Pro Rp99.000, dan Business Rp249.000 per toko per bulan. Harga paket berbayar pertamanya sama dengan Kasir UMKM, jadi perbedaannya ada di fitur yang termasuk di tiap paket. Berikut perbandingan yang jujur, termasuk kapan KasirOnline justru lebih cocok.',
+                'tldr' => [
+                    ['Harga setara', 'paket {paid} Kasir UMKM {paid_price} per outlet per bulan; paket Pro KasirOnline Rp99.000 per toko per bulan.'],
+                    ['Fitur di paket yang sama', 'layar dapur, QR meja, resep & HPP, dan akun karyawan termasuk paket {paid}. Di KasirOnline, layar dapur, cabang, absensi, dan hak akses kustom ada di paket Business Rp249.000.'],
+                    ['KasirOnline lebih unggul', 'bila Anda butuh QRIS terintegrasi dengan status lunas otomatis, paket gratis untuk 2 pengguna, atau struk dan laporan lewat WhatsApp.'],
+                ],
+                'reasons' => [
+                    ['Cabang butuh paket Business', 'Banyak cabang dan transfer stok di KasirOnline ada di paket Business Rp249.000 per toko per bulan.'],
+                    ['Layar dapur di paket teratas', 'Layar dapur dan layar pelanggan KasirOnline tercantum di paket Business.'],
+                    ['Butuh fitur khas jenis usaha', 'Seperti mode apotek dengan batch dan kedaluwarsa, order laundry, atau komisi kapster.'],
+                ],
+                'compare' => [
+                    ['Paket gratis', 'Paket {free}: transaksi tanpa batas, {free_limits}', 'Gratis: 1 toko, 2 pengguna, laporan 31 hari terakhir'],
+                    ['Paket berbayar pertama', '{paid}: {paid_price} / outlet / bulan', 'Pro: Rp99.000 / toko / bulan (belum pajak)'],
+                    ['Cabang', 'Add-on {outlet_addon} / outlet / bulan', 'Paket Business: Rp249.000 / toko / bulan'],
+                    ['Layar dapur', 'Termasuk paket {paid}', 'Paket Business'],
+                    ['Hak akses karyawan', 'Peran kasir, gudang, manajer, admin (paket {paid})', 'Hak akses kustom di paket Business; kasir masuk dengan PIN'],
+                    ['Pembayaran QRIS', 'Catat pembayaran QRIS (gambar QRIS statis milik toko)', 'QRIS dengan status lunas otomatis di layar kasir (biaya mengikuti penyedia pembayaran)'],
+                    ['Mode offline', 'Penjualan tetap tercatat saat offline dan tersinkron otomatis', 'Tunai, struk, dan tutup shift tetap jalan saat offline; QRIS butuh internet'],
+                    ['Fitur usaha khusus', 'Mode apotek, laundry, barbershop, produksi & HPP, QR meja', 'Tidak tercantum di halaman harga'],
+                ],
+                'source_note' => 'Harga KasirOnline belum termasuk pajak; paket berbayar bisa dicoba 14 hari.',
+                'cost' => [
+                    'title' => 'Contoh biaya bulanan: kafe 2 cabang dengan layar dapur',
+                    'sub' => 'Kafe dengan dua cabang yang memakai layar dapur di setiap cabang.',
+                    'outlets' => 2,
+                    'theirs_title' => 'KasirOnline (paket Business)',
+                    'theirs' => [
+                        ['Business cabang 1', 'Rp249.000'],
+                        ['Business cabang 2', 'Rp249.000'],
+                    ],
+                    'theirs_total' => 'Rp498.000 / bulan',
+                    'theirs_note' => 'Belum termasuk pajak. Untuk satu toko tanpa layar dapur, paket Pro KasirOnline (Rp99.000) setara dengan paket {paid}.',
+                    'ours' => [
+                        ['Paket {paid} (cabang 1)', '{paid_price}'],
+                        ['Cabang tambahan', '{outlet_addon}'],
+                        ['Layar dapur', 'Termasuk'],
+                    ],
+                    'ours_note' => 'Dalam Rupiah, tanpa biaya per karyawan atau perangkat.',
+                ],
+                'strengths' => [
+                    ['QRIS terintegrasi', 'Status lunas pembayaran QRIS muncul sendiri di layar kasir, tanpa mencocokkan mutasi.'],
+                    ['Paket gratis untuk 2 pengguna', 'Paket Gratis mencantumkan 1 toko dan 2 pengguna, tanpa batas waktu.'],
+                    ['Struk & laporan lewat WhatsApp', 'Struk bisa dikirim lewat WhatsApp dan email; paket Pro mengirim laporan terjadwal ke email dan WhatsApp.'],
+                    ['API', 'Paket Business mencantumkan API dan dukungan prioritas.'],
+                ],
+                'fit_us' => [
+                    'Restoran atau kafe yang butuh layar dapur dan QR meja tanpa paket termahal',
+                    'Punya beberapa cabang dan ingin biaya cabang yang lebih ringan',
+                    'Butuh mode apotek, laundry, atau komisi kapster',
+                    'Ingin menghitung HPP dan produksi dari resep',
+                ],
+                'faq' => [
+                    ['Apa alternatif KasirOnline?', 'Kasir UMKM by MaccaPOS punya paket {free} gratis dan paket {paid} {paid_price} per outlet per bulan yang sudah termasuk layar dapur, QR meja, serta resep & HPP.'],
+                    ['Berapa harga KasirOnline?', 'Menurut situs KasirOnline, paket Gratis Rp0, Pro Rp99.000, dan Business Rp249.000 per toko per bulan, belum termasuk pajak.'],
+                    ['Mana yang lebih murah untuk banyak cabang?', 'Di Kasir UMKM, cabang tambahan {outlet_addon} per bulan di atas paket {paid}. Di KasirOnline, banyak cabang ada di paket Business Rp249.000 per toko per bulan.'],
                 ],
             ],
         ];

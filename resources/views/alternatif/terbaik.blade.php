@@ -20,7 +20,7 @@
 
     // Rekomendasi per kebutuhan (kunci = key di Kompetitor::summaries()).
     $byNeed = [
-        ['need' => 'Ingin mulai gratis tanpa batas waktu', 'keys' => ['kasir-umkm', 'kasir-pintar', 'kasir-aja', 'loyverse', 'ireap'], 'note' => 'Pawoon juga punya paket gratis, tetapi dibatasi 7 transaksi per hari.'],
+        ['need' => 'Ingin mulai gratis tanpa batas waktu', 'keys' => ['kasir-umkm', 'kasir-pintar', 'kasir-aja', 'kasironline', 'loyverse', 'ireap'], 'note' => 'Pawoon juga punya paket gratis, tetapi dibatasi 7 transaksi per hari.'],
         ['need' => 'Siap bayar tahunan dengan biaya paling hemat', 'keys' => ['qasir', 'ireap', 'kasir-pintar'], 'note' => 'Cocok untuk kebutuhan kasir umum dengan satu perangkat atau satu outlet.'],
         ['need' => 'Punya banyak staf atau beberapa perangkat kasir', 'keys' => ['kasir-umkm', 'qasir'], 'note' => 'Perhatikan aplikasi yang menghitung biaya per karyawan atau per perangkat.'],
         ['need' => 'Butuh integrasi ojol, pembayaran digital, atau akuntansi', 'keys' => ['majoo', 'esb', 'iseller', 'pawoon', 'moka', 'olsera', 'accurate-pos', 'jurnal-pos'], 'note' => 'Integrasi biasanya ada di paket menengah ke atas.'],
@@ -30,7 +30,7 @@
 
     $faq = [
         ['q' => 'Apa aplikasi kasir terbaik untuk UMKM?', 'a' => 'Tergantung kebutuhan. Untuk mulai gratis, pilih aplikasi dengan paket gratis tanpa batas waktu seperti Kasir UMKM, Kasir Pintar, KasirAja, Loyverse, atau iReap Lite. Untuk integrasi ojol dan pembayaran digital, Majoo, ESB, Pawoon, Moka, dan Olsera mencantumkannya di paket mereka.'],
-        ['q' => 'Aplikasi kasir apa yang gratis selamanya?', 'a' => 'Kasir UMKM (paket Starter), Kasir Pintar Free, KasirAja Gratis, Loyverse POS, dan iREAP POS Lite punya versi gratis. Pawoon punya paket gratis dengan batas 7 transaksi per hari, dan ESB Basic mulai dari Rp0 dengan syarat & ketentuan. Moka, Majoo, Qasir, Olsera, dan Accurate POS mencantumkan uji coba gratis.'],
+        ['q' => 'Aplikasi kasir apa yang gratis selamanya?', 'a' => 'Kasir UMKM (paket Starter), Kasir Pintar Free, KasirAja Gratis, KasirOnline Gratis, Loyverse POS, dan iREAP POS Lite punya versi gratis. Pawoon punya paket gratis dengan batas 7 transaksi per hari, dan ESB Basic mulai dari Rp0 dengan syarat & ketentuan. Moka, Majoo, Qasir, Olsera, dan Accurate POS mencantumkan uji coba gratis.'],
         ['q' => 'Aplikasi kasir mana yang paling murah?', 'a' => 'Untuk bayar tahunan, Qasir Pro (Rp699.000 per 12 bulan), iReap PRO (Rp500.000 per 12 bulan per perangkat), dan Kasir Pintar Pro (Rp666.000 per tahun) termasuk yang paling hemat. Untuk bayar bulanan per outlet tanpa biaya per karyawan atau perangkat, paket '.$pricing['paid']['name'].' Kasir UMKM '.($pricing['paid']['monthly_label'] ?: '').' per bulan.'],
         ['q' => 'Apa yang perlu diperhatikan saat memilih aplikasi kasir?', 'a' => 'Perhatikan cara hitung biayanya (per outlet, per perangkat, atau per karyawan), batas paket gratis, apakah bisa bayar bulanan, perangkat yang didukung, dan fitur khusus jenis usaha Anda.'],
     ];
