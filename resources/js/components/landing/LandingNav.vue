@@ -50,6 +50,10 @@ const waPanelOpen = ref(false);
                                     <li>
                                         <Link href="/panduan"><span>Panduan</span></Link>
                                     </li>
+                                    <li>
+                                        <!-- Blog dirender Blade (bukan Inertia): tautan biasa, bukan <Link>. -->
+                                        <a href="/blog"><span>Blog</span></a>
+                                    </li>
                                 </ul>
                             </nav>
                         </div>
@@ -98,6 +102,9 @@ const waPanelOpen = ref(false);
                                     </li>
                                     <li>
                                         <Link href="/panduan"><span>Panduan</span></Link>
+                                    </li>
+                                    <li>
+                                        <a href="/blog"><span>Blog</span></a>
                                     </li>
                                     <li>
                                         <Link href="/privacy"><span>Kebijakan Privasi</span></Link>

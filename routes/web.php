@@ -86,7 +86,15 @@ Route::get('/mulai', [App\Http\Controllers\AdLandingController::class, 'show'])-
 Route::post('/mulai', [App\Http\Controllers\AdLandingController::class, 'store'])->middleware('throttle:8,1')->name('ads.lead.store');
 Route::get('/mulai/terima-kasih', [App\Http\Controllers\AdLandingController::class, 'thanks'])->name('ads.thanks');
 
-Route::get('/', function () {
+// Server yang meneruskan path apa adanya (mis. Herd lokal) melihat "/index.php" sebagai path.
+Route::get('/index.php', fn () => redirect('/', 301));
+
+Route::get('/', function (\Illuminate\Http\Request $request) {
+    // /index.php menampilkan beranda yang sama: alihkan permanen agar hanya satu URL yang diindeks.
+    if (str_starts_with($request->getRequestUri(), '/index.php')) {
+        return redirect('/', 301);
+    }
+
     if (auth()->check()) {
         if (auth()->user()?->isSuperAdmin()) {
             return redirect()->route('superadmin.dashboard');
@@ -110,6 +118,8 @@ Route::get('/', function () {
         'ogImageHeight' => $og['height'],
         // Harga paket diambil langsung dari pengaturan Super Admin.
         'pricing' => \App\Support\LandingPricing::payload(),
+        // Tautan beranda -> artikel blog (SEO: artikel ditemukan lewat tautan, bukan hanya sitemap).
+        'latestArticles' => LandingSeo::latestArticles(),
     ]);
 })->name('home');
 

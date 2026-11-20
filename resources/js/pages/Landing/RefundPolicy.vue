@@ -2,7 +2,7 @@
 import LandingFooter from '@/components/landing/LandingFooter.vue';
 import LandingNav from '@/components/landing/LandingNav.vue';
 import { Head, Link } from '@inertiajs/vue3';
-import { computed, onMounted, onUnmounted } from 'vue';
+import { onMounted, onUnmounted } from 'vue';
 
 const props = defineProps<{
     maskotUrl?: string;
@@ -14,14 +14,8 @@ const props = defineProps<{
 }>();
 
 const pageTitle = 'Kebijakan Refund — Kasir UMKM by MaccaPOS';
-const pageDescription =
-    'Kebijakan pengembalian dana (refund) UMKM Ketentuan pengembalian dana untuk langganan Kasir UMKM by MaccaPOS.';
 
 const maskotUrl = props.maskotUrl ?? '/logo-kasir-umkm.png?v=2';
-const canonicalUrl = props.canonicalUrl ?? '';
-
-const shareImageUrl = computed(() => props.ogImageUrl ?? maskotUrl);
-const shareImageType = computed(() => props.ogImageType ?? 'image/webp');
 
 const lastUpdated = '25 Agustus 2026';
 
@@ -124,28 +118,7 @@ onUnmounted(() => {
             <link rel="stylesheet" :href="`${buyerAssetsBase}/css/nice-select.css`" media="print" onload="this.media='all'" />
             <link rel="stylesheet" :href="`${buyerAssetsBase}/css/magnific-popup.css`" media="print" onload="this.media='all'" />
             <link rel="stylesheet" :href="`${buyerAssetsBase}/css/jquery-ui.css`" media="print" onload="this.media='all'" />
-
-            <link rel="canonical" :href="canonicalUrl" />
-            <meta name="description" :content="pageDescription" />
-            <meta name="robots" content="index, follow" />
-
-            <meta property="og:type" content="website" />
-            <meta property="og:site_name" content="Kasir UMKM by MaccaPOS" />
-            <meta property="og:locale" content="id_ID" />
-            <meta property="og:title" :content="pageTitle" />
-            <meta property="og:description" :content="pageDescription" />
-            <meta property="og:url" :content="canonicalUrl" />
-            <meta property="og:image" :content="shareImageUrl" />
-            <meta property="og:image:type" :content="shareImageType" />
-            <meta v-if="ogImageWidth && ogImageHeight" property="og:image:width" :content="String(ogImageWidth)" />
-            <meta v-if="ogImageWidth && ogImageHeight" property="og:image:height" :content="String(ogImageHeight)" />
-            <meta v-if="shareImageUrl.startsWith('https://')" property="og:image:secure_url" :content="shareImageUrl" />
-            <meta property="og:image:alt" content="Logo Kasir UMKM by MaccaPOS — aplikasi kasir untuk UMKM" />
-
-            <meta name="twitter:card" content="summary_large_image" />
-            <meta name="twitter:title" :content="pageTitle" />
-            <meta name="twitter:description" :content="pageDescription" />
-            <meta name="twitter:image" :content="shareImageUrl" />
+            <!-- Meta SEO (canonical, description, OG, JSON-LD) dirender server: LandingSeo::serverSeoForPage(). -->
         </Head>
 
         <div id="smooth-wrapper">

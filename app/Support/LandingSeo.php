@@ -9,7 +9,8 @@ final class LandingSeo
     /** Judul & deskripsi beranda (juga dipakai Landing/Index.vue lewat props agar selalu sama). */
     public const HOME_TITLE = 'Aplikasi Kasir Online Gratis untuk UMKM | Kasir UMKM by MaccaPOS';
 
-    public const HOME_DESCRIPTION = 'Aplikasi kasir (POS) online untuk UMKM: catat penjualan, kelola stok, cetak struk, shift kasir, dan laporan keuangan dalam satu aplikasi. Mulai gratis dengan paket Starter.';
+    /** Maks. ±155 karakter agar tidak terpotong di hasil Google. */
+    public const HOME_DESCRIPTION = 'Aplikasi kasir online gratis untuk UMKM: catat penjualan, kelola stok, cetak struk, dan lihat laporan keuangan dari HP. Mulai gratis dengan paket Starter.';
 
     /**
      * URL maskot untuk UI (utama WebP + cache-bust jika ada).
@@ -139,7 +140,69 @@ final class LandingSeo
         }
         $html = trim((string) file_get_contents($path));
 
-        return $html !== '' ? self::injectLivePrices($html) : null;
+        return $html !== '' ? self::injectLatestArticles(self::injectLivePrices($html)) : null;
+    }
+
+    /**
+     * Artikel blog terbaru untuk bagian "Tips" di beranda (prop latestArticles).
+     *
+     * @return list<array{title: string, url: string, excerpt: ?string, date: ?string}>
+     */
+    public static function latestArticles(int $limit = 3): array
+    {
+        try {
+            return \App\Models\Article::query()
+                ->published()
+                ->orderByDesc('published_at')
+                ->limit($limit)
+                ->get(['title', 'slug', 'excerpt', 'published_at'])
+                ->map(fn (\App\Models\Article $a): array => [
+                    'title' => (string) $a->title,
+                    'url' => $a->publicUrl(),
+                    'excerpt' => filled($a->excerpt) ? \Illuminate\Support\Str::limit(strip_tags((string) $a->excerpt), 160) : null,
+                    'date' => $a->published_at?->locale('id')->translatedFormat('j F Y'),
+                ])
+                ->values()
+                ->all();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * Ganti daftar artikel di HTML prerender dengan artikel terbaru.
+     *
+     * Sama alasannya dengan injectLivePrices: prerender adalah potret statis,
+     * sedangkan artikel terus bertambah. Daftar artikel di prerender (bila ada)
+     * diganti versi terbaru; bila tidak ada artikel terbit, bagian blog dibuang.
+     */
+    private static function injectLatestArticles(string $html): string
+    {
+        if (! str_contains($html, 'lp-blog-grid')) {
+            return $html;
+        }
+
+        $articles = self::latestArticles();
+
+        if ($articles === []) {
+            return (string) preg_replace('/<section class="lp-blog[^"]*".*?<\/section>/is', '', $html, 1);
+        }
+
+        $items = '';
+        foreach ($articles as $a) {
+            $items .= '<li class="lp-blog-card"><a href="'.e($a['url']).'" class="lp-blog-link">'
+                .($a['date'] ? '<span class="lp-blog-date">'.e($a['date']).'</span>' : '')
+                .'<h3 class="lp-blog-title">'.e($a['title']).'</h3>'
+                .($a['excerpt'] ? '<p class="lp-blog-excerpt">'.e($a['excerpt']).'</p>' : '')
+                .'<span class="lp-blog-more">Baca artikel &rarr;</span></a></li>';
+        }
+
+        return (string) preg_replace_callback(
+            '/(<ul class="lp-blog-grid"[^>]*>).*?(<\/ul>)/is',
+            fn (array $m): string => $m[1].$items.$m[2],
+            $html,
+            1,
+        );
     }
 
     /**
@@ -276,8 +339,68 @@ final class LandingSeo
                 $ogImageWidth,
                 $ogImageHeight,
             ),
+            'Landing/Terms' => self::policyServerSeo(
+                $props['canonicalUrl'] ?? url('/terms'),
+                'Syarat & Ketentuan — '.self::SITE_NAME,
+                'Syarat dan ketentuan penggunaan Kasir UMKM by MaccaPOS: akun, paket langganan, pembayaran, batasan layanan, dan tanggung jawab pengguna.',
+                'Syarat & Ketentuan',
+                $ogImage,
+                $ogImageType,
+                $ogImageWidth,
+                $ogImageHeight,
+            ),
+            'Landing/RefundPolicy' => self::policyServerSeo(
+                $props['canonicalUrl'] ?? url('/refund'),
+                'Kebijakan Refund — '.self::SITE_NAME,
+                'Kebijakan pengembalian dana Kasir UMKM by MaccaPOS: syarat refund paket berbayar, cara mengajukan, dan lama proses pengembalian dana.',
+                'Kebijakan Refund',
+                $ogImage,
+                $ogImageType,
+                $ogImageWidth,
+                $ogImageHeight,
+            ),
             default => null,
         };
+    }
+
+    /**
+     * Meta halaman kebijakan (Syarat & Ketentuan, Refund).
+     *
+     * @return array<string, mixed>
+     */
+    private static function policyServerSeo(
+        string $canonical,
+        string $title,
+        string $description,
+        string $about,
+        string $ogImage,
+        string $ogImageType,
+        ?int $ogImageWidth,
+        ?int $ogImageHeight,
+    ): array {
+        $siteRoot = rtrim(url('/'), '/');
+
+        return [
+            'title' => $title,
+            'description' => $description,
+            'canonical' => $canonical,
+            'og_image' => $ogImage,
+            'og_image_type' => $ogImageType,
+            'og_image_width' => $ogImageWidth,
+            'og_image_height' => $ogImageHeight,
+            'og_type' => 'article',
+            'json_ld' => self::encodeJsonLd([
+                '@context' => 'https://schema.org',
+                '@type' => 'WebPage',
+                'name' => $title,
+                'description' => $description,
+                'url' => $canonical,
+                'inLanguage' => 'id-ID',
+                'about' => ['@type' => 'Thing', 'name' => $about],
+                'isPartOf' => ['@type' => 'WebSite', 'name' => self::SITE_NAME, 'url' => $siteRoot],
+                'publisher' => self::organizationNode($siteRoot.'/#organization', $siteRoot, self::logoUrl()),
+            ]),
+        ];
     }
 
     /**

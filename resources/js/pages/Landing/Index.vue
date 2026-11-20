@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import LandingAudience from '@/components/landing/LandingAudience.vue';
+import LandingBlog, { type LandingArticle } from '@/components/landing/LandingBlog.vue';
 import LandingBrand from '@/components/landing/LandingBrand.vue';
 import LandingFaq from '@/components/landing/LandingFaq.vue';
 import LandingFooter from '@/components/landing/LandingFooter.vue';
@@ -37,6 +38,8 @@ const props = withDefaults(
         landingOptimized?: boolean;
         /** Harga & batas paket dari pengaturan Super Admin (LandingPricing::payload). */
         pricing?: LandingPricingData;
+        /** Artikel blog terbaru (LandingSeo::latestArticles). */
+        latestArticles?: LandingArticle[];
     }>(),
     {
         // Wajib eksplisit: Vue meng-cast prop Boolean yang tidak dikirim menjadi false.
@@ -323,6 +326,7 @@ onUnmounted(() => {
                         <LandingUseCase :assets-base="assetsBase" />
                         <LandingPricing :assets-base="assetsBase" :pricing="props.pricing" />
                         <LandingFaq :assets-base="assetsBase" />
+                        <LandingBlog :articles="props.latestArticles ?? []" />
                     </main>
 
                     <LandingFooter :assets-base="assetsBase" />

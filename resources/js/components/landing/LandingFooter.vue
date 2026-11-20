@@ -12,6 +12,7 @@ const navLinks: { label: string; href: string }[] = [
     { label: 'Fitur', href: '#fitur' },
     { label: 'Harga', href: '#harga' },
     { label: 'FAQ', href: '#faq' },
+    { label: 'Blog', href: '/blog' },
     { label: 'Kebijakan Refund', href: '/refund' },
     { label: 'Syarat & Ketentuan', href: '/terms' },
     { label: 'Kontak', href: '#kontak' },
@@ -183,7 +184,8 @@ const navLinks: { label: string; href: string }[] = [
                 <p>
                     <Link href="/terms">Syarat &amp; Ketentuan</Link> &middot; <Link href="/privacy">Kebijakan Privasi</Link> &middot;
                     <Link href="/refund">Kebijakan Refund</Link> &middot;
-                    <Link href="/panduan">Panduan</Link>
+                    <Link href="/panduan">Panduan</Link> &middot;
+                    <a href="/blog">Blog</a>
                 </p>
             </div>
         </div>

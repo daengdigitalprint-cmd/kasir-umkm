@@ -251,7 +251,7 @@
                     <div>
                         <p class="label" style="margin:0">Mulai sekarang</p>
                         <h2>Siap Kelola Usaha Lebih Rapi?</h2>
-                        <p>Daftar gratis dalam 1 menit dan mulai catat penjualan hari ini juga.</p>
+                        <p>Coba <a href="{{ url('/') }}">aplikasi kasir gratis untuk UMKM</a> dari Kasir UMKM by MaccaPOS. Daftar dalam 1 menit dan mulai catat penjualan hari ini juga.</p>
                         <div class="foot-acts">
                             <a class="btn btn-primary" href="{{ url('/register') }}">Mulai Gratis</a>
                             <a class="btn btn-ghost" href="{{ url('/panduan') }}">Lihat Panduan</a>

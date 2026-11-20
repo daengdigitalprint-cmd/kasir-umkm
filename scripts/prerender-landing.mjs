@@ -75,6 +75,12 @@ function stop(child) {
 const server = spawn(process.execPath, [SSR_BUNDLE], { cwd: ROOT, stdio: ['ignore', 'inherit', 'inherit'], detached: process.platform !== 'win32' });
 try {
     const page = await sourcePage();
+    // Bagian "artikel terbaru" harus selalu ada di prerender: isinya diganti server
+    // dengan artikel terbaru (LandingSeo::injectLatestArticles). Bila sumber belum
+    // mengirim latestArticles (mis. produksi belum di-deploy), pakai satu placeholder.
+    if (!Array.isArray(page.props.latestArticles) || page.props.latestArticles.length === 0) {
+        page.props.latestArticles = [{ title: 'Artikel', url: '/blog', excerpt: null, date: null }];
+    }
     await waitForServer();
     const res = await fetch(`http://127.0.0.1:${PORT}/render`, {
         method: 'POST',
@@ -86,7 +92,7 @@ try {
 
     // Ambil isi <div id="app" ...> saja (wrapper dirender ulang oleh blade).
     const inner = body.replace(/^\s*<div id="app"[^>]*>/, '').replace(/<\/div>\s*$/, '');
-    for (const must of ['<h1', 'Pertanyaan yang Sering Diajukan', 'Paket Starter']) {
+    for (const must of ['<h1', 'Pertanyaan yang Sering Diajukan', 'Paket Starter', 'lp-blog-grid']) {
         if (!inner.includes(must)) throw new Error(`Hasil prerender tidak memuat "${must}" — periksa error SSR`);
     }
 
