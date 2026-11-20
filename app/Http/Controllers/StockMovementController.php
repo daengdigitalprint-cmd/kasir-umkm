@@ -65,23 +65,7 @@ class StockMovementController extends Controller
                 'date_from' => isset($validated['date_from']) ? (string) $validated['date_from'] : null,
                 'date_to' => isset($validated['date_to']) ? (string) $validated['date_to'] : null,
             ],
-            'typeLabels' => [
-                StockMovement::TYPE_SALE => 'Penjualan',
-                StockMovement::TYPE_ADJUSTMENT => 'Penyesuaian',
-                StockMovement::TYPE_PURCHASE => 'Pembelian',
-                StockMovement::TYPE_SUPPLIER_RETURN => 'Retur ke supplier',
-                StockMovement::TYPE_RETURN => 'Retur',
-                StockMovement::TYPE_DAMAGE => 'Rusak / hilang',
-                StockMovement::TYPE_TRANSFER_OUT => 'Transfer keluar',
-                StockMovement::TYPE_TRANSFER_IN => 'Transfer masuk',
-                StockMovement::TYPE_TRANSFER_REVERSAL => 'Pembatalan transfer',
-                StockMovement::TYPE_PRODUCTION_CONSUMPTION => 'Konsumsi produksi',
-                StockMovement::TYPE_PRODUCTION_OUTPUT => 'Output produksi',
-                StockMovement::TYPE_PRODUCTION_REVERSAL => 'Pembatalan produksi',
-                StockMovement::TYPE_OPNAME => 'Stock opname',
-                StockMovement::TYPE_REPACK => 'Pecah kemasan',
-                StockMovement::TYPE_ADJUSTMENT_REVERSAL => 'Pembatalan penyesuaian',
-            ],
+            'typeLabels' => StockMovement::typeLabels(),
         ]);
     }
 }

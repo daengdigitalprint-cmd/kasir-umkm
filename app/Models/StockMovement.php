@@ -68,6 +68,32 @@ class StockMovement extends Model
         ];
     }
 
+    /**
+     * Label Bahasa Indonesia per jenis mutasi (untuk tampilan).
+     *
+     * @return array<string, string>
+     */
+    public static function typeLabels(): array
+    {
+        return [
+            self::TYPE_SALE => 'Penjualan',
+            self::TYPE_ADJUSTMENT => 'Penyesuaian',
+            self::TYPE_PURCHASE => 'Pembelian',
+            self::TYPE_SUPPLIER_RETURN => 'Retur ke supplier',
+            self::TYPE_RETURN => 'Retur',
+            self::TYPE_DAMAGE => 'Rusak / hilang',
+            self::TYPE_TRANSFER_OUT => 'Transfer keluar',
+            self::TYPE_TRANSFER_IN => 'Transfer masuk',
+            self::TYPE_TRANSFER_REVERSAL => 'Pembatalan transfer',
+            self::TYPE_PRODUCTION_CONSUMPTION => 'Konsumsi produksi',
+            self::TYPE_PRODUCTION_OUTPUT => 'Output produksi',
+            self::TYPE_PRODUCTION_REVERSAL => 'Pembatalan produksi',
+            self::TYPE_OPNAME => 'Stock opname',
+            self::TYPE_REPACK => 'Pecah kemasan',
+            self::TYPE_ADJUSTMENT_REVERSAL => 'Pembatalan penyesuaian',
+        ];
+    }
+
     public function store(): BelongsTo
     {
         return $this->belongsTo(Store::class);

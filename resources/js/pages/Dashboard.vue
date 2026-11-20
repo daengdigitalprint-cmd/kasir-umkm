@@ -102,12 +102,13 @@ interface Props {
     recentMovements?: Array<{
         id: number;
         type: string;
+        type_label?: string;
         quantity_change: number;
         created_at: string;
         product?: {
             name: string;
-            sku: string;
-        };
+            sku: string | null;
+        } | null;
     }>;
     lowStockProducts?: Array<{
         id: number;
@@ -756,7 +757,7 @@ const daysUntilExpiry = (dateString: string) => {
                                 <div class="flex items-center justify-end">
                                     <div class="flex items-center rounded-full bg-green-100 px-2 py-1 text-xs font-bold text-green-700">
                                         <ArrowDownCircle class="mr-1 h-3 w-3" />
-                                        <span>Unit</span>
+                                        <span>Jenis barang</span>
                                     </div>
                                 </div>
                             </CardContent>
@@ -1013,7 +1014,7 @@ const daysUntilExpiry = (dateString: string) => {
                                             ></div>
                                             <div class="min-w-0 flex-1">
                                                 <p class="truncate text-xs font-medium text-gray-900 md:text-sm">{{ m.product?.name ?? '-' }}</p>
-                                                <p class="truncate text-xs text-gray-500 md:text-sm">{{ m.type }}</p>
+                                                <p class="truncate text-xs text-gray-500 md:text-sm">{{ m.type_label ?? m.type }}</p>
                                             </div>
                                         </div>
                                         <div class="ml-2 flex-shrink-0 text-right">

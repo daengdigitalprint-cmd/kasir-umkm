@@ -2,12 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\StockMovement;
+use App\Models\StockTransfer;
+use App\Models\Store;
 use App\Models\TransactionItem;
 use App\Support\BatchTracking;
 use App\Support\ExpiringProductBatches;
 use App\Support\FnBFeatures;
 use App\Support\PharmacyFeatures;
 use App\Support\ReceiptSettings;
+use App\Support\StoreLocationType;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -103,6 +107,10 @@ class DashboardController extends Controller
         // ─── Dashboard insight data (realtime — di-query langsung saat render) ──
         $insights = $this->getDashboardInsights((int) $store->id);
 
+        // ─── Gudang Pusat: ringkasan stok & transfer (Dashboard.vue memakai template gudang) ──
+        $isWarehouse = StoreLocationType::isCentralWarehouse($store);
+        $warehouse = $isWarehouse ? $this->warehouseSummary($store) : null;
+
         return Inertia::render('Dashboard', [
             'is_kitchen' => $user->getRoleForActiveStore() === 'kitchen',
             'pending_kitchen_order_count' => $pendingKitchenOrderCount,
@@ -125,7 +133,12 @@ class DashboardController extends Controller
                 'receipt' => ReceiptSettings::payload($store),
                 'pharmacy_enabled' => PharmacyFeatures::enabled($store),
                 'fnb_enabled' => FnBFeatures::enabled($store),
+                'location_type' => StoreLocationType::of($store),
+                'today_stock_in' => $warehouse['today_stock_in'] ?? 0,
+                'pending_incoming_transfers' => $warehouse['pending_incoming_transfers'] ?? 0,
+                'today_transfers_out' => $warehouse['today_transfers_out'] ?? 0,
             ],
+            'recentMovements' => $warehouse['recent_movements'] ?? [],
             'recentTransactions' => $recentTransactions,
             'lowStockProducts' => $lowStockProducts,
             'lowStockCount' => $lowStockCount,
@@ -136,6 +149,72 @@ class DashboardController extends Controller
             'peakHours' => $insights['peak_hours'],
             'topProducts' => $insights['top_products'],
         ]);
+    }
+
+    /**
+     * Ringkasan untuk dashboard Gudang Pusat.
+     *
+     * today_stock_in = jumlah jenis barang yang stoknya masuk hari ini (pembelian,
+     * transfer masuk, hasil produksi). Dihitung per jenis, bukan dijumlah kuantitas,
+     * karena satuan barang berbeda-beda (gram, ml, pcs).
+     *
+     * @return array{
+     *     today_stock_in: int,
+     *     pending_incoming_transfers: int,
+     *     today_transfers_out: int,
+     *     recent_movements: array<int, array{id: int, type: string, type_label: string, quantity_change: float, created_at: mixed, product: array{name: string, sku: string|null}|null}>
+     * }
+     */
+    private function warehouseSummary(Store $store): array
+    {
+        $today = [today(), today()->endOfDay()];
+
+        $todayStockIn = StockMovement::query()
+            ->where('store_id', $store->id)
+            ->whereIn('type', [
+                StockMovement::TYPE_PURCHASE,
+                StockMovement::TYPE_TRANSFER_IN,
+                StockMovement::TYPE_PRODUCTION_OUTPUT,
+            ])
+            ->where('quantity_change', '>', 0)
+            ->whereBetween('created_at', $today)
+            ->distinct()
+            ->count('product_id');
+
+        $pendingIncoming = StockTransfer::query()
+            ->where('to_store_id', $store->id)
+            ->where('status', StockTransfer::STATUS_SENT)
+            ->count();
+
+        $todayTransfersOut = StockTransfer::query()
+            ->where('from_store_id', $store->id)
+            ->whereIn('status', [StockTransfer::STATUS_SENT, StockTransfer::STATUS_RECEIVED])
+            ->whereBetween('sent_at', $today)
+            ->count();
+
+        $labels = StockMovement::typeLabels();
+        $recentMovements = StockMovement::query()
+            ->where('store_id', $store->id)
+            ->with('product:id,name,sku')
+            ->latest('id')
+            ->limit(5)
+            ->get()
+            ->map(fn (StockMovement $m) => [
+                'id' => $m->id,
+                'type' => $m->type,
+                'type_label' => $labels[$m->type] ?? $m->type,
+                'quantity_change' => (float) $m->quantity_change,
+                'created_at' => $m->created_at,
+                'product' => $m->product ? ['name' => $m->product->name, 'sku' => $m->product->sku] : null,
+            ])
+            ->all();
+
+        return [
+            'today_stock_in' => $todayStockIn,
+            'pending_incoming_transfers' => $pendingIncoming,
+            'today_transfers_out' => $todayTransfersOut,
+            'recent_movements' => $recentMovements,
+        ];
     }
 
     /**
