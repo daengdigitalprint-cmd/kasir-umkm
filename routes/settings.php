@@ -63,11 +63,15 @@ Route::middleware('auth')->group(function () {
     // Backup routes
     Route::redirect('settings/backup', '/settings/store/backup')
         ->middleware('role.store_admin');
+    // Backup berisi seluruh data toko (transaksi, pelanggan, akuntansi): hanya pemilik/admin toko.
     Route::get('settings/backup/history', [BackupController::class, 'history'])
+        ->middleware('role.store_admin')
         ->name('backup.history');
     Route::post('settings/backup/create', [BackupController::class, 'createBackup'])
+        ->middleware('role.store_admin')
         ->name('backup.create');
     Route::post('settings/backup/download', [BackupController::class, 'download'])
+        ->middleware('role.store_admin')
         ->name('backup.download');
     Route::post('settings/backup/upload', [BackupController::class, 'upload'])
         ->middleware('role.store_admin')

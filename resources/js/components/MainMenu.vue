@@ -903,6 +903,8 @@ const isSimpleMode = computed(() => (page.props as { ui_mode?: string }).ui_mode
 const canSwitchUiMode = computed(() =>
     Boolean((page.props as { abilities?: { manage_store_settings?: boolean } }).abilities?.manage_store_settings),
 );
+// Langganan & pembayaran: sama dengan pengatur toko (EnsureBillingAccess di server).
+const canManageBilling = canSwitchUiMode;
 const switchingUiMode = ref(false);
 function switchUiMode(mode: 'simple' | 'full') {
     if (switchingUiMode.value) return;
@@ -1095,7 +1097,8 @@ const subscriptionCardSoft = computed(() => {
             <span>Tampilkan semua menu</span>
         </button>
 
-        <!-- Subscription Section -->
+        <!-- Subscription Section: hanya pemilik/admin toko (route dijaga role.billing) -->
+        <template v-if="canManageBilling">
         <p class="mt-8 mb-4 px-4 text-[10px] font-black tracking-[0.2em] text-violet-400/90 uppercase">SUBSCRIPTION</p>
 
         <!-- Subscription Status Card -->
@@ -1173,6 +1176,7 @@ const subscriptionCardSoft = computed(() => {
                 </div>
             </div>
         </Link>
+        </template>
 
         <!-- System Section -->
         <p class="mt-8 mb-4 px-4 text-[10px] font-black tracking-[0.2em] text-slate-400 uppercase">SISTEM</p>

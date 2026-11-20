@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Organization;
 use App\Models\Store;
+use App\Models\User;
 use App\Support\BusinessTypePresets;
 use App\Support\InventoryType;
 use App\Support\OptionalFeatures;
@@ -11,6 +12,7 @@ use App\Support\StoreDefaultProductCategories;
 use App\Support\StoreLocationType;
 use App\Support\StorePlanLimits;
 use App\Support\UiMode;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
@@ -19,6 +21,39 @@ use Inertia\Inertia;
 
 class StoreController extends Controller implements HasMiddleware
 {
+    /** Peran (di salah satu toko) yang boleh menambah toko/outlet baru. */
+    private const STORE_CREATOR_ROLES = ['owner', 'admin'];
+
+    /**
+     * Toko pertama (onboarding) boleh dibuat siapa saja. Setelah punya toko, hanya
+     * pemilik/admin yang boleh menambah lokasi: staf (kasir, gudang, dapur, teknisi)
+     * tidak boleh membuat outlet atau menggabungkannya ke grup usaha pemilik.
+     */
+    private static function canAddStores(?User $user): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        if ($user->stores()->exists()) {
+            return $user->stores()->wherePivotIn('role', self::STORE_CREATOR_ROLES)->exists();
+        }
+
+        // Tanpa baris pivot: belum punya toko (onboarding), atau akun lama yang hanya
+        // memakai users.store_id + users.role — staf seperti itu tetap tidak boleh.
+        return ! $user->store_id || in_array($user->role, self::STORE_CREATOR_ROLES, true);
+    }
+
+    private static function denyAddStores(): RedirectResponse
+    {
+        return redirect()->route('dashboard')
+            ->with('error', 'Hanya pemilik atau admin toko yang dapat menambah outlet atau gudang.');
+    }
+
     public static function middleware(): array
     {
         return [
@@ -39,6 +74,10 @@ class StoreController extends Controller implements HasMiddleware
     {
         $user = auth()->user();
 
+        if (! self::canAddStores($user)) {
+            return self::denyAddStores();
+        }
+
         // Toko pertama: onboarding ringkas (nama toko + jenis usaha saja).
         // Form lengkap di bawah dipakai untuk menambah outlet berikutnya.
         if ($user && ! $user->stores()->exists()) {
@@ -51,7 +90,9 @@ class StoreController extends Controller implements HasMiddleware
 
         $joinableOrganizations = [];
         if ($user) {
+            // Hanya grup tempat user menjadi pemilik/admin; staf tidak boleh menambah lokasi ke grup.
             $orgIds = $user->stores()
+                ->wherePivotIn('role', self::STORE_CREATOR_ROLES)
                 ->whereNotNull('organization_id')
                 ->pluck('organization_id')
                 ->unique()
@@ -126,6 +167,10 @@ class StoreController extends Controller implements HasMiddleware
 
     public function store(Request $request)
     {
+        if (! self::canAddStores($request->user())) {
+            return self::denyAddStores();
+        }
+
         // Onboarding toko pertama hanya mengirim nama + jenis usaha (+ zona waktu hasil deteksi);
         // sisanya diisi nilai bawaan dan bisa diubah di Pengaturan Toko.
         $creator = $request->user();
@@ -190,6 +235,7 @@ class StoreController extends Controller implements HasMiddleware
             }
             $allowed = $owner->stores()
                 ->where('organization_id', $oid)
+                ->wherePivotIn('role', self::STORE_CREATOR_ROLES)
                 ->exists();
             if (! $allowed) {
                 return back()->withErrors(['organization_id' => 'Anda tidak memiliki akses ke grup tersebut.'])->withInput();

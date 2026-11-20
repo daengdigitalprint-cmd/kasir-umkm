@@ -244,13 +244,13 @@ Route::get('payment', function () {
     return Inertia::render('Payment', [
         'storeName' => $store->name,
     ]);
-})->middleware(['auth', 'verified'])->name('payment');
+})->middleware(['auth', 'verified', 'role.billing'])->name('payment');
 
-Route::post('payment/process', [App\Http\Controllers\PaymentController::class, 'processPayment'])->middleware(['auth', 'verified'])->name('payment.process');
-Route::get('payment/plans', [App\Http\Controllers\PaymentController::class, 'getPlans'])->middleware(['auth', 'verified'])->name('payment.plans');
+Route::post('payment/process', [App\Http\Controllers\PaymentController::class, 'processPayment'])->middleware(['auth', 'verified', 'role.billing'])->name('payment.process');
+Route::get('payment/plans', [App\Http\Controllers\PaymentController::class, 'getPlans'])->middleware(['auth', 'verified', 'role.billing'])->name('payment.plans');
 
-// Subscription Routes (User-facing)
-Route::middleware(['auth', 'verified'])->prefix('subscription')->name('subscription.')->group(function () {
+// Subscription Routes (User-facing) — hanya pemilik/admin toko (lihat EnsureBillingAccess).
+Route::middleware(['auth', 'verified', 'role.billing'])->prefix('subscription')->name('subscription.')->group(function () {
     Route::get('/', [SubscriptionController::class, 'index'])->name('index');
     Route::get('/checkout/{plan}', [SubscriptionController::class, 'checkout'])->name('checkout');
     Route::get('/checkout-outlet', [SubscriptionController::class, 'checkoutOutlet'])->name('checkout-outlet');

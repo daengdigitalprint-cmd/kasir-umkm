@@ -62,6 +62,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'role.pos' => EnsurePointOfSaleAccess::class,
             'role.invoice' => EnsureInvoiceViewAccess::class,
             'role.store_admin' => EnsureStoreAdminRole::class,
+            'role.billing' => \App\Http\Middleware\EnsureBillingAccess::class,
             'role.stock_view' => EnsureStockViewRole::class,
             'plan.advanced' => EnsureAdvancedPlan::class,
             'owner' => EnsureOwnerRole::class,
