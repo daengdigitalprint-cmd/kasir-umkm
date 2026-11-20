@@ -337,6 +337,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Beban Operasional
     Route::get('expenses', [App\Http\Controllers\OperationalExpenseController::class, 'index'])->name('expenses.index')->middleware(['store.active', 'role.backoffice']);
     Route::post('expenses', [App\Http\Controllers\OperationalExpenseController::class, 'store'])->name('expenses.store')->middleware(['store.active', 'role.backoffice']);
+    Route::patch('expenses/{expense}', [App\Http\Controllers\OperationalExpenseController::class, 'update'])->name('expenses.update')->middleware(['store.active', 'role.backoffice']);
     Route::delete('expenses/{expense}', [App\Http\Controllers\OperationalExpenseController::class, 'destroy'])->name('expenses.destroy')->middleware(['store.active', 'role.backoffice']);
 
     // Log Aktivitas

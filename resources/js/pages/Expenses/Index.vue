@@ -1,23 +1,36 @@
 <script setup lang="ts">
-import { Head, router, useForm } from '@inertiajs/vue3';
-import AdminLayout from '@/layouts/AdminLayout.vue';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import ReportExportButton from '@/components/ReportExportButton.vue';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
-import { Wallet, Plus, Trash2, Receipt } from 'lucide-vue-next';
-import { ref } from 'vue';
+import { PAYMENT_METHODS, paymentMethodLabel, rupiah } from '@/composables/useReceivables';
+import AdminLayout from '@/layouts/AdminLayout.vue';
 import { confirmDelete, toastSuccess } from '@/lib/swal';
-import ReportExportButton from '@/components/ReportExportButton.vue';
+import { Head, router, useForm } from '@inertiajs/vue3';
+import {
+    Copy,
+    Droplet,
+    Home,
+    MoreHorizontal,
+    MoreVertical,
+    Pencil,
+    Plus,
+    Search,
+    Trash2,
+    TrendingDown,
+    TrendingUp,
+    Truck,
+    Users,
+    Wallet,
+    Wifi,
+    X,
+    Zap,
+} from 'lucide-vue-next';
+import type { Component } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 interface ExpenseRow {
     id: number;
@@ -27,326 +40,532 @@ interface ExpenseRow {
     expense_date: string;
     payment_method: string;
     notes: string | null;
-    created_at: string;
     user: { id: number; name: string } | null;
 }
 
-interface CategoryItem {
-    [key: string]: string;
-}
-
 const props = defineProps<{
-    expenses: { data: ExpenseRow[]; current_page: number; last_page: number; total: number; per_page: number; links: Array<{ url: string | null; label: string; active: boolean }> };
-    categories: CategoryItem;
-    summary: { total: number; count: number };
-    byCategory: Array<{ category: string; total: number }>;
-    filters: { category?: string; start_date?: string; end_date?: string };
+    expenses: {
+        data: ExpenseRow[];
+        current_page: number;
+        last_page: number;
+        total: number;
+    };
+    categories: Record<string, string>;
+    summary: { total: number; count: number; previous_total: number; previous_start: string; previous_end: string; days: number };
+    byCategory: { category: string; total: number; count: number }[];
+    dailyTotals: Record<string, number>;
+    filters: { start_date: string; end_date: string; category: string | null; q: string };
+    today: string;
 }>();
 
-const showDialog = ref(false);
-const isDeleting = ref(false);
+// ── Kategori: ikon & warna ──
+const CATEGORY_ICON: Record<string, Component> = {
+    sewa: Home,
+    gaji: Users,
+    listrik: Zap,
+    air: Droplet,
+    internet: Wifi,
+    transport: Truck,
+    lainnya: MoreHorizontal,
+};
+const CATEGORY_TONE: Record<string, string> = {
+    sewa: 'bg-blue-50 text-blue-700',
+    gaji: 'bg-emerald-50 text-emerald-700',
+    listrik: 'bg-amber-50 text-amber-700',
+    air: 'bg-cyan-50 text-cyan-700',
+    internet: 'bg-violet-50 text-violet-700',
+    transport: 'bg-orange-50 text-orange-700',
+    lainnya: 'bg-slate-100 text-slate-600',
+};
+const iconOf = (c: string) => CATEGORY_ICON[c] ?? MoreHorizontal;
+const toneOf = (c: string) => CATEGORY_TONE[c] ?? 'bg-slate-100 text-slate-600';
+const labelOf = (c: string) => props.categories[c] ?? c;
 
+// ── Tanggal (berbasis tanggal toko dari server, bukan jam UTC browser) ──
+const parse = (s: string) => {
+    const [y, m, d] = s.split('-').map(Number);
+    return new Date(y, m - 1, d);
+};
+const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const fmtShort = (s: string) => parse(s).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+const fmtDay = (s: string) => {
+    if (s === props.today) return 'Hari ini';
+    const y = parse(props.today);
+    y.setDate(y.getDate() - 1);
+    if (s === iso(y)) return 'Kemarin';
+    return parse(s).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+};
+
+type PresetKey = 'today' | 'week' | 'month' | 'last_month' | 'custom';
+const presets = computed<Record<Exclude<PresetKey, 'custom'>, { label: string; start: string; end: string }>>(() => {
+    const t = parse(props.today);
+    const weekStart = new Date(t);
+    weekStart.setDate(t.getDate() - ((t.getDay() + 6) % 7)); // Senin
+    const monthStart = new Date(t.getFullYear(), t.getMonth(), 1);
+    const lastStart = new Date(t.getFullYear(), t.getMonth() - 1, 1);
+    const lastEnd = new Date(t.getFullYear(), t.getMonth(), 0);
+    return {
+        today: { label: 'Hari ini', start: props.today, end: props.today },
+        week: { label: 'Minggu ini', start: iso(weekStart), end: props.today },
+        month: { label: 'Bulan ini', start: iso(monthStart), end: props.today },
+        last_month: { label: 'Bulan lalu', start: iso(lastStart), end: iso(lastEnd) },
+    };
+});
+const activePreset = computed<PresetKey>(() => {
+    const hit = Object.entries(presets.value).find(([, p]) => p.start === props.filters.start_date && p.end === props.filters.end_date);
+    return (hit?.[0] as PresetKey) ?? 'custom';
+});
+const showCustom = ref(activePreset.value === 'custom');
+const customStart = ref(props.filters.start_date);
+const customEnd = ref(props.filters.end_date);
+const periodText = computed(() =>
+    props.filters.start_date === props.filters.end_date
+        ? fmtDay(props.filters.start_date)
+        : `${fmtShort(props.filters.start_date)} – ${fmtShort(props.filters.end_date)} ${parse(props.filters.end_date).getFullYear()}`,
+);
+
+// ── Filter ──
+const search = ref(props.filters.q ?? '');
+function visit(overrides: Record<string, string | null | undefined> = {}) {
+    const params: Record<string, string> = {};
+    const merged = {
+        start_date: props.filters.start_date,
+        end_date: props.filters.end_date,
+        category: props.filters.category,
+        q: search.value,
+        ...overrides,
+    };
+    for (const [k, v] of Object.entries(merged)) if (v) params[k] = v;
+    router.get('/expenses', params, { preserveState: true, preserveScroll: true, replace: true });
+}
+function choosePreset(key: Exclude<PresetKey, 'custom'>) {
+    showCustom.value = false;
+    visit({ start_date: presets.value[key].start, end_date: presets.value[key].end });
+}
+function applyCustom() {
+    if (customStart.value && customEnd.value) visit({ start_date: customStart.value, end_date: customEnd.value });
+}
+function toggleCategory(c: string) {
+    visit({ category: props.filters.category === c ? null : c });
+}
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
+watch(search, () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => visit(), 400);
+});
+const goToPage = (page: number) => visit({ page: String(page) });
+
+// ── Ringkasan ──
+const change = computed(() => {
+    const prev = props.summary.previous_total;
+    if (prev <= 0) return null;
+    return ((props.summary.total - prev) / prev) * 100;
+});
+const topCategory = computed(() => props.byCategory[0] ?? null);
+const categoryGrand = computed(() => props.byCategory.reduce((s, c) => s + c.total, 0));
+const share = (v: number) => (categoryGrand.value > 0 ? (v / categoryGrand.value) * 100 : 0);
+
+// ── Daftar dikelompokkan per tanggal ──
+const groups = computed(() => {
+    const out: { date: string; items: ExpenseRow[] }[] = [];
+    for (const e of props.expenses.data) {
+        const last = out[out.length - 1];
+        if (last && last.date === e.expense_date) last.items.push(e);
+        else out.push({ date: e.expense_date, items: [e] });
+    }
+    return out;
+});
+
+// ── Form tambah / ubah / catat lagi ──
+const showDialog = ref(false);
+const editing = ref<ExpenseRow | null>(null);
 const form = useForm({
     category: '',
     description: '',
-    amount: '',
-    expense_date: new Date().toISOString().slice(0, 10),
+    amount: '' as number | '',
+    expense_date: props.today,
     payment_method: 'cash',
     notes: '',
 });
-
-function submit() {
-    form.post('/expenses', {
-        preserveScroll: true,
-        onSuccess: () => {
-            showDialog.value = false;
-            toastSuccess('Biaya operasional berhasil dicatat.');
-        },
-    });
-}
-
-async function destroyExpense(expense: ExpenseRow) {
-    const confirmed = await confirmDelete(expense.description);
-    if (!confirmed) return;
-    isDeleting.value = true;
-    router.delete(`/expenses/${expense.id}`, {
-        preserveScroll: true,
-        onFinish: () => { isDeleting.value = false; },
-        onSuccess: () => toastSuccess('Biaya operasional berhasil dihapus.'),
-    });
-}
-
-const formatRp = (n: number | string | null) => {
-    const num = typeof n === 'string' ? parseFloat(n) : (n ?? 0);
-    return 'Rp ' + num.toLocaleString('id-ID', { maximumFractionDigits: 0 });
-};
-
-const filterCategory = ref(props.filters.category ?? '');
-const filterStart = ref(props.filters.start_date ?? '');
-const filterEnd = ref(props.filters.end_date ?? '');
-
-const applyFilter = () => {
-    const params: Record<string, string> = {};
-    if (filterCategory.value) params.category = filterCategory.value;
-    if (filterStart.value) params.start_date = filterStart.value;
-    if (filterEnd.value) params.end_date = filterEnd.value;
-    router.get('/expenses', params, { preserveState: true, preserveScroll: true });
-};
-
-const goToPage = (page: number) => {
-    router.get('/expenses', { ...props.filters, page }, { preserveState: true, preserveScroll: true });
-};
-
-const categoryColor = (cat: string) => {
-    const colors: Record<string, string> = {
-        sewa: 'bg-blue-100 text-blue-800',
-        gaji: 'bg-green-100 text-green-800',
-        listrik: 'bg-yellow-100 text-yellow-800',
-        air: 'bg-cyan-100 text-cyan-800',
-        internet: 'bg-purple-100 text-purple-800',
-        transport: 'bg-orange-100 text-orange-800',
-        lainnya: 'bg-slate-100 text-slate-800',
-    };
-    return colors[cat] ?? 'bg-slate-100 text-slate-800';
-};
-
-const paymentLabel = (m: string) => ({ cash: 'Tunai', transfer: 'Transfer', ewallet: 'E-Wallet' }[m] ?? m);
-
-// Format rupiah untuk input field
 const amountDisplay = ref('');
+const QUICK_AMOUNTS = [50000, 100000, 250000, 500000, 1000000];
 
-function formatAmountInput(e: Event) {
-    const input = e.target as HTMLInputElement;
-    const raw = input.value.replace(/[^0-9]/g, '');
-    amountDisplay.value = raw ? Number(raw).toLocaleString('id-ID') : '';
-    form.amount = raw || '';
+function setAmount(v: number | '') {
+    form.amount = v;
+    amountDisplay.value = v === '' ? '' : Number(v).toLocaleString('id-ID');
+}
+function onAmountInput(e: Event) {
+    const raw = (e.target as HTMLInputElement).value.replace(/[^0-9]/g, '');
+    setAmount(raw ? Number(raw) : '');
 }
 
-function openCreateDialog() {
-    form.reset();
-    form.expense_date = new Date().toISOString().slice(0, 10);
-    form.payment_method = 'cash';
-    amountDisplay.value = '';
+function openForm(mode: 'create' | 'edit' | 'repeat', row?: ExpenseRow) {
+    form.clearErrors();
+    editing.value = mode === 'edit' && row ? row : null;
+    form.category = row?.category ?? '';
+    form.description = row?.description ?? '';
+    form.payment_method = row ? (row.payment_method === 'transfer' ? 'other' : row.payment_method) : 'cash';
+    form.notes = mode === 'edit' ? (row?.notes ?? '') : '';
+    form.expense_date = mode === 'edit' && row ? row.expense_date : props.today;
+    setAmount(row ? row.amount : '');
     showDialog.value = true;
 }
 
+function submit() {
+    const opts = {
+        preserveScroll: true,
+        onSuccess: () => {
+            showDialog.value = false;
+            void toastSuccess(editing.value ? 'Biaya diperbarui.' : 'Biaya dicatat.');
+        },
+    };
+    if (editing.value) form.patch(`/expenses/${editing.value.id}`, opts);
+    else form.post('/expenses', opts);
+}
+
+async function destroyExpense(e: ExpenseRow) {
+    const ok = await confirmDelete(
+        'Hapus biaya ini?',
+        `${e.description} · ${rupiah(e.amount)} · ${fmtShort(e.expense_date)}. Jurnal terkait ikut dihapus.`,
+    );
+    if (!ok) return;
+    router.delete(`/expenses/${e.id}`, { preserveScroll: true, onSuccess: () => void toastSuccess('Biaya dihapus.') });
+}
 </script>
 
 <template>
-    <AdminLayout title="Biaya Operasional">
-        <Head title="Biaya Operasional" />
+    <AdminLayout title="Biaya Usaha">
+        <Head title="Biaya Usaha" />
 
-        <div class="flex items-center justify-between gap-3 mb-6">
-            <div>
-                <p class="text-sm text-slate-600">Catat semua biaya operasional usaha Anda (sewa, gaji, listrik, dll).</p>
+        <div class="mx-auto max-w-5xl space-y-4 pb-8">
+            <div class="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                    <h1 class="text-xl font-bold text-slate-900">Biaya Usaha</h1>
+                    <p class="mt-1 text-sm text-slate-600">Sewa, gaji, listrik, dan pengeluaran rutin lain di luar belanja bahan.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <ReportExportButton
+                        report="beban"
+                        :params="{ category: filters.category, start_date: filters.start_date, end_date: filters.end_date }"
+                    />
+                    <Button class="gap-2 rounded-xl" @click="openForm('create')">
+                        <Plus class="h-4 w-4" />
+                        Catat biaya
+                    </Button>
+                </div>
             </div>
-            <div class="flex items-center gap-2">
-                <ReportExportButton report="beban" :params="{ category: filterCategory, start_date: filterStart, end_date: filterEnd }" />
-                <Button @click="openCreateDialog" class="inline-flex items-center gap-2">
-                    <Plus class="h-4 w-4" />
-                    Tambah Biaya
-                </Button>
-            </div>
-        </div>
 
-        <!-- Summary Cards -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-            <Card class="rounded-2xl border-slate-200 shadow-sm">
-                <CardContent class="p-4">
-                    <div class="flex items-center gap-3">
-                        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-                            <Wallet class="h-5 w-5 text-primary" />
-                        </div>
-                        <div>
-                            <p class="text-xs text-slate-500">Total Biaya</p>
-                            <p class="text-lg font-bold text-slate-900">{{ formatRp(summary.total) }}</p>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-            <Card class="rounded-2xl border-slate-200 shadow-sm">
-                <CardContent class="p-4">
-                    <div class="flex items-center gap-3">
-                        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10">
-                            <Receipt class="h-5 w-5 text-amber-700" />
-                        </div>
-                        <div>
-                            <p class="text-xs text-slate-500">Jumlah Transaksi</p>
-                            <p class="text-lg font-bold text-slate-900">{{ summary.count }}</p>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-            <Card class="rounded-2xl border-slate-200 shadow-sm">
-                <CardContent class="p-4">
-                    <div class="flex items-center gap-3">
-                        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10">
-                            <span class="text-sm font-bold text-emerald-700">{{ byCategory.length }}</span>
-                        </div>
-                        <div>
-                            <p class="text-xs text-slate-500">Kategori Aktif</p>
-                            <p class="text-lg font-bold text-slate-900">Kategori</p>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-        </div>
-
-        <!-- Filter -->
-        <Card class="rounded-2xl border-slate-200 shadow-sm mb-6">
-            <CardContent class="p-4">
-                <form class="flex flex-wrap items-end gap-3" @submit.prevent="applyFilter">
-                    <div class="space-y-1.5">
-                        <Label class="text-xs">Kategori</Label>
-                        <select v-model="filterCategory" class="flex h-9 w-44 items-center rounded-md border border-slate-200 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/20">
-                            <option value="">Semua kategori</option>
-                            <option v-for="(label, key) in props.categories" :key="key" :value="key">{{ label }}</option>
-                        </select>
-                    </div>
-                    <div class="space-y-1.5">
-                        <Label class="text-xs">Dari</Label>
-                        <Input v-model="filterStart" type="date" class="w-40" />
-                    </div>
-                    <div class="space-y-1.5">
-                        <Label class="text-xs">Sampai</Label>
-                        <Input v-model="filterEnd" type="date" class="w-40" />
-                    </div>
-                    <Button type="submit" variant="outline">Terapkan</Button>
+            <!-- Periode -->
+            <div class="space-y-2">
+                <div class="flex gap-1.5 overflow-x-auto [scrollbar-width:none]">
+                    <button
+                        v-for="(p, key) in presets"
+                        :key="key"
+                        type="button"
+                        class="shrink-0 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors"
+                        :class="
+                            activePreset === key && !showCustom
+                                ? 'border-primary bg-primary text-white'
+                                : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                        "
+                        @click="choosePreset(key)"
+                    >
+                        {{ p.label }}
+                    </button>
+                    <button
+                        type="button"
+                        class="shrink-0 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors"
+                        :class="
+                            activePreset === 'custom' || showCustom
+                                ? 'border-primary bg-primary text-white'
+                                : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                        "
+                        @click="showCustom = !showCustom"
+                    >
+                        Pilih tanggal
+                    </button>
+                </div>
+                <form v-if="showCustom" class="flex flex-wrap items-center gap-2" @submit.prevent="applyCustom">
+                    <Input v-model="customStart" type="date" class="w-40 rounded-xl" aria-label="Dari tanggal" />
+                    <span class="text-sm text-slate-500">sampai</span>
+                    <Input v-model="customEnd" type="date" class="w-40 rounded-xl" aria-label="Sampai tanggal" />
+                    <Button type="submit" variant="outline" class="rounded-xl">Tampilkan</Button>
                 </form>
-            </CardContent>
-        </Card>
+            </div>
 
-        <!-- By Category Breakdown -->
-        <Card v-if="byCategory.length > 0" class="rounded-2xl border-slate-200 shadow-sm mb-6">
-            <CardHeader class="pb-2">
-                <CardTitle class="text-sm">Rincian per Kategori</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div v-for="item in byCategory" :key="item.category" class="rounded-xl bg-slate-50 p-3">
-                        <p class="text-xs text-slate-500">{{ categories[item.category] ?? item.category }}</p>
-                        <p class="text-sm font-bold text-slate-900">{{ formatRp(item.total) }}</p>
+            <!-- Ringkasan -->
+            <div class="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 sm:grid-cols-3 sm:p-5">
+                <div>
+                    <p class="text-xs text-slate-500">Total biaya · {{ periodText }}</p>
+                    <p class="mt-1 text-2xl font-bold text-slate-900 tabular-nums">{{ rupiah(summary.total) }}</p>
+                    <p
+                        v-if="change !== null"
+                        class="mt-1 inline-flex items-center gap-1 text-xs"
+                        :class="change > 0 ? 'text-red-600' : 'text-emerald-700'"
+                    >
+                        <TrendingUp v-if="change > 0" class="h-3.5 w-3.5" />
+                        <TrendingDown v-else class="h-3.5 w-3.5" />
+                        {{ change > 0 ? 'Naik' : 'Turun' }} {{ Math.abs(change).toLocaleString('id-ID', { maximumFractionDigits: 0 }) }}% dari
+                        {{ fmtShort(summary.previous_start) }}–{{ fmtShort(summary.previous_end) }}
+                    </p>
+                    <p v-else-if="summary.previous_total === 0 && summary.total > 0" class="mt-1 text-xs text-slate-500">
+                        Periode sebelumnya belum ada biaya.
+                    </p>
+                </div>
+                <div class="sm:border-l sm:border-slate-100 sm:pl-4">
+                    <p class="text-xs text-slate-500">Jumlah pencatatan</p>
+                    <p class="mt-1 text-lg font-semibold text-slate-900">{{ summary.count }} biaya</p>
+                    <p v-if="summary.count > 0" class="mt-0.5 text-xs text-slate-500">
+                        Rata-rata {{ rupiah(summary.total / Math.max(summary.days, 1)) }}/hari
+                    </p>
+                </div>
+                <div class="sm:border-l sm:border-slate-100 sm:pl-4">
+                    <p class="text-xs text-slate-500">Biaya terbesar</p>
+                    <template v-if="topCategory">
+                        <p class="mt-1 text-lg font-semibold text-slate-900">{{ labelOf(topCategory.category) }}</p>
+                        <p class="mt-0.5 text-xs text-slate-500">
+                            {{ rupiah(topCategory.total) }} · {{ share(topCategory.total).toLocaleString('id-ID', { maximumFractionDigits: 0 }) }}%
+                            dari total
+                        </p>
+                    </template>
+                    <p v-else class="mt-1 text-sm text-slate-400">—</p>
+                </div>
+            </div>
+
+            <!-- Rincian per kategori -->
+            <div v-if="byCategory.length > 0" class="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+                <div class="mb-3 flex items-center justify-between">
+                    <h2 class="text-sm font-bold text-slate-900">Per kategori</h2>
+                    <span class="text-xs text-slate-500">Klik untuk menyaring daftar</span>
+                </div>
+                <div class="space-y-1">
+                    <button
+                        v-for="c in byCategory"
+                        :key="c.category"
+                        type="button"
+                        class="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors"
+                        :class="filters.category === c.category ? 'bg-primary/5 ring-1 ring-primary/30' : 'hover:bg-slate-50'"
+                        @click="toggleCategory(c.category)"
+                    >
+                        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" :class="toneOf(c.category)">
+                            <component :is="iconOf(c.category)" class="h-4 w-4" />
+                        </span>
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-baseline justify-between gap-2 text-sm">
+                                <span class="truncate font-medium text-slate-800"
+                                    >{{ labelOf(c.category) }} <span class="text-xs font-normal text-slate-400">· {{ c.count }}×</span></span
+                                >
+                                <span class="shrink-0 font-semibold text-slate-900 tabular-nums">{{ rupiah(c.total) }}</span>
+                            </div>
+                            <div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                                <div class="h-full rounded-full bg-primary/70" :style="{ width: `${Math.max(share(c.total), 2)}%` }" />
+                            </div>
+                        </div>
+                        <span class="w-10 shrink-0 text-right text-xs text-slate-500 tabular-nums"
+                            >{{ share(c.total).toLocaleString('id-ID', { maximumFractionDigits: 0 }) }}%</span
+                        >
+                    </button>
+                </div>
+            </div>
+
+            <!-- Daftar -->
+            <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                <div class="flex flex-wrap items-center gap-2 border-b border-slate-100 p-3">
+                    <div class="relative min-w-0 flex-1">
+                        <Search class="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                        <Input v-model="search" type="search" placeholder="Cari keterangan biaya" class="rounded-xl pl-9" />
                     </div>
-                </div>
-            </CardContent>
-        </Card>
-
-        <!-- Table -->
-        <Card class="rounded-2xl border-slate-200 shadow-sm">
-            <CardHeader class="pb-2">
-                <CardTitle class="text-sm">Daftar Biaya Operasional</CardTitle>
-                <CardDescription>Menampilkan {{ expenses.data.length }} dari {{ expenses.total }} biaya</CardDescription>
-            </CardHeader>
-            <CardContent class="p-0">
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
-                        <thead>
-                            <tr class="border-b border-slate-100 bg-slate-50/80">
-                                <th class="px-4 py-3 text-left font-semibold text-slate-700">Tanggal</th>
-                                <th class="px-4 py-3 text-left font-semibold text-slate-700">Kategori</th>
-                                <th class="px-4 py-3 text-left font-semibold text-slate-700">Deskripsi</th>
-                                <th class="px-4 py-3 text-left font-semibold text-slate-700">Metode</th>
-                                <th class="px-4 py-3 text-left font-semibold text-slate-700">Catat oleh</th>
-                                <th class="px-4 py-3 text-right font-semibold text-slate-700">Jumlah</th>
-                                <th class="px-4 py-3 text-right font-semibold text-slate-700">Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="expense in expenses.data" :key="expense.id" class="border-b border-slate-50 hover:bg-slate-50/50">
-                                <td class="px-4 py-3 text-slate-700">{{ new Date(expense.expense_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) }}</td>
-                                <td class="px-4 py-3">
-                                    <span :class="['inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium', categoryColor(expense.category)]">
-                                        {{ categories[expense.category] ?? expense.category }}
-                                    </span>
-                                </td>
-                                <td class="px-4 py-3 text-slate-700 max-w-[200px] truncate">{{ expense.description }}</td>
-                                <td class="px-4 py-3 text-slate-500 text-xs">{{ paymentLabel(expense.payment_method) }}</td>
-                                <td class="px-4 py-3 text-slate-500 text-xs">{{ expense.user?.name ?? '-' }}</td>
-                                <td class="px-4 py-3 text-right font-semibold text-red-600">-{{ formatRp(expense.amount) }}</td>
-                                <td class="px-4 py-3 text-right">
-                                    <button @click="destroyExpense(expense)" :disabled="isDeleting" class="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50">
-                                        <Trash2 class="h-4 w-4" />
-                                    </button>
-                                </td>
-                            </tr>
-                            <tr v-if="expenses.data.length === 0">
-                                <td colspan="7" class="px-4 py-12 text-center text-slate-400">Belum ada biaya operasional.</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                    <button
+                        v-if="filters.category"
+                        type="button"
+                        class="inline-flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary"
+                        @click="toggleCategory(filters.category)"
+                    >
+                        {{ labelOf(filters.category) }}
+                        <X class="h-3.5 w-3.5" />
+                    </button>
                 </div>
 
-                <!-- Pagination -->
-                <div v-if="expenses.last_page > 1" class="flex items-center justify-between px-4 py-3 border-t border-slate-100">
+                <div v-if="expenses.data.length === 0" class="px-6 py-12 text-center">
+                    <Wallet class="mx-auto h-10 w-10 text-slate-300" />
+                    <p class="mt-3 font-semibold text-slate-800">Belum ada biaya di periode ini</p>
+                    <p class="mt-1 text-sm text-slate-500">Catat sewa, gaji, atau listrik agar laba usaha terlihat lebih jujur.</p>
+                    <Button class="mt-4 gap-2 rounded-xl" @click="openForm('create')">
+                        <Plus class="h-4 w-4" />
+                        Catat biaya
+                    </Button>
+                </div>
+
+                <template v-for="g in groups" :key="g.date">
+                    <div class="flex items-center justify-between bg-slate-50 px-4 py-2 text-xs">
+                        <span class="font-semibold text-slate-600">{{ fmtDay(g.date) }}</span>
+                        <span class="font-semibold text-slate-600 tabular-nums">{{
+                            rupiah(dailyTotals[g.date] ?? g.items.reduce((s, i) => s + i.amount, 0))
+                        }}</span>
+                    </div>
+                    <div v-for="e in g.items" :key="e.id" class="flex items-center gap-3 border-b border-slate-100 px-4 py-3 last:border-0">
+                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" :class="toneOf(e.category)">
+                            <component :is="iconOf(e.category)" class="h-4 w-4" />
+                        </span>
+                        <div class="min-w-0 flex-1">
+                            <p class="truncate text-sm font-medium text-slate-900">{{ e.description }}</p>
+                            <p class="truncate text-xs text-slate-500">
+                                {{ labelOf(e.category) }} · {{ paymentMethodLabel(e.payment_method)
+                                }}<template v-if="e.user"> · {{ e.user.name }}</template>
+                                <template v-if="e.notes"> · {{ e.notes }}</template>
+                            </p>
+                        </div>
+                        <span class="shrink-0 text-sm font-semibold text-slate-900 tabular-nums">{{ rupiah(e.amount) }}</span>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger as-child>
+                                <button
+                                    type="button"
+                                    class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
+                                    :aria-label="`Menu ${e.description}`"
+                                >
+                                    <MoreVertical class="h-4 w-4" />
+                                </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem @click="openForm('repeat', e)"><Copy class="h-4 w-4" /> Catat lagi</DropdownMenuItem>
+                                <DropdownMenuItem @click="openForm('edit', e)"><Pencil class="h-4 w-4" /> Ubah</DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem class="text-red-600" @click="destroyExpense(e)"><Trash2 class="h-4 w-4" /> Hapus</DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
+                </template>
+
+                <div v-if="expenses.last_page > 1" class="flex items-center justify-between border-t border-slate-100 px-4 py-3">
                     <p class="text-xs text-slate-500">Halaman {{ expenses.current_page }} dari {{ expenses.last_page }}</p>
                     <div class="flex gap-1">
-                        <Button v-if="expenses.current_page > 1" @click="goToPage(expenses.current_page - 1)" variant="outline" size="sm">Sebelumnya</Button>
-                        <Button v-if="expenses.current_page < expenses.last_page" @click="goToPage(expenses.current_page + 1)" variant="outline" size="sm">Selanjutnya</Button>
+                        <Button
+                            v-if="expenses.current_page > 1"
+                            variant="outline"
+                            size="sm"
+                            class="rounded-lg"
+                            @click="goToPage(expenses.current_page - 1)"
+                            >Sebelumnya</Button
+                        >
+                        <Button
+                            v-if="expenses.current_page < expenses.last_page"
+                            variant="outline"
+                            size="sm"
+                            class="rounded-lg"
+                            @click="goToPage(expenses.current_page + 1)"
+                            >Selanjutnya</Button
+                        >
                     </div>
                 </div>
-            </CardContent>
-        </Card>
+            </div>
+        </div>
 
-        <!-- Dialog Create -->
+        <!-- Form -->
         <Dialog v-model:open="showDialog">
-            <DialogContent class="sm:max-w-[500px]">
+            <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-[520px]">
                 <DialogHeader>
-                    <DialogTitle>Tambah Biaya Operasional</DialogTitle>
-                    <DialogDescription>Catat biaya operasional baru. Jurnal akuntansi akan diposting otomatis.</DialogDescription>
+                    <DialogTitle>{{ editing ? 'Ubah biaya' : 'Catat biaya' }}</DialogTitle>
+                    <DialogDescription>
+                        {{
+                            editing
+                                ? 'Perubahan ikut memperbarui jurnal bila modul akuntansi aktif.'
+                                : 'Biaya di luar belanja bahan, misalnya sewa, gaji, atau listrik.'
+                        }}
+                    </DialogDescription>
                 </DialogHeader>
-                <form @submit.prevent="submit" class="space-y-4">
+                <form class="space-y-4" @submit.prevent="submit">
                     <div class="space-y-1.5">
-                        <Label>Kategori <span class="text-red-500">*</span></Label>
-                        <select v-model="form.category" required class="flex h-9 w-full items-center rounded-md border border-slate-200 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/20">
-                            <option value="" disabled>Pilih kategori</option>
-                            <option v-for="(label, key) in props.categories" :key="key" :value="key">{{ label }}</option>
-                        </select>
-                        <p v-if="form.errors.category" class="text-xs text-red-500">{{ form.errors.category }}</p>
+                        <Label>Kategori</Label>
+                        <div class="grid grid-cols-4 gap-2" role="radiogroup" aria-label="Kategori biaya">
+                            <button
+                                v-for="(label, key) in categories"
+                                :key="key"
+                                type="button"
+                                role="radio"
+                                :aria-checked="form.category === key"
+                                class="flex flex-col items-center gap-1 rounded-xl border px-1 py-2 text-[11px] font-medium transition-colors"
+                                :class="
+                                    form.category === key
+                                        ? 'border-primary bg-primary/5 text-primary'
+                                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                                "
+                                @click="form.category = String(key)"
+                            >
+                                <component :is="iconOf(String(key))" class="h-4 w-4" />
+                                <span class="w-full truncate text-center">{{ label.replace(' Karyawan', '').replace(' Tempat', '') }}</span>
+                            </button>
+                        </div>
+                        <p v-if="form.errors.category" class="text-xs text-red-600">{{ form.errors.category }}</p>
                     </div>
+
                     <div class="space-y-1.5">
-                        <Label>Deskripsi <span class="text-red-500">*</span></Label>
-                        <Input v-model="form.description" placeholder="Contoh: Sewa bulanan Agustus" required />
-                        <p v-if="form.errors.description" class="text-xs text-red-500">{{ form.errors.description }}</p>
+                        <Label for="exp-amount">Jumlah</Label>
+                        <div class="flex items-center rounded-xl border border-slate-200 bg-white focus-within:ring-2 focus-within:ring-primary/30">
+                            <span class="pl-3 text-base text-slate-500">Rp</span>
+                            <input
+                                id="exp-amount"
+                                :value="amountDisplay"
+                                type="text"
+                                inputmode="numeric"
+                                placeholder="0"
+                                class="h-12 w-full min-w-0 bg-transparent px-2 text-xl font-semibold outline-none"
+                                @input="onAmountInput"
+                            />
+                        </div>
+                        <div class="flex flex-wrap gap-1.5">
+                            <button
+                                v-for="q in QUICK_AMOUNTS"
+                                :key="q"
+                                type="button"
+                                class="rounded-full border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                                @click="setAmount(q)"
+                            >
+                                {{ q >= 1000000 ? `${q / 1000000} jt` : `${q / 1000} rb` }}
+                            </button>
+                        </div>
+                        <p v-if="form.errors.amount" class="text-xs text-red-600">{{ form.errors.amount }}</p>
                     </div>
-                    <div class="grid grid-cols-2 gap-3">
+
+                    <div class="space-y-1.5">
+                        <Label for="exp-desc">Keterangan</Label>
+                        <Input id="exp-desc" v-model="form.description" class="rounded-xl" placeholder="Contoh: Sewa ruko bulan November" />
+                        <p v-if="form.errors.description" class="text-xs text-red-600">{{ form.errors.description }}</p>
+                    </div>
+
+                    <div class="grid gap-3 sm:grid-cols-2">
                         <div class="space-y-1.5">
-                            <Label>Jumlah (Rp) <span class="text-red-500">*</span></Label>
-                            <div class="relative">
-                                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">Rp</span>
-                                <input
-                                    :value="amountDisplay"
-                                    @input="formatAmountInput"
-                                    type="text"
-                                    inputmode="numeric"
-                                    placeholder="0"
-                                    class="flex h-9 w-full items-center rounded-md border border-slate-200 bg-white pl-10 pr-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                                    required
-                                />
+                            <Label for="exp-date">Tanggal</Label>
+                            <Input id="exp-date" v-model="form.expense_date" type="date" class="rounded-xl" />
+                            <p v-if="form.errors.expense_date" class="text-xs text-red-600">{{ form.errors.expense_date }}</p>
+                        </div>
+                        <div class="space-y-1.5">
+                            <Label>Dibayar dengan</Label>
+                            <div class="grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1" role="radiogroup" aria-label="Metode bayar">
+                                <button
+                                    v-for="m in PAYMENT_METHODS"
+                                    :key="m.value"
+                                    type="button"
+                                    role="radio"
+                                    :aria-checked="form.payment_method === m.value"
+                                    class="rounded-lg py-1.5 text-xs font-medium transition-colors"
+                                    :class="form.payment_method === m.value ? 'bg-white text-slate-900' : 'text-slate-600'"
+                                    @click="form.payment_method = m.value"
+                                >
+                                    {{ m.label }}
+                                </button>
                             </div>
-                            <p v-if="form.errors.amount" class="text-xs text-red-500">{{ form.errors.amount }}</p>
-                        </div>
-                        <div class="space-y-1.5">
-                            <Label>Tanggal <span class="text-red-500">*</span></Label>
-                            <Input v-model="form.expense_date" type="date" required />
-                            <p v-if="form.errors.expense_date" class="text-xs text-red-500">{{ form.errors.expense_date }}</p>
                         </div>
                     </div>
+
                     <div class="space-y-1.5">
-                        <Label>Metode Pembayaran</Label>
-                        <select v-model="form.payment_method" class="flex h-9 w-full items-center rounded-md border border-slate-200 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/20">
-                            <option value="cash">Tunai</option>
-                            <option value="transfer">Transfer</option>
-                            <option value="ewallet">E-Wallet</option>
-                        </select>
+                        <Label for="exp-notes">Catatan <span class="font-normal text-slate-400">(opsional)</span></Label>
+                        <Textarea id="exp-notes" v-model="form.notes" :rows="2" class="rounded-xl" />
                     </div>
-                    <div class="space-y-1.5">
-                        <Label>Catatan</Label>
-                        <Textarea v-model="form.notes" placeholder="Catatan tambahan (opsional)" rows="2" />
-                    </div>
-                    <DialogFooter>
-                        <Button type="button" variant="outline" @click="showDialog = false">Batal</Button>
-                        <Button type="submit" :disabled="form.processing">
-                            {{ form.processing ? 'Menyimpan...' : 'Simpan' }}
+
+                    <DialogFooter class="gap-2">
+                        <Button type="button" variant="outline" class="rounded-xl" @click="showDialog = false">Batal</Button>
+                        <Button type="submit" class="rounded-xl" :disabled="form.processing">
+                            {{ form.processing ? 'Menyimpan…' : editing ? 'Simpan perubahan' : 'Simpan' }}
                         </Button>
                     </DialogFooter>
                 </form>

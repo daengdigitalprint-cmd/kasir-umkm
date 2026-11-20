@@ -1003,6 +1003,7 @@ class ReportExportController extends Controller
         $expenses = \App\Models\OperationalExpense::where('store_id', $store->id)
             ->where('expense_date', '>=', $start)
             ->where('expense_date', '<=', $end)
+            ->when($request->filled('category'), fn ($q) => $q->where('category', $request->input('category')))
             ->with('user:id,name')
             ->orderByDesc('expense_date')
             ->get();
@@ -1353,7 +1354,7 @@ class ReportExportController extends Controller
             StockMovement::TYPE_PRODUCTION_OUTPUT => 'Output produksi',
             StockMovement::TYPE_PRODUCTION_REVERSAL => 'Pembatalan produksi',
             StockMovement::TYPE_OPNAME => 'Stock opname',
-                StockMovement::TYPE_REPACK => 'Pecah kemasan',
+            StockMovement::TYPE_REPACK => 'Pecah kemasan',
             StockMovement::TYPE_ADJUSTMENT_REVERSAL => 'Pembatalan penyesuaian',
         ][$type] ?? $type;
     }
