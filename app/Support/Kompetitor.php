@@ -131,6 +131,13 @@ final class Kompetitor
                 'best_for' => 'Restoran dan kafe multi-cabang yang butuh integrasi ojol, pembayaran digital, dan ERP',
                 'consider' => 'Khusus bisnis kuliner; harga detail lewat konsultasi',
             ],
+            'iseller' => [
+                'free' => 'Tidak tercantum paket gratis (ada tombol coba gratis)',
+                'price' => 'Starter Rp300.000 / bulan',
+                'billing' => 'Per paket; kasir tambahan Rp225.000–Rp450.000 / bulan; add-on terpisah',
+                'best_for' => 'Usaha yang butuh omnichannel (Shopee, Lazada, online ordering) dan integrasi Accurate/Jurnal',
+                'consider' => 'Biaya bertambah untuk setiap kasir tambahan dan add-on',
+            ],
         ];
 
         $out = [];
@@ -935,6 +942,75 @@ final class Kompetitor
                     ['Apa alternatif ESB untuk usaha kecil?', 'Kasir UMKM by MaccaPOS punya paket {free} gratis dan paket {paid} {paid_price} per outlet per bulan, dengan QR meja, layar dapur, serta resep & HPP untuk usaha kuliner.'],
                     ['Berapa harga ESB?', 'Menurut halaman harga ESB, paket Basic mulai dari Rp0 per bulan (syarat & ketentuan berlaku), Advanced mulai dari Rp499.000 per bulan, dan Enterprise sesuai kebutuhan.'],
                     ['Apakah Kasir UMKM bisa untuk usaha selain kuliner?', 'Bisa. Selain kuliner, Kasir UMKM punya mode untuk toko kelontong dan retail, apotek, laundry, barbershop, dan bakery.'],
+                ],
+            ],
+
+            'iseller' => [
+                'slug' => 'alternatif-iseller',
+                'name' => 'iSeller',
+                'checked_at' => '2026-11-20',
+                'checked_label' => '20 November 2026',
+                'sources' => [
+                    ['label' => 'halaman harga iSeller', 'url' => 'https://www.isellercommerce.com/id/pricing'],
+                ],
+                'h1' => 'Alternatif iSeller: aplikasi kasir mulai gratis, tanpa biaya per kasir',
+                'description' => 'Mencari alternatif iSeller? Bandingkan harga paket, biaya kasir tambahan, dan add-on dengan Kasir UMKM by MaccaPOS yang punya paket gratis selamanya.',
+                'lead' => 'iSeller adalah platform kasir dan penjualan omnichannel dengan paket mulai Rp300.000 per bulan, ditambah biaya untuk setiap kasir tambahan dan berbagai add-on. Untuk UMKM yang baru tumbuh dan belum butuh omnichannel, berikut perbandingan yang jujur, termasuk kapan iSeller justru lebih cocok.',
+                'tldr' => [
+                    ['Harga', 'Kasir UMKM punya paket {free} gratis dan paket {paid} {paid_price} per outlet per bulan. Paket Starter iSeller Rp300.000 per bulan untuk satu outlet.'],
+                    ['Kasir tambahan', 'Kasir UMKM tidak menagih per perangkat. Di iSeller, kasir tambahan Rp225.000 per bulan di outlet yang sama.'],
+                    ['iSeller lebih unggul', 'bila Anda butuh omnichannel (Shopee, Lazada, online ordering), integrasi Accurate & Jurnal, atau paket perangkat keras.'],
+                ],
+                'reasons' => [
+                    ['Biaya awal cukup besar', 'Paket Starter iSeller Rp300.000 per bulan, sebelum add-on dan kasir tambahan.'],
+                    ['Kasir kedua menambah biaya', 'Setiap register tambahan di outlet yang sama Rp225.000 per bulan, dan Rp450.000 di outlet berbeda.'],
+                    ['Fitur dasar sebagai add-on', 'Kontrol stok (sesi opname, multi user) tercantum sebagai add-on Stock Control Rp150.000 per bulan.'],
+                ],
+                'compare' => [
+                    ['Paket gratis', 'Ada: paket {free}, transaksi tanpa batas, {free_limits}', 'Tidak tercantum paket gratis; ada tombol coba gratis'],
+                    ['Harga paket', '{paid}: {paid_price} / outlet / bulan', 'Starter Rp300.000, Pro Rp570.000, Advanced Rp1.110.000 / bulan; Enterprise hubungi'],
+                    ['Kasir tambahan', 'Tanpa biaya per perangkat', 'Rp225.000 / bulan (outlet sama), Rp450.000 / bulan (outlet berbeda)'],
+                    ['Outlet', 'Add-on {outlet_addon} / outlet / bulan', 'Starter 1 outlet; Pro maks. 3; Advanced maks. 8'],
+                    ['Stok opname', 'Termasuk paket {paid}', 'Add-on Stock Control Rp150.000 / bulan'],
+                    ['Pesanan GrabFood', 'Dicatat manual sebagai channel penjualan beserta komisinya', 'Add-on GrabFood Rp75.000 / outlet / bulan'],
+                    ['Marketplace & akuntansi', 'Belum ada integrasi', 'Add-on Shopee, Lazada, Accurate, Jurnal tercantum'],
+                    ['Fitur usaha khusus', 'Mode apotek, laundry, barbershop, produksi & HPP', 'Tidak tercantum di halaman harga'],
+                ],
+                'source_note' => 'Harga paket iSeller yang dikutip adalah harga bulanan untuk "Software Only"; halaman harganya menyebut hemat 10% untuk tagihan tahunan.',
+                'cost' => [
+                    'title' => 'Contoh biaya bulanan: 1 outlet, 2 kasir',
+                    'sub' => 'Toko dengan dua perangkat kasir yang dipakai bersamaan.',
+                    'outlets' => 1,
+                    'theirs_title' => 'iSeller (paket Starter)',
+                    'theirs' => [
+                        ['Paket Starter (termasuk 1 kasir)', 'Rp300.000'],
+                        ['Register tambahan (outlet sama)', 'Rp225.000'],
+                    ],
+                    'theirs_total' => 'Rp525.000 / bulan',
+                    'theirs_note' => 'Paket Starter iSeller sudah termasuk 10.000 produk dan 1 add-on premium gratis. Add-on lain seperti Stock Control (Rp150.000) atau GrabFood (Rp75.000) dihitung terpisah.',
+                    'ours' => [
+                        ['Paket {paid}', '{paid_price}'],
+                        ['Kasir kedua', 'Tanpa biaya'],
+                        ['Stok opname', 'Termasuk'],
+                    ],
+                    'ours_note' => 'Dalam Rupiah, tanpa biaya per perangkat atau per karyawan.',
+                ],
+                'strengths' => [
+                    ['Omnichannel', 'Add-on Shopee, Lazada, dan F&B Online Ordering untuk menjual di banyak kanal.'],
+                    ['Integrasi akuntansi', 'Add-on Accurate dan Jurnal untuk sinkronisasi penjualan dan inventaris.'],
+                    ['Paket perangkat keras', 'Paket iSeller Basic dan Mobile menggabungkan software dengan tablet atau mPOS.'],
+                    ['Katalog besar & pengguna tidak terbatas', 'Starter hingga 10.000 produk, Advanced tanpa batas; pengguna tidak terbatas.'],
+                ],
+                'fit_us' => [
+                    'Baru mulai dan ingin kasir gratis atau biaya bulanan yang ringan',
+                    'Memakai lebih dari satu perangkat kasir tanpa biaya tambahan',
+                    'Butuh stok opname tanpa add-on terpisah',
+                    'Butuh mode apotek, laundry, atau komisi kapster',
+                ],
+                'faq' => [
+                    ['Apa alternatif iSeller yang lebih murah?', 'Kasir UMKM by MaccaPOS punya paket {free} gratis dan paket {paid} {paid_price} per outlet per bulan, tanpa biaya per kasir atau perangkat.'],
+                    ['Berapa harga iSeller?', 'Menurut halaman harga iSeller, paket Starter Rp300.000, Pro Rp570.000, dan Advanced Rp1.110.000 per bulan (Software Only), dengan register tambahan Rp225.000 atau Rp450.000 per bulan dan add-on terpisah.'],
+                    ['Apakah Kasir UMKM terhubung ke Shopee atau Accurate seperti iSeller?', 'Belum. Kasir UMKM berfokus pada kasir, stok, dan laporan untuk UMKM. Bila integrasi marketplace atau akuntansi penting, iSeller menyediakannya sebagai add-on.'],
                 ],
             ],
         ];

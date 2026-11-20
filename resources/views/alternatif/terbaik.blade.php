@@ -23,7 +23,7 @@
         ['need' => 'Ingin mulai gratis tanpa batas waktu', 'keys' => ['kasir-umkm', 'kasir-pintar', 'kasir-aja', 'loyverse', 'ireap'], 'note' => 'Pawoon juga punya paket gratis, tetapi dibatasi 7 transaksi per hari.'],
         ['need' => 'Siap bayar tahunan dengan biaya paling hemat', 'keys' => ['qasir', 'ireap', 'kasir-pintar'], 'note' => 'Cocok untuk kebutuhan kasir umum dengan satu perangkat atau satu outlet.'],
         ['need' => 'Punya banyak staf atau beberapa perangkat kasir', 'keys' => ['kasir-umkm', 'qasir'], 'note' => 'Perhatikan aplikasi yang menghitung biaya per karyawan atau per perangkat.'],
-        ['need' => 'Butuh integrasi ojol, pembayaran digital, atau akuntansi', 'keys' => ['majoo', 'esb', 'pawoon', 'moka', 'olsera', 'accurate-pos'], 'note' => 'Integrasi biasanya ada di paket menengah ke atas.'],
+        ['need' => 'Butuh integrasi ojol, pembayaran digital, atau akuntansi', 'keys' => ['majoo', 'esb', 'iseller', 'pawoon', 'moka', 'olsera', 'accurate-pos'], 'note' => 'Integrasi biasanya ada di paket menengah ke atas.'],
         ['need' => 'Apotek, laundry, atau barbershop', 'keys' => ['kasir-umkm'], 'note' => 'Mode apotek (batch, kedaluwarsa, nomor resep), order laundry, dan komisi kapster.'],
     ];
     $appByKey = collect($apps)->keyBy('key');
