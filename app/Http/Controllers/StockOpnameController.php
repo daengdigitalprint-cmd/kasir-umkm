@@ -214,7 +214,7 @@ class StockOpnameController extends Controller
             'cancelledBy:id,name',
         ]);
 
-        $canReview = $user->isAdmin() || $user->isManager();
+        $canReview = StockAdjustmentApproval::isReviewer($user);
         $isOwnDocument = (int) $stockOpname->created_by === (int) $user->id;
         $blockedBySegregation = StockAdjustmentApproval::segregationOfDuties($store) && $isOwnDocument;
         $isPending = $stockOpname->status === StockAdjustment::STATUS_PENDING_APPROVAL;
@@ -222,7 +222,7 @@ class StockOpnameController extends Controller
         return Inertia::render('StockOpnames/Show', [
             'opname' => $stockOpname,
             'statusLabel' => StockAdjustment::statusLabel((string) $stockOpname->status),
-            'canPost' => $stockOpname->isDraft(),
+            'canPost' => $stockOpname->isDraft() && $canReview,
             'canCancel' => ! $stockOpname->isCancelled() && $canReview,
             'canDelete' => $stockOpname->isCancelled() && $canReview,
             'canApprove' => $isPending && $canReview && ! $blockedBySegregation,
@@ -476,8 +476,8 @@ class StockOpnameController extends Controller
 
         $this->assertOwnedOpname($store, $stockOpname);
 
-        if (! $user->isAdmin() && ! $user->isManager()) {
-            abort(403, 'Hanya admin atau manajer yang dapat memposting stock opname.');
+        if (! StockAdjustmentApproval::isReviewer($user)) {
+            abort(403, 'Hanya admin, manajer, atau pemilik yang dapat memposting stock opname.');
         }
 
         StorePlanLimits::assertAdvancedRetail($store, 'Fitur stock opname tersedia mulai paket GrowUp.');
@@ -644,8 +644,8 @@ class StockOpnameController extends Controller
 
         $this->assertOwnedOpname($store, $stockOpname);
 
-        if (! $user->isAdmin() && ! $user->isManager()) {
-            abort(403, 'Hanya admin atau manajer yang dapat membatalkan stock opname.');
+        if (! StockAdjustmentApproval::isReviewer($user)) {
+            abort(403, 'Hanya admin, manajer, atau pemilik yang dapat membatalkan stock opname.');
         }
 
         StorePlanLimits::assertAdvancedRetail($store, 'Fitur stock opname tersedia mulai paket GrowUp.');
@@ -729,8 +729,8 @@ class StockOpnameController extends Controller
 
         $this->assertOwnedOpname($store, $stockOpname);
 
-        if (! $user->isAdmin() && ! $user->isManager()) {
-            abort(403, 'Hanya admin atau manajer yang dapat menghapus stock opname.');
+        if (! StockAdjustmentApproval::isReviewer($user)) {
+            abort(403, 'Hanya admin, manajer, atau pemilik yang dapat menghapus stock opname.');
         }
 
         StorePlanLimits::assertAdvancedRetail($store, 'Fitur stock opname tersedia mulai paket GrowUp.');

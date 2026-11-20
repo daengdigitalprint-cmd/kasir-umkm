@@ -100,6 +100,8 @@ class StockAdjustmentController extends Controller
             'reasonDirections' => collect(StockAdjustment::manualReasonLabels())
                 ->map(fn ($label, $code) => StockAdjustment::directionFor((string) $code))
                 ->all(),
+            // Koreksi dari staf (gudang, kasir) menunggu persetujuan peninjau sebelum stok berubah.
+            'needsReview' => ! StockAdjustmentApproval::isReviewer($user),
         ]);
     }
 
@@ -302,8 +304,8 @@ class StockAdjustmentController extends Controller
 
         $document->update(['total_variance_value' => $totalValue]);
 
-        // Dokumen di atas ambang ditahan; stok baru berubah setelah disetujui.
-        if (StockAdjustmentApproval::requiresApproval($store, $document->fresh())) {
+        // Dokumen dari staf, atau di atas ambang, ditahan; stok baru berubah setelah disetujui.
+        if (StockAdjustmentApproval::requiresApproval($store, $document->fresh(), $user)) {
             $document->update(['status' => StockAdjustment::STATUS_PENDING_APPROVAL]);
 
             return $document->fresh();
@@ -383,7 +385,7 @@ class StockAdjustmentController extends Controller
             'cancelledBy:id,name',
         ]);
 
-        $canReview = $user->isAdmin() || $user->isManager();
+        $canReview = StockAdjustmentApproval::isReviewer($user);
         $isOwnDocument = (int) $stockAdjustment->created_by === (int) $user->id;
         $blockedBySegregation = StockAdjustmentApproval::segregationOfDuties($store) && $isOwnDocument;
 
@@ -496,8 +498,8 @@ class StockAdjustmentController extends Controller
             abort(403, 'Dokumen ini bukan milik toko Anda.');
         }
 
-        if (! $user->isAdmin() && ! $user->isManager()) {
-            abort(403, 'Hanya admin atau manajer yang dapat membatalkan penyesuaian stok.');
+        if (! StockAdjustmentApproval::isReviewer($user)) {
+            abort(403, 'Hanya admin, manajer, atau pemilik yang dapat membatalkan penyesuaian stok.');
         }
 
         StorePlanLimits::assertAdvancedRetail($store, 'Fitur penyesuaian stok tersedia mulai paket GrowUp.');

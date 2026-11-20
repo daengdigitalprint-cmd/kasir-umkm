@@ -56,11 +56,30 @@ final class StockAdjustmentApproval
     }
 
     /**
-     * Dokumen memerlukan persetujuan bila alur aktif dan nilai selisihnya
-     * melampaui ambang. Ambang nol berarti seluruh dokumen wajib disetujui.
+     * Peninjau koreksi stok: admin, manajer, atau pemilik di toko yang sedang aktif.
+     * (Pemilik dicek per toko aktif, bukan isOwner() yang juga benar untuk toko lain.)
      */
-    public static function requiresApproval(?Store $store, StockAdjustment $document): bool
+    public static function isReviewer(User $user): bool
     {
+        if ($user->isSuperAdmin() || $user->isAdmin() || $user->isManager()) {
+            return true;
+        }
+
+        return $user->getRoleForActiveStore() === 'owner';
+    }
+
+    /**
+     * Dokumen memerlukan persetujuan bila:
+     * - dibuat staf (gudang, kasir, dll.) — koreksi staf selalu ditinjau peninjau; atau
+     * - alur persetujuan toko aktif dan nilai selisihnya melampaui ambang
+     *   (ambang nol berarti seluruh dokumen wajib disetujui).
+     */
+    public static function requiresApproval(?Store $store, StockAdjustment $document, ?User $creator = null): bool
+    {
+        if ($creator !== null && ! self::isReviewer($creator)) {
+            return true;
+        }
+
         if (! self::enabled($store)) {
             return false;
         }
@@ -74,15 +93,15 @@ final class StockAdjustmentApproval
     }
 
     /**
-     * Penyetuju harus admin atau manajer, dan — bila pemisahan wewenang aktif —
-     * bukan orang yang membuat dokumen tersebut.
+     * Penyetuju harus admin, manajer, atau pemilik, dan — bila pemisahan wewenang
+     * aktif — bukan orang yang membuat dokumen tersebut.
      *
      * @throws \RuntimeException
      */
     public static function assertCanApprove(?Store $store, StockAdjustment $document, User $approver): void
     {
-        if (! $approver->isAdmin() && ! $approver->isManager()) {
-            throw new \RuntimeException('Hanya admin atau manajer yang dapat menyetujui dokumen koreksi stok.');
+        if (! self::isReviewer($approver)) {
+            throw new \RuntimeException('Hanya admin, manajer, atau pemilik yang dapat menyetujui dokumen koreksi stok.');
         }
 
         if (

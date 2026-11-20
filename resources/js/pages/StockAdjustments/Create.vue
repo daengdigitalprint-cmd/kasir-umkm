@@ -36,6 +36,8 @@ const props = defineProps<{
     reasonDirections: Record<string, Direction>;
     batchTrackingEnabled?: boolean;
     pharmacyFieldsEnabled?: boolean;
+    /** Pembuat bukan admin/manajer/pemilik: dokumen menunggu persetujuan. */
+    needsReview?: boolean;
 }>();
 
 interface LineDraft {
@@ -457,7 +459,10 @@ function submit() {
         <DialogContent class="sm:max-w-lg">
             <DialogHeader>
                 <DialogTitle class="text-lg font-bold">Simpan penyesuaian stok?</DialogTitle>
-                <DialogDescription>Stok langsung berubah. Bila keliru, dokumen dapat dibatalkan lewat mutasi pembalik.</DialogDescription>
+                <DialogDescription v-if="props.needsReview">
+                    Dokumen dikirim ke admin, manajer, atau pemilik untuk disetujui. Stok baru berubah setelah disetujui.
+                </DialogDescription>
+                <DialogDescription v-else>Stok langsung berubah. Bila keliru, dokumen dapat dibatalkan lewat mutasi pembalik.</DialogDescription>
             </DialogHeader>
             <ul class="max-h-64 space-y-1.5 overflow-y-auto py-2 text-sm">
                 <li v-for="(line, i) in form.lines" :key="i" class="flex justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2">

@@ -41,6 +41,7 @@ const statusClass: Record<string, string> = {
 
 const statusFilters = [
     { value: '', label: 'Semua' },
+    { value: 'pending_approval', label: 'Menunggu persetujuan' },
     { value: 'posted', label: 'Diposting' },
     { value: 'cancelled', label: 'Dibatalkan' },
 ];

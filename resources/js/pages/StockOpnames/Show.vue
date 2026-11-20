@@ -1134,6 +1134,7 @@ const formatWhen = (iso: string | null) =>
                     <CheckCircle2 class="mr-2 h-4 w-4" />
                     Posting
                 </Button>
+                <p v-else class="text-sm text-slate-500">Selesai menghitung? Minta admin, manajer, atau pemilik memposting.</p>
             </div>
         </div>
     </AdminLayout>
