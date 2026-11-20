@@ -5,8 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\Customer;
 use App\Models\ReceivablePayment;
 use App\Models\Transaction;
+use App\Support\Accounting\AccountingPeriodGuard;
+use App\Support\ReceivableCollector;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 /**
@@ -19,6 +22,9 @@ class ReceivablesController extends Controller
 {
     /**
      * Daftar pelanggan yang memiliki piutang, diagregat per pelanggan.
+     *
+     * status: outstanding (belum lunas) | overdue (ada yang lewat tempo) | due_soon (jatuh tempo ≤ 7 hari) | paid (sudah lunas)
+     * sort:   due (lewat tempo & tempo terdekat dulu) | amount (sisa terbesar) | name
      */
     public function index(Request $request)
     {
@@ -29,22 +35,26 @@ class ReceivablesController extends Controller
             return redirect()->route('stores.create');
         }
 
-        $filter = $request->input('status', 'outstanding'); // outstanding | all
+        $filter = in_array($request->input('status'), ['outstanding', 'overdue', 'due_soon', 'paid'], true)
+            ? $request->input('status')
+            : 'outstanding';
+        $sort = in_array($request->input('sort'), ['due', 'amount', 'name'], true) ? $request->input('sort') : 'due';
         $search = trim((string) $request->input('search', ''));
         $now = now();
+        $soon = now()->addDays(7)->endOfDay();
 
         $query = Transaction::where('store_id', $store->id)
             ->where('status', 'completed')
             ->whereNotNull('customer_id');
 
-        if ($filter === 'outstanding') {
-            $query->whereIn('payment_status', ['partial', 'unpaid']);
-        } else {
-            // Semua pelanggan yang pernah berutang (masih aktif atau sudah lunas).
-            $query->where(function ($q) {
-                $q->whereIn('payment_status', ['partial', 'unpaid'])
-                    ->orWhereNotNull('debt_due_at');
+        if ($filter === 'paid') {
+            $query->where('payment_status', 'paid')->where(function ($q) {
+                $q->whereNotNull('debt_due_at')
+                    ->orWhere('payment_method', 'credit')
+                    ->orWhereHas('receivablePayments');
             });
+        } else {
+            $query->whereIn('payment_status', ['partial', 'unpaid']);
         }
 
         if ($search !== '') {
@@ -54,17 +64,31 @@ class ReceivablesController extends Controller
             });
         }
 
-        $rows = $query
-            ->groupBy('customer_id')
+        $overdueExpr = 'SUM(CASE WHEN debt_due_at IS NOT NULL AND debt_due_at < ? THEN 1 ELSE 0 END)';
+        $query->groupBy('customer_id')
             ->selectRaw('customer_id')
             ->selectRaw('SUM(total_amount - amount_paid) as outstanding_total')
+            ->selectRaw('SUM(total_amount) as debt_total')
             ->selectRaw('COUNT(*) as transaction_count')
             ->selectRaw('MIN(debt_due_at) as earliest_due_at')
-            ->selectRaw('SUM(CASE WHEN debt_due_at IS NOT NULL AND debt_due_at < ? THEN 1 ELSE 0 END) as overdue_count', [$now])
-            ->orderByRaw('SUM(CASE WHEN debt_due_at IS NOT NULL AND debt_due_at < ? THEN 1 ELSE 0 END) DESC', [$now])
-            ->orderByRaw('SUM(total_amount - amount_paid) DESC')
-            ->paginate(15)
-            ->withQueryString();
+            ->selectRaw("{$overdueExpr} as overdue_count", [$now]);
+
+        if ($filter === 'overdue') {
+            $query->havingRaw("{$overdueExpr} > 0", [$now]);
+        } elseif ($filter === 'due_soon') {
+            $query->havingRaw('SUM(CASE WHEN debt_due_at >= ? AND debt_due_at <= ? THEN 1 ELSE 0 END) > 0', [$now, $soon]);
+        }
+
+        match ($sort) {
+            'amount' => $query->orderByRaw('SUM(total_amount - amount_paid) DESC'),
+            'name' => $query->orderBy(Customer::select('name')->whereColumn('customers.id', 'transactions.customer_id')),
+            default => $query->orderByRaw("{$overdueExpr} DESC", [$now])
+                ->orderByRaw('CASE WHEN MIN(debt_due_at) IS NULL THEN 1 ELSE 0 END')
+                ->orderByRaw('MIN(debt_due_at) ASC')
+                ->orderByRaw('SUM(total_amount - amount_paid) DESC'),
+        };
+
+        $rows = $query->paginate(15)->withQueryString();
 
         $customers = Customer::whereIn('id', $rows->pluck('customer_id'))
             ->get()
@@ -80,35 +104,108 @@ class ReceivablesController extends Controller
                     'phone' => $customer->phone,
                 ] : null,
                 'outstanding_total' => round((float) $row->outstanding_total, 2),
+                'debt_total' => round((float) $row->debt_total, 2),
                 'transaction_count' => (int) $row->transaction_count,
                 'earliest_due_at' => $row->earliest_due_at ? Carbon::parse($row->earliest_due_at)->toDateString() : null,
                 'overdue_count' => (int) $row->overdue_count,
             ];
         });
 
-        // Summary
-        $outstandingTotal = Transaction::where('store_id', $store->id)
+        // Ringkasan seluruh piutang aktif toko.
+        $active = Transaction::where('store_id', $store->id)
             ->where('status', 'completed')
             ->whereNotNull('customer_id')
-            ->whereIn('payment_status', ['partial', 'unpaid'])
-            ->selectRaw('SUM(total_amount - amount_paid) as total')
-            ->value('total') ?? 0;
+            ->whereIn('payment_status', ['partial', 'unpaid']);
+        $remainingExpr = DB::raw('total_amount - amount_paid');
 
-        $overdueCount = Transaction::where('store_id', $store->id)
-            ->where('status', 'completed')
-            ->whereNotNull('customer_id')
-            ->whereIn('payment_status', ['partial', 'unpaid'])
-            ->where('debt_due_at', '<', now())
-            ->count();
+        $summary = [
+            'outstanding_total' => round((float) (clone $active)->sum($remainingExpr), 2),
+            'customer_count' => (clone $active)->distinct()->count('customer_id'),
+            'overdue_total' => round((float) (clone $active)->where('debt_due_at', '<', $now)->sum($remainingExpr), 2),
+            'overdue_customers' => (clone $active)->where('debt_due_at', '<', $now)->distinct()->count('customer_id'),
+            'due_soon_total' => round((float) (clone $active)->whereBetween('debt_due_at', [$now, $soon])->sum($remainingExpr), 2),
+            'due_soon_customers' => (clone $active)->whereBetween('debt_due_at', [$now, $soon])->distinct()->count('customer_id'),
+        ];
 
         return Inertia::render('Receivables/Index', [
             'customers' => $rows,
             'filter' => $filter,
+            'sort' => $sort,
             'search' => $search,
-            'outstandingTotal' => round((float) $outstandingTotal, 2),
-            'overdueCount' => $overdueCount,
+            'summary' => $summary,
             'store' => ['id' => $store->id, 'name' => $store->name, 'currency' => $store->currency ?? 'IDR'],
         ]);
+    }
+
+    /**
+     * Terima pembayaran sekaligus dari satu pelanggan; dialokasikan ke bon
+     * dengan jatuh tempo paling awal (lalu bon tertua) sampai uangnya habis.
+     */
+    public function collectForCustomer(Request $request, string $customer)
+    {
+        $user = auth()->user();
+        $store = $user->store;
+        abort_if(! $store, 403, 'Tidak ada toko aktif.');
+
+        $customer = Customer::where('store_id', $store->id)->findOrFail($customer);
+
+        $validated = $request->validate([
+            'amount' => 'required|numeric|min:1|max:99999999999.99',
+            'payment_method' => 'required|string|in:'.implode(',', ReceivableCollector::METHODS),
+            'received_at' => 'required|date',
+            'reference_number' => 'nullable|string|max:255',
+            'notes' => 'nullable|string|max:1000',
+        ], [
+            'amount.required' => 'Isi jumlah yang dibayar.',
+            'amount.min' => 'Jumlah bayar minimal Rp 1.',
+        ]);
+
+        AccountingPeriodGuard::assertDateOpen($store, $validated['received_at']);
+
+        $result = DB::transaction(function () use ($store, $user, $customer, $validated) {
+            $transactions = Transaction::where('store_id', $store->id)
+                ->where('customer_id', $customer->id)
+                ->where('status', 'completed')
+                ->whereIn('payment_status', ['partial', 'unpaid'])
+                ->orderByRaw('CASE WHEN debt_due_at IS NULL THEN 1 ELSE 0 END')
+                ->orderBy('debt_due_at')
+                ->orderBy('created_at')
+                ->lockForUpdate()
+                ->get();
+
+            $remaining = round((float) $validated['amount'], 2);
+            $applied = 0.0;
+            $settled = 0;
+            foreach ($transactions as $transaction) {
+                if ($remaining <= 0) {
+                    break;
+                }
+                $payment = ReceivableCollector::apply($store, $user, $transaction, $remaining, $validated);
+                if (! $payment) {
+                    continue;
+                }
+                $remaining = round($remaining - (float) $payment->amount, 2);
+                $applied = round($applied + (float) $payment->amount, 2);
+                if ($transaction->payment_status === 'paid') {
+                    $settled++;
+                }
+            }
+
+            return ['applied' => $applied, 'settled' => $settled];
+        });
+
+        if ($result['applied'] <= 0) {
+            return back()->with('error', 'Pelanggan ini tidak punya utang yang belum lunas.');
+        }
+
+        $rupiah = fn (float $n) => 'Rp '.number_format($n, 0, ',', '.');
+        $message = 'Pembayaran '.$rupiah($result['applied']).' dicatat';
+        $message .= $result['settled'] > 0 ? ", {$result['settled']} bon lunas." : '.';
+        if ($result['applied'] < (float) $validated['amount']) {
+            $message .= ' Kelebihan '.$rupiah((float) $validated['amount'] - $result['applied']).' tidak dicatat karena semua utang sudah lunas.';
+        }
+
+        return back()->with('success', $message);
     }
 
     /**
@@ -130,8 +227,11 @@ class ReceivablesController extends Controller
             ->where('customer_id', $customer->id)
             ->where('status', 'completed')
             ->where(function ($q) {
+                // Termasuk bon utang yang sudah lunas, walau tanpa tanggal jatuh tempo.
                 $q->whereIn('payment_status', ['partial', 'unpaid'])
-                    ->orWhereNotNull('debt_due_at');
+                    ->orWhereNotNull('debt_due_at')
+                    ->orWhere('payment_method', 'credit')
+                    ->orWhereHas('receivablePayments');
             })
             ->orderBy('created_at', 'desc')
             ->get();

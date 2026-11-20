@@ -1,21 +1,10 @@
 <script setup lang="ts">
+import ReceivablePaymentDialog from '@/components/receivables/ReceivablePaymentDialog.vue';
+import { DUE_TONE_CLASS, dueStatus, formatDate, formatDateTime, paymentMethodLabel, reminderLink, rupiah } from '@/composables/useReceivables';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import {
-    ArrowLeft, AlertTriangle, CheckCircle2, ChevronRight,
-    User, Phone, Mail, MapPin, Clock, Receipt, CreditCard,
-} from 'lucide-vue-next';
-
-interface Customer {
-    id: number;
-    name: string;
-    phone: string | null;
-    email: string | null;
-    address: string | null;
-}
+import { ArrowLeft, ChevronLeft, ChevronRight, HandCoins, Mail, MapPin, MessageCircle, Phone, Receipt } from 'lucide-vue-next';
+import { computed, ref } from 'vue';
 
 interface ReceivableTransaction {
     id: number;
@@ -29,7 +18,7 @@ interface ReceivableTransaction {
     is_overdue: boolean;
 }
 
-interface ReceivablePayment {
+interface ReceivablePaymentRow {
     id: number;
     amount: number;
     payment_method: string;
@@ -41,221 +30,208 @@ interface ReceivablePayment {
     transaction_id: number | null;
 }
 
-interface Props {
-    customer: Customer;
-    summary: {
-        total_debt: number;
-        total_paid: number;
-        outstanding_total: number;
-        active_count: number;
-        overdue_count: number;
-    };
+const props = defineProps<{
+    customer: { id: number; name: string; phone: string | null; email: string | null; address: string | null };
+    summary: { total_debt: number; total_paid: number; outstanding_total: number; active_count: number; overdue_count: number };
     transactions: ReceivableTransaction[];
     payments: {
-        data: ReceivablePayment[];
-        links: { url: string | null; label: string; active: boolean }[];
-        total: number;
+        data: ReceivablePaymentRow[];
         current_page: number;
         last_page: number;
-        per_page: number;
         from: number | null;
         to: number | null;
+        total: number;
     };
-    store: { id: number; name: string; currency: string };
+    store: { id: number; name: string };
+}>();
+
+/** Bon belum lunas dalam urutan alokasi: jatuh tempo paling awal, lalu yang tertua. */
+const openBills = computed(() =>
+    props.transactions
+        .filter((t) => t.payment_status !== 'paid' && t.outstanding > 0)
+        .sort((a, b) => {
+            if (a.debt_due_at && b.debt_due_at) return a.debt_due_at.localeCompare(b.debt_due_at) || a.created_at.localeCompare(b.created_at);
+            if (a.debt_due_at) return -1;
+            if (b.debt_due_at) return 1;
+            return a.created_at.localeCompare(b.created_at);
+        }),
+);
+const earliestDue = computed(() => openBills.value.find((b) => b.debt_due_at)?.debt_due_at ?? null);
+
+const waLink = computed(() =>
+    props.summary.outstanding_total > 0
+        ? reminderLink({
+              phone: props.customer.phone,
+              customerName: props.customer.name,
+              storeName: props.store.name,
+              amount: props.summary.outstanding_total,
+              dueAt: earliestDue.value,
+          })
+        : null,
+);
+
+const payOpen = ref(false);
+
+function goPaymentsPage(page: number) {
+    router.get(`/receivables/customers/${props.customer.id}`, { payments_page: page }, { preserveScroll: true, preserveState: true });
 }
-
-defineProps<Props>();
-
-const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('id-ID', { style: 'decimal', minimumFractionDigits: 0 }).format(amount);
-
-const formatDate = (dateString: string | null) => {
-    if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric' });
-};
-
-const formatDateTime = (dateString: string) =>
-    new Date(dateString).toLocaleString('id-ID', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-
-const paymentMethodLabel = (method: string) => {
-    const map: Record<string, string> = { cash: 'Tunai', qris: 'QRIS', transfer: 'Transfer', card: 'Kartu', ewallet: 'E-Wallet', other: 'Lainnya' };
-    return map[method] ?? method;
-};
-
-const statusLabel = (status: string) => {
-    const map: Record<string, string> = { unpaid: 'Belum Bayar', partial: 'Sebagian', paid: 'Lunas' };
-    return map[status] ?? status;
-};
-
-const initials = (name: string) =>
-    name.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('') || '?';
 </script>
 
 <template>
-    <AdminLayout title="Detail Piutang Pelanggan">
+    <AdminLayout title="Piutang Pelanggan">
         <Head :title="`Piutang ${customer.name}`" />
 
-        <div class="space-y-5 p-4">
-            <!-- Header -->
-            <div class="flex items-center gap-3">
-                <Link href="/receivables">
-                    <Button variant="ghost" size="icon" class="h-9 w-9 rounded-xl">
-                        <ArrowLeft class="h-4 w-4" />
-                    </Button>
+        <div class="mx-auto max-w-4xl space-y-4">
+            <!-- Kepala -->
+            <div class="flex flex-wrap items-start gap-3">
+                <Link href="/receivables" class="rounded-xl p-2 text-slate-500 hover:bg-slate-100" aria-label="Kembali ke daftar piutang">
+                    <ArrowLeft class="h-5 w-5" />
                 </Link>
-                <div class="h-11 w-11 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-sm font-black shrink-0">
-                    {{ initials(customer.name) }}
-                </div>
-                <div class="min-w-0">
-                    <h1 class="text-lg font-black text-slate-900 truncate">{{ customer.name }}</h1>
-                    <Link :href="`/customers/${customer.id}`" class="text-xs text-primary hover:underline">Lihat profil pelanggan &rarr;</Link>
-                </div>
-                <Badge v-if="summary.overdue_count > 0" variant="destructive" class="text-xs ml-auto shrink-0">
-                    <AlertTriangle class="h-2.5 w-2.5 mr-1" /> {{ summary.overdue_count }} lewat tempo
-                </Badge>
-            </div>
-
-            <!-- Info kontak -->
-            <div v-if="customer.phone || customer.email || customer.address" class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 -mt-2">
-                <span v-if="customer.phone" class="flex items-center gap-1"><Phone class="h-3 w-3" /> {{ customer.phone }}</span>
-                <span v-if="customer.email" class="flex items-center gap-1"><Mail class="h-3 w-3" /> {{ customer.email }}</span>
-                <span v-if="customer.address" class="flex items-center gap-1"><MapPin class="h-3 w-3" /> {{ customer.address }}</span>
-            </div>
-
-            <!-- Summary -->
-            <div class="grid grid-cols-3 gap-3">
-                <Card class="rounded-2xl border border-orange-200 bg-orange-50 shadow-sm">
-                    <CardContent class="p-4 text-center">
-                        <p class="text-xs text-orange-600 mb-1">Sisa Hutang</p>
-                        <p class="text-base font-black text-orange-700">Rp {{ formatCurrency(summary.outstanding_total) }}</p>
-                    </CardContent>
-                </Card>
-                <Card class="rounded-2xl border border-green-200 bg-green-50 shadow-sm">
-                    <CardContent class="p-4 text-center">
-                        <p class="text-xs text-green-600 mb-1">Sudah Dibayar</p>
-                        <p class="text-base font-black text-green-700">Rp {{ formatCurrency(summary.total_paid) }}</p>
-                    </CardContent>
-                </Card>
-                <Card class="rounded-2xl border border-slate-200 shadow-sm">
-                    <CardContent class="p-4 text-center">
-                        <p class="text-xs text-slate-500 mb-1">Utang Aktif</p>
-                        <p class="text-base font-black text-slate-800">{{ summary.active_count }} transaksi</p>
-                    </CardContent>
-                </Card>
-            </div>
-
-            <!-- Daftar utang per transaksi -->
-            <Card class="rounded-2xl border border-slate-200 shadow-sm">
-                <CardHeader class="pb-2 pt-4 px-4">
-                    <CardTitle class="text-sm font-semibold flex items-center gap-2">
-                        <CreditCard class="h-4 w-4 text-slate-400" /> Daftar Utang
-                    </CardTitle>
-                </CardHeader>
-                <CardContent class="p-0">
-                    <div v-if="transactions.length === 0" class="text-center py-8 text-slate-400">
-                        <CreditCard class="h-8 w-8 mx-auto mb-2 opacity-30" />
-                        <p class="text-xs">Tidak ada transaksi utang</p>
-                    </div>
-                    <div v-else class="divide-y divide-slate-100">
-                        <Link
-                            v-for="t in transactions"
-                            :key="t.id"
-                            :href="`/receivables/${t.id}`"
-                            class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors"
-                        >
-                            <div class="min-w-0 flex-1">
-                                <div class="flex items-center gap-2 flex-wrap">
-                                    <span class="text-sm font-bold text-primary truncate">{{ t.transaction_number }}</span>
-                                    <Badge v-if="t.is_overdue" variant="destructive" class="text-xs shrink-0">
-                                        <AlertTriangle class="h-2.5 w-2.5 mr-1" /> Lewat Tempo
-                                    </Badge>
-                                    <Badge
-                                        :class="[
-                                            'text-xs shrink-0',
-                                            t.payment_status === 'paid' ? 'bg-green-100 text-green-700 border-green-200' :
-                                            t.payment_status === 'partial' ? 'bg-yellow-100 text-yellow-700 border-yellow-200' :
-                                            'bg-orange-100 text-orange-700 border-orange-200'
-                                        ]"
-                                    >
-                                        {{ statusLabel(t.payment_status) }}
-                                    </Badge>
-                                </div>
-                                <p class="text-xs text-slate-400 mt-0.5">
-                                    {{ formatDate(t.created_at) }}
-                                    <span v-if="t.debt_due_at"> · <Clock class="inline h-3 w-3 -mt-0.5" /> Tempo: {{ formatDate(t.debt_due_at) }}</span>
-                                </p>
-                            </div>
-                            <div class="text-right shrink-0 flex items-center gap-1.5">
-                                <div>
-                                    <p v-if="t.payment_status !== 'paid'" class="text-sm font-black text-orange-600">Rp {{ formatCurrency(t.outstanding) }}</p>
-                                    <p v-else class="text-sm font-black text-green-600">Lunas</p>
-                                    <p class="text-xs text-slate-400">dari Rp {{ formatCurrency(t.total_amount) }}</p>
-                                </div>
-                                <ChevronRight class="h-4 w-4 text-slate-300" />
-                            </div>
-                        </Link>
-                    </div>
-                    <p class="px-4 py-2.5 border-t border-slate-100 text-xs text-slate-400">
-                        Ketuk transaksi untuk melihat item &amp; mencatat pembayaran.
+                <div class="min-w-0 flex-1">
+                    <h1 class="truncate text-xl font-bold text-slate-900">{{ customer.name }}</h1>
+                    <p class="mt-0.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
+                        <span v-if="customer.phone" class="flex items-center gap-1"><Phone class="h-3 w-3" /> {{ customer.phone }}</span>
+                        <span v-if="customer.email" class="flex items-center gap-1"><Mail class="h-3 w-3" /> {{ customer.email }}</span>
+                        <span v-if="customer.address" class="flex items-center gap-1"><MapPin class="h-3 w-3" /> {{ customer.address }}</span>
+                        <Link :href="`/customers/${customer.id}`" class="font-semibold text-primary hover:underline">Profil pelanggan</Link>
                     </p>
-                </CardContent>
-            </Card>
+                </div>
+                <div class="flex w-full gap-2 sm:w-auto">
+                    <a
+                        v-if="waLink"
+                        :href="waLink"
+                        target="_blank"
+                        rel="noopener"
+                        class="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 sm:flex-none"
+                    >
+                        <MessageCircle class="h-4 w-4" /> Ingatkan via WA
+                    </a>
+                    <button
+                        v-if="summary.outstanding_total > 0"
+                        type="button"
+                        class="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 sm:flex-none"
+                        @click="payOpen = true"
+                    >
+                        <HandCoins class="h-4 w-4" /> Terima pembayaran
+                    </button>
+                </div>
+            </div>
+
+            <!-- Ringkasan -->
+            <div class="grid grid-cols-3 gap-3">
+                <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                    <p class="text-xs font-semibold text-slate-500">Sisa utang</p>
+                    <p class="mt-1 text-base font-bold sm:text-lg" :class="summary.overdue_count > 0 ? 'text-red-600' : 'text-slate-900'">
+                        {{ rupiah(summary.outstanding_total) }}
+                    </p>
+                    <p v-if="summary.overdue_count > 0" class="text-xs text-red-600">{{ summary.overdue_count }} bon lewat tempo</p>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                    <p class="text-xs font-semibold text-slate-500">Sudah dibayar</p>
+                    <p class="mt-1 text-base font-bold sm:text-lg text-slate-900">{{ rupiah(summary.total_paid) }}</p>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                    <p class="text-xs font-semibold text-slate-500">Bon belum lunas</p>
+                    <p class="mt-1 text-base font-bold sm:text-lg text-slate-900">{{ summary.active_count }}</p>
+                </div>
+            </div>
+
+            <!-- Bon -->
+            <section class="rounded-2xl border border-slate-200 bg-white">
+                <h2 class="flex items-center gap-2 border-b border-slate-100 px-4 py-3 text-base font-bold text-slate-900">
+                    <Receipt class="h-4 w-4 text-slate-400" /> Bon utang
+                </h2>
+                <p v-if="!transactions.length" class="px-4 py-10 text-center text-sm text-slate-500">Tidak ada bon utang.</p>
+                <ul v-else class="divide-y divide-slate-100">
+                    <li v-for="t in transactions" :key="t.id">
+                        <Link :href="`/receivables/${t.id}`" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50">
+                            <span class="min-w-0 flex-1">
+                                <span class="block truncate text-sm font-semibold text-slate-900">{{ t.transaction_number }}</span>
+                                <span class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+                                    {{ formatDate(t.created_at) }}
+                                    <span
+                                        class="rounded-full px-2 py-0.5 font-semibold"
+                                        :class="DUE_TONE_CLASS[dueStatus(t.debt_due_at, t.payment_status === 'paid').tone]"
+                                    >
+                                        {{ dueStatus(t.debt_due_at, t.payment_status === 'paid').label }}
+                                    </span>
+                                </span>
+                            </span>
+                            <span class="shrink-0 text-right">
+                                <span
+                                    v-if="t.payment_status !== 'paid'"
+                                    class="block text-sm font-bold"
+                                    :class="t.is_overdue ? 'text-red-600' : 'text-slate-900'"
+                                >
+                                    {{ rupiah(t.outstanding) }}
+                                </span>
+                                <span class="block text-xs text-slate-400">dari {{ rupiah(t.total_amount) }}</span>
+                            </span>
+                            <ChevronRight class="h-4 w-4 shrink-0 text-slate-300" />
+                        </Link>
+                    </li>
+                </ul>
+            </section>
 
             <!-- Riwayat pembayaran -->
-            <Card class="rounded-2xl border border-slate-200 shadow-sm">
-                <CardHeader class="pb-2 pt-4 px-4">
-                    <CardTitle class="text-sm font-semibold flex items-center gap-2">
-                        <Receipt class="h-4 w-4 text-slate-400" /> Riwayat Pembayaran
-                    </CardTitle>
-                </CardHeader>
-                <CardContent class="p-0">
-                    <div v-if="payments.data.length === 0" class="text-center py-8 text-slate-400">
-                        <Receipt class="h-8 w-8 mx-auto mb-2 opacity-30" />
-                        <p class="text-xs">Belum ada pembayaran tercatat</p>
-                    </div>
-                    <div v-else class="divide-y divide-slate-100">
-                        <div
-                            v-for="payment in payments.data"
-                            :key="payment.id"
-                            class="flex items-start justify-between px-4 py-3 text-xs"
+            <section class="rounded-2xl border border-slate-200 bg-white">
+                <h2 class="border-b border-slate-100 px-4 py-3 text-base font-bold text-slate-900">Riwayat pembayaran</h2>
+                <p v-if="!payments.data.length" class="px-4 py-10 text-center text-sm text-slate-500">Belum ada pembayaran tercatat.</p>
+                <ul v-else class="divide-y divide-slate-100">
+                    <li v-for="p in payments.data" :key="p.id" class="flex items-start justify-between gap-3 px-4 py-3 text-sm">
+                        <span class="min-w-0">
+                            <span class="block font-semibold text-slate-800">
+                                {{ paymentMethodLabel(p.payment_method) }}
+                                <Link
+                                    v-if="p.transaction_id"
+                                    :href="`/receivables/${p.transaction_id}`"
+                                    class="ml-1 text-xs font-normal text-primary hover:underline"
+                                >
+                                    {{ p.transaction_number }}
+                                </Link>
+                            </span>
+                            <span class="block text-xs text-slate-500">
+                                {{ formatDateTime(p.received_at) }}<template v-if="p.user_name"> · {{ p.user_name }}</template>
+                            </span>
+                            <span v-if="p.reference_number" class="block text-xs text-slate-500">Ref: {{ p.reference_number }}</span>
+                            <span v-if="p.notes" class="block text-xs text-slate-500 italic">{{ p.notes }}</span>
+                        </span>
+                        <span class="shrink-0 font-bold text-emerald-600">+{{ rupiah(p.amount) }}</span>
+                    </li>
+                </ul>
+                <div v-if="payments.last_page > 1" class="flex items-center justify-between border-t border-slate-100 px-4 py-3">
+                    <p class="text-xs text-slate-500">{{ payments.from }}–{{ payments.to }} dari {{ payments.total }}</p>
+                    <div class="flex gap-1">
+                        <button
+                            type="button"
+                            class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-40"
+                            :disabled="payments.current_page <= 1"
+                            aria-label="Sebelumnya"
+                            @click="goPaymentsPage(payments.current_page - 1)"
                         >
-                            <div>
-                                <p class="font-medium text-slate-800">
-                                    {{ paymentMethodLabel(payment.payment_method) }}
-                                    <Link
-                                        v-if="payment.transaction_id"
-                                        :href="`/receivables/${payment.transaction_id}`"
-                                        class="text-primary hover:underline"
-                                    >{{ payment.transaction_number }}</Link>
-                                </p>
-                                <p class="text-slate-400 mt-0.5">{{ formatDateTime(payment.received_at) }}</p>
-                                <p v-if="payment.reference_number" class="text-slate-400">Ref: {{ payment.reference_number }}</p>
-                                <p v-if="payment.notes" class="text-slate-400 italic">{{ payment.notes }}</p>
-                                <p v-if="payment.user_name" class="text-slate-400">Oleh: {{ payment.user_name }}</p>
-                            </div>
-                            <p class="font-black text-green-600 shrink-0">+Rp {{ formatCurrency(payment.amount) }}</p>
-                        </div>
+                            <ChevronLeft class="h-4 w-4" />
+                        </button>
+                        <button
+                            type="button"
+                            class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-40"
+                            :disabled="payments.current_page >= payments.last_page"
+                            aria-label="Berikutnya"
+                            @click="goPaymentsPage(payments.current_page + 1)"
+                        >
+                            <ChevronRight class="h-4 w-4" />
+                        </button>
                     </div>
-
-                    <!-- Pagination riwayat -->
-                    <div v-if="(payments?.last_page ?? 0) > 1" class="flex items-center justify-between px-4 py-3 border-t border-slate-100">
-                        <p class="text-xs text-slate-400">
-                            {{ payments.from }}–{{ payments.to }} dari {{ payments.total }}
-                        </p>
-                        <div class="flex gap-1">
-                            <button
-                                v-for="link in (payments.links ?? [])"
-                                :key="link.label"
-                                :disabled="!link.url"
-                                type="button"
-                                :class="['px-2.5 py-1 rounded-lg text-xs border transition-colors', link.active ? 'bg-primary text-white border-primary' : 'border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed']"
-                                @click="link.url && router.get(link.url)"
-                                v-html="link.label"
-                            ></button>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
+                </div>
+            </section>
         </div>
+
+        <ReceivablePaymentDialog
+            :open="payOpen"
+            :title="`Terima pembayaran dari ${customer.name}`"
+            :outstanding="summary.outstanding_total"
+            :submit-url="`/receivables/customers/${customer.id}/payments`"
+            :bills="openBills"
+            @close="payOpen = false"
+        />
     </AdminLayout>
 </template>

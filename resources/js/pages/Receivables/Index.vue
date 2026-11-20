@@ -1,201 +1,296 @@
 <script setup lang="ts">
+import { DUE_TONE_CLASS, dueStatus, reminderLink, rupiah } from '@/composables/useReceivables';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { CreditCard, AlertTriangle, ChevronRight, Search, User } from 'lucide-vue-next';
+import {
+    AlertTriangle,
+    ArrowDownUp,
+    CalendarClock,
+    ChevronLeft,
+    ChevronRight,
+    CreditCard,
+    MessageCircle,
+    Search,
+    ShoppingCart,
+    Users,
+} from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
 interface CustomerSummary {
     customer: { id: number; name: string; phone?: string | null } | null;
     outstanding_total: number;
+    debt_total: number;
     transaction_count: number;
     earliest_due_at: string | null;
     overdue_count: number;
 }
 
-interface Props {
+const props = defineProps<{
     customers: {
         data: CustomerSummary[];
-        links: { url: string | null; label: string; active: boolean }[];
         total: number;
         current_page: number;
         last_page: number;
-        per_page: number;
         from: number | null;
         to: number | null;
     };
     filter: string;
+    sort: string;
     search: string;
-    outstandingTotal: number;
-    overdueCount: number;
-    store: { id: number; name: string; currency: string };
-}
-
-const props = defineProps<Props>();
+    summary: {
+        outstanding_total: number;
+        customer_count: number;
+        overdue_total: number;
+        overdue_customers: number;
+        due_soon_total: number;
+        due_soon_customers: number;
+    };
+    store: { id: number; name: string };
+}>();
 
 const page = usePage();
 const receivablesEnabled = computed(() => Boolean((page.props as { receivables_enabled?: boolean }).receivables_enabled));
 
-const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('id-ID', { style: 'decimal', minimumFractionDigits: 0 }).format(amount);
-
-const formatDate = (dateString: string | null) => {
-    if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric' });
-};
-
-const initials = (name: string) =>
-    name.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('') || '?';
-
-// ─── Filter & pencarian ─────────────────────────────────────────────────────
+// ── Filter, urutan, pencarian ───────────────────────────────────────────
 const searchInput = ref(props.search ?? '');
+const sortKey = ref(props.sort ?? 'due');
 
-function setFilter(f: string) {
-    router.get('/receivables', { status: f, search: searchInput.value || undefined }, { preserveScroll: true });
+function visit(params: { status?: string; sort?: string; search?: string; page?: number }) {
+    router.get(
+        '/receivables',
+        {
+            status: params.status ?? props.filter,
+            sort: (params.sort ?? sortKey.value) === 'due' ? undefined : (params.sort ?? sortKey.value),
+            search: (params.search ?? searchInput.value) || undefined,
+            page: params.page && params.page > 1 ? params.page : undefined,
+        },
+        { preserveScroll: true, preserveState: true, replace: true },
+    );
 }
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 watch(searchInput, (value) => {
     if (searchTimer) clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => {
-        router.get('/receivables', { status: props.filter, search: value || undefined }, { preserveScroll: true, preserveState: true });
-    }, 350);
+    searchTimer = setTimeout(() => visit({ search: value }), 350);
 });
+watch(sortKey, (value) => visit({ sort: value }));
+
+const TABS = [
+    { key: 'outstanding', label: 'Belum lunas' },
+    { key: 'overdue', label: 'Lewat tempo' },
+    { key: 'due_soon', label: 'Jatuh tempo ≤ 7 hari' },
+    { key: 'paid', label: 'Lunas' },
+];
+
+const rows = computed(() => props.customers?.data ?? []);
+const isPaidTab = computed(() => props.filter === 'paid');
+
+function waLink(row: CustomerSummary) {
+    if (!row.customer || row.outstanding_total <= 0) return null;
+    return reminderLink({
+        phone: row.customer.phone,
+        customerName: row.customer.name,
+        storeName: props.store.name,
+        amount: row.outstanding_total,
+        dueAt: row.earliest_due_at,
+    });
+}
 </script>
 
 <template>
-    <AdminLayout title="Manajemen Piutang">
+    <AdminLayout title="Piutang Pelanggan">
         <Head title="Piutang Pelanggan" />
 
-        <div class="space-y-5 p-4">
-            <!-- Modul nonaktif -->
-            <div v-if="!receivablesEnabled" class="text-center py-16">
-                <CreditCard class="h-14 w-14 mx-auto mb-4 text-slate-300" />
-                <h2 class="text-lg font-bold text-slate-700 mb-2">Modul Hutang Piutang Nonaktif</h2>
-                <p class="text-sm text-slate-500 max-w-md mx-auto">Modul ini belum diaktifkan. Silakan aktifkan melalui halaman <Link href="/profile?tab=store" class="text-primary underline">Pengaturan &rarr; Modul Fitur</Link>.</p>
-            </div>
-            <template v-else>
-            <!-- Header -->
-            <div class="flex items-center justify-between gap-3">
-                <div>
-                    <h1 class="text-xl font-black text-slate-900">Piutang Pelanggan</h1>
-                    <p class="text-sm text-slate-400 mt-0.5">Daftar pelanggan yang masih memiliki hutang</p>
-                </div>
-            </div>
+        <!-- Modul nonaktif -->
+        <div v-if="!receivablesEnabled" class="mx-auto max-w-md py-16 text-center">
+            <CreditCard class="mx-auto mb-4 h-12 w-12 text-slate-300" />
+            <h2 class="mb-2 text-lg font-bold text-slate-800">Fitur piutang belum aktif</h2>
+            <p class="text-sm text-slate-500">Nyalakan "Piutang Pelanggan" agar kasir bisa mencatat penjualan yang dibayar belakangan.</p>
+            <Link
+                href="/settings/store/fitur"
+                class="mt-4 inline-flex rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90"
+            >
+                Buka Pengaturan → Fitur
+            </Link>
+        </div>
 
-            <!-- Summary cards -->
-            <div class="grid grid-cols-2 sm:grid-cols-2 gap-3">
-                <Card class="rounded-2xl border border-orange-200 bg-orange-50 shadow-sm">
-                    <CardContent class="p-4">
-                        <p class="text-xs text-orange-600 mb-1 flex items-center gap-1">
-                            <CreditCard class="h-3.5 w-3.5" /> Total Piutang
-                        </p>
-                        <p class="text-xl font-black text-orange-700">Rp {{ formatCurrency(outstandingTotal) }}</p>
-                    </CardContent>
-                </Card>
-                <Card class="rounded-2xl border border-red-200 bg-red-50 shadow-sm">
-                    <CardContent class="p-4">
-                        <p class="text-xs text-red-600 mb-1 flex items-center gap-1">
-                            <AlertTriangle class="h-3.5 w-3.5" /> Lewat Jatuh Tempo
-                        </p>
-                        <p class="text-xl font-black text-red-700">{{ overdueCount }} transaksi</p>
-                    </CardContent>
-                </Card>
-            </div>
-
-            <!-- Pencarian -->
-            <div class="relative">
-                <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <input
-                    v-model="searchInput"
-                    type="text"
-                    placeholder="Cari nama atau no. HP pelanggan..."
-                    class="w-full border border-gray-200 rounded-xl py-2.5 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                />
-            </div>
-
-            <!-- Filter tabs -->
-            <div class="flex gap-2 border-b border-gray-200">
+        <div v-else class="mx-auto max-w-5xl space-y-4">
+            <!-- Ringkasan yang bisa diklik -->
+            <div class="grid gap-3 sm:grid-cols-3">
                 <button
-                    v-for="tab in [{ key: 'outstanding', label: 'Aktif' }, { key: 'all', label: 'Semua' }]"
-                    :key="tab.key"
                     type="button"
-                    :class="['px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px', filter === tab.key ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700']"
-                    @click="setFilter(tab.key)"
-                >{{ tab.label }}</button>
+                    class="rounded-2xl border bg-white p-4 text-left transition"
+                    :class="filter === 'outstanding' ? 'border-primary' : 'border-slate-200 hover:border-slate-300'"
+                    @click="visit({ status: 'outstanding', page: 1 })"
+                >
+                    <p class="flex items-center gap-1.5 text-xs font-semibold text-slate-500"><CreditCard class="h-3.5 w-3.5" /> Total piutang</p>
+                    <p class="mt-1 text-xl font-bold text-slate-900">{{ rupiah(summary.outstanding_total) }}</p>
+                    <p class="text-xs text-slate-500">{{ summary.customer_count }} pelanggan</p>
+                </button>
+                <button
+                    type="button"
+                    class="rounded-2xl border bg-white p-4 text-left transition"
+                    :class="filter === 'overdue' ? 'border-red-400' : 'border-slate-200 hover:border-slate-300'"
+                    @click="visit({ status: 'overdue', page: 1 })"
+                >
+                    <p class="flex items-center gap-1.5 text-xs font-semibold" :class="summary.overdue_total > 0 ? 'text-red-600' : 'text-slate-500'">
+                        <AlertTriangle class="h-3.5 w-3.5" /> Lewat jatuh tempo
+                    </p>
+                    <p class="mt-1 text-xl font-bold" :class="summary.overdue_total > 0 ? 'text-red-600' : 'text-slate-900'">
+                        {{ rupiah(summary.overdue_total) }}
+                    </p>
+                    <p class="text-xs text-slate-500">{{ summary.overdue_customers }} pelanggan</p>
+                </button>
+                <button
+                    type="button"
+                    class="rounded-2xl border bg-white p-4 text-left transition"
+                    :class="filter === 'due_soon' ? 'border-amber-400' : 'border-slate-200 hover:border-slate-300'"
+                    @click="visit({ status: 'due_soon', page: 1 })"
+                >
+                    <p class="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+                        <CalendarClock class="h-3.5 w-3.5" /> Jatuh tempo 7 hari ke depan
+                    </p>
+                    <p class="mt-1 text-xl font-bold text-slate-900">{{ rupiah(summary.due_soon_total) }}</p>
+                    <p class="text-xs text-slate-500">{{ summary.due_soon_customers }} pelanggan</p>
+                </button>
             </div>
 
-            <!-- Daftar pelanggan berutang -->
-            <Card class="rounded-2xl border border-slate-200 shadow-sm">
-                <CardContent class="p-0">
-                    <div v-if="!customers?.data?.length" class="text-center py-12 text-slate-400">
-                        <User class="h-10 w-10 mx-auto mb-3 opacity-30" />
-                        <p class="text-sm font-medium">{{ search ? 'Pelanggan tidak ditemukan' : 'Tidak ada piutang aktif' }}</p>
+            <section class="rounded-2xl border border-slate-200 bg-white">
+                <!-- Pencarian & urutan -->
+                <div class="flex flex-col gap-2 border-b border-slate-100 p-3 sm:flex-row">
+                    <div class="relative flex-1">
+                        <Search class="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                        <input
+                            v-model="searchInput"
+                            type="search"
+                            placeholder="Cari nama atau no. HP pelanggan"
+                            class="h-10 w-full rounded-xl border border-slate-200 bg-white pr-3 pl-9 text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
+                        />
                     </div>
-                    <div v-else class="divide-y divide-slate-100">
-                        <Link
-                            v-for="row in (customers?.data ?? [])"
-                            :key="row.customer?.id ?? `unknown-${row.transaction_count}`"
-                            :href="row.customer ? `/receivables/customers/${row.customer.id}` : '#'"
-                            class="flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 transition-colors"
+                    <div class="relative sm:w-56">
+                        <ArrowDownUp class="pointer-events-none absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                        <select
+                            v-model="sortKey"
+                            aria-label="Urutkan"
+                            class="h-10 w-full rounded-xl border border-slate-200 bg-white pr-3 pl-8 text-sm text-slate-700 focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
                         >
-                            <!-- Avatar inisial -->
-                            <div
-                                :class="[
-                                    'h-10 w-10 rounded-full flex items-center justify-center text-sm font-black shrink-0',
-                                    row.overdue_count > 0 ? 'bg-red-100 text-red-600' : 'bg-orange-100 text-orange-600',
-                                ]"
-                            >
-                                {{ row.customer ? initials(row.customer.name) : '?' }}
-                            </div>
-
-                            <div class="min-w-0 flex-1">
-                                <div class="flex items-center gap-2 flex-wrap">
-                                    <span class="text-sm font-bold text-slate-800 truncate">
-                                        {{ row.customer?.name ?? 'Pelanggan tidak diketahui' }}
-                                    </span>
-                                    <Badge v-if="row.overdue_count > 0" variant="destructive" class="text-xs shrink-0">
-                                        <AlertTriangle class="h-2.5 w-2.5 mr-1" /> {{ row.overdue_count }} lewat tempo
-                                    </Badge>
-                                </div>
-                                <p class="text-xs text-slate-500 mt-0.5">
-                                    <span v-if="row.customer?.phone">{{ row.customer.phone }} · </span>
-                                    {{ row.transaction_count }} transaksi
-                                    <span v-if="row.earliest_due_at"> · Tempo terdekat: {{ formatDate(row.earliest_due_at) }}</span>
-                                </p>
-                            </div>
-
-                            <div class="text-right shrink-0 flex items-center gap-1.5">
-                                <div>
-                                    <p class="text-sm font-black text-orange-600">Rp {{ formatCurrency(row.outstanding_total) }}</p>
-                                    <p class="text-xs text-slate-400">sisa hutang</p>
-                                </div>
-                                <ChevronRight class="h-4 w-4 text-slate-300" />
-                            </div>
-                        </Link>
+                            <option value="due">Jatuh tempo terdekat</option>
+                            <option value="amount">Sisa utang terbesar</option>
+                            <option value="name">Nama A–Z</option>
+                        </select>
                     </div>
+                </div>
 
-                    <!-- Pagination -->
-                    <div v-if="(customers?.last_page ?? 0) > 1" class="flex items-center justify-between px-4 py-3 border-t border-slate-100">
-                        <p class="text-xs text-slate-400">
-                            {{ customers.from }}–{{ customers.to }} dari {{ customers.total }}
+                <!-- Filter status -->
+                <div class="flex gap-1 overflow-x-auto border-b border-slate-100 px-3 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <button
+                        v-for="t in TABS"
+                        :key="t.key"
+                        type="button"
+                        class="shrink-0 rounded-lg px-3 py-1.5 text-sm font-semibold whitespace-nowrap transition"
+                        :class="filter === t.key ? 'bg-primary text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'"
+                        @click="visit({ status: t.key, page: 1 })"
+                    >
+                        {{ t.label }}
+                    </button>
+                </div>
+
+                <!-- Kosong -->
+                <div v-if="!rows.length" class="px-6 py-14 text-center">
+                    <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100">
+                        <Users class="h-5 w-5 text-slate-400" />
+                    </div>
+                    <template v-if="search">
+                        <p class="font-semibold text-slate-700">Pelanggan tidak ditemukan</p>
+                        <button type="button" class="mt-2 text-sm font-semibold text-primary hover:underline" @click="searchInput = ''">
+                            Hapus pencarian
+                        </button>
+                    </template>
+                    <template v-else-if="filter === 'outstanding'">
+                        <p class="font-semibold text-slate-700">Belum ada piutang</p>
+                        <p class="mx-auto mt-1 max-w-sm text-sm text-slate-500">
+                            Piutang tercatat saat kasir mencentang <strong>Penjualan Kredit / Piutang</strong> di layar bayar dan memilih
+                            pelanggannya. Tanggal jatuh tempo bisa diisi saat itu juga.
                         </p>
-                        <div class="flex gap-1">
-                            <button
-                                v-for="link in (customers.links ?? [])"
-                                :key="link.label"
-                                :disabled="!link.url"
-                                type="button"
-                                :class="['px-2.5 py-1 rounded-lg text-xs border transition-colors', link.active ? 'bg-primary text-white border-primary' : 'border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed']"
-                                @click="link.url && router.get(link.url)"
-                                v-html="link.label"
-                            ></button>
-                        </div>
+                        <Link
+                            href="/pos"
+                            class="mt-4 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                        >
+                            <ShoppingCart class="h-4 w-4" /> Buka kasir
+                        </Link>
+                    </template>
+                    <p v-else class="font-semibold text-slate-700">Tidak ada pelanggan di daftar ini</p>
+                </div>
+
+                <!-- Daftar pelanggan -->
+                <ul v-else class="divide-y divide-slate-100">
+                    <li v-for="row in rows" :key="row.customer?.id ?? `x-${row.transaction_count}`" class="flex items-center gap-3 px-4 py-3">
+                        <Link :href="row.customer ? `/receivables/customers/${row.customer.id}` : '#'" class="flex min-w-0 flex-1 items-center gap-3">
+                            <span class="min-w-0 flex-1">
+                                <span class="block truncate text-sm font-semibold text-slate-900">{{
+                                    row.customer?.name ?? 'Pelanggan tidak diketahui'
+                                }}</span>
+                                <span class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+                                    <span>{{ row.transaction_count }} bon</span>
+                                    <span v-if="row.customer?.phone">· {{ row.customer.phone }}</span>
+                                    <span
+                                        class="rounded-full px-2 py-0.5 font-semibold"
+                                        :class="DUE_TONE_CLASS[dueStatus(row.earliest_due_at, isPaidTab).tone]"
+                                    >
+                                        {{ dueStatus(row.earliest_due_at, isPaidTab).label }}
+                                    </span>
+                                </span>
+                            </span>
+                            <span class="shrink-0 text-right">
+                                <span
+                                    class="block text-sm font-bold"
+                                    :class="row.overdue_count > 0 && !isPaidTab ? 'text-red-600' : 'text-slate-900'"
+                                >
+                                    {{ rupiah(isPaidTab ? row.debt_total : row.outstanding_total) }}
+                                </span>
+                                <span class="block text-xs text-slate-400">{{ isPaidTab ? 'total utang' : 'sisa utang' }}</span>
+                            </span>
+                        </Link>
+                        <a
+                            v-if="waLink(row)"
+                            :href="waLink(row)!"
+                            target="_blank"
+                            rel="noopener"
+                            class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-emerald-600 hover:bg-emerald-50"
+                            :aria-label="`Ingatkan ${row.customer?.name} via WhatsApp`"
+                            title="Ingatkan via WhatsApp"
+                        >
+                            <MessageCircle class="h-4 w-4" />
+                        </a>
+                        <span v-else class="h-9 w-9 shrink-0" aria-hidden="true" />
+                    </li>
+                </ul>
+
+                <!-- Halaman -->
+                <div v-if="customers.last_page > 1" class="flex items-center justify-between border-t border-slate-100 px-4 py-3">
+                    <p class="text-xs text-slate-500">{{ customers.from }}–{{ customers.to }} dari {{ customers.total }} pelanggan</p>
+                    <div class="flex gap-1">
+                        <button
+                            type="button"
+                            class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-40"
+                            :disabled="customers.current_page <= 1"
+                            aria-label="Sebelumnya"
+                            @click="visit({ page: customers.current_page - 1 })"
+                        >
+                            <ChevronLeft class="h-4 w-4" />
+                        </button>
+                        <button
+                            type="button"
+                            class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-40"
+                            :disabled="customers.current_page >= customers.last_page"
+                            aria-label="Berikutnya"
+                            @click="visit({ page: customers.current_page + 1 })"
+                        >
+                            <ChevronRight class="h-4 w-4" />
+                        </button>
                     </div>
-                </CardContent>
-            </Card>
-            </template>
+                </div>
+            </section>
         </div>
     </AdminLayout>
 </template>

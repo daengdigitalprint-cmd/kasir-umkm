@@ -490,6 +490,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('receivables/customers/{customer}', [App\Http\Controllers\ReceivablesController::class, 'showCustomer'])
         ->name('receivables.customers.show')
         ->middleware(['store.active', 'role.backoffice']);
+    Route::post('receivables/customers/{customer}/payments', [App\Http\Controllers\ReceivablesController::class, 'collectForCustomer'])
+        ->name('receivables.customers.payments.store')
+        ->middleware(['store.active']);
     Route::get('receivables/{transaction}', [App\Http\Controllers\ReceivablesController::class, 'show'])
         ->name('receivables.show')
         ->middleware(['store.active', 'role.backoffice']);
