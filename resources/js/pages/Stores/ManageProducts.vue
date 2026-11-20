@@ -181,6 +181,56 @@ const copyToSelected = async () => {
 
 watch(selectedSourceId, () => { copyResult.value = null; });
 watch(copyType, () => { copyResult.value = null; });
+
+// --- Pratinjau: per outlet tujuan, berapa produk baru dan berapa yang sudah ada (dilewati) ---
+interface PreviewRow {
+    id: number;
+    name: string;
+    new: number;
+    existing: number;
+}
+const preview = ref<PreviewRow[]>([]);
+const previewLoading = ref(false);
+let previewSeq = 0;
+let previewTimer: ReturnType<typeof setTimeout> | undefined;
+
+async function loadPreview() {
+    const seq = ++previewSeq;
+    if (selectedOutlets.value.size === 0 || !selectedSourceId.value) {
+        preview.value = [];
+        previewLoading.value = false;
+        return;
+    }
+    previewLoading.value = true;
+    try {
+        const res = await fetch('/manage-products/preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': getCsrfToken(), Accept: 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({
+                outlet_ids: [...selectedOutlets.value],
+                source_store_id: selectedSourceId.value,
+                copy_type: copyType.value,
+            }),
+        });
+        const data = await res.json();
+        if (seq === previewSeq) preview.value = res.ok ? (data.outlets ?? []) : [];
+    } catch {
+        if (seq === previewSeq) preview.value = [];
+    } finally {
+        if (seq === previewSeq) previewLoading.value = false;
+    }
+}
+
+watch(
+    [() => [...selectedOutlets.value].join(','), selectedSourceId, copyType, copyResult],
+    () => {
+        clearTimeout(previewTimer);
+        previewTimer = setTimeout(loadPreview, 300);
+    },
+);
+
+const previewNewTotal = computed(() => preview.value.reduce((n, r) => n + r.new, 0));
 </script>
 
 <template>
@@ -352,6 +402,24 @@ watch(copyType, () => { copyResult.value = null; });
                             <span class="text-gray-500">Outlet Dipilih</span>
                             <span class="font-medium text-gray-900">{{ selectedOutlets.size }} outlet</span>
                         </div>
+                    </div>
+
+                    <!-- Pratinjau per outlet: produk baru vs sudah ada -->
+                    <div v-if="selectedOutlets.size > 0" class="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <p class="text-xs font-semibold tracking-wide text-slate-500 uppercase">Pratinjau</p>
+                        <p v-if="previewLoading && preview.length === 0" class="text-xs text-slate-500">Menghitung…</p>
+                        <div v-for="row in preview" :key="row.id" class="flex items-center justify-between gap-3 text-sm">
+                            <span class="min-w-0 truncate text-slate-800">{{ row.name }}</span>
+                            <span class="shrink-0 text-xs">
+                                <span class="font-semibold text-emerald-700">{{ row.new }} baru</span>
+                                <span class="text-slate-400"> · </span>
+                                <span class="text-slate-500">{{ row.existing }} sudah ada</span>
+                            </span>
+                        </div>
+                        <p v-if="!previewLoading && preview.length > 0 && previewNewTotal === 0" class="text-xs text-amber-700">
+                            Semua produk sudah ada di outlet tujuan. Tidak ada yang akan disalin.
+                        </p>
+                        <p v-else-if="preview.length > 0" class="text-xs text-slate-500">Produk yang sudah ada dilewati, tidak ditimpa.</p>
                     </div>
 
                     <div class="border-t pt-4">

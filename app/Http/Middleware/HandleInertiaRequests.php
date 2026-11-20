@@ -146,6 +146,7 @@ class HandleInertiaRequests extends Middleware
                 'info' => fn () => $request->session()->get('info'),
                 'status' => fn () => $request->session()->get('status'),
                 'show_product_modal' => fn () => $request->session()->get('show_product_modal'),
+                'new_store_checklist' => fn () => $request->session()->get('new_store_checklist'),
             ],
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'auth' => [

@@ -15,6 +15,7 @@ import DashboardLowStockCard from '@/components/dashboard/DashboardLowStockCard.
 import DashboardPeakHours from '@/components/dashboard/DashboardPeakHours.vue';
 import DashboardTopProducts from '@/components/dashboard/DashboardTopProducts.vue';
 import DashboardTrendChart from '@/components/dashboard/DashboardTrendChart.vue';
+import NewStoreChecklistCard from '@/components/dashboard/NewStoreChecklistCard.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -731,6 +732,9 @@ const daysUntilExpiry = (dateString: string) => {
                         </div>
                     </div>
                 </div>
+
+                <!-- Langkah berikutnya setelah outlet/gudang baru dibuat -->
+                <NewStoreChecklistCard :store-id="store?.id" />
 
                 <!-- Stats Cards — Gudang -->
                 <div

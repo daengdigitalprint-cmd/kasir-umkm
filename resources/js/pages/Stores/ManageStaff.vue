@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Users, Plus, ArrowLeft, ShieldCheck, UserPlus, Pencil, Trash2 } from 'lucide-vue-next';
+import { Users, Plus, ArrowLeft, ShieldCheck, UserPlus, Pencil, Trash2, MessageCircle, Copy, KeyRound } from 'lucide-vue-next';
 import { ref, watch, computed } from 'vue';
 import { confirmDialog, toastSuccess, toastError } from '@/lib/swal';
 import AdminLayout from '@/layouts/AdminLayout.vue';
@@ -14,7 +14,11 @@ type StoreRole = 'admin' | 'manager' | 'cashier' | 'kitchen' | 'warehouse' | 'ow
 interface TeamMember {
     id: number;
     name: string;
-    email: string;
+    /** null untuk akun PIN (tanpa email). */
+    email: string | null;
+    phone?: string | null;
+    is_pin_only?: boolean;
+    has_pin?: boolean;
     role: string;
 }
 
@@ -24,6 +28,8 @@ interface StoreInfo {
     name: string;
     team_members?: TeamMember[];
     organization_id?: number | null;
+    /** Jumlah outlet di grup yang dikelola user ini (termasuk toko aktif). */
+    group_store_count?: number;
 }
 
 interface Props {
@@ -42,22 +48,116 @@ const canShowOwnerOption = computed(() => canAssignOwner.value || isSuperAdmin.v
 const activeTab = ref<'karyawan' | 'izin'>('karyawan');
 
 // --- Form buat akun baru ---
+const PIN_ROLES: StoreRole[] = ['cashier', 'kitchen', 'warehouse', 'barber'];
+const pinModeOn = computed(() => String((page.props as { cashier_login_mode?: string }).cashier_login_mode ?? 'email') === 'pin');
+
 const showCreateForm = ref(false);
 const createForm = useForm({
     name: '',
+    phone: '',
+    login_method: 'email' as 'email' | 'pin',
     email: '',
     password: '',
     password_confirmation: '',
+    pin: '',
     role: 'cashier' as StoreRole,
 });
 
+// Akun PIN hanya untuk peran non-pengelola; pindahkan peran bila perlu.
+watch(
+    () => createForm.login_method,
+    (method) => {
+        if (method === 'pin' && !PIN_ROLES.includes(createForm.role)) createForm.role = 'cashier';
+    },
+);
+
+/** Info login terakhir yang dibuat, untuk dibagikan lewat WhatsApp. Hanya di browser, tidak disimpan. */
+interface CreatedInfo {
+    name: string;
+    phone: string;
+    method: 'email' | 'pin';
+    email: string;
+    password: string;
+    pin: string;
+}
+const lastCreated = ref<CreatedInfo | null>(null);
+
 const submitCreate = async () => {
     if (!(await confirmDialog('Buat akun baru?', `Akun akan dibuat dengan peran ${roleLabel(createForm.role)}.`, { confirmText: 'Buat', icon: 'question' }))) return;
-    createForm.post(`/stores/${props.store.slug}/members/create`, {
-        preserveScroll: true,
-        onSuccess: () => { createForm.reset(); showCreateForm.value = false; },
-    });
+    const snapshot: CreatedInfo = {
+        name: createForm.name,
+        phone: createForm.phone,
+        method: createForm.login_method,
+        email: createForm.email,
+        password: createForm.password,
+        pin: createForm.pin,
+    };
+    createForm
+        .transform((data) => {
+            const d = { ...data } as Record<string, unknown>;
+            if (d.login_method === 'pin') {
+                delete d.email;
+                delete d.password;
+                delete d.password_confirmation;
+            } else {
+                delete d.pin;
+            }
+            return d;
+        })
+        .post(`/stores/${props.store.slug}/members/create`, {
+            preserveScroll: true,
+            onSuccess: () => {
+                lastCreated.value = snapshot;
+                createForm.reset();
+                showCreateForm.value = false;
+            },
+        });
 };
+
+function shareMessage(info: CreatedInfo): string {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    if (info.method === 'pin') {
+        return [
+            `Halo ${info.name}, akun Kasir UMKM Anda di ${props.store.name} sudah dibuat.`,
+            '',
+            'Cara masuk: di perangkat kasir toko, pilih nama Anda lalu masukkan PIN berikut.',
+            `PIN: ${info.pin}`,
+            '',
+            'Jangan bagikan PIN ini ke orang lain.',
+        ].join('\n');
+    }
+    return [
+        `Halo ${info.name}, akun Kasir UMKM Anda di ${props.store.name} sudah dibuat.`,
+        '',
+        `Masuk di: ${origin}/login`,
+        `Email: ${info.email}`,
+        `Kata sandi: ${info.password}`,
+        '',
+        'Segera ganti kata sandi setelah masuk (menu Pengaturan → Kata sandi).',
+    ].join('\n');
+}
+
+/** Nomor HP Indonesia ke format wa.me (62…); kosong = pilih kontak di WhatsApp. */
+function waNumber(phone: string): string {
+    let digits = phone.replace(/\D/g, '');
+    if (digits.startsWith('0')) digits = '62' + digits.slice(1);
+    return digits;
+}
+
+const waLink = computed(() => {
+    if (!lastCreated.value) return '';
+    return `https://wa.me/${waNumber(lastCreated.value.phone)}?text=${encodeURIComponent(shareMessage(lastCreated.value))}`;
+});
+
+async function copyShareMessage() {
+    if (!lastCreated.value) return;
+    try {
+        await navigator.clipboard.writeText(shareMessage(lastCreated.value));
+        toastSuccess('Pesan disalin.');
+    } catch {
+        toastError('Gagal menyalin. Salin manual dari WhatsApp.');
+    }
+}
 
 // --- Peran ---
 function roleLabel(role: string): string {
@@ -93,9 +193,10 @@ const baseRoles = computed<StoreRole[]>(() => {
 });
 
 /** Pilihan peran untuk form; peran saat ini selalu ikut agar tidak hilang saat diedit. */
-function roleOptionsFor(current?: string): StoreRole[] {
-    const roles = [...baseRoles.value];
+function roleOptionsFor(current?: string, pinOnly = false): StoreRole[] {
+    let roles = [...baseRoles.value];
     if (canShowOwnerOption.value) roles.push('owner');
+    if (pinOnly) roles = roles.filter((r) => PIN_ROLES.includes(r));
     if (current && !roles.includes(current as StoreRole)) roles.push(current as StoreRole);
     return roles;
 }
@@ -107,8 +208,10 @@ const editingMember = ref<TeamMember | null>(null);
 const editForm = useForm({
     name: '',
     email: '',
+    phone: '',
     password: '',
     password_confirmation: '',
+    pin: '',
     role: 'cashier' as StoreRole,
 });
 
@@ -116,9 +219,11 @@ function openEdit(m: TeamMember) {
     editingMember.value = m;
     editForm.clearErrors();
     editForm.name = m.name;
-    editForm.email = m.email;
+    editForm.email = m.email ?? '';
+    editForm.phone = m.phone ?? '';
     editForm.password = '';
     editForm.password_confirmation = '';
+    editForm.pin = '';
     editForm.role = m.role as StoreRole;
 }
 
@@ -127,6 +232,18 @@ async function submitEdit() {
     const memberId = editingMember.value?.id;
     if (!slug || !memberId) return;
     if (!(await confirmDialog('Simpan perubahan?', `Data "${editingMember.value?.name ?? ''}" akan diperbarui.`, { confirmText: 'Simpan', icon: 'question' }))) return;
+    const pinOnly = Boolean(editingMember.value?.is_pin_only);
+    editForm.transform((data) => {
+        const d = { ...data } as Record<string, unknown>;
+        // Akun PIN tidak punya email/kata sandi; akun email tidak mengirim PIN kosong.
+        if (pinOnly) {
+            delete d.email;
+            delete d.password;
+            delete d.password_confirmation;
+        }
+        if (!d.pin) delete d.pin;
+        return d;
+    });
     editForm.patch(`/stores/${slug}/members/${memberId}`, {
         preserveScroll: true,
         onSuccess: () => { editingMember.value = null; editForm.reset(); },
@@ -205,8 +322,13 @@ const fetchPermissions = async () => {
     }
 };
 
+/** Terapkan hak akses yang sama ke semua outlet di grup yang dikelola user ini. */
+const otherGroupStores = computed(() => Math.max(0, Number(props.store.group_store_count ?? 1) - 1));
+const applyToAllStores = ref(false);
+
 const savePermissions = async () => {
-    if (!(await confirmDialog('Simpan hak akses?', `Menu yang diizinkan untuk peran ${roleLabel(selectedPermRole.value)} di toko ini akan diperbarui.`, { confirmText: 'Simpan', icon: 'question' }))) return;
+    const scope = applyToAllStores.value && otherGroupStores.value > 0 ? `toko ini dan ${otherGroupStores.value} outlet lain di grup` : 'toko ini';
+    if (!(await confirmDialog('Simpan hak akses?', `Menu yang diizinkan untuk peran ${roleLabel(selectedPermRole.value)} di ${scope} akan diperbarui.`, { confirmText: 'Simpan', icon: 'question' }))) return;
     permSaving.value = true;
     try {
         const res = await fetch('/menu-permissions', {
@@ -218,10 +340,16 @@ const savePermissions = async () => {
                 'X-XSRF-TOKEN': decodeURIComponent(document.cookie.match(/XSRF-TOKEN=([^;]+)/)?.[1] ?? ''),
                 Accept: 'application/json',
             },
-            body: JSON.stringify({ role: selectedPermRole.value, menus: selectedPermMenus.value }),
+            body: JSON.stringify({ role: selectedPermRole.value, menus: selectedPermMenus.value, apply_to_all: applyToAllStores.value }),
         });
         if (res.ok) {
-            toastSuccess('Hak akses menu tersimpan. Pengguna melihat perubahan setelah memuat ulang halaman.');
+            const data = await res.json().catch(() => ({}));
+            const n = Number(data.store_count ?? 1);
+            toastSuccess(
+                n > 1
+                    ? `Hak akses menu tersimpan di ${n} outlet. Pengguna melihat perubahan setelah memuat ulang halaman.`
+                    : 'Hak akses menu tersimpan. Pengguna melihat perubahan setelah memuat ulang halaman.',
+            );
             await fetchPermissions();
         } else {
             toastError('Gagal menyimpan hak akses.');
@@ -336,12 +464,52 @@ watch(activeTab, (tab) => {
                                     <p v-if="createForm.errors.name" class="text-xs text-red-600">{{ createForm.errors.name }}</p>
                                 </div>
                                 <div class="space-y-1">
+                                    <Label for="create-phone" class="text-xs">Nomor HP (opsional)</Label>
+                                    <Input id="create-phone" v-model="createForm.phone" type="tel" inputmode="tel" class="h-9 text-sm" placeholder="08xxxxxxxxxx" />
+                                    <p v-if="createForm.errors.phone" class="text-xs text-red-600">{{ createForm.errors.phone }}</p>
+                                    <p v-else class="text-[11px] text-slate-500">Untuk mengirim info masuk lewat WhatsApp.</p>
+                                </div>
+                            </div>
+
+                            <div class="space-y-1.5">
+                                <Label class="text-xs">Cara masuk</Label>
+                                <div class="grid gap-2 sm:grid-cols-2">
+                                    <label
+                                        class="flex cursor-pointer items-start gap-2 rounded-lg border bg-white px-3 py-2 text-sm"
+                                        :class="createForm.login_method === 'email' ? 'border-primary ring-1 ring-primary/30' : 'border-gray-200'"
+                                    >
+                                        <input v-model="createForm.login_method" type="radio" value="email" class="mt-0.5" />
+                                        <span>
+                                            <span class="block font-semibold text-slate-800">Email &amp; kata sandi</span>
+                                            <span class="block text-xs text-slate-500">Masuk dari HP/komputer mana pun.</span>
+                                        </span>
+                                    </label>
+                                    <label
+                                        class="flex items-start gap-2 rounded-lg border bg-white px-3 py-2 text-sm"
+                                        :class="[
+                                            createForm.login_method === 'pin' ? 'border-primary ring-1 ring-primary/30' : 'border-gray-200',
+                                            pinModeOn ? 'cursor-pointer' : 'cursor-not-allowed opacity-60',
+                                        ]"
+                                    >
+                                        <input v-model="createForm.login_method" type="radio" value="pin" class="mt-0.5" :disabled="!pinModeOn" />
+                                        <span>
+                                            <span class="block font-semibold text-slate-800">PIN saja (tanpa email)</span>
+                                            <span class="block text-xs text-slate-500">Pilih nama lalu masukkan PIN di perangkat kasir toko.</span>
+                                        </span>
+                                    </label>
+                                </div>
+                                <p v-if="!pinModeOn" class="text-[11px] text-slate-500">
+                                    Untuk karyawan tanpa email, aktifkan dulu mode PIN di
+                                    <a href="/settings/cashier-pin" class="font-semibold text-primary underline">Pengaturan → Login Kasir</a>.
+                                </p>
+                            </div>
+
+                            <div v-if="createForm.login_method === 'email'" class="grid gap-3 sm:grid-cols-3">
+                                <div class="space-y-1">
                                     <Label for="create-email" class="text-xs">Email</Label>
                                     <Input id="create-email" v-model="createForm.email" type="email" class="h-9 text-sm" placeholder="nama@email.com" required />
                                     <p v-if="createForm.errors.email" class="text-xs text-red-600">{{ createForm.errors.email }}</p>
                                 </div>
-                            </div>
-                            <div class="grid gap-3 sm:grid-cols-3">
                                 <div class="space-y-1">
                                     <Label for="create-pass" class="text-xs">Kata sandi</Label>
                                     <Input id="create-pass" v-model="createForm.password" type="password" class="h-9 text-sm" required />
@@ -351,10 +519,30 @@ watch(activeTab, (tab) => {
                                     <Label for="create-pass2" class="text-xs">Ulangi sandi</Label>
                                     <Input id="create-pass2" v-model="createForm.password_confirmation" type="password" class="h-9 text-sm" required />
                                 </div>
+                            </div>
+                            <div v-else class="grid gap-3 sm:grid-cols-3">
+                                <div class="space-y-1">
+                                    <Label for="create-pin" class="text-xs">PIN (4–6 angka)</Label>
+                                    <Input
+                                        id="create-pin"
+                                        v-model="createForm.pin"
+                                        type="password"
+                                        inputmode="numeric"
+                                        autocomplete="off"
+                                        maxlength="6"
+                                        class="h-9 text-sm tracking-widest"
+                                        required
+                                    />
+                                    <p v-if="createForm.errors.pin" class="text-xs text-red-600">{{ createForm.errors.pin }}</p>
+                                    <p v-else class="text-[11px] text-slate-500">Hindari PIN mudah seperti 1234 atau 1111.</p>
+                                </div>
+                            </div>
+
+                            <div class="grid gap-3 sm:grid-cols-3">
                                 <div class="space-y-1">
                                     <Label for="create-role" class="text-xs">Peran</Label>
                                     <select id="create-role" v-model="createForm.role" class="flex h-9 w-full rounded-lg border border-gray-200 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
-                                        <option v-for="r in roleOptionsFor()" :key="r" :value="r">{{ roleLabel(r) }}</option>
+                                        <option v-for="r in roleOptionsFor(undefined, createForm.login_method === 'pin')" :key="r" :value="r">{{ roleLabel(r) }}</option>
                                     </select>
                                     <p v-if="createForm.errors.role" class="text-xs text-red-600">{{ createForm.errors.role }}</p>
                                 </div>
@@ -370,6 +558,31 @@ watch(activeTab, (tab) => {
                         </form>
                     </div>
 
+                    <!-- Bagikan info masuk ke karyawan baru -->
+                    <div v-if="lastCreated" class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <p class="text-sm font-bold text-emerald-900">Akun {{ lastCreated.name }} sudah dibuat</p>
+                                <p class="mt-0.5 text-xs text-emerald-800">
+                                    Kirim cara masuknya ke karyawan. Info ini hanya tampil sekarang dan tidak disimpan.
+                                </p>
+                            </div>
+                            <button type="button" class="text-emerald-700/70 hover:text-emerald-900" aria-label="Tutup" @click="lastCreated = null">✕</button>
+                        </div>
+                        <div class="mt-3 flex flex-wrap gap-2">
+                            <Button as-child size="sm" class="gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700">
+                                <a :href="waLink" target="_blank" rel="noopener">
+                                    <MessageCircle class="h-4 w-4" />
+                                    Kirim via WhatsApp
+                                </a>
+                            </Button>
+                            <Button type="button" size="sm" variant="outline" class="gap-1.5 rounded-xl" @click="copyShareMessage">
+                                <Copy class="h-4 w-4" />
+                                Salin pesan
+                            </Button>
+                        </div>
+                    </div>
+
                     <!-- Tabel anggota -->
                     <ul v-if="store.team_members?.length" class="divide-y divide-gray-100 rounded-xl border border-gray-200 overflow-hidden">
                         <li
@@ -380,7 +593,12 @@ watch(activeTab, (tab) => {
                             <div class="min-w-0 flex-1">
                                 <span class="font-medium text-gray-900">{{ m.name }}</span>
                                 <span v-if="m.id === user?.id" class="ml-2 text-xs font-medium text-blue-600">(Anda)</span>
-                                <p class="text-gray-500 break-all text-xs mt-0.5">{{ m.email }}</p>
+                                <p v-if="m.is_pin_only" class="mt-0.5 inline-flex items-center gap-1 text-xs text-gray-500">
+                                    <KeyRound class="h-3 w-3" /> Masuk dengan PIN<template v-if="m.phone"> · {{ m.phone }}</template>
+                                </p>
+                                <p v-else class="text-gray-500 break-all text-xs mt-0.5">
+                                    {{ m.email }}<template v-if="m.phone"> · {{ m.phone }}</template>
+                                </p>
                             </div>
                             <div class="flex flex-wrap items-center gap-2 shrink-0">
                                 <span
@@ -431,20 +649,39 @@ watch(activeTab, (tab) => {
                         <Input id="edit-name" v-model="editForm.name" type="text" class="h-9 text-sm" required />
                         <p v-if="editForm.errors.name" class="text-xs text-red-600">{{ editForm.errors.name }}</p>
                     </div>
-                    <div class="space-y-1">
+                    <div v-if="!editingMember.is_pin_only" class="space-y-1">
                         <Label for="edit-email" class="text-xs">Email</Label>
                         <Input id="edit-email" v-model="editForm.email" type="email" class="h-9 text-sm" required />
                         <p v-if="editForm.errors.email" class="text-xs text-red-600">{{ editForm.errors.email }}</p>
                     </div>
                     <div class="space-y-1">
+                        <Label for="edit-phone" class="text-xs">Nomor HP (opsional)</Label>
+                        <Input id="edit-phone" v-model="editForm.phone" type="tel" inputmode="tel" class="h-9 text-sm" placeholder="08xxxxxxxxxx" />
+                        <p v-if="editForm.errors.phone" class="text-xs text-red-600">{{ editForm.errors.phone }}</p>
+                    </div>
+                    <div class="space-y-1">
                         <Label for="edit-role" class="text-xs">Peran</Label>
                         <select id="edit-role" v-model="editForm.role" class="flex h-9 w-full rounded-lg border border-gray-200 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
-                            <option v-for="r in roleOptionsFor(editingMember?.role)" :key="r" :value="r">{{ roleLabel(r) }}</option>
+                            <option v-for="r in roleOptionsFor(editingMember?.role, Boolean(editingMember?.is_pin_only))" :key="r" :value="r">{{ roleLabel(r) }}</option>
                         </select>
                         <p class="text-xs text-slate-500">{{ roleDescription(editForm.role) }}</p>
                         <p v-if="editForm.errors.role" class="text-xs text-red-600">{{ editForm.errors.role }}</p>
                     </div>
-                    <div class="grid gap-3 sm:grid-cols-2">
+                    <div v-if="editingMember.is_pin_only" class="space-y-1">
+                        <Label for="edit-pin" class="text-xs">PIN baru (opsional)</Label>
+                        <Input
+                            id="edit-pin"
+                            v-model="editForm.pin"
+                            type="password"
+                            inputmode="numeric"
+                            autocomplete="off"
+                            maxlength="6"
+                            class="h-9 text-sm tracking-widest"
+                            placeholder="Kosongkan jika tidak diubah"
+                        />
+                        <p v-if="editForm.errors.pin" class="text-xs text-red-600">{{ editForm.errors.pin }}</p>
+                    </div>
+                    <div v-else class="grid gap-3 sm:grid-cols-2">
                         <div class="space-y-1">
                             <Label for="edit-pass" class="text-xs">Kata sandi baru (opsional)</Label>
                             <Input id="edit-pass" v-model="editForm.password" type="password" class="h-9 text-sm" placeholder="Kosongkan jika tidak diubah" />
@@ -558,6 +795,13 @@ watch(activeTab, (tab) => {
                         </p>
 
                         <!-- Save button -->
+                        <label v-if="otherGroupStores > 0" class="flex cursor-pointer items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm">
+                            <input v-model="applyToAllStores" type="checkbox" class="mt-0.5 h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" />
+                            <span>
+                                <span class="block font-semibold text-slate-800">Terapkan juga ke {{ otherGroupStores }} outlet lain di grup</span>
+                                <span class="block text-xs text-slate-500">Hak akses peran {{ roleLabel(selectedPermRole) }} di outlet lain disamakan dengan pilihan ini.</span>
+                            </span>
+                        </label>
                         <div class="flex justify-end pt-4">
                             <Button
                                 type="button"

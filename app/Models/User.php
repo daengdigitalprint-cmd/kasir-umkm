@@ -66,6 +66,26 @@ class User extends Authenticatable
         return ! empty($this->cashier_pin_hash);
     }
 
+    /**
+     * Akun karyawan tanpa email: masuk hanya lewat PIN di perangkat kasir toko.
+     * Kolom email wajib & unik, jadi diisi alamat internal ber-TLD .invalid
+     * (RFC 2606) yang tidak pernah bisa menerima email.
+     */
+    public const PIN_ONLY_EMAIL_DOMAIN = 'pin.kasirumkm.invalid';
+
+    /** Peran yang boleh dibuat sebagai akun PIN (tanpa email). */
+    public const PIN_ONLY_ROLES = ['cashier', 'kitchen', 'warehouse', 'barber'];
+
+    public static function pinOnlyEmailFor(int $storeId): string
+    {
+        return 'staf-'.$storeId.'-'.\Illuminate\Support\Str::lower(\Illuminate\Support\Str::random(12)).'@'.self::PIN_ONLY_EMAIL_DOMAIN;
+    }
+
+    public function isPinOnly(): bool
+    {
+        return str_ends_with((string) $this->email, '@'.self::PIN_ONLY_EMAIL_DOMAIN);
+    }
+
     public function verifyCashierPin(string $pin): bool
     {
         if (! $this->hasCashierPin()) {

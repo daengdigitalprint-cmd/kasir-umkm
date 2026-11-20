@@ -301,6 +301,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('manage-products/copy', [StoreController::class, 'copyProductsToOutlets'])
         ->middleware(['store.active', 'role.store_admin'])
         ->name('manage-products.copy');
+    Route::post('manage-products/preview', [StoreController::class, 'previewCopyToOutlets'])
+        ->middleware(['store.active', 'role.store_admin'])
+        ->name('manage-products.preview');
     Route::get('products/catalog', [App\Http\Controllers\ProductCatalogController::class, 'index'])
         ->middleware(['store.active'])
         ->name('products.catalog');

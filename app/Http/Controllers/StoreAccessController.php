@@ -120,16 +120,37 @@ class StoreAccessController extends Controller
      */
     public function createMember(Request $request, Store $store): RedirectResponse
     {
+        // Cara masuk: email & kata sandi, atau PIN saja di perangkat kasir (tanpa email).
+        $loginMethod = $request->input('login_method') === 'pin' ? 'pin' : 'email';
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'lowercase', 'email', 'max:255', Rule::unique('users', 'email')],
-            'password' => ['required', 'confirmed', Password::defaults()],
-            'role' => ['required', 'string', 'in:admin,manager,cashier,kitchen,warehouse,owner,barber'],
+            'phone' => ['nullable', 'string', 'max:30', 'regex:/^[0-9+\s\-()]{6,30}$/'],
+            'login_method' => ['nullable', 'in:email,pin'],
+            'email' => $loginMethod === 'email'
+                ? ['required', 'string', 'lowercase', 'email', 'max:255', Rule::unique('users', 'email')]
+                : ['nullable'],
+            'password' => $loginMethod === 'email' ? ['required', 'confirmed', Password::defaults()] : ['nullable'],
+            'pin' => $loginMethod === 'pin' ? ['required', 'digits_between:4,6'] : ['nullable'],
+            'role' => [
+                'required', 'string',
+                $loginMethod === 'pin'
+                    ? Rule::in(User::PIN_ONLY_ROLES)
+                    : 'in:admin,manager,cashier,kitchen,warehouse,owner,barber',
+            ],
+        ], [
+            'role.in' => 'Akun PIN hanya untuk peran Kasir, Dapur, Admin gudang, atau Barber.',
+            'pin.digits_between' => 'PIN harus 4–6 angka.',
+            'phone.regex' => 'Nomor HP hanya boleh berisi angka.',
         ]);
 
         $actor = $request->user();
         if (! $actor?->canManageStoreSettings()) {
             abort(403);
+        }
+
+        if ($loginMethod === 'pin' && ($store->cashier_login_mode ?? 'email') !== 'pin') {
+            return back()->with('error', 'Aktifkan dulu mode login PIN di Pengaturan → Login Kasir agar karyawan bisa masuk dengan PIN.');
         }
 
         // Admin/super_admin bisa menugaskan role owner
@@ -141,16 +162,33 @@ class StoreAccessController extends Controller
             return back()->with('error', 'Anda bukan anggota toko ini.');
         }
 
-        $member = User::query()->create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => $validated['password'],
-            'business_type' => $store->business_type ?? 'general',
-            'store_id' => $store->id,
-            'role' => $validated['role'] === 'admin' ? 'admin' : 'cashier',
-            'is_active' => true,
-            'email_verified_at' => now(),
-        ]);
+        $pinService = app(\App\Modules\CashierPin\Services\CashierPinService::class);
+        if ($loginMethod === 'pin' && ! $pinService->validatePinFormat((string) $validated['pin'])) {
+            return back()->withErrors(['pin' => 'PIN harus 4–6 angka.'])->withInput();
+        }
+
+        $member = \Illuminate\Support\Facades\DB::transaction(function () use ($validated, $loginMethod, $store, $pinService) {
+            $member = User::query()->create([
+                'name' => $validated['name'],
+                'email' => $loginMethod === 'pin' ? User::pinOnlyEmailFor($store->id) : $validated['email'],
+                // Akun PIN tidak memakai kata sandi: diisi acak dan tidak pernah dibagikan.
+                'password' => $loginMethod === 'pin' ? \Illuminate\Support\Str::random(40) : $validated['password'],
+                'phone' => $validated['phone'] ?? null,
+                'business_type' => $store->business_type ?? 'general',
+                'store_id' => $store->id,
+                'role' => $validated['role'] === 'admin' ? 'admin' : 'cashier',
+                'is_active' => true,
+                'email_verified_at' => now(),
+            ]);
+
+            if ($loginMethod === 'pin' && ! $pinService->setPin($member, (string) $validated['pin'])) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'pin' => 'PIN terlalu mudah ditebak (mis. 1234 atau 1111). Pilih PIN lain.',
+                ]);
+            }
+
+            return $member;
+        });
 
         $store->members()->syncWithoutDetaching([
             $member->id => ['role' => $validated['role']],
@@ -173,7 +211,9 @@ class StoreAccessController extends Controller
             ]
         );
 
-        return back()->with('success', 'Akun anggota dibuat. Bagikan email dan kata sandi kepada pengguna: '.$member->email);
+        return back()->with('success', $loginMethod === 'pin'
+            ? "Akun {$member->name} dibuat. Ia masuk dengan memilih namanya lalu memasukkan PIN di perangkat kasir."
+            : 'Akun anggota dibuat. Bagikan email dan kata sandi kepada pengguna: '.$member->email);
     }
 
     public function updateMember(Request $request, Store $store, User $user): RedirectResponse
@@ -182,7 +222,12 @@ class StoreAccessController extends Controller
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'email' => ['sometimes', 'required', 'string', 'lowercase', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'password' => ['nullable', 'confirmed', Password::defaults()],
+            'phone' => ['sometimes', 'nullable', 'string', 'max:30', 'regex:/^[0-9+\s\-()]{6,30}$/'],
+            'pin' => ['nullable', 'digits_between:4,6'],
             'role' => ['required', 'string', 'in:admin,manager,cashier,kitchen,warehouse,owner,barber'],
+        ], [
+            'pin.digits_between' => 'PIN harus 4–6 angka.',
+            'phone.regex' => 'Nomor HP hanya boleh berisi angka.',
         ]);
 
         $actor = $request->user();
@@ -192,6 +237,11 @@ class StoreAccessController extends Controller
 
         if (! $actor->isMemberOfStore($store)) {
             return back()->with('error', 'Anda bukan anggota toko ini.');
+        }
+
+        // Akun PIN tidak punya email untuk masuk: tidak bisa dijadikan admin/manajer/pemilik.
+        if ($user->isPinOnly() && ! in_array($validated['role'], User::PIN_ONLY_ROLES, true)) {
+            return back()->withErrors(['role' => 'Akun PIN hanya untuk peran Kasir, Dapur, Admin gudang, atau Barber. Buat akun email untuk peran ini.']);
         }
 
         if (! $store->members()->whereKey($user->id)->exists()) {
@@ -218,15 +268,25 @@ class StoreAccessController extends Controller
             }
         }
 
+        // PIN baru disimpan lebih dulu: bila terlalu mudah ditebak, tidak ada data lain yang terlanjur berubah.
+        if (! empty($validated['pin'])) {
+            if (! app(\App\Modules\CashierPin\Services\CashierPinService::class)->setPin($user, (string) $validated['pin'])) {
+                return back()->withErrors(['pin' => 'PIN terlalu mudah ditebak (mis. 1234 atau 1111). Pilih PIN lain.']);
+            }
+        }
+
         $data = [];
         if (array_key_exists('name', $validated)) {
             $data['name'] = $validated['name'];
         }
-        if (array_key_exists('email', $validated)) {
+        if (array_key_exists('email', $validated) && ! $user->isPinOnly()) {
             $data['email'] = $validated['email'];
         }
-        if (! empty($validated['password'])) {
+        if (! empty($validated['password']) && ! $user->isPinOnly()) {
             $data['password'] = $validated['password'];
+        }
+        if (array_key_exists('phone', $validated)) {
+            $data['phone'] = $validated['phone'];
         }
         if ($data !== []) {
             $user->update($data);
@@ -363,34 +423,56 @@ class StoreAccessController extends Controller
             'role' => ['required', 'string', Rule::in(self::PERMISSION_ROLES)],
             'menus' => ['present', 'array'],
             'menus.*' => ['required', 'string', 'max:64'],
+            'apply_to_all' => ['sometimes', 'boolean'],
         ]);
 
         $role = $validated['role'];
-
-        // Menu di luar daftar (mis. menu khusus admin atau modul yang sedang mati)
-        // tidak tampil di form, jadi nilainya dipertahankan dari pengaturan
-        // sebelumnya agar tidak hilang diam-diam.
         $editable = MenuCatalog::keys();
         $chosen = array_values(array_intersect($editable, $validated['menus']));
-        $kept = array_values(array_diff(RoleMenuPermission::allowedMenus($role, $store), $editable));
-        $menus = array_values(array_unique([...$chosen, ...$kept]));
 
-        $settings = $store->settings ?? [];
-        $settings[RoleMenuPermission::STORE_SETTINGS_KEY][$role] = $menus;
-        $store->settings = $settings;
-        $store->save();
-
-        ActivityLogger::log(
-            store: $store,
-            action: 'menu_permissions.updated',
-            description: "Mengubah hak akses menu peran {$role}",
-            metadata: ['role' => $role, 'menus' => $menus],
-        );
-
-        if ($request->expectsJson()) {
-            return response()->json(['success' => true, 'role' => $role, 'menus' => $menus]);
+        // Toko aktif, plus — bila diminta — outlet lain di grup yang juga dikelola user ini
+        // (sebagai pemilik/admin). Outlet yang tidak ia kelola tidak disentuh.
+        $targets = collect([$store]);
+        if (($validated['apply_to_all'] ?? false) && $store->organization_id) {
+            $others = $actor->isSuperAdmin()
+                ? Store::query()->where('organization_id', $store->organization_id)->where('id', '!=', $store->id)->get()
+                : $actor->stores()
+                    ->where('stores.organization_id', $store->organization_id)
+                    ->where('stores.id', '!=', $store->id)
+                    ->wherePivotIn('role', ['owner', 'admin'])
+                    ->get();
+            $targets = $targets->concat($others);
         }
 
-        return back()->with('success', 'Hak akses menu untuk role '.$role.' berhasil diperbarui.');
+        $menus = [];
+        foreach ($targets as $target) {
+            // Menu di luar daftar (mis. menu khusus admin atau modul yang sedang mati)
+            // tidak tampil di form, jadi nilainya dipertahankan dari pengaturan
+            // sebelumnya per toko agar tidak hilang diam-diam.
+            $kept = array_values(array_diff(RoleMenuPermission::allowedMenus($role, $target), $editable));
+            $targetMenus = array_values(array_unique([...$chosen, ...$kept]));
+
+            $settings = $target->settings ?? [];
+            $settings[RoleMenuPermission::STORE_SETTINGS_KEY][$role] = $targetMenus;
+            $target->settings = $settings;
+            $target->save();
+
+            ActivityLogger::log(
+                store: $target,
+                action: 'menu_permissions.updated',
+                description: "Mengubah hak akses menu peran {$role}",
+                metadata: ['role' => $role, 'menus' => $targetMenus, 'from_store_id' => $store->id],
+            );
+
+            if ($target->is($store)) {
+                $menus = $targetMenus;
+            }
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'role' => $role, 'menus' => $menus, 'store_count' => $targets->count()]);
+        }
+
+        return back()->with('success', 'Hak akses menu untuk role '.$role.' berhasil diperbarui di '.$targets->count().' outlet.');
     }
 }

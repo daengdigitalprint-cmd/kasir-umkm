@@ -355,11 +355,23 @@ class StoreController extends Controller implements HasMiddleware
             }
         }
 
+        $hasSiblings = $organizationId
+            && Store::query()->where('organization_id', $organizationId)->where('id', '!=', $store->id)->exists();
+
         $response = redirect()->route('dashboard')->with('success', 'Toko berhasil dibuat!');
 
-        // Modal ajakan buat produk pertama hanya jika toko benar-benar belum punya produk
-        // (misal user memilih salin produk dari gudang pusat, modal tidak perlu ditampilkan).
-        if (! $store->products()->exists()) {
+        if ($hasSiblings) {
+            // Outlet tambahan di grup: tampilkan daftar langkah berikutnya di dashboard
+            // (salin produk, tambah karyawan, atur struk) alih-alih modal produk pertama.
+            $response->with('new_store_checklist', [
+                'store_id' => $store->id,
+                'name' => $store->name,
+                'location_type' => $locationType,
+                'has_products' => $store->products()->exists(),
+            ]);
+        } elseif (! $store->products()->exists()) {
+            // Modal ajakan buat produk pertama hanya jika toko benar-benar belum punya produk
+            // (misal user memilih salin produk dari gudang pusat, modal tidak perlu ditampilkan).
             $response->with('show_product_modal', true);
         }
 
@@ -444,15 +456,27 @@ class StoreController extends Controller implements HasMiddleware
 
         $teamMembers = $store->members()
             ->orderBy('name')
-            ->get(['users.id', 'users.name', 'users.email'])
+            ->get(['users.id', 'users.name', 'users.email', 'users.phone', 'users.cashier_pin_hash'])
             ->map(fn ($m) => [
                 'id' => $m->id,
                 'name' => $m->name,
-                'email' => $m->email,
+                // Akun PIN memakai alamat internal: jangan tampilkan ke pengguna.
+                'email' => $m->isPinOnly() ? null : $m->email,
+                'phone' => $m->phone,
+                'is_pin_only' => $m->isPinOnly(),
+                'has_pin' => $m->hasCashierPin(),
                 'role' => $m->pivot->role,
             ])
             ->values()
             ->all();
+
+        // Outlet lain di grup yang juga dikelola user ini (untuk "Terapkan ke semua outlet").
+        $groupStoreCount = $store->organization_id
+            ? $user->stores()
+                ->where('stores.organization_id', $store->organization_id)
+                ->wherePivotIn('role', self::STORE_CREATOR_ROLES)
+                ->count()
+            : 1;
 
         return Inertia::render('Stores/ManageStaff', [
             'store' => [
@@ -460,6 +484,7 @@ class StoreController extends Controller implements HasMiddleware
                 'slug' => $store->slug,
                 'name' => $store->name,
                 'team_members' => $teamMembers,
+                'group_store_count' => $user->isSuperAdmin() ? max(1, $groupStoreCount) : $groupStoreCount,
             ],
         ]);
     }
@@ -539,6 +564,38 @@ class StoreController extends Controller implements HasMiddleware
         $sellable = ($counts[InventoryType::SELLABLE] ?? 0) + ($counts[InventoryType::PRODUCTION_OUTPUT] ?? 0);
 
         return ['raw_material' => $rawMaterial, 'sellable' => $sellable];
+    }
+
+    /**
+     * Pratinjau sebelum menyalin: per outlet tujuan, berapa produk baru dan berapa
+     * yang sudah ada (akan dilewati). Tidak mengubah data.
+     */
+    public function previewCopyToOutlets(Request $request)
+    {
+        $validated = $request->validate([
+            'outlet_ids' => 'present|array',
+            'outlet_ids.*' => 'required|integer',
+            'source_store_id' => 'required|integer',
+            'copy_type' => 'required|string|in:raw_material,sellable,all',
+        ]);
+
+        $organizationId = $request->user()->store?->organization_id;
+        $source = $organizationId
+            ? Store::query()->where('organization_id', $organizationId)->find($validated['source_store_id'])
+            : null;
+        if (! $source) {
+            return response()->json(['error' => 'Sumber penyalinan tidak valid.'], 422);
+        }
+
+        $outlets = Store::query()
+            ->where('organization_id', $organizationId)
+            ->whereIn('id', $validated['outlet_ids'])
+            ->where('id', '!=', $source->id)
+            ->get(['id', 'name']);
+
+        return response()->json([
+            'outlets' => $outlets->map(fn (Store $o) => ['id' => $o->id, 'name' => $o->name] + $o->previewCopyFrom($source, $validated['copy_type']))->values(),
+        ]);
     }
 
     public function copyProductsToOutlets(Request $request)

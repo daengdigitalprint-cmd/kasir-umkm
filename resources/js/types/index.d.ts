@@ -36,6 +36,7 @@ export type AppPageProps<T extends Record<string, unknown> = Record<string, unkn
         info?: string | null;
         status?: string | null;
         show_product_modal?: boolean | null;
+        new_store_checklist?: { store_id: number; name: string; location_type: string; has_products: boolean } | null;
     };
     subscription?: {
         is_active: boolean;

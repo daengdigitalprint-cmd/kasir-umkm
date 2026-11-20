@@ -172,19 +172,12 @@ class Store extends Model
     }
 
     /**
-     * Salin produk dari sumber ke toko ini, lengkap dengan varian, komponen paket,
-     * komponen konsumsi penjualan, dan resep produksi.
+     * Produk aktif sumber yang ikut disalin untuk jenis penyalinan tertentu.
      *
      * @param  string  $copyType  'raw_material' | 'sellable' | 'all'
-     * @return array{copied: int, skipped: int, components: int, errors: string[], details: array}
      */
-    public function copyProductsFrom(Store $source, string $copyType = 'all'): array
+    private static function copySourceQuery(Store $source, string $copyType): \Illuminate\Database\Eloquent\Relations\HasMany
     {
-        // Bangun lookup duplikasi: SKU (jika ada) + nama+inventory_type sebagai fallback
-        $destProducts = $this->products()->get();
-        $destBySku = $destProducts->filter(fn ($p) => filled($p->sku))->keyBy('sku');
-        $destByName = $destProducts->keyBy(fn ($p) => $p->name.'|'.$p->inventory_type);
-
         $query = $source->products()->where('is_active', true);
 
         $query->when($copyType === 'raw_material', fn ($q) => $q->whereIn('inventory_type', [
@@ -199,7 +192,46 @@ class Store extends Model
 
         // 'all' — tidak perlu filter, ambil semua produk aktif
 
-        $sourceProducts = $query
+        return $query;
+    }
+
+    /**
+     * Pratinjau penyalinan tanpa mengubah data: berapa produk baru dan berapa yang
+     * sudah ada di toko ini (dilewati). Aturan cocoknya sama dengan copyProductsFrom().
+     *
+     * @return array{new: int, existing: int}
+     */
+    public function previewCopyFrom(Store $source, string $copyType = 'all'): array
+    {
+        $destProducts = $this->products()->get(['id', 'sku', 'name', 'inventory_type']);
+        $destSkus = $destProducts->filter(fn ($p) => filled($p->sku))->pluck('sku')->flip();
+        $destNames = $destProducts->map(fn ($p) => $p->name.'|'.$p->inventory_type)->flip();
+
+        $new = 0;
+        $existing = 0;
+        foreach (self::copySourceQuery($source, $copyType)->get(['id', 'sku', 'name', 'inventory_type']) as $sp) {
+            $match = (filled($sp->sku) && $destSkus->has($sp->sku)) || $destNames->has($sp->name.'|'.$sp->inventory_type);
+            $match ? $existing++ : $new++;
+        }
+
+        return ['new' => $new, 'existing' => $existing];
+    }
+
+    /**
+     * Salin produk dari sumber ke toko ini, lengkap dengan varian, komponen paket,
+     * komponen konsumsi penjualan, dan resep produksi.
+     *
+     * @param  string  $copyType  'raw_material' | 'sellable' | 'all'
+     * @return array{copied: int, skipped: int, components: int, errors: string[], details: array}
+     */
+    public function copyProductsFrom(Store $source, string $copyType = 'all'): array
+    {
+        // Bangun lookup duplikasi: SKU (jika ada) + nama+inventory_type sebagai fallback
+        $destProducts = $this->products()->get();
+        $destBySku = $destProducts->filter(fn ($p) => filled($p->sku))->keyBy('sku');
+        $destByName = $destProducts->keyBy(fn ($p) => $p->name.'|'.$p->inventory_type);
+
+        $sourceProducts = self::copySourceQuery($source, $copyType)
             ->with([
                 'productCategory',
                 'variants',
