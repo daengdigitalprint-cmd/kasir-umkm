@@ -1,0 +1,94 @@
+{
+  "judul": "Bedah Menu #4: nasi kucing",
+  "brief": "  A12: nasi kucing Rp3.000, modal Rp1.500, beras Rp13.700/kg (Bapanas 12 Nov 2026); rahasia porsi: sekilo beras jadi 25 bungkus; salah hitung Rp1.000 = dua pertiga untung; keranjang kasir.",
+  "adegan": [
+    {
+      "bg": "dark",
+      "vo": "Nasi kucing tiga ribu. Modalnya cuma [modal]seribu lima ratus. [beras]Padahal beras sekarang [harga]tiga belas ribu tujuh ratus sekilo. [kok]Kok bisa?",
+      "isi": [
+        {"jenis": "objek", "svg": "nasi-kucing", "x": 60, "y": 640, "w": 360},
+        {"jenis": "label", "teks": "Rp3.000", "x": 80, "y": 980, "at": 0.5, "rot": -12},
+        {"jenis": "stempel", "kecil": "modal sebungkus", "besar": "Rp1.500", "kecilAtas": true, "kelas": "smod", "at": "@modal", "hilang": "@beras-0.3"},
+        {"jenis": "objek", "svg": "beras", "x": 700, "y": 520, "w": 270, "at": "@beras", "rot": 10},
+        {"jenis": "label", "teks": "Rp13.700/kg", "x": 540, "y": 1110, "at": "@harga", "rot": 8, "ukuran": 70},
+        {"jenis": "tanya", "x": 470, "y": 700, "at": "@kok"}
+      ],
+      "cap": [
+        {"kecil": "nasi kucing Rp3.000, modalnya", "kunci": "rp1.500", "at": 0.04, "kw": "@modal", "keluar": "@beras-0.25"},
+        {"kecil": "padahal beras Rp13.700 sekilo.", "kunci": "kok bisa?", "at": "@beras-0.15", "kw": "@kok"}
+      ]
+    },
+    {
+      "bg": "cream",
+      "vo": "Bedah Menu nomor empat. Kita hitung pakai [harga]harga beras Bapanas, November dua ribu dua puluh enam.",
+      "isi": [
+        {"jenis": "objek", "svg": "nasi-kucing", "x": 340, "y": 600, "w": 400, "at": 0.02, "rot": -8, "dari": 0.5},
+        {"jenis": "seri", "sub": "#4 nasi kucing"},
+        {"jenis": "kaca"},
+        {"jenis": "pil", "teks": "harga Bapanas · Nov 2026", "y": 1200, "at": "@harga"}
+      ]
+    },
+    {
+      "bg": "orange",
+      "vo": "[nasi]Nasinya dari empat puluh gram beras, lima ratus lima puluh. [teri]Teri lima gram, empat ratus. [sambal]Sambal dua ratus. [kertas]Kertas dan karet seratus lima puluh. [gas]Gas dan minyak dua ratus. [total]Total seribu lima ratus.",
+      "isi": [
+        {"jenis": "struk", "judul": "Modal 1 bungkus", "baris": [
+          ["Nasi (40 g beras)", "550", "@nasi"], ["Teri 5 g", "400", "@teri"], ["Sambal", "200", "@sambal"],
+          ["Kertas & karet", "150", "@kertas"], ["Gas & minyak", "200", "@gas"]],
+          "total": {"label": "Modal", "nilai": 1500, "at": "@total"}}
+      ],
+      "cap": [{"kecil": "modal sebungkus", "kunci": "rp1.500", "kw": "@total+0.4"}]
+    },
+    {
+      "bg": "dark",
+      "vo": "Rahasianya di porsi. [kilo]Sekilo beras jadi [n]dua puluh lima bungkus. [jual]Dijual semua, [hasil]tujuh puluh lima ribu.",
+      "isi": [
+        {"jenis": "objek", "svg": "beras", "x": 70, "y": 560, "w": 240, "at": "@kilo", "rot": -8},
+        {"jenis": "label", "teks": "1 kg", "x": 110, "y": 860, "at": "@kilo+0.3", "rot": -8},
+        {"jenis": "grid", "svg": "nasi-kucing", "n": 25, "kolom": 5, "x0": 370, "y0": 540, "dx": 125, "dy": 100, "w": 110, "at": "@n-0.4", "hitung": "bungkus", "hitungKelas": "sc2", "hitungHilang": "@jual-0.1"},
+        {"jenis": "persamaan", "bagian": ["25", "×", "3.000"], "kelas": "sm seq", "at": "@jual"},
+        {"jenis": "angka", "ke": 75000, "kelas": "smeg", "at": "@hasil"}
+      ],
+      "cap": [{"kecil": "sekilo beras jadi", "kunci": "25 bungkus", "kw": "@n"}]
+    },
+    {
+      "bg": "purple",
+      "vo": "Untung sebungkus [untung]seribu lima ratus. [separuh]Separuh dari harga jualnya.",
+      "isi": [
+        {"jenis": "objek", "svg": "nasi-kucing", "x": 300, "y": 560, "w": 420},
+        {"jenis": "stempel", "besar": "Rp1.500", "kecil": "untung sebungkus", "kelas": "sunt", "at": "@untung", "getar": false},
+        {"jenis": "bulat", "teks": "50%", "x": 760, "y": 1110, "at": "@separuh"}
+      ],
+      "cap": [{"kecil": "untung sebungkus", "kunci": "separuh harga", "kw": "@separuh"}]
+    },
+    {
+      "bg": "cream",
+      "vo": "Tapi jualannya kecil-kecil. Pembeli ambil [nasi]dua nasi, [gor]dua gorengan, [teh]es teh. [salah]Salah hitung seribu saja, [hilang]dua pertiga untung sebungkus hilang.",
+      "isi": [
+        {"jenis": "chip", "teks": "🍙 2 nasi kucing", "x": 150, "y": 540, "at": "@nasi", "rot": -6},
+        {"jenis": "chip", "teks": "🍤 2 gorengan", "x": 330, "y": 690, "at": "@gor", "rot": 6},
+        {"jenis": "chip", "teks": "🧋 es teh", "x": 200, "y": 840, "at": "@teh", "rot": -4},
+        {"jenis": "stempel", "besar": "−Rp1.000", "kecil": "salah hitung", "kecilAtas": true, "y": 1040, "at": "@salah"},
+        {"jenis": "kartu", "judul": "untung sebungkus", "dari": 1500, "ke": 500, "y": 1380, "at": "@salah+0.6", "ubahAt": "@hilang", "catatan": "hilang dua pertiga"}
+      ],
+      "cap": [{"kecil": "salah hitung seribu,", "kunci": "untung ikut hilang", "kw": "@hilang"}]
+    },
+    {
+      "bg": "purple",
+      "vo": "Di Kasir UMKM, cukup [ketuk]ketuk tiap menu. [total]Totalnya langsung terhitung, tanpa hitung di kepala.",
+      "isi": [
+        {"jenis": "ponsel", "judul": "Keranjang", "kelas": "pendek",
+          "baris": [["Nasi kucing ×2", "Rp6.000", "@ketuk"], ["Gorengan ×2", "Rp3.000", "@ketuk+0.5"], ["Es teh", "Rp3.000", "@ketuk+1.0"]],
+          "ringkasan": [["Total", ""]], "dari": 0,
+          "langkah": [["@ketuk", 6000], ["@ketuk+0.5", 9000], ["@ketuk+1.0", 12000]]}
+      ],
+      "cap": [{"kecil": "ketuk tiap menu,", "kunci": "total langsung jadi", "kw": "@total"}]
+    },
+    {
+      "bg": "purple",
+      "vo": "Mau menu lain dibedah? [follow]Follow Kasir UMKM.",
+      "isi": [{"jenis": "follow", "ketuk": "@follow-0.1"}],
+      "cap": [{"kecil": "mau menu lain dibedah?", "kunci": "follow kasir umkm", "kw": "@follow-0.1"}]
+    }
+  ]
+}

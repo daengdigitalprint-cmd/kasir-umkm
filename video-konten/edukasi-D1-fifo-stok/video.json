@@ -1,0 +1,334 @@
+{
+  "judul": "Tips Stok #1: FIFO",
+  "brief": "D1: 3 kotak susu UHT basi seminggu x Rp21.000 = Rp252.000/bulan, Rp3.024.000/tahun; penyebab: barang baru ditaruh di depan; solusi FIFO (baru di belakang, lama di depan); 2 kebiasaan (tulis tanggal datang, cek ED); soft selling: ED per batch di Pembelian, kasir jual ED terdekat, kartu Batch mendekati ED; ajakan follow.",
+  "css": ".sjt.sbs{top:1290px}.sjt.sbs small{margin:0 0 8px}.sjt.sff{top:1420px}.sjt.sff b{font-size:150px}.sjt.sff small{font-size:52px}.mega2.u1{top:930px}.mega2.u2{top:1380px}.bigeq.ds{top:560px}.d1lb{position:absolute;left:0;width:1080px;text-align:center;font:900 58px/1 'Outfit';color:#fff;opacity:0}.d1lb.l1{top:850px}.d1lb.l2{top:1300px}.schip.tp1{left:90px}.schip.tp2{left:90px}.sseri.ds2{top:420px}.phone.rcp .sbd{left:auto;right:-30px;top:-44px}",
+  "adegan": [
+    {
+      "bg": "dark",
+      "vo": "Cuma [tiga]tiga kotak susu basi seminggu. Tapi setahun, [juta]tiga juta rupiah [sampah]masuk tempat sampah.",
+      "isi": [
+        {
+          "jenis": "objek",
+          "svg": "susu",
+          "x": 170,
+          "y": 520,
+          "w": 210,
+          "at": "@tiga",
+          "rot": -12,
+          "hilang": "@sampah+0.1"
+        },
+        {
+          "jenis": "objek",
+          "svg": "susu",
+          "x": 435,
+          "y": 480,
+          "w": 210,
+          "at": "@tiga+0.13",
+          "rot": 6,
+          "hilang": "@sampah+0.2"
+        },
+        {
+          "jenis": "objek",
+          "svg": "susu",
+          "x": 700,
+          "y": 520,
+          "w": 210,
+          "at": "@tiga+0.26",
+          "rot": 14,
+          "hilang": "@sampah+0.3"
+        },
+        {
+          "jenis": "label",
+          "teks": "basi",
+          "x": 640,
+          "y": 900,
+          "at": "@tiga+0.5",
+          "rot": 10,
+          "hilang": "@sampah"
+        },
+        {
+          "jenis": "objek",
+          "svg": "sampah",
+          "x": 380,
+          "y": 560,
+          "w": 320,
+          "at": "@sampah",
+          "goyang": 0
+        },
+        {
+          "jenis": "stempel",
+          "kecil": "setahun dibuang",
+          "besar": "Rp3 juta",
+          "kecilAtas": true,
+          "kelas": "sbs",
+          "at": "@juta"
+        }
+      ],
+      "cap": [
+        {
+          "kecil": "cuma 3 kotak susu basi seminggu,",
+          "kunci": "setahun rp3 juta",
+          "at": 0.04,
+          "kw": "@juta"
+        }
+      ]
+    },
+    {
+      "bg": "cream",
+      "vo": "Padahal belanjanya [pas]nggak kebanyakan. Masalahnya ada di [rak]cara naruh di rak.",
+      "isi": [
+        {
+          "jenis": "seri",
+          "judul": "TIPS STOK",
+          "sub": "#1 FIFO",
+          "kelas": "ds2",
+          "at": 0.1
+        },
+        {
+          "jenis": "chip",
+          "teks": "belanja kebanyakan?",
+          "x": 210,
+          "y": 900,
+          "at": 0.4,
+          "rot": -4,
+          "coret": "@pas+0.2"
+        },
+        {
+          "jenis": "pil",
+          "teks": "cara naruh di rak",
+          "y": 1200,
+          "at": "@rak"
+        }
+      ]
+    },
+    {
+      "bg": "orange",
+      "vo": "Susu baru datang, [depan]ditaruh di depan. [lagi]Datang lagi, di depan lagi. Yang laku [laku]selalu yang baru. Yang lama [lama]makin ke belakang, [lewat]sampai lewat tanggal.",
+      "isi": [
+        {
+          "jenis": "rak",
+          "svg": "susu",
+          "y": 860,
+          "at": 0.02,
+          "isi": [
+            "ED 15 Nov",
+            "ED 12 Nov"
+          ],
+          "masuk": [
+            [
+              "ED 22 Nov",
+              "@depan-0.1"
+            ],
+            [
+              "ED 25 Nov",
+              "@lagi"
+            ]
+          ],
+          "dari": "depan",
+          "ambil": [
+            "@laku",
+            "@laku+0.55"
+          ],
+          "basi": {
+            "at": "@lewat",
+            "teks": "LEWAT ED"
+          },
+          "w": 200,
+          "jarak": 240,
+          "x0": 90
+        }
+      ],
+      "cap": [
+        {
+          "kecil": "baru di depan, yang lama",
+          "kunci": "lewat tanggal",
+          "at": "@lama-0.1",
+          "kw": "@lewat"
+        }
+      ]
+    },
+    {
+      "bg": "purple",
+      "vo": "Tiga kotak seminggu, [harga]dua puluh satu ribu sekotak. [bulan]Sebulan dua ratus lima puluh dua ribu. [tahun]Setahun tiga juta lebih.",
+      "isi": [
+        {
+          "jenis": "persamaan",
+          "bagian": [
+            "3 kotak",
+            "×",
+            "21.000"
+          ],
+          "kelas": "ds",
+          "at": "@harga"
+        },
+        {
+          "jenis": "kode",
+          "js": "const a=document.createElement('div');a.className='d1lb l1';a.textContent='sebulan';S.inn.append(a);tl.to(a,{opacity:1,duration:.2},S.t0+DATA.adegan[S.i].isi[2].at);const b=document.createElement('div');b.className='d1lb l2';b.textContent='setahun';S.inn.append(b);tl.to(b,{opacity:1,duration:.2},S.t0+DATA.adegan[S.i].isi[3].at);"
+        },
+        {
+          "jenis": "angka",
+          "ke": 252000,
+          "kelas": "u1",
+          "at": "@bulan"
+        },
+        {
+          "jenis": "angka",
+          "ke": 3024000,
+          "kelas": "u2",
+          "at": "@tahun"
+        },
+        {
+          "jenis": "getar",
+          "at": "@tahun+0.5"
+        }
+      ]
+    },
+    {
+      "bg": "green",
+      "vo": "Caranya [fifo]FIFO: masuk duluan, keluar duluan. Barang baru [belakang]taruh di belakang. Yang lama [depan]geser ke depan, [laku]laku duluan.",
+      "isi": [
+        {
+          "jenis": "stempel",
+          "besar": "FIFO",
+          "kecil": "masuk duluan, keluar duluan",
+          "kelas": "sff",
+          "at": "@fifo",
+          "getar": false
+        },
+        {
+          "jenis": "rak",
+          "svg": "susu",
+          "y": 700,
+          "at": "@fifo+0.4",
+          "isi": [
+            "ED 12 Nov",
+            "ED 15 Nov"
+          ],
+          "masuk": [
+            [
+              "ED 22 Nov",
+              "@belakang"
+            ]
+          ],
+          "dari": "belakang",
+          "ambil": [
+            "@laku"
+          ],
+          "w": 200,
+          "jarak": 240,
+          "x0": 90
+        }
+      ],
+      "cap": [
+        {
+          "kecil": "yang lama di depan,",
+          "kunci": "laku duluan",
+          "at": "@depan-0.1",
+          "kw": "@laku"
+        }
+      ]
+    },
+    {
+      "bg": "dark",
+      "vo": "Dua kebiasaan kecil: [tulis]tulis tanggal datang pakai spidol, dan [cek]cek tanggal kedaluwarsa tiap belanjaan datang.",
+      "isi": [
+        {
+          "jenis": "objek",
+          "svg": "susu",
+          "x": 420,
+          "y": 480,
+          "w": 240,
+          "at": 0.05,
+          "rot": -6
+        },
+        {
+          "jenis": "chip",
+          "teks": "✍️ tulis tanggal datang",
+          "kelas": "tp1",
+          "y": 1080,
+          "at": "@tulis",
+          "rot": -3
+        },
+        {
+          "jenis": "chip",
+          "teks": "🔍 cek ED tiap belanja",
+          "kelas": "tp2",
+          "y": 1290,
+          "at": "@cek",
+          "rot": 3
+        }
+      ],
+      "cap": [
+        {
+          "kecil": "dua kebiasaan kecil",
+          "kunci": "tulis & cek tanggal",
+          "at": 0.08,
+          "kw": "@cek+0.3"
+        }
+      ]
+    },
+    {
+      "bg": "purple",
+      "vo": "Di Kasir UMKM, [ed]isi ED tiap batch saat catat pembelian. Kasir [ambil]otomatis jual yang paling dekat kedaluwarsa.",
+      "isi": [
+        {
+          "jenis": "ponsel",
+          "judul": "Batch mendekati ED",
+          "sub": "Susu UHT 1L",
+          "baris": [
+            [
+              "Batch B-1112",
+              "ED 12 Nov",
+              "@ed"
+            ],
+            [
+              "Batch B-1115",
+              "ED 15 Nov",
+              "@ed+0.25"
+            ],
+            [
+              "Batch B-1122",
+              "ED 22 Nov",
+              "@ed+0.5"
+            ]
+          ],
+          "sorot": {
+            "baris": 0,
+            "badge": "dijual duluan",
+            "at": "@ambil"
+          }
+        },
+        {
+          "jenis": "pil",
+          "teks": "Tips Stok · Kasir UMKM",
+          "y": 1660,
+          "at": "@ambil+0.8"
+        }
+      ],
+      "cap": [
+        {
+          "kecil": "kasir otomatis jual",
+          "kunci": "ed terdekat dulu",
+          "kw": "@ambil+0.4"
+        }
+      ]
+    },
+    {
+      "bg": "purple",
+      "vo": "Mau tips stok lainnya? [follow]Follow Kasir UMKM.",
+      "isi": [
+        {
+          "jenis": "follow",
+          "ketuk": "@follow-0.1"
+        }
+      ],
+      "cap": [
+        {
+          "kecil": "mau tips stok lainnya?",
+          "kunci": "follow kasir umkm",
+          "kw": "@follow-0.1"
+        }
+      ]
+    }
+  ]
+}

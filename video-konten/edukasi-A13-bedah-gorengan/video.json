@@ -1,0 +1,92 @@
+{
+  "judul": "Bedah Menu #5: gorengan",
+  "brief": "  A13: gorengan (bakwan) Rp1.500, modal Rp1.000 (SP2KP 13 Nov 2026), konsep bongkar menu; untung Rp500; setara UMP Jabar 179 biji/hari, UMP Jakarta 441 biji/hari; sisa 20 biji = untung 40 biji; soft selling Resep + tanda seri.",
+  "css": ".mega2.u1{top:820px}.mega2.u2{top:1400px}.sjt.s1{top:1060px}.sjt.s2{top:1400px}.phone.rcp.pendek .rcs div{display:block;font-size:40px}.phone.rcp.pendek .rcs b{display:block;margin-top:14px;font-size:80px}",
+  "adegan": [
+    {
+      "bg": "dark",
+      "vo": "Gorengan seribu lima ratus. Modalnya [modal]seribu. Biar setara gaji UMR, [berapa]harus laku berapa biji sehari?",
+      "isi": [
+        {"jenis": "objek", "svg": "gorengan", "x": 270, "y": 600, "w": 540},
+        {"jenis": "label", "teks": "Rp1.500", "x": 120, "y": 1020, "at": 0.5, "rot": -12},
+        {"jenis": "stempel", "kecil": "modal sebiji", "besar": "Rp1.000", "kecilAtas": true, "kelas": "smod", "at": "@modal", "hilang": "@berapa-0.3"},
+        {"jenis": "tanya", "x": 740, "y": 1040, "at": "@berapa+0.4"}
+      ],
+      "cap": [
+        {"kecil": "gorengan Rp1.500, modalnya", "kunci": "rp1.000", "at": 0.04, "kw": "@modal", "keluar": "@berapa-0.25"},
+        {"kecil": "biar setara gaji UMR,", "kunci": "laku berapa biji?", "at": "@berapa-0.15", "kw": "@berapa+0.5"}
+      ]
+    },
+    {
+      "bg": "cream",
+      "vo": "Bedah Menu nomor lima. Kita bongkar pakai [harga]harga pangan November dua ribu dua puluh enam.",
+      "isi": [
+        {"jenis": "objek", "svg": "gorengan", "x": 320, "y": 640, "w": 440, "at": 0.02, "rot": -8, "dari": 0.5},
+        {"jenis": "seri", "sub": "#5 gorengan", "tanda": "by Kasir UMKM"},
+        {"jenis": "kaca"},
+        {"jenis": "pil", "teks": "harga pangan · Nov 2026", "y": 1160, "at": "@harga"}
+      ]
+    },
+    {
+      "bg": "orange",
+      "vo": "[bongkar]Satu biji kita bongkar. [tepung]Tepung terigu dua puluh lima gram, tiga ratus. [sayur]Kol dan wortel, tiga ratus. [minyak]Minyak goreng, dua ratus. [bumbu]Bumbu seratus, [gas]gas seratus. [gabung]Total modalnya [total]seribu.",
+      "isi": [
+        {"jenis": "bongkar", "svg": "gorengan", "w": 420, "cy": 980, "at": 0.05,
+          "bagian": [["🌾", "Tepung 25 g", "300", "@tepung"], ["🥬", "Kol & wortel", "300", "@sayur"], ["🛢️", "Minyak", "200", "@minyak"], ["🧄", "Bumbu", "100", "@bumbu"], ["🔥", "Gas", "100", "@gas"]],
+          "gabung": "@gabung", "total": {"label": "modal sebiji", "nilai": 1000, "at": "@total"}}
+      ],
+      "cap": [{"kecil": "satu biji kita", "kunci": "bongkar", "kw": "@bongkar+0.4"}]
+    },
+    {
+      "bg": "purple",
+      "vo": "Untungnya [untung]lima ratus per biji.",
+      "isi": [
+        {"jenis": "objek", "svg": "gorengan", "x": 290, "y": 620, "w": 500},
+        {"jenis": "stempel", "besar": "Rp500", "kecil": "untung sebiji", "kelas": "sunt", "at": "@untung", "getar": false}
+      ],
+      "cap": [{"kecil": "untung sebiji", "kunci": "rp500", "kw": "@untung"}]
+    },
+    {
+      "bg": "dark",
+      "vo": "UMP Jawa Barat, yang paling rendah, [jabar]dua juta tiga ratus ribu. Kerja dua puluh enam hari, harus laku [biji1]seratus tujuh puluh sembilan biji sehari. [jkt]Setara UMP Jakarta? [biji2]Empat ratus empat puluh satu biji.",
+      "isi": [
+        {"jenis": "pil", "teks": "UMP Jabar Rp2.317.601", "y": 620, "at": "@jabar"},
+        {"jenis": "angka", "ke": 179, "awalan": "", "akhiran": " biji/hari", "bulat": 1, "kelas": "u1", "at": "@biji1"},
+        {"jenis": "pil", "teks": "UMP Jakarta Rp5.729.876", "y": 1200, "at": "@jkt"},
+        {"jenis": "angka", "ke": 441, "awalan": "", "akhiran": " biji/hari", "bulat": 1, "kelas": "u2", "at": "@biji2"},
+        {"jenis": "getar", "at": "@biji2+0.3"}
+      ],
+      "cap": [
+        {"kecil": "setara UMP Jawa Barat,", "kunci": "179 biji sehari", "at": 0.08, "kw": "@biji1", "keluar": "@jkt-0.25"},
+        {"kecil": "setara UMP Jakarta?", "kunci": "441 biji sehari", "at": "@jkt-0.15", "kw": "@biji2"}
+      ]
+    },
+    {
+      "bg": "green",
+      "vo": "Itu kalau semua habis. [sisa]Sisa dua puluh biji sehari, [modal]modal dua puluh ribu ikut hilang. [setara]Sama dengan untung empat puluh biji.",
+      "isi": [
+        {"jenis": "grid", "svg": "gorengan", "n": 20, "kolom": 5, "x0": 210, "y0": 520, "dx": 135, "dy": 115, "w": 120, "at": "@sisa", "hitung": "biji sisa", "hitungKelas": "sc2", "hitungHilang": "@modal-0.1"},
+        {"jenis": "stempel", "besar": "−Rp20.000", "kecil": "modal hilang", "kecilAtas": true, "kelas": "s1", "at": "@modal"},
+        {"jenis": "stempel", "besar": "= 40 biji", "kecil": "untung ikut hilang", "kelas": "s2", "at": "@setara", "getar": false}
+      ],
+      "cap": [{"kecil": "sisa 20 biji,", "kunci": "untung 40 biji hilang", "kw": "@setara"}]
+    },
+    {
+      "bg": "purple",
+      "vo": "[resep]Hitungan modal per biji seperti ini bisa disimpan di menu Resep Kasir UMKM.",
+      "isi": [
+        {"jenis": "ponsel", "judul": "Master Recipe", "sub": "Bakwan", "kelas": "pendek",
+          "baris": [["Tepung terigu", "25 g"], ["Kol & wortel", "30 g"], ["Minyak goreng", "10 ml"]],
+          "ringkasan": [["HPP per satuan output", "/biji"]], "dari": 1000, "ke": 1000},
+        {"jenis": "pil", "teks": "Bedah Menu · Kasir UMKM", "y": 1660, "at": "@resep+0.8"}
+      ],
+      "cap": [{"kecil": "modal per biji", "kunci": "tersimpan di resep", "kw": "@resep+1.2"}]
+    },
+    {
+      "bg": "purple",
+      "vo": "Mau menu lain dibedah? [follow]Follow Kasir UMKM.",
+      "isi": [{"jenis": "follow", "ketuk": "@follow-0.1"}],
+      "cap": [{"kecil": "mau menu lain dibedah?", "kunci": "follow kasir umkm", "kw": "@follow-0.1"}]
+    }
+  ]
+}

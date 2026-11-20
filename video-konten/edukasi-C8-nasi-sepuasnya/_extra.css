@@ -1,0 +1,54 @@
+/* ---- tambahan C8 nasi sepuasnya (kerangka v2) ---- */
+.stamp{position:absolute;left:150px;top:880px;width:780px;padding:30px 0 40px;text-align:center;border:22px solid #E0430E;border-radius:40px;font:900 200px/1 "Outfit";color:#E0430E;letter-spacing:.04em;background:rgba(255,255,255,.9);box-shadow:0 20px 0 rgba(0,0,0,.3);opacity:0;z-index:3}
+.stamp.ngood{border-color:#2d8a12;color:#2d8a12;font-size:170px}
+.spk{position:absolute;font:900 70px/1 "Outfit";color:var(--gold);opacity:0}
+.nplate{position:absolute;border-radius:50%;background:radial-gradient(ellipse at 50% 40%,#fff 0 55%,#E8EEF5 56% 100%);border:12px solid var(--line);box-shadow:0 18px 0 rgba(0,0,0,.25);opacity:0}
+.nrice{position:absolute;margin:-55px 0 0 -60px;border-radius:50% 50% 46% 46%;background:radial-gradient(circle at 35% 30%,#fff 0 40%,#F3EEE2 75%,#E2D8C3 100%);border:7px solid var(--line)}
+.nleg{position:absolute;filter:drop-shadow(0 12px 0 rgba(0,0,0,.22));opacity:0}.nleg svg{display:block;width:100%;height:auto}
+.nveg{position:absolute;border-radius:50% 50% 40% 40%;background:radial-gradient(circle at 40% 35%,#9BE07A 0 30%,#4FA83A 70%,#2E7D32 100%);border:8px solid var(--line);opacity:0}
+.nadd{position:absolute;left:0;top:640px;width:1080px;text-align:center;font:900 140px/1 "Outfit";color:#fff;-webkit-text-stroke:9px var(--line);paint-order:stroke fill;font-variant-numeric:tabular-nums;opacity:0}
+.ntag{position:absolute;padding:16px 40px 22px;border-radius:30px;background:#fff;border:10px solid var(--line);box-shadow:0 14px 0 rgba(0,0,0,.25);font:900 66px/1 "Outfit";color:var(--ink);white-space:nowrap;opacity:0}
+.ntag.cheap{left:150px;top:900px;background:var(--grn);color:#16300a}
+.ntag.price{left:500px;top:620px;background:var(--gold)}.ntag.price b{font-size:92px;color:var(--line)}
+.ntag.free{left:50px;top:1400px;background:var(--gold);color:var(--line)}
+.ntag.gain{left:680px;top:1400px;background:var(--grn);color:#16300a}
+.narr{position:absolute;left:330px;top:1030px;font:900 120px/1 "Outfit";color:#2d8a12;-webkit-text-stroke:8px var(--line);paint-order:stroke fill;opacity:0}
+.nsack{position:absolute;left:160px;top:600px;width:420px;height:560px;border-radius:120px 120px 70px 70px;background:linear-gradient(170deg,#F7EBD0,#DCC69A);border:12px solid var(--line);box-shadow:0 20px 0 rgba(0,0,0,.25);text-align:center;opacity:0}
+.nsack::before{content:"";position:absolute;left:110px;right:110px;top:-30px;height:70px;border-radius:30px;background:#C9A86A;border:10px solid var(--line)}
+.nsack b{display:block;margin-top:200px;font:900 100px/1 "Outfit";color:var(--pri)}.nsack small{display:block;margin-top:14px;font:800 60px/1 "Outfit";color:var(--line)}
+.nmini{position:absolute;width:160px;height:62px;border-radius:50%;background:#fff;border:8px solid var(--line);box-shadow:0 8px 0 rgba(0,0,0,.2)}
+.nmini i{position:absolute;left:30px;top:-46px;width:84px;height:70px;border-radius:50% 50% 30% 30%;background:radial-gradient(circle at 35% 30%,#fff,#E9E0CC);border:7px solid var(--line)}
+.ncount{position:absolute;left:0;top:1740px;width:1080px;text-align:center;font:900 96px/1 "Outfit";color:#fff;-webkit-text-stroke:8px var(--line);paint-order:stroke fill;font-variant-numeric:tabular-nums;opacity:0}
+.nbig{position:absolute;left:0;top:1450px;width:1080px;text-align:center;font:900 200px/1 "Outfit";color:#fff;-webkit-text-stroke:11px var(--line);paint-order:stroke fill;font-variant-numeric:tabular-nums;opacity:0}
+.nsub{position:absolute;left:0;top:1680px;width:1080px;text-align:center;font:800 64px/1 "Outfit";color:#16300a;opacity:0}
+.neq{position:absolute;left:110px;top:1030px;width:860px;padding:44px 50px 50px;border-radius:50px;background:#fff;border:11px solid var(--line);box-shadow:0 24px 0 rgba(0,0,0,.2);text-align:center;opacity:0}
+.neq .er{display:flex;justify-content:center;align-items:baseline;gap:22px;font:900 110px/1.1 "Outfit";color:var(--ink)}
+.neq .er i{font-style:normal;color:#E0430E}.neq .er .md{color:#E0430E}
+.neq .ex{display:flex;justify-content:space-around;margin-top:6px;font:700 40px/1 "Plus Jakarta Sans";color:#64748b}
+.neq .eb{margin-top:34px;padding-top:30px;border-top:9px solid var(--line);font:900 150px/1 "Outfit";color:#2d8a12}
+.nscale{position:absolute;left:90px;top:620px;width:900px;height:1000px;opacity:0}
+.nscale .post{position:absolute;left:425px;top:420px;width:50px;height:460px;border-radius:20px;background:var(--gold);border:10px solid var(--line)}
+.nscale .base{position:absolute;left:250px;top:860px;width:400px;height:70px;border-radius:30px;background:var(--gold);border:10px solid var(--line)}
+.nscale .beam{position:absolute;left:0;top:400px;width:900px;height:50px;border-radius:25px;background:#fff;border:10px solid var(--line);transform-origin:50% 50%}
+.nscale .pan{position:absolute;bottom:40px;width:330px;padding:24px 0 28px;border-radius:36px;border:10px solid var(--line);text-align:center;box-shadow:0 12px 0 rgba(0,0,0,.25)}
+.nscale .pan.l{left:-10px;background:#FFF6E5}.nscale .pan.r{right:-10px;background:var(--grn)}
+.nscale .pan b{display:block;font:900 92px/1 "Outfit";color:var(--line);font-variant-numeric:tabular-nums}.nscale .pan small{display:block;margin-top:10px;font:800 40px/1 "Outfit";color:var(--line)}
+.nres{position:absolute;left:170px;top:1560px;width:740px;padding:24px 0 34px;border-radius:50px;background:var(--grn);border:13px solid var(--line);box-shadow:0 20px 0 rgba(0,0,0,.35);text-align:center;opacity:0;z-index:2}
+.nres small{display:block;font:900 54px/1 "Outfit";color:#16300a}.nres b{display:block;margin-top:8px;font:900 140px/1 "Outfit";color:#16300a;font-variant-numeric:tabular-nums}
+.nday{position:absolute;top:720px;width:280px;height:460px;border-radius:40px;background:#fff;border:11px solid var(--line);box-shadow:0 18px 0 rgba(0,0,0,.22);text-align:center}
+.nday small{display:block;padding:24px 0;border-radius:28px 28px 0 0;background:var(--pri);font:900 52px/1 "Outfit";color:#fff}
+.nface{position:absolute;border-radius:50%;background:radial-gradient(circle at 40% 35%,#FFE0B8,#F5B97A);border:9px solid var(--line)}
+.nface .e{position:absolute;top:36%;width:20px;height:28px;border-radius:50%;background:var(--line)}.nface .e.l{left:30%}.nface .e.r{right:30%}
+.nface .m{position:absolute;left:28%;top:52%;width:44%;height:22%;border:9px solid var(--line);border-top:0;border-radius:0 0 80px 80px}
+.nloop{position:absolute;left:390px;top:1300px;width:300px;height:300px;border-radius:50%;background:var(--grn);border:13px solid var(--line);box-shadow:0 18px 0 rgba(0,0,0,.25);font:900 210px/270px "Outfit";color:#16300a;text-align:center;opacity:0}
+.phone.hph{left:110px;top:620px;width:860px;height:1200px;border-radius:96px;padding:110px 54px 0}
+.phone.hph .hd{font-size:60px}
+.phone .pc{margin-top:26px;font:800 44px/1 "Plus Jakarta Sans";color:#0f172a}
+.phone .tp{display:flex;align-items:center;gap:22px;margin-top:22px;padding:24px 22px;border-radius:26px;background:#f6f8fa;border:4px solid #e2e8f0}
+.phone .tp i{flex:none;width:64px;height:64px;border-radius:18px;background:var(--pri);color:#fff;font:800 38px/64px "Plus Jakarta Sans";text-align:center;font-style:normal}
+.phone .tp .nm{flex:1;min-width:0}.phone .tp .nm b{display:block;font:800 42px/1.1 "Plus Jakarta Sans";color:#0f172a;white-space:nowrap}
+.phone .tp small{display:block;margin-top:8px;font:600 32px/1 "Plus Jakarta Sans";color:#64748b}
+.phone .tp .rv{text-align:right}.phone .tp .rv b{display:block;font:800 42px/1.1 "Plus Jakarta Sans";color:#0f172a;font-variant-numeric:tabular-nums}
+.phone .tp .rv small{color:#059669;font-weight:700}
+.cta{position:absolute;left:0;top:1720px;width:1080px;text-align:center;opacity:0}
+.cta span{display:inline-block;padding:16px 50px 22px;border-radius:70px;background:var(--grn);border:9px solid var(--line);box-shadow:0 12px 0 rgba(0,0,0,.25);font:900 64px/1 "Outfit";color:#16300a}

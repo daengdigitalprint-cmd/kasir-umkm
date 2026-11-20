@@ -1,0 +1,104 @@
+{
+  "judul": "Bedah Menu #3: es kopi keliling",
+  "brief": "  A11: es kopi keliling Rp8.000 vs kafe Rp25.000, modal Rp6.800 (harga eceran 2026), rahasia: susu paling mahal, volume 84 gelas, risiko susu naik, Master Recipe.",
+  "adegan": [
+    {
+      "bg": "dark",
+      "vo": "Es kopi susu keliling delapan ribu. Modalnya [modal]enam ribu delapan ratus. [kafe]Di kafe, segelas bisa [harga]dua puluh lima ribu. [tanya]Selisihnya ke mana?",
+      "isi": [
+        {"jenis": "objek", "svg": "kopi", "x": 120, "y": 600, "w": 300},
+        {"jenis": "label", "teks": "Rp8.000", "x": 90, "y": 1130, "at": 0.55, "rot": -12},
+        {"jenis": "stempel", "kecil": "modal segelas", "besar": "Rp6.800", "kecilAtas": true, "kelas": "smod", "at": "@modal", "hilang": "@kafe-0.3"},
+        {"jenis": "objek", "svg": "kopi-kafe", "x": 660, "y": 600, "w": 300, "at": "@kafe", "rot": 10},
+        {"jenis": "label", "teks": "Rp25.000", "x": 540, "y": 1130, "at": "@harga", "rot": 10},
+        {"jenis": "tanya", "x": 452, "y": 760, "at": "@tanya"}
+      ],
+      "cap": [
+        {"kecil": "keliling Rp8.000, modalnya", "kunci": "rp6.800", "at": 0.04, "kw": "@modal", "keluar": "@kafe-0.25"},
+        {"kecil": "di kafe bisa Rp25.000.", "kunci": "selisihnya ke mana?", "at": "@kafe-0.15", "kw": "@tanya"}
+      ]
+    },
+    {
+      "bg": "cream",
+      "vo": "Bedah Menu nomor tiga. Kita hitung pakai [harga]harga eceran tahun ini.",
+      "isi": [
+        {"jenis": "objek", "svg": "kopi", "x": 380, "y": 520, "w": 320, "at": 0.02, "rot": -8, "dari": 0.5},
+        {"jenis": "seri", "sub": "#3 es kopi keliling"},
+        {"jenis": "kaca"},
+        {"jenis": "pil", "teks": "harga eceran 2026", "y": 1200, "at": "@harga"}
+      ]
+    },
+    {
+      "bg": "orange",
+      "vo": "[kopi]Kopi empat belas gram, seribu delapan ratus. [susu]Susu UHT seratus mili, dua ribu seratus. [skm]Kental manis tujuh ratus, [aren]gula aren sembilan ratus, [es]es tiga ratus. [gelas]Gelas, tutup, dan sedotan seribu. [total]Total enam ribu delapan ratus.",
+      "isi": [
+        {"jenis": "struk", "judul": "Modal 1 gelas", "baris": [
+          ["Kopi 14 g", "1.800", "@kopi"], ["Susu UHT 100 ml", "2.100", "@susu"], ["Kental manis", "700", "@skm"],
+          ["Gula aren", "900", "@aren"], ["Es batu", "300", "@es"], ["Gelas & sedotan", "1.000", "@gelas"]],
+          "total": {"label": "Modal", "nilai": 6800, "at": "@total"}}
+      ],
+      "cap": [{"kecil": "modal segelas", "kunci": "rp6.800", "kw": "@total+0.4"}]
+    },
+    {
+      "bg": "purple",
+      "vo": "Rahasianya, yang paling mahal itu [susu]susunya, bukan kopinya. Untungnya cuma [untung]seribu dua ratus segelas.",
+      "isi": [
+        {"jenis": "batang", "baris": [["Susu UHT", 2100, true], ["Kopi", 1800], ["Gelas & sedotan", 1000], ["Gula aren", 900], ["Kental manis", 700], ["Es batu", 300]], "sorot": "@susu"},
+        {"jenis": "stempel", "besar": "Rp1.200", "kecil": "untung segelas · 15%", "kelas": "sunt", "at": "@untung", "getar": false}
+      ],
+      "cap": [{"kecil": "rahasianya: paling mahal itu", "kunci": "susu, bukan kopi", "kw": "@susu"}]
+    },
+    {
+      "bg": "cream",
+      "vo": "Lalu kenapa kafe dua puluh lima ribu? Yang kamu bayar di sana juga [sewa]sewa tempat, [ac]AC, dan [kursi]kursi. [gerobak]Gerobak nggak punya semua itu.",
+      "isi": [
+        {"jenis": "objek", "svg": "kopi-kafe", "x": 90, "y": 560, "w": 300, "rot": -8},
+        {"jenis": "label", "teks": "Rp25.000", "x": 70, "y": 1080, "at": 0.6},
+        {"jenis": "chip", "teks": "🏠 sewa tempat", "y": 600, "at": "@sewa", "coret": "@gerobak+0.7"},
+        {"jenis": "chip", "teks": "❄️ AC", "y": 760, "at": "@ac", "coret": "@gerobak+0.85"},
+        {"jenis": "chip", "teks": "🪑 kursi", "y": 920, "at": "@kursi", "coret": "@gerobak+1.0"},
+        {"jenis": "objek", "svg": "gerobak", "x": 150, "y": 1260, "w": 440, "at": "@gerobak", "rot": 6},
+        {"jenis": "label", "teks": "Rp8.000", "x": 590, "y": 1300, "at": "@gerobak+0.3", "rot": 8}
+      ],
+      "cap": [{"kecil": "di kafe kamu juga bayar", "kunci": "sewa, AC, kursi", "kw": "@sewa"}]
+    },
+    {
+      "bg": "dark",
+      "vo": "Tapi biar dapat seratus ribu sehari, gerobak harus laku [n]delapan puluh empat gelas.",
+      "isi": [
+        {"jenis": "grid", "svg": "kopi", "n": 84, "kolom": 12, "x0": 64, "y0": 520, "dx": 80, "dy": 102, "w": 62, "hitung": "gelas", "hitungKelas": "sc2", "hitungHilang": "@n-0.1"},
+        {"jenis": "persamaan", "bagian": ["84", "×", "1.200"], "kelas": "sm seq", "at": "@n"},
+        {"jenis": "angka", "ke": 100800, "akhiran": "/hari", "kelas": "smeg", "at": "@n+0.65"}
+      ],
+      "cap": [{"kecil": "biar dapat Rp100 ribu sehari", "kunci": "84 gelas", "kw": "@n"}]
+    },
+    {
+      "bg": "green",
+      "vo": "Kalau susu [naik]naik tiga ribu seliter, [untung]untung segelas [turun]turun tiga ratus. [seperempat]Seperempat untungnya hilang.",
+      "isi": [
+        {"jenis": "objek", "svg": "susu", "x": 130, "y": 560, "w": 300},
+        {"jenis": "label", "teks": "+Rp3.000/liter", "x": 450, "y": 780, "at": "@naik+0.15", "rot": 8, "ukuran": 62},
+        {"jenis": "kartu", "judul": "untung segelas", "dari": 1200, "ke": 900, "at": "@untung", "ubahAt": "@turun", "catatan": "turun Rp300"},
+        {"jenis": "bulat", "teks": "−25%", "kelas": "sp6", "at": "@seperempat"}
+      ],
+      "cap": [{"kecil": "susu naik, untung segelas", "kunci": "−rp300", "kw": "@turun"}]
+    },
+    {
+      "bg": "purple",
+      "vo": "Di Kasir UMKM, simpan resep tiap menu. [harga]Harga bahan berubah, [hpp]HPP per gelas ikut berubah.",
+      "isi": [
+        {"jenis": "ponsel", "judul": "Master Recipe", "sub": "Es Kopi Susu",
+          "baris": [["Kopi bubuk", "14 g"], ["Susu UHT", "100 ml"], ["Kental manis", "20 g"], ["Gula aren", "15 ml"], ["Es batu", "150 g"], ["Gelas & sedotan", "1 pcs"]],
+          "sorot": {"baris": 1, "badge": "+Rp3.000/L", "at": "@harga-0.1"},
+          "ringkasan": [["Total biaya bahan", ""], ["HPP per satuan output", "/gelas"]], "dari": 6800, "ke": 7100, "ubahAt": "@hpp"}
+      ],
+      "cap": [{"kecil": "harga bahan berubah,", "kunci": "hpp ikut berubah", "kw": "@hpp"}]
+    },
+    {
+      "bg": "purple",
+      "vo": "Mau menu lain dibedah? [follow]Follow Kasir UMKM.",
+      "isi": [{"jenis": "follow", "ketuk": "@follow-0.1"}],
+      "cap": [{"kecil": "mau menu lain dibedah?", "kunci": "follow kasir umkm", "kw": "@follow-0.1"}]
+    }
+  ]
+}
