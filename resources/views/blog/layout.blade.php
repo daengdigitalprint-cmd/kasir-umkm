@@ -178,6 +178,10 @@
         .foot-links a:last-child { border-right: 0; }
         .foot-links a:hover { color: var(--primary); background: #fff; }
         .foot-links a .lbl { display: inline-flex; align-items: center; gap: 9px; }
+        .foot-usaha { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; padding: 22px 0 0; font-size: 14px; }
+        .foot-usaha .label { margin-right: 4px; }
+        .foot-usaha a { color: var(--ink); font-weight: 600; }
+        .foot-usaha a:hover { color: var(--primary); }
         .foot-bottom { display: flex; flex-wrap: wrap; gap: 10px 20px; justify-content: space-between; align-items: center; padding: 24px 0 8px; font-size: 13.5px; color: var(--muted); }
         .foot-bottom nav { display: flex; flex-wrap: wrap; gap: 8px 18px; }
         .foot-bottom a { color: var(--muted); }
@@ -215,7 +219,7 @@
             <a class="brand" href="{{ url('/') }}" aria-label="Kasir UMKM by MaccaPOS">
                 <img src="{{ \App\Support\LandingSeo::maskotAssetUrl() }}" alt="Logo Kasir UMKM by MaccaPOS" width="150" height="38">
                 <span class="sep" aria-hidden="true"></span>
-                <span class="tag">Blog</span>
+                <span class="tag">@yield('brand_tag', 'Blog')</span>
             </a>
 
             <nav class="menu" aria-label="Menu utama">
@@ -298,6 +302,13 @@
                     </a>
                 </div>
             </div>
+
+            <nav class="foot-usaha" aria-label="Aplikasi kasir per jenis usaha">
+                <span class="label">Aplikasi kasir untuk</span>
+                @foreach (\App\Support\JenisUsaha::all() as $ju)
+                    <a href="{{ url('/'.$ju['slug']) }}">{{ $ju['name'] }}</a>
+                @endforeach
+            </nav>
 
             <div class="foot-bottom">
                 <p style="margin:0">Hak Cipta © {{ date('Y') }} Kasir UMKM by MaccaPOS. Semua Hak Dilindungi.</p>

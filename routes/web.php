@@ -48,6 +48,17 @@ Route::get('/sitemap.xml', function () {
         ],
     ];
 
+    // Halaman per jenis usaha (lastmod = file konten terakhir diubah).
+    $jenisUsahaLastmod = date('Y-m-d', filemtime(app_path('Support/JenisUsaha.php')));
+    foreach (\App\Support\JenisUsaha::slugs() as $slug) {
+        $urls[] = [
+            'loc' => url('/'.$slug),
+            'changefreq' => 'monthly',
+            'priority' => '0.9',
+            'lastmod' => $jenisUsahaLastmod,
+        ];
+    }
+
     // Blog: indeks + semua artikel terbit (lastmod dari updated_at).
     $articles = \App\Models\Article::query()
         ->published()
@@ -85,6 +96,12 @@ Route::get('/blog/{slug}', [App\Http\Controllers\BlogController::class, 'show'])
 Route::get('/mulai', [App\Http\Controllers\AdLandingController::class, 'show'])->name('ads.landing');
 Route::post('/mulai', [App\Http\Controllers\AdLandingController::class, 'store'])->middleware('throttle:8,1')->name('ads.lead.store');
 Route::get('/mulai/terima-kasih', [App\Http\Controllers\AdLandingController::class, 'thanks'])->name('ads.thanks');
+
+// ── Halaman per jenis usaha (SEO): /aplikasi-kasir-cafe, /aplikasi-kasir-laundry, dst. ──
+foreach (\App\Support\JenisUsaha::slugs() as $jenisUsahaSlug) {
+    Route::get('/'.$jenisUsahaSlug, [App\Http\Controllers\JenisUsahaController::class, 'show'])
+        ->name('jenis-usaha.'.$jenisUsahaSlug);
+}
 
 // Server yang meneruskan path apa adanya (mis. Herd lokal) melihat "/index.php" sebagai path.
 Route::get('/index.php', fn () => redirect('/', 301));

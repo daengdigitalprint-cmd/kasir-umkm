@@ -9,6 +9,8 @@ type UseCase = {
     icon: string;
     title: string;
     desc: string;
+    /** Halaman SEO per jenis usaha (App\Support\JenisUsaha). Halaman Blade: tautan biasa, bukan <Link>. */
+    href: string;
 };
 
 const useCases: UseCase[] = [
@@ -16,41 +18,49 @@ const useCases: UseCase[] = [
         icon: 'fa-solid fa-utensils',
         title: 'F&B',
         desc: 'Restoran, warung makan, dan jajanan. Antrean dapur, pesan lewat scan QR meja, split bill, dan diskon otomatis.',
+        href: '/aplikasi-kasir-restoran',
     },
     {
         icon: 'fa-solid fa-store',
         title: 'Retail / Grosir',
         desc: 'Minimarket, toko grosir, dan toko bangunan. Scan barcode, multi satuan, dan varian produk.',
+        href: '/aplikasi-kasir-toko-retail',
     },
     {
         icon: 'fa-solid fa-prescription-bottle-medical',
         title: 'Apotek / Kesehatan',
         desc: 'Apotek dan toko obat. Nomor batch, pengingat tanggal kedaluwarsa, dan stok per batch.',
+        href: '/aplikasi-kasir-apotek',
     },
     {
         icon: 'fa-solid fa-shirt',
         title: 'Laundry',
         desc: 'Laundry kiloan dan satuan. Nota order, estimasi selesai, dan status cucian.',
+        href: '/aplikasi-kasir-laundry',
     },
     {
         icon: 'fa-solid fa-scissors',
         title: 'Barbershop & Salon',
         desc: 'Barbershop dan salon. Antrean pelanggan, pilih kapster, dan hitung komisi otomatis.',
+        href: '/aplikasi-kasir-barbershop',
     },
     {
         icon: 'fa-solid fa-mug-saucer',
         title: 'Kafe & Coffee Shop',
-        desc: 'Kafe, coffee shop, dan bakery. Pilihan topping & level gula, takeaway, dan poin loyalti.',
+        desc: 'Kafe dan coffee shop. Pilihan topping & level gula, takeaway, dan poin loyalti.',
+        href: '/aplikasi-kasir-cafe',
     },
     {
         icon: 'fa-solid fa-basket-shopping',
         title: 'Toko Kelontong',
         desc: 'Warung dan toko kelontong. Catatan utang pelanggan, shift kasir, dan setoran harian.',
+        href: '/aplikasi-kasir-toko-kelontong',
     },
     {
-        icon: 'fa-solid fa-layer-group',
-        title: 'Dan lainnya',
-        desc: 'Fitur modular: aktifkan menu sesuai kebutuhan usaha Anda, dari produksi & resep hingga absensi karyawan.',
+        icon: 'fa-solid fa-cake-candles',
+        title: 'Toko Roti & Kue',
+        desc: 'Bakery dan toko kue. Produksi harian, resep & HPP, dan pre-order dengan DP.',
+        href: '/aplikasi-kasir-toko-roti',
     },
 ];
 </script>
@@ -68,18 +78,19 @@ const useCases: UseCase[] = [
                         data-wow-duration="600ms"
                         style="max-width: 600px; margin-left: auto; margin-right: auto"
                     >
-                        Solusi Kasir yang Fleksibel untuk Semua Lini UMKM
+                        Fitur modular: aktifkan menu sesuai kebutuhan usaha Anda. Pilih jenis usaha untuk melihat fiturnya.
                     </p>
                 </div>
                 <div class="row mt-none-30">
                     <div class="col-xl-3 col-md-6 mt-30" v-for="item in useCases" :key="item.title">
-                        <div class="fs-usecase-item wow fadeInUp" data-wow-delay="0ms" data-wow-duration="600ms">
+                        <a :href="item.href" class="fs-usecase-item wow fadeInUp" data-wow-delay="0ms" data-wow-duration="600ms">
                             <div class="xb-item--icon">
                                 <i :class="item.icon"></i>
                             </div>
                             <h3 class="xb-item--title">{{ item.title }}</h3>
                             <p class="xb-item--content">{{ item.desc }}</p>
-                        </div>
+                            <span class="fs-usecase-more">Lihat fiturnya &rarr;</span>
+                        </a>
                     </div>
                 </div>
             </div>
@@ -95,6 +106,9 @@ const useCases: UseCase[] = [
 }
 
 .fs-usecase-item {
+    display: block;
+    color: inherit;
+    text-decoration: none;
     z-index: 1;
     height: 100%;
     overflow: hidden;
@@ -141,6 +155,14 @@ const useCases: UseCase[] = [
     line-height: 1.6;
     color: #5a6478;
     margin: 0;
+}
+
+.fs-usecase-more {
+    display: inline-block;
+    margin-top: 14px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #533afd;
 }
 
 @media (max-width: 767px) {
