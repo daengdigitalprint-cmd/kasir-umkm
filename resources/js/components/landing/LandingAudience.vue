@@ -7,6 +7,36 @@ const props = defineProps<{
 }>();
 
 const assetsBase = computed(() => props.assetsBase ?? '/sastik-assets');
+
+/**
+ * Metode pembayaran yang bisa dicatat di kasir (TransactionPayment::METHODS, DP pre-order/laundry).
+ * Sengaja berupa ikon + teks, bukan logo merek: aplikasi mencatat metodenya, tidak terintegrasi
+ * langsung dengan GoPay/OVO/bank tertentu. (Sebelumnya logo template luar negeri: iDEAL, Wero, UPI.)
+ */
+type PayMethod = { icon: string; label: string };
+/** Isi <svg viewBox="0 0 24 24"> bergaris. Bukan Font Awesome: landing.min.css hanya memuat sebagian ikon. */
+const ICONS = {
+    qris: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM21 14v.01M14 21h.01M17 21h4v-4"/>',
+    cash: '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>',
+    bank: '<path d="M3 21h18M5 21v-9M9.5 21v-9M14.5 21v-9M19 21v-9M2 9l10-6 10 6z"/>',
+    wallet: '<path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h14a1 1 0 0 1 1 1v4h-4a2 2 0 0 0 0 4h4v3a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V5"/>',
+    card: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/>',
+    later: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    split: '<path d="M16 3h5v5M8 3H3v5M12 22v-8.3a4 4 0 0 0-1.2-2.8L3 3M21 3l-7.8 7.8"/>',
+    dp: '<path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
+};
+const payFirst: PayMethod[] = [
+    { icon: ICONS.qris, label: 'QRIS' },
+    { icon: ICONS.cash, label: 'Tunai' },
+    { icon: ICONS.bank, label: 'Transfer' },
+    { icon: ICONS.wallet, label: 'E-Wallet' },
+];
+const paySecond: PayMethod[] = [
+    { icon: ICONS.card, label: 'Kartu' },
+    { icon: ICONS.later, label: 'Bayar Nanti' },
+    { icon: ICONS.split, label: 'Split Bayar' },
+    { icon: ICONS.dp, label: 'DP' },
+];
 </script>
 
 <template>
@@ -68,85 +98,10 @@ const assetsBase = computed(() => props.assetsBase ?? '/sastik-assets');
                             <div class="xb-item--marquee_wrap">
                                 <div class="xb-item--marquee_inner ul_li_between">
                                     <div class="xb-item--marquee marquee-first">
-                                        <div class="xb-logo">
-                                            <img
-                                                width="90"
-                                                height="90"
-                                                :src="`${assetsBase}/img/feature/logo01.jpg`"
-                                                alt=""
-                                                loading="lazy"
-                                                decoding="async"
-                                            />
-                                        </div>
-                                        <div class="xb-logo">
-                                            <img
-                                                width="90"
-                                                height="90"
-                                                :src="`${assetsBase}/img/feature/logo02.jpg`"
-                                                alt=""
-                                                loading="lazy"
-                                                decoding="async"
-                                            />
-                                        </div>
-                                        <div class="xb-logo">
-                                            <img
-                                                width="90"
-                                                height="90"
-                                                :src="`${assetsBase}/img/feature/logo03.jpg`"
-                                                alt=""
-                                                loading="lazy"
-                                                decoding="async"
-                                            />
-                                        </div>
-                                        <div class="xb-logo">
-                                            <img
-                                                width="90"
-                                                height="90"
-                                                :src="`${assetsBase}/img/feature/logo04.jpg`"
-                                                alt=""
-                                                loading="lazy"
-                                                decoding="async"
-                                            />
-                                        </div>
-                                        <div class="xb-logo">
-                                            <img
-                                                width="90"
-                                                height="90"
-                                                :src="`${assetsBase}/img/feature/logo01.jpg`"
-                                                alt=""
-                                                loading="lazy"
-                                                decoding="async"
-                                            />
-                                        </div>
-                                        <div class="xb-logo">
-                                            <img
-                                                width="90"
-                                                height="90"
-                                                :src="`${assetsBase}/img/feature/logo02.jpg`"
-                                                alt=""
-                                                loading="lazy"
-                                                decoding="async"
-                                            />
-                                        </div>
-                                        <div class="xb-logo">
-                                            <img
-                                                width="90"
-                                                height="90"
-                                                :src="`${assetsBase}/img/feature/logo03.jpg`"
-                                                alt=""
-                                                loading="lazy"
-                                                decoding="async"
-                                            />
-                                        </div>
-                                        <div class="xb-logo">
-                                            <img
-                                                width="90"
-                                                height="90"
-                                                :src="`${assetsBase}/img/feature/logo04.jpg`"
-                                                alt=""
-                                                loading="lazy"
-                                                decoding="async"
-                                            />
+                                        <!-- Diulang dua kali agar marquee tersambung tanpa celah. -->
+                                        <div v-for="(pay, i) in [...payFirst, ...payFirst]" :key="i" class="xb-logo lp-pay" :aria-hidden="i >= payFirst.length ? 'true' : undefined">
+                                            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" v-html="pay.icon"></svg>
+                                            <span>{{ pay.label }}</span>
                                         </div>
                                     </div>
                                     <div class="xb-item--card">
@@ -160,85 +115,10 @@ const assetsBase = computed(() => props.assetsBase ?? '/sastik-assets');
                                         />
                                     </div>
                                     <div class="xb-item--marquee marquee-2">
-                                        <div class="xb-logo">
-                                            <img
-                                                width="90"
-                                                height="90"
-                                                :src="`${assetsBase}/img/feature/logo05.jpg`"
-                                                alt=""
-                                                loading="lazy"
-                                                decoding="async"
-                                            />
-                                        </div>
-                                        <div class="xb-logo">
-                                            <img
-                                                width="90"
-                                                height="90"
-                                                :src="`${assetsBase}/img/feature/logo06.jpg`"
-                                                alt=""
-                                                loading="lazy"
-                                                decoding="async"
-                                            />
-                                        </div>
-                                        <div class="xb-logo">
-                                            <img
-                                                width="90"
-                                                height="90"
-                                                :src="`${assetsBase}/img/feature/logo07.jpg`"
-                                                alt=""
-                                                loading="lazy"
-                                                decoding="async"
-                                            />
-                                        </div>
-                                        <div class="xb-logo">
-                                            <img
-                                                width="90"
-                                                height="90"
-                                                :src="`${assetsBase}/img/feature/logo08.jpg`"
-                                                alt=""
-                                                loading="lazy"
-                                                decoding="async"
-                                            />
-                                        </div>
-                                        <div class="xb-logo">
-                                            <img
-                                                width="90"
-                                                height="90"
-                                                :src="`${assetsBase}/img/feature/logo05.jpg`"
-                                                alt=""
-                                                loading="lazy"
-                                                decoding="async"
-                                            />
-                                        </div>
-                                        <div class="xb-logo">
-                                            <img
-                                                width="90"
-                                                height="90"
-                                                :src="`${assetsBase}/img/feature/logo06.jpg`"
-                                                alt=""
-                                                loading="lazy"
-                                                decoding="async"
-                                            />
-                                        </div>
-                                        <div class="xb-logo">
-                                            <img
-                                                width="90"
-                                                height="90"
-                                                :src="`${assetsBase}/img/feature/logo07.jpg`"
-                                                alt=""
-                                                loading="lazy"
-                                                decoding="async"
-                                            />
-                                        </div>
-                                        <div class="xb-logo">
-                                            <img
-                                                width="90"
-                                                height="90"
-                                                :src="`${assetsBase}/img/feature/logo08.jpg`"
-                                                alt=""
-                                                loading="lazy"
-                                                decoding="async"
-                                            />
+                                        <!-- Diulang dua kali agar marquee tersambung tanpa celah. -->
+                                        <div v-for="(pay, i) in [...paySecond, ...paySecond]" :key="i" class="xb-logo lp-pay" :aria-hidden="i >= paySecond.length ? 'true' : undefined">
+                                            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" v-html="pay.icon"></svg>
+                                            <span>{{ pay.label }}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -614,6 +494,28 @@ const assetsBase = computed(() => props.assetsBase ?? '/sastik-assets');
 </template>
 
 <style scoped>
+/* Ubin metode pembayaran di marquee (ukuran sama dengan logo template 90x90). */
+.lp-pay {
+    width: 90px;
+    height: 90px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: #fff;
+    border: 1px solid #e6e3f2;
+    color: #0d1738;
+    text-align: center;
+}
+.lp-pay svg {
+    color: #533afd;
+    flex: none;
+}
+.lp-pay span {
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.2;
+}
 @media (max-width: 767px) {
     .process {
         padding-top: 40px !important;

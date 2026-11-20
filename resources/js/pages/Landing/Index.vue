@@ -325,8 +325,12 @@ onUnmounted(() => {
                         <LandingAudience :assets-base="assetsBase" />
                         <LandingUseCase :assets-base="assetsBase" />
                         <LandingPricing :assets-base="assetsBase" :pricing="props.pricing" />
-                        <LandingFaq :assets-base="assetsBase" />
-                        <LandingBlog :articles="props.latestArticles ?? []" />
+                        <LandingFaq :assets-base="assetsBase">
+                            <!-- Artikel tepat di bawah FAQ, sebelum pita transaksi dekoratif. -->
+                            <template #after-faq>
+                                <LandingBlog :articles="props.latestArticles ?? []" />
+                            </template>
+                        </LandingFaq>
                     </main>
 
                     <LandingFooter :assets-base="assetsBase" />

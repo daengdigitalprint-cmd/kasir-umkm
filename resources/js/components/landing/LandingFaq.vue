@@ -122,6 +122,9 @@ const rightMarquee: { name: string; desig: string; avatar: string; avatarClass: 
     </section>
     <!-- faq end -->
 
+    <!-- Bagian di antara FAQ dan pita transaksi (dipakai Landing/Index untuk artikel terbaru). -->
+    <slot name="after-faq" />
+
     <!-- transaction-feed start -->
     <section class="transaction-feed pos-rel">
         <div class="mxw-1330 container">

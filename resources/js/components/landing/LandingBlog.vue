@@ -26,7 +26,7 @@ defineProps<{
 </script>
 
 <template>
-    <section v-if="articles.length" class="lp-blog pt-130" id="blog">
+    <section v-if="articles.length" class="lp-blog" id="blog">
         <div class="mxw-1330 container">
             <div class="sec-title text-center lp-blog-head">
                 <h2 class="title">Tips Kasir, Stok &amp; Keuangan untuk UMKM</h2>
@@ -63,6 +63,15 @@ defineProps<{
 </template>
 
 <style>
+/* Tepat di bawah FAQ: jarak atas lebih rapat dari section lain (pt-130). */
+.lp-blog {
+    padding-top: 90px;
+}
+@media (max-width: 767px) {
+    .lp-blog {
+        padding-top: 56px;
+    }
+}
 /* Jarak judul ke kartu (kelas mb-* bawaan template tidak ada di landing.min.css). */
 .lp-blog-head {
     margin-bottom: 48px;
