@@ -417,8 +417,8 @@ const submitOrder = async () => {
                             </button>
                             <div class="mt-2 flex items-start justify-between gap-1">
                                 <button type="button" class="min-w-0 text-left" @click="openProduct(product)">
-                                    <p class="line-clamp-2 text-sm leading-tight font-semibold text-slate-900">{{ product.name }}</p>
-                                    <p class="mt-1 text-sm font-black text-slate-900">{{ formatPrice(product.price) }}</p>
+                                    <p class="line-clamp-2 text-sm leading-snug font-semibold text-slate-800">{{ product.name }}</p>
+                                    <p class="mt-0.5 text-sm font-bold text-violet-700">{{ formatPrice(product.price) }}</p>
                                 </button>
                                 <button type="button" class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-violet-300 text-violet-700" :aria-label="`Tambah ${product.name}`" @click="addToCart(product)">
                                     <Plus class="h-4 w-4" />
@@ -437,13 +437,14 @@ const submitOrder = async () => {
                                 <img v-if="product.image" :src="product.image" :alt="product.name" class="h-full w-full object-cover" />
                                 <div v-else class="flex h-full w-full items-center justify-center"><Utensils class="h-7 w-7 text-slate-300" /></div>
                             </button>
-                            <div class="flex min-w-0 flex-1 flex-col">
+                            <!-- Nama, keterangan, dan harga berdekatan; dipusatkan terhadap foto. -->
+                            <div class="flex min-w-0 flex-1 flex-col justify-center">
                                 <button type="button" class="text-left" @click="openProduct(product)">
-                                    <h3 class="line-clamp-2 text-sm leading-tight font-bold text-slate-900">{{ product.name }}</h3>
-                                    <p v-if="product.description" class="mt-0.5 line-clamp-2 text-xs text-slate-500">{{ product.description }}</p>
+                                    <h3 class="line-clamp-2 text-[15px] leading-snug font-semibold text-slate-800">{{ product.name }}</h3>
+                                    <p v-if="product.description" class="mt-0.5 line-clamp-2 text-xs leading-snug text-slate-500">{{ product.description }}</p>
                                 </button>
-                                <div class="mt-auto flex items-center justify-between pt-2">
-                                    <p class="text-sm font-black text-slate-900">{{ formatPrice(product.price) }}</p>
+                                <div class="mt-1.5 flex items-center justify-between gap-2">
+                                    <p class="text-[15px] font-bold text-violet-700">{{ formatPrice(product.price) }}</p>
                                     <div v-if="qtyInCart(product.id)" class="flex items-center gap-2">
                                         <button type="button" class="flex h-7 w-7 items-center justify-center rounded-full border border-slate-300 text-slate-600" :aria-label="`Kurangi ${product.name}`" @click="decrement(product.id)">
                                             <Minus class="h-3.5 w-3.5" />
