@@ -12,7 +12,7 @@ namespace App\Support;
  * - Periksa ulang setiap 3 bulan atau sebelum mengubah halaman.
  *
  * Placeholder yang diisi dari harga paket di database (lihat fill()):
- * {name} {free} {free_limits} {paid} {paid_price} {outlet_addon}
+ * {name} {free} {free_limits} {paid} {paid_price} {paid_yearly} {outlet_addon}
  */
 final class Kompetitor
 {
@@ -57,6 +57,7 @@ final class Kompetitor
             '{free_limits}' => $limits,
             '{paid}' => $paid['name'],
             '{paid_price}' => $paid['monthly_label'] !== '' ? $paid['monthly_label'] : 'lihat harga',
+            '{paid_yearly}' => $paid['yearly_label'] !== '' ? $paid['yearly_label'] : 'lihat harga',
             '{outlet_addon}' => $paid['outlet_addon_label'],
         ]);
     }
@@ -276,6 +277,144 @@ final class Kompetitor
                     ['Apa alternatif Pawoon yang gratis?', 'Kasir UMKM by MaccaPOS punya paket {free} gratis selamanya tanpa batas transaksi harian, untuk {free_limits}.'],
                     ['Berapa batas transaksi paket gratis Pawoon?', 'Menurut halaman harga Pawoon, paket gratis dibatasi 7 transaksi per hari untuk satu outlet.'],
                     ['Apakah Kasir UMKM terhubung ke GrabFood atau Accurate?', 'Belum terhubung otomatis. Penjualan GoFood, GrabFood, dan ShopeeFood bisa dicatat manual sebagai channel penjualan beserta potongan komisinya. Bila integrasi otomatis penting, Pawoon mencantumkannya di tabel fiturnya.'],
+                ],
+            ],
+
+            'majoo' => [
+                'slug' => 'alternatif-majoo',
+                'name' => 'Majoo',
+                'checked_at' => '2026-11-20',
+                'checked_label' => '20 November 2026',
+                'sources' => [
+                    ['label' => 'halaman harga Majoo', 'url' => 'https://majoo.id/harga'],
+                ],
+                'h1' => 'Alternatif Majoo: aplikasi kasir mulai gratis untuk UMKM yang baru tumbuh',
+                'description' => 'Mencari alternatif Majoo yang lebih ringan biayanya? Bandingkan harga per outlet dan fitur dengan Kasir UMKM by MaccaPOS. Ada paket gratis selamanya.',
+                'lead' => 'Majoo adalah aplikasi bisnis lengkap, dari kasir, akuntansi, sampai payroll, dengan paket mulai Rp249.000 per outlet per bulan. Untuk warung, kedai, atau toko kecil yang baru mulai, banyak fiturnya belum dibutuhkan dan biaya per outlet jadi pertimbangan. Berikut perbandingan yang jujur, termasuk kapan Majoo justru lebih cocok.',
+                'tldr' => [
+                    ['Harga', 'Kasir UMKM punya paket {free} gratis dan paket {paid} {paid_price} per outlet per bulan. Paket Majoo mulai Rp249.000 per outlet per bulan (belum PPN).'],
+                    ['Cabang', 'paket Starter Majoo untuk satu outlet; multi outlet mulai paket Advance Rp499.000 per outlet. Di Kasir UMKM, outlet tambahan {outlet_addon} per bulan.'],
+                    ['Majoo lebih unggul', 'bila Anda butuh integrasi GoFood/GrabFood, QRIS dinamis & EDC, toko online & marketplace, atau payroll lengkap dalam satu sistem.'],
+                ],
+                'reasons' => [
+                    ['Fiturnya lebih banyak dari yang dibutuhkan', 'Majoo mencakup akuntansi, toko online, hingga payroll. Usaha kecil yang baru mulai sering hanya butuh kasir, stok, dan laporan.'],
+                    ['Biaya per outlet cukup besar', 'Paket Majoo mulai Rp249.000 per outlet per bulan, belum termasuk PPN.'],
+                    ['Ingin mencoba tanpa biaya bulanan', 'Banyak pemilik usaha ingin memakai aplikasi kasir gratis dulu sebelum berlangganan.'],
+                ],
+                'compare' => [
+                    ['Paket gratis', 'Ada: paket {free}, transaksi tanpa batas, {free_limits}', 'Tidak tercantum paket gratis di halaman harga (ada tombol "Coba Gratis")'],
+                    ['Harga paket berbayar', '{paid}: {paid_price} / outlet / bulan', 'Starter Rp249.000, Advance Rp499.000, Prime Rp999.000 / outlet / bulan (belum PPN); Prime+ lewat konsultasi'],
+                    ['Lebih dari satu outlet', 'Add-on {outlet_addon} / outlet / bulan', 'Starter: satu outlet; multi outlet mulai paket Advance'],
+                    ['Meja & multi satuan', 'Meja (usaha F&B & bakery) dan multi satuan', 'Mulai paket Advance'],
+                    ['Produksi & HPP', 'Produksi dari bahan baku, resep & HPP (paket {paid})', 'Fitur produksi stok & COGS average mulai paket Advance'],
+                    ['Harga grosir & batch', 'Harga grosir per barang; batch & kedaluwarsa di mode apotek', 'Grosir, batch number, serial number di paket Prime'],
+                    ['Pembayaran digital', 'Catat pembayaran QRIS (gambar QRIS statis milik toko)', 'QRIS di Starter; QRIS dinamis & EDC mulai Advance'],
+                    ['Pesanan GoFood / GrabFood', 'Dicatat manual sebagai channel penjualan beserta komisinya', 'Integrasi order online GrabFood & GoFood di paket Prime'],
+                    ['Akuntansi', 'Laporan laba rugi, neraca, jurnal (paket {paid})', 'Akuntansi lengkap mulai paket Advance'],
+                    ['Absensi & payroll', 'Add-on Absensi & Payroll', 'Payroll & majoo Teams di paket Prime'],
+                ],
+                'source_note' => 'Halaman harga Majoo juga menyebut diskon hingga 50% dan paket bundling perangkat; rincian fitur per paket ada di situs Majoo.',
+                'cost' => [
+                    'title' => 'Contoh biaya bulanan: 1 outlet',
+                    'sub' => 'Toko atau kedai dengan satu outlet yang memakai paket berbayar terendah.',
+                    'outlets' => 1,
+                    'theirs_title' => 'Majoo (paket Starter)',
+                    'theirs' => [
+                        ['Paket Starter (single outlet)', 'Rp249.000'],
+                    ],
+                    'theirs_total' => 'Rp249.000 / bulan',
+                    'theirs_note' => 'Belum termasuk PPN. Paket Starter Majoo sudah mencakup toko online, QRIS, dan pencatatan keuangan; fiturnya tidak identik dengan paket {paid}.',
+                    'ours' => [
+                        ['Paket {paid}', '{paid_price}'],
+                        ['Atau paket {free}', 'Gratis'],
+                    ],
+                    'ours_note' => 'Dalam Rupiah. Paket {free} gratis selama produk dan pelanggan masih dalam batasnya.',
+                ],
+                'strengths' => [
+                    ['Integrasi pesan antar', 'Order online GrabFood & GoFood tercantum di paket Prime.'],
+                    ['Pembayaran terintegrasi', 'QRIS dinamis dan EDC kartu debit/kredit tercantum mulai paket Advance.'],
+                    ['Toko online & marketplace', 'Website, weborder, dan omnichannel marketplace (Shopee, Grabmart) tercantum di paket Prime.'],
+                    ['Satu sistem dari kasir sampai payroll', 'Akuntansi lengkap, payroll, dan aplikasi karyawan majoo Teams dalam satu langganan.'],
+                    ['Tetap jalan tanpa internet di banyak perangkat', 'Local server untuk multi perangkat tanpa koneksi internet tercantum di paket Prime.'],
+                ],
+                'fit_us' => [
+                    'Baru mulai dan ingin kasir gratis atau biaya bulanan yang ringan',
+                    'Hanya butuh kasir, stok, laporan, dan karyawan tanpa modul ERP',
+                    'Ingin menambah cabang dengan biaya per outlet yang lebih ringan',
+                    'Butuh mode apotek, laundry, atau komisi kapster',
+                ],
+                'faq' => [
+                    ['Apa alternatif Majoo yang lebih murah?', 'Kasir UMKM by MaccaPOS punya paket {free} gratis selamanya dan paket {paid} {paid_price} per outlet per bulan. Outlet tambahan {outlet_addon} per bulan.'],
+                    ['Berapa harga Majoo?', 'Menurut halaman harga Majoo, paket Starter Rp249.000, Advance Rp499.000, dan Prime Rp999.000 per outlet per bulan, belum termasuk PPN. Paket Prime+ lewat konsultasi.'],
+                    ['Apakah Kasir UMKM terhubung ke GoFood dan GrabFood seperti Majoo?', 'Belum terhubung otomatis. Penjualan GoFood, GrabFood, dan ShopeeFood bisa dicatat manual sebagai channel penjualan beserta potongan komisinya. Majoo mencantumkan integrasi order online di paket Prime.'],
+                ],
+            ],
+
+            'qasir' => [
+                'slug' => 'alternatif-qasir',
+                'name' => 'Qasir',
+                'checked_at' => '2026-11-20',
+                'checked_label' => '20 November 2026',
+                'sources' => [
+                    ['label' => 'halaman harga Qasir', 'url' => 'https://www.qasir.id/en/pricing'],
+                ],
+                'h1' => 'Alternatif Qasir: aplikasi kasir gratis selamanya, bisa bayar bulanan',
+                'description' => 'Mencari alternatif Qasir? Kasir UMKM punya paket gratis selamanya, bisa bayar bulanan, dan fitur khusus apotek, laundry, dan barbershop. Bandingkan di sini.',
+                'lead' => 'Qasir adalah aplikasi kasir Indonesia yang terjangkau: paket Pro Rp699.000 per tahun dengan uji coba gratis 7 hari. Bila Anda ingin terus memakai versi gratis, membayar per bulan, atau butuh fitur khusus jenis usaha, berikut perbandingan yang jujur, termasuk kapan Qasir justru lebih cocok.',
+                'tldr' => [
+                    ['Paket gratis', 'Kasir UMKM punya paket {free} gratis selamanya. Halaman harga Qasir mencantumkan uji coba gratis 7 hari.'],
+                    ['Cara bayar', 'paket {paid} bisa dibayar bulanan ({paid_price}) atau tahunan ({paid_yearly}). Paket Qasir ditagih per 12 bulan.'],
+                    ['Qasir lebih unggul', 'bila Anda siap bayar setahun di muka: paket Pro Qasir Rp699.000 per tahun lebih murah dari paket {paid} tahunan.'],
+                ],
+                'reasons' => [
+                    ['Masa uji coba singkat', 'Uji coba gratis Qasir berlaku 7 hari. Sebagian pemilik usaha ingin memakai versi gratis lebih lama.'],
+                    ['Harus bayar setahun di muka', 'Paket Qasir ditagih sekali per 12 bulan, sehingga perlu menyiapkan biaya setahun sekaligus.'],
+                    ['Butuh fitur khas jenis usaha', 'Seperti mode apotek dengan batch dan kedaluwarsa, order laundry, komisi kapster, atau produksi dari resep.'],
+                ],
+                'compare' => [
+                    ['Paket gratis', 'Ada, tanpa batas waktu: paket {free} ({free_limits})', 'Tidak tercantum paket gratis; uji coba gratis 7 hari, semua fitur'],
+                    ['Harga paket berbayar', '{paid}: {paid_price} / bulan atau {paid_yearly} / tahun', 'Pro Rp699.000 / 12 bulan; Pro Plus Rp1.199.000 / 12 bulan (belum pajak)'],
+                    ['Cara bayar', 'Bulanan atau tahunan', 'Ditagih sekali per 12 bulan'],
+                    ['Akun karyawan', 'Termasuk paket {paid}, tanpa biaya per karyawan', 'Akun staf tanpa batas dengan hak akses'],
+                    ['Jumlah produk', 'Paket {free} dibatasi; paket {paid} tanpa batas', 'Produk tanpa batas'],
+                    ['Outlet tambahan', 'Add-on {outlet_addon} / outlet / bulan', 'Tidak dirinci di halaman harga'],
+                    ['Fitur usaha khusus', 'Mode apotek, laundry, barbershop, produksi & HPP, pesan lewat QR meja', 'Tidak tercantum di halaman harga'],
+                ],
+                'source_note' => 'Halaman harga Qasir menyebut harga belum termasuk pajak dan terakhir ditinjau 11 Oktober 2026.',
+                'cost' => [
+                    'title' => 'Contoh biaya setahun: 1 outlet',
+                    'sub' => 'Toko dengan satu outlet. Bila Anda siap bayar tahunan dan hanya butuh fitur kasir umum, Qasir Pro lebih murah.',
+                    'outlets' => 1,
+                    'theirs_title' => 'Qasir (paket Pro)',
+                    'theirs' => [
+                        ['Uji coba', 'Gratis 7 hari'],
+                        ['Paket Pro (12 bulan)', 'Rp699.000'],
+                    ],
+                    'theirs_total' => 'Rp699.000 / tahun',
+                    'theirs_note' => 'Belum termasuk pajak, ditagih sekali per 12 bulan.',
+                    'ours' => [
+                        ['Paket {free} (tanpa batas waktu)', 'Gratis'],
+                        ['Paket {paid} tahunan', '{paid_yearly}'],
+                        ['Atau paket {paid} bulanan', '{paid_price} / bulan'],
+                    ],
+                    'ours_total' => 'Mulai Gratis',
+                    'ours_note' => 'Untuk paket berbayar setahun penuh, Qasir Pro lebih murah. Kasir UMKM unggul bila Anda ingin tetap gratis atau membayar per bulan.',
+                ],
+                'strengths' => [
+                    ['Harga tahunan lebih murah', 'Paket Pro Rp699.000 per 12 bulan, sekitar Rp1.900 per hari menurut halaman harganya.'],
+                    ['Staf dan produk tanpa batas', 'Akun staf dan produk tanpa batas tercantum di paket berbayarnya.'],
+                    ['Struk & laporan lanjutan', 'Struk digital lewat email, nomor antrean di struk, dan laporan penjualan yang dikirim otomatis ke email.'],
+                ],
+                'fit_us' => [
+                    'Ingin memakai aplikasi kasir gratis tanpa batas waktu',
+                    'Lebih nyaman membayar per bulan daripada setahun di muka',
+                    'Butuh mode apotek, laundry, komisi kapster, atau produksi dari resep',
+                    'Restoran atau kafe yang ingin pesan lewat QR meja dan layar dapur',
+                ],
+                'faq' => [
+                    ['Apa alternatif Qasir yang gratis?', 'Kasir UMKM by MaccaPOS punya paket {free} gratis selamanya dengan transaksi tanpa batas, untuk {free_limits}.'],
+                    ['Berapa harga Qasir?', 'Menurut halaman harga Qasir, paket Pro Rp699.000 dan Pro Plus Rp1.199.000 per 12 bulan, belum termasuk pajak, dengan uji coba gratis 7 hari.'],
+                    ['Mana yang lebih murah, Qasir atau Kasir UMKM?', 'Untuk paket berbayar setahun penuh, Qasir Pro (Rp699.000 per tahun) lebih murah dari paket {paid} tahunan ({paid_yearly}). Kasir UMKM lebih hemat bila paket {free} gratis sudah cukup, atau bila Anda ingin membayar per bulan.'],
                 ],
             ],
         ];
