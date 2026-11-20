@@ -21,6 +21,9 @@ final class MenuRouteAccess
         'upsell-rules.' => 'upsell',
         'expenses.' => 'expenses',
         'loyalty.' => 'loyalty',
+        // Terima pembayaran piutang juga bisa dilakukan dari halaman Detail Pelanggan.
+        'receivable-payments.' => ['receivables', 'customers'],
+        'receivables.customers.payments.' => ['receivables', 'customers'],
         'receivables.' => 'receivables',
         'sales-returns.' => 'sales_returns',
         'reports.' => 'reports',
@@ -38,16 +41,22 @@ final class MenuRouteAccess
         'deliveries.' => 'deliveries',
     ];
 
-    /** @param  array<string, string>  $map */
+    /** @param  array<string, string|list<string>>  $map  menu_key, atau beberapa (cukup salah satu) */
     public static function allows(User $user, ?string $routeName, array $map): bool
     {
         if (! $routeName) {
             return false;
         }
 
-        foreach ($map as $prefix => $menuKey) {
+        foreach ($map as $prefix => $menuKeys) {
             if (str_starts_with($routeName, $prefix)) {
-                return $user->canAccessMenu($menuKey);
+                foreach ((array) $menuKeys as $menuKey) {
+                    if ($user->canAccessMenu($menuKey)) {
+                        return true;
+                    }
+                }
+
+                return false;
             }
         }
 

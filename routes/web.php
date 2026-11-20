@@ -542,7 +542,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::post('receivable-payments', [App\Http\Controllers\ReceivablePaymentController::class, 'store'])
         ->name('receivable-payments.store')
-        ->middleware(['store.active']);
+        ->middleware(['store.active', 'role.backoffice']);
 
     Route::get('receivables', [App\Http\Controllers\ReceivablesController::class, 'index'])
         ->name('receivables.index')
@@ -552,7 +552,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware(['store.active', 'role.backoffice']);
     Route::post('receivables/customers/{customer}/payments', [App\Http\Controllers\ReceivablesController::class, 'collectForCustomer'])
         ->name('receivables.customers.payments.store')
-        ->middleware(['store.active']);
+        ->middleware(['store.active', 'role.backoffice']);
     Route::get('receivables/{transaction}', [App\Http\Controllers\ReceivablesController::class, 'show'])
         ->name('receivables.show')
         ->middleware(['store.active', 'role.backoffice']);
