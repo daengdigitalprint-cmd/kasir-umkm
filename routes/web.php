@@ -48,6 +48,17 @@ Route::get('/sitemap.xml', function () {
         ],
     ];
 
+    // Halaman alternatif kompetitor (lastmod = tanggal data kompetitor terakhir dicek).
+    foreach (['loyverse'] as $kompetitorKey) {
+        $kompetitor = \App\Support\Kompetitor::find($kompetitorKey);
+        $urls[] = [
+            'loc' => url('/'.$kompetitor['slug']),
+            'changefreq' => 'monthly',
+            'priority' => '0.8',
+            'lastmod' => $kompetitor['checked_at'],
+        ];
+    }
+
     // Halaman per jenis usaha (lastmod = file konten terakhir diubah).
     $jenisUsahaLastmod = date('Y-m-d', filemtime(app_path('Support/JenisUsaha.php')));
     foreach (\App\Support\JenisUsaha::slugs() as $slug) {
@@ -102,6 +113,11 @@ foreach (\App\Support\JenisUsaha::slugs() as $jenisUsahaSlug) {
     Route::get('/'.$jenisUsahaSlug, [App\Http\Controllers\JenisUsahaController::class, 'show'])
         ->name('jenis-usaha.'.$jenisUsahaSlug);
 }
+
+// ── Halaman alternatif kompetitor (SEO): /alternatif-loyverse ──
+Route::get('/alternatif-loyverse', [App\Http\Controllers\AlternatifController::class, 'show'])
+    ->defaults('kompetitor', 'loyverse')
+    ->name('alternatif.loyverse');
 
 // Server yang meneruskan path apa adanya (mis. Herd lokal) melihat "/index.php" sebagai path.
 Route::get('/index.php', fn () => redirect('/', 301));

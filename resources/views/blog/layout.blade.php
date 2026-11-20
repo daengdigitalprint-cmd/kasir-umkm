@@ -317,6 +317,7 @@
                     <a href="{{ url('/privacy') }}">Kebijakan Privasi</a>
                     <a href="{{ url('/refund') }}">Kebijakan Refund</a>
                     <a href="{{ url('/panduan') }}">Panduan</a>
+                    <a href="{{ url('/alternatif-loyverse') }}">Alternatif Loyverse</a>
                 </nav>
             </div>
         </div>
