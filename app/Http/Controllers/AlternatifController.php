@@ -20,4 +20,17 @@ class AlternatifController extends Controller
             'others' => array_values(array_filter(Kompetitor::all(), fn (array $o) => $o['key'] !== $kompetitor)),
         ]);
     }
+
+    /** Halaman hub /aplikasi-kasir-terbaik: semua aplikasi dalam satu perbandingan. */
+    public function terbaik(): View
+    {
+        $checkedAt = max(array_map(fn (array $k) => $k['checked_at'], Kompetitor::all()));
+
+        return view('alternatif.terbaik', [
+            'apps' => Kompetitor::summaries(),
+            'pricing' => LandingPricing::payload(),
+            'checkedAt' => $checkedAt,
+            'checkedLabel' => \Illuminate\Support\Carbon::parse($checkedAt)->locale('id')->translatedFormat('j F Y'),
+        ]);
+    }
 }

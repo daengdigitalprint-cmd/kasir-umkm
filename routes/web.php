@@ -48,6 +48,14 @@ Route::get('/sitemap.xml', function () {
         ],
     ];
 
+    // Halaman hub perbandingan (lastmod = tanggal data kompetitor terbaru).
+    $urls[] = [
+        'loc' => url('/aplikasi-kasir-terbaik'),
+        'changefreq' => 'monthly',
+        'priority' => '0.9',
+        'lastmod' => max(array_map(fn (array $k) => $k['checked_at'], \App\Support\Kompetitor::all())),
+    ];
+
     // Halaman alternatif kompetitor (lastmod = tanggal data kompetitor terakhir dicek).
     foreach (\App\Support\Kompetitor::all() as $kompetitor) {
         $urls[] = [
@@ -112,6 +120,10 @@ foreach (\App\Support\JenisUsaha::slugs() as $jenisUsahaSlug) {
     Route::get('/'.$jenisUsahaSlug, [App\Http\Controllers\JenisUsahaController::class, 'show'])
         ->name('jenis-usaha.'.$jenisUsahaSlug);
 }
+
+// ── Halaman hub perbandingan semua aplikasi kasir (SEO) ──
+Route::get('/aplikasi-kasir-terbaik', [App\Http\Controllers\AlternatifController::class, 'terbaik'])
+    ->name('aplikasi-kasir-terbaik');
 
 // ── Halaman alternatif kompetitor (SEO): /alternatif-loyverse, /alternatif-moka-pos, /alternatif-pawoon ──
 foreach (\App\Support\Kompetitor::all() as $kompetitorPage) {

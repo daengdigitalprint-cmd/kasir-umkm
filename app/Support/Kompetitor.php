@@ -37,6 +37,98 @@ final class Kompetitor
     }
 
     /**
+     * Ringkasan per aplikasi untuk halaman /aplikasi-kasir-terbaik (Kasir UMKM + semua kompetitor).
+     * Hanya berisi fakta yang sudah ada di data() per kompetitor (bersumber & bertanggal).
+     *
+     * @return list<array{key: string, name: string, slug: ?string, free: string, price: string, billing: string, best_for: string, consider: string}>
+     */
+    public static function summaries(): array
+    {
+        $rows = [
+            'kasir-umkm' => [
+                'name' => 'Kasir UMKM by MaccaPOS',
+                'slug' => null,
+                'free' => 'Paket {free} gratis selamanya: transaksi tanpa batas, {free_limits}',
+                'price' => '{paid}: {paid_price} / outlet / bulan',
+                'billing' => 'Per outlet, bulanan atau tahunan; tanpa biaya per karyawan atau perangkat',
+                'best_for' => 'UMKM yang ingin mulai gratis, punya beberapa staf, atau butuh mode apotek, laundry, barbershop, dan F&B (QR meja, layar dapur, resep & HPP)',
+                'consider' => 'Paket gratis dibatasi 30 produk; belum ada integrasi otomatis ojol & pembayaran; belum ada aplikasi iOS',
+            ],
+            'loyverse' => [
+                'free' => 'POS, beberapa toko, layar dapur & layar pelanggan gratis',
+                'price' => 'Add-on mulai $5 USD / bulan per karyawan',
+                'billing' => 'Add-on dalam USD, per toko atau per karyawan',
+                'best_for' => 'Toko yang cukup dengan fitur dasar gratis, atau punya banyak toko',
+                'consider' => 'Karyawan, stok lanjutan, dan riwayat penjualan panjang adalah add-on berbayar dalam USD',
+            ],
+            'moka' => [
+                'free' => 'Tidak tercantum paket gratis (ada tombol coba gratis)',
+                'price' => 'Basic Rp299.000 / outlet / bulan',
+                'billing' => 'Per outlet; kuota karyawan per paket',
+                'best_for' => 'Usaha mapan yang butuh pembayaran digital terintegrasi dan training tatap muka',
+                'consider' => 'Biaya per outlet relatif tinggi untuk usaha yang baru mulai',
+            ],
+            'pawoon' => [
+                'free' => 'Gratis 7 transaksi / hari, satu outlet',
+                'price' => 'Pro Rp299rb / outlet / bulan',
+                'billing' => 'Per outlet',
+                'best_for' => 'Usaha yang butuh integrasi pembayaran digital, Jurnal & Accurate, atau GrabFood',
+                'consider' => 'Paket gratis dibatasi 7 transaksi per hari',
+            ],
+            'majoo' => [
+                'free' => 'Tidak tercantum paket gratis (ada tombol coba gratis)',
+                'price' => 'Starter Rp249.000 / outlet / bulan (belum PPN)',
+                'billing' => 'Per outlet; Starter untuk satu outlet',
+                'best_for' => 'Bisnis yang ingin satu sistem dari kasir, akuntansi, toko online, sampai payroll',
+                'consider' => 'Banyak fitur integrasi ada di paket yang lebih tinggi',
+            ],
+            'qasir' => [
+                'free' => 'Uji coba gratis 7 hari',
+                'price' => 'Pro Rp699.000 / 12 bulan (belum pajak)',
+                'billing' => 'Ditagih per 12 bulan',
+                'best_for' => 'Toko dengan kebutuhan kasir umum yang siap bayar tahunan dengan harga hemat',
+                'consider' => 'Tidak ada pilihan bayar bulanan di halaman harganya',
+            ],
+            'olsera' => [
+                'free' => 'Uji coba gratis 14 hari',
+                'price' => 'Basic Rp1.288.000 / tahun (belum PPN)',
+                'billing' => 'Harga per tahun',
+                'best_for' => 'Usaha yang butuh POS Windows atau iOS dan integrasi GrabFood',
+                'consider' => 'Paket Basic dibatasi 3 perangkat',
+            ],
+            'kasir-pintar' => [
+                'free' => 'Gratis: transaksi tanpa batas, hingga 1.000 barang, 1 pengguna',
+                'price' => 'Pro Rp666.000 / tahun',
+                'billing' => 'Paket 6 atau 12 bulan; plugin per bulan',
+                'best_for' => 'Toko kecil yang butuh paket gratis longgar dan harga Pro murah',
+                'consider' => 'Bahan baku, food menu, dan absensi adalah plugin terpisah; Pro maks. 5 akun staf',
+            ],
+            'ireap' => [
+                'free' => 'iREAP POS Lite gratis',
+                'price' => 'PRO Rp99.000 / bulan per perangkat (Rp500.000 / 12 bulan)',
+                'billing' => 'Per voucher: 1 voucher untuk 1 perangkat',
+                'best_for' => 'Toko dengan 1 mesin kasir, atau usaha dengan salesman keliling',
+                'consider' => 'Biaya bertambah untuk setiap perangkat kasir',
+            ],
+            'accurate-pos' => [
+                'free' => 'Uji coba gratis 30 hari',
+                'price' => 'Paket Dasar Rp222.000 / bulan (termasuk PPN)',
+                'billing' => 'Bulanan; perangkat, meja, outlet, dan pengguna back office sebagai add-on',
+                'best_for' => 'Usaha yang sudah memakai ekosistem Accurate',
+                'consider' => 'Biaya bertambah dengan add-on',
+            ],
+        ];
+
+        $out = [];
+        foreach ($rows as $key => $row) {
+            $k = $key === 'kasir-umkm' ? null : self::find($key);
+            $out[] = ['key' => $key, 'name' => $k['name'] ?? $row['name'], 'slug' => $k['slug'] ?? null] + $row;
+        }
+
+        return $out;
+    }
+
+    /**
      * Isi placeholder harga Kasir UMKM (dari LandingPricing::payload()).
      *
      * @param  array<string, mixed>  $pricing

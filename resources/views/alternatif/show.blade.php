@@ -319,6 +319,7 @@
             @if (count($others))
                 <h2 style="margin-top: 44px">Perbandingan lainnya</h2>
                 <div class="alt-links">
+                    <a href="{{ url('/aplikasi-kasir-terbaik') }}">Semua aplikasi kasir terbaik</a>
                     @foreach ($others as $o)
                         <a href="{{ url('/'.$o['slug']) }}">Alternatif {{ $o['name'] }}</a>
                     @endforeach
