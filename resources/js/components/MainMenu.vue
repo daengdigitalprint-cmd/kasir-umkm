@@ -293,7 +293,7 @@ const navigationSource: NavItem[] = [
         advancedRetailOnly: true,
         hideOnDirectStockEdit: true,
     },
-    { name: 'Resep', href: '/recipes', icon: ChefHat, menuKey: 'recipes', section: 'produk_stok', recipesOnly: true },
+    { name: 'Resep produksi', href: '/recipes', icon: ChefHat, menuKey: 'recipes', section: 'produk_stok', recipesOnly: true },
     { name: 'Produksi', href: '/productions', icon: Layers, menuKey: 'productions', section: 'produk_stok', productionsOnly: true },
     // ── Pembelian & Distribusi ──
     {

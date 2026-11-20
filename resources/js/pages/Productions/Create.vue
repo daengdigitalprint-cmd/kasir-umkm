@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { Head, useForm, Link } from '@inertiajs/vue3';
-import AdminLayout from '@/layouts/AdminLayout.vue';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Factory, FlaskConical } from 'lucide-vue-next';
-import { ref, computed } from 'vue';
+import AdminLayout from '@/layouts/AdminLayout.vue';
 import { modalError } from '@/lib/swal';
+import { Head, Link, useForm } from '@inertiajs/vue3';
+import { ArrowLeft, Factory, FlaskConical } from 'lucide-vue-next';
+import { computed, ref } from 'vue';
 
 interface ProductTiny {
     id: number;
@@ -41,19 +41,17 @@ const props = defineProps<{
     products: ProductTiny[];
 }>();
 
-const selectedRecipeId = ref<number | ''>('');
+// Dari tombol "Produksi sekarang" di resep: ?recipe_id= langsung terpilih.
+const initialRecipeId = Number(new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('recipe_id'));
+const selectedRecipeId = ref<number | ''>(props.recipes.some((r) => r.id === initialRecipeId) ? initialRecipeId : '');
 const multiplier = ref(1);
 
-const selectedRecipe = computed(() =>
-    props.recipes.find((r) => r.id === selectedRecipeId.value) ?? null,
-);
+const selectedRecipe = computed(() => props.recipes.find((r) => r.id === selectedRecipeId.value) ?? null);
 
 const estimatedIngredients = computed(() => {
     if (!selectedRecipe.value) return [];
     return selectedRecipe.value.ingredients.map((ing) => {
-        const required = ing.product
-            ? Number((Number(ing.quantity) * multiplier.value).toPrecision(10))
-            : 0;
+        const required = ing.product ? Number((Number(ing.quantity) * multiplier.value).toPrecision(10)) : 0;
         const stock = ing.product ? Number(ing.product.stock_quantity) : 0;
         const ok = Number(required) <= stock;
         return { ...ing, required, ok, stock };
@@ -72,7 +70,7 @@ const form = useForm({
 
 function submit() {
     if (!selectedRecipeId.value) {
-        void modalError('Data belum lengkap', 'Pilih recipe terlebih dahulu.');
+        void modalError('Data belum lengkap', 'Pilih resep terlebih dahulu.');
         return;
     }
     if (multiplier.value <= 0) {
@@ -108,7 +106,7 @@ function submit() {
 
     <AdminLayout title="Produksi">
         <div class="mx-auto space-y-6 pb-8" style="max-width: 90rem">
-            <Button as-child variant="outline" size="sm" class="gap-2 rounded-xl mb-2">
+            <Button as-child variant="outline" size="sm" class="mb-2 gap-2 rounded-xl">
                 <Link href="/productions">
                     <ArrowLeft class="h-4 w-4" />
                     Daftar Produksi
@@ -123,72 +121,57 @@ function submit() {
                         </div>
                         <div>
                             <CardTitle>Produksi Baru</CardTitle>
-                            <CardDescription>
-                                Pilih recipe dan multiplier. Stok bahan akan dikurangi saat diselesaikan.
-                            </CardDescription>
+                            <CardDescription> Pilih resep dan berapa kali produksi. Stok bahan akan dikurangi saat diselesaikan. </CardDescription>
                         </div>
                     </div>
                 </CardHeader>
                 <CardContent class="space-y-6">
                     <div class="grid gap-4 sm:grid-cols-2">
                         <div class="space-y-2 sm:col-span-2">
-                            <Label for="recipe">Recipe</Label>
+                            <Label for="recipe">Resep produksi</Label>
                             <select
                                 id="recipe"
                                 v-model="selectedRecipeId"
                                 class="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
                                 required
                             >
-                                <option value="" disabled>Pilih recipe</option>
+                                <option value="" disabled>Pilih resep</option>
                                 <option v-for="r in recipes" :key="r.id" :value="r.id">
-                                    {{ r.name }} <template v-if="r.code"> ({{ r.code }})</template>
-                                    → {{ r.product?.name ?? '—' }}
+                                    {{ r.name }} <template v-if="r.code"> ({{ r.code }})</template> → {{ r.product?.name ?? '—' }}
                                 </option>
                             </select>
                             <p v-if="recipes.length === 0" class="text-xs text-amber-700">
-                                Tidak ada recipe aktif. Buat recipe terlebih dahulu.
+                                Belum ada resep aktif. Buat resep produksi terlebih dahulu.
                             </p>
                         </div>
                         <div class="space-y-2">
                             <Label for="multiplier">Multiplier</Label>
-                            <Input
-                                id="multiplier"
-                                v-model.number="multiplier"
-                                type="number"
-                                step="0.5"
-                                min="0"
-                                class="rounded-xl"
-                                required
-                            />
+                            <Input id="multiplier" v-model.number="multiplier" type="number" step="0.5" min="0" class="rounded-xl" required />
                             <p class="text-xs text-slate-500">×2 menggandakan bahan dan output.</p>
                         </div>
                     </div>
 
                     <!-- Estimasi -->
                     <div v-if="selectedRecipe" class="space-y-4">
-                        <div class="rounded-xl bg-orange-50 border border-orange-100 p-4">
-                            <h3 class="text-xs font-bold text-orange-800 uppercase mb-2">Estimasi Output</h3>
+                        <div class="rounded-xl border border-orange-100 bg-orange-50 p-4">
+                            <h3 class="mb-2 text-xs font-bold text-orange-800 uppercase">Estimasi Output</h3>
                             <p class="text-sm">
                                 <strong class="text-slate-900">{{ selectedRecipe.product?.name }}</strong>
-                                <span class="font-mono font-bold text-orange-700 ml-2">
+                                <span class="ml-2 font-mono font-bold text-orange-700">
                                     {{ estimatedOutput }} {{ selectedRecipe.output_unit ?? '' }}
                                 </span>
                             </p>
                         </div>
 
                         <div class="rounded-xl border border-slate-100 p-4">
-                            <h3 class="text-xs font-bold text-slate-500 uppercase mb-2">Kebutuhan Bahan</h3>
+                            <h3 class="mb-2 text-xs font-bold text-slate-500 uppercase">Kebutuhan Bahan</h3>
                             <div class="space-y-2">
-                                <div
-                                    v-for="ing in estimatedIngredients"
-                                    :key="ing.id"
-                                    class="flex items-center justify-between gap-2 text-sm"
-                                >
+                                <div v-for="ing in estimatedIngredients" :key="ing.id" class="flex items-center justify-between gap-2 text-sm">
                                     <div class="min-w-0">
                                         <span class="text-slate-800">{{ ing.product?.name ?? '—' }}</span>
-                                        <span class="text-xs text-slate-500 ml-1">{{ ing.base_unit ?? '' }}</span>
+                                        <span class="ml-1 text-xs text-slate-500">{{ ing.base_unit ?? '' }}</span>
                                     </div>
-                                    <div class="flex items-center gap-2 shrink-0">
+                                    <div class="flex shrink-0 items-center gap-2">
                                         <span class="font-mono font-semibold" :class="ing.ok ? 'text-slate-900' : 'text-red-600'">
                                             {{ ing.required }}
                                         </span>

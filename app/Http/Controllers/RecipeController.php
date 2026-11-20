@@ -7,6 +7,7 @@ use App\Models\Recipe;
 use App\Models\RecipeIngredient;
 use App\Support\BaseUnit;
 use App\Support\InventoryType;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -25,11 +26,19 @@ class RecipeController extends Controller
 
         $recipes = Recipe::query()
             ->where('store_id', $store->id)
-            ->with(['product:id,name,sku,inventory_type,base_unit', 'ingredients.product:id,name,sku,inventory_type,base_unit'])
+            ->with(['product:id,name,sku,inventory_type,base_unit,unit', 'ingredients.product:id,name,sku,inventory_type,base_unit,average_cost,cost_price'])
             ->withCount('ingredients')
             ->latest()
             ->paginate(20)
             ->withQueryString();
+
+        // Modal resep & HPP per satuan hasil, agar terlihat tanpa membuka detail.
+        $recipes->getCollection()->transform(function (Recipe $r) {
+            $r->total_cost = (float) $r->totalIngredientCost();
+            $r->unit_cost = (float) $r->unitCostPerOutput();
+
+            return $r;
+        });
 
         return Inertia::render('Recipes/Index', [
             'recipes' => $recipes,
@@ -48,7 +57,7 @@ class RecipeController extends Controller
             ->where('store_id', $store->id)
             ->where('is_active', true)
             ->orderBy('name')
-            ->get(['id', 'name', 'sku', 'inventory_type', 'base_unit']);
+            ->get(['id', 'name', 'sku', 'inventory_type', 'base_unit', 'unit', 'average_cost', 'cost_price']);
 
         // Bahan: raw_material dan production_output
         $ingredients = $products->filter(fn (Product $p) => InventoryType::usableAsIngredient($p))->values();
@@ -129,7 +138,7 @@ class RecipeController extends Controller
                 }
                 if (! InventoryType::usableAsIngredient($product)) {
                     throw ValidationException::withMessages([
-                        "ingredients.{$idx}.product_id" => 'Produk tidak dapat menjadi bahan recipe.',
+                        "ingredients.{$idx}.product_id" => 'Produk ini tidak bisa dipakai sebagai bahan resep.',
                     ]);
                 }
 
@@ -154,7 +163,46 @@ class RecipeController extends Controller
         });
 
         return redirect()->route('recipes.show', $transfer)
-            ->with('success', 'Recipe berhasil dibuat.');
+            ->with('success', 'Resep produksi berhasil dibuat.');
+    }
+
+    /**
+     * Buat produk "Hasil produksi" langsung dari form resep (hanya nama & satuan),
+     * supaya pembuatan resep pertama tidak buntu. Balas JSON untuk dipilih otomatis.
+     */
+    public function storeOutputProduct(Request $request): JsonResponse
+    {
+        $store = $request->user()->store;
+        abort_if(! $store, 403);
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:150'],
+            'base_unit' => ['required', 'string', 'in:'.implode(',', array_keys(BaseUnit::LABELS))],
+        ], [
+            'name.required' => 'Isi nama produk hasil produksi.',
+        ]);
+
+        $product = Product::query()->create([
+            'store_id' => $store->id,
+            'name' => trim($validated['name']),
+            'inventory_type' => InventoryType::PRODUCTION_OUTPUT,
+            'base_unit' => $validated['base_unit'],
+            'unit' => $validated['base_unit'],
+            'price' => 0,
+            'cost_price' => 0,
+            'stock_quantity' => 0,
+            'min_stock_level' => 0,
+            'track_stock' => true,
+            'is_active' => true,
+        ]);
+
+        return response()->json([
+            'id' => $product->id,
+            'name' => $product->name,
+            'sku' => $product->sku,
+            'inventory_type' => $product->inventory_type,
+            'base_unit' => $product->base_unit,
+        ]);
     }
 
     public function show(Request $request, Recipe $recipe): Response|RedirectResponse
@@ -167,7 +215,7 @@ class RecipeController extends Controller
 
         $recipe->load([
             'product:id,name,sku,inventory_type,base_unit,average_cost',
-            'ingredients.product:id,name,sku,inventory_type,base_unit,average_cost',
+            'ingredients.product:id,name,sku,inventory_type,base_unit,average_cost,cost_price',
             'createdBy:id,name',
             'updatedBy:id,name',
         ]);
@@ -196,7 +244,7 @@ class RecipeController extends Controller
             ->where('store_id', $store->id)
             ->where('is_active', true)
             ->orderBy('name')
-            ->get(['id', 'name', 'sku', 'inventory_type', 'base_unit']);
+            ->get(['id', 'name', 'sku', 'inventory_type', 'base_unit', 'unit', 'average_cost', 'cost_price']);
 
         $ingredients = $products->filter(fn (Product $p) => InventoryType::usableAsIngredient($p))->values();
         $outputs = $products->filter(fn (Product $p) => InventoryType::isProductionOutput($p))->values();
@@ -277,7 +325,7 @@ class RecipeController extends Controller
                 }
                 if (! InventoryType::usableAsIngredient($product)) {
                     throw ValidationException::withMessages([
-                        "ingredients.{$idx}.product_id" => 'Produk tidak dapat menjadi bahan recipe.',
+                        "ingredients.{$idx}.product_id" => 'Produk ini tidak bisa dipakai sebagai bahan resep.',
                     ]);
                 }
 
@@ -298,7 +346,7 @@ class RecipeController extends Controller
         });
 
         return redirect()->route('recipes.show', $recipe)
-            ->with('success', 'Recipe berhasil diperbarui. Versi baru: v'.$recipe->fresh()->version.'.');
+            ->with('success', 'Resep produksi diperbarui. Versi baru: v'.$recipe->fresh()->version.'.');
     }
 
     public function destroy(Request $request, Recipe $recipe): RedirectResponse
@@ -312,6 +360,6 @@ class RecipeController extends Controller
         $recipe->delete();
 
         return redirect()->route('recipes.index')
-            ->with('success', 'Recipe berhasil dihapus.');
+            ->with('success', 'Resep produksi dihapus.');
     }
 }

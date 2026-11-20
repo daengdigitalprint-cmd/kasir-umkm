@@ -156,7 +156,7 @@ async function cancelBatch() {
                     <!-- Info -->
                     <div class="rounded-xl bg-slate-50 border border-slate-100 p-4 text-sm space-y-2">
                         <div class="flex justify-between">
-                            <span class="text-slate-500">Recipe</span>
+                            <span class="text-slate-500">Resep</span>
                             <strong class="text-slate-900">{{ batch.recipe_name ?? '—' }} <span v-if="batch.recipe_code" class="text-xs text-slate-400">v{{ batch.recipe_version }} ({{ batch.recipe_code }})</span></strong>
                         </div>
                         <div class="flex justify-between">

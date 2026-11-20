@@ -445,6 +445,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->only(['index', 'create', 'store', 'show'])
         ->middleware(['store.active', 'role.inventory']);
 
+    Route::post('recipes/output-product', [App\Http\Controllers\RecipeController::class, 'storeOutputProduct'])
+        ->name('recipes.output-product')
+        ->middleware(['store.active', 'role.inventory']);
     Route::resource('recipes', App\Http\Controllers\RecipeController::class)
         ->only(['index', 'create', 'store', 'show', 'edit', 'update', 'destroy'])
         ->middleware(['store.active', 'role.inventory']);

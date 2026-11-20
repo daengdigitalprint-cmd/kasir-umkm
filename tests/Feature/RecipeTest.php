@@ -297,3 +297,33 @@ test('relasi recipe dengan bahan eager loading', function () {
         ->and($loaded->ingredients->first()->product)->not->toBeNull()
         ->and($loaded->ingredients->first()->product->name)->toBe('Teh');
 });
+
+test('produk hasil produksi bisa dibuat langsung dari form resep', function () {
+    [$store, $user] = makeRecipeOrg('R-out');
+    $user->stores()->attach($store->id, ['role' => 'admin']);
+
+    $this->actingAs($user)
+        ->postJson('/recipes/output-product', ['name' => 'Sambal Dasar', 'base_unit' => BaseUnit::GRAM])
+        ->assertOk()
+        ->assertJson(['name' => 'Sambal Dasar', 'base_unit' => BaseUnit::GRAM, 'inventory_type' => InventoryType::PRODUCTION_OUTPUT]);
+
+    $this->actingAs($user)
+        ->postJson('/recipes/output-product', ['name' => 'X', 'base_unit' => 'ember'])
+        ->assertUnprocessable();
+
+    expect(Product::query()->where('store_id', $store->id)->where('name', 'Sambal Dasar')->value('inventory_type'))
+        ->toBe(InventoryType::PRODUCTION_OUTPUT);
+});
+
+test('daftar resep menampilkan modal dan HPP per satuan', function () {
+    [$store, $user] = makeRecipeOrg('R-idx');
+    $user->stores()->attach($store->id, ['role' => 'admin']);
+    $output = makeRecipeProduct($store, ['name' => 'Biang', 'inventory_type' => InventoryType::PRODUCTION_OUTPUT, 'base_unit' => BaseUnit::MILLILITER]);
+    $gula = makeRecipeProduct($store, ['name' => 'Gula', 'average_cost' => '20.000000']);
+    $recipe = createTestRecipe($user, $store, $output, [['product_id' => $gula->id, 'quantity' => '900.0000']]);
+
+    $this->actingAs($user)->get('/recipes')->assertInertia(fn ($page) => $page
+        ->where('recipes.data.0.id', $recipe->id)
+        ->where('recipes.data.0.total_cost', 18000)
+        ->where('recipes.data.0.unit_cost', 1));
+});
