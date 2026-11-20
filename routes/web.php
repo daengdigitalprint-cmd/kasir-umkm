@@ -371,8 +371,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('product-option-groups/{modifier_group}', [App\Http\Controllers\ModifierGroupController::class, 'destroy'])
             ->name('products.option-groups.destroy');
     });
-    Route::get('customers/search', [App\Http\Controllers\CustomerController::class, 'search'])->middleware(['store.active']);
-    Route::post('customers/quick-store', [App\Http\Controllers\CustomerController::class, 'quickStore'])->middleware(['store.active']);
+    // Cari/tambah cepat pelanggan dari layar kasir (POS): hanya peran yang boleh memakai POS.
+    // Nama berawalan "pos." supaya peran yang diberi menu Kasir di Tim & Akses tetap lolos role.pos.
+    Route::get('customers/search', [App\Http\Controllers\CustomerController::class, 'search'])
+        ->name('pos.customers.search')
+        ->middleware(['store.active', 'role.pos']);
+    Route::post('customers/quick-store', [App\Http\Controllers\CustomerController::class, 'quickStore'])
+        ->name('pos.customers.quick-store')
+        ->middleware(['store.active', 'role.pos']);
     // F9 Segmen pelanggan (sebelum resource agar tidak tertangkap customers/{customer})
     Route::get('customers/segments', [App\Http\Controllers\CustomerSegmentController::class, 'index'])
         ->name('customers.segments')->middleware(['store.active', 'role.backoffice']);
