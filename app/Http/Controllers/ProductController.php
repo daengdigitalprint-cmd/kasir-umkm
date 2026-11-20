@@ -31,6 +31,7 @@ use App\Support\StorePlanLimits;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -58,10 +59,26 @@ class ProductController extends Controller
         $search = $request->string('search')->trim()->toString();
         $inventoryType = $request->string('inventory_type')->trim()->toString();
         $categoryFilter = $request->string('category')->trim()->toString();
+        $statusFilter = in_array($request->string('status')->toString(), ['active', 'inactive'], true) ? $request->string('status')->toString() : '';
+        $stockFilter = $request->string('stock')->toString() === 'low' ? 'low' : '';
+        $sort = in_array($request->string('sort')->toString(), ['latest', 'name', 'stock', 'price'], true) ? $request->string('sort')->toString() : 'latest';
+        $dir = $request->string('dir')->toString() === 'asc' ? 'asc' : 'desc';
 
         $productsQuery = $store->products()
             ->with('store')
-            ->with(['variants' => fn ($q) => $q->where('is_active', true)->orderBy('sort_order')->orderBy('id')]);
+            ->with(['variants' => fn ($q) => $q->where('is_active', true)->orderBy('sort_order')->orderBy('id')])
+            // Produk yang sudah pernah terjual sebaiknya dinonaktifkan, bukan dihapus.
+            ->withExists('transactionItems as has_sales');
+
+        if ($statusFilter !== '') {
+            $productsQuery->where('is_active', $statusFilter === 'active');
+        }
+
+        if ($stockFilter === 'low') {
+            $productsQuery->whereColumn('stock_quantity', '<=', 'min_stock_level')
+                ->where('track_stock', true)
+                ->where('unlimited_stock', false);
+        }
 
         if ($search !== '') {
             $productsQuery->where(function ($q) use ($search) {
@@ -89,7 +106,14 @@ class ProductController extends Controller
             });
         }
 
-        $products = $productsQuery->latest()->paginate(20)->withQueryString();
+        match ($sort) {
+            'name' => $productsQuery->orderBy('name', $dir),
+            'stock' => $productsQuery->orderBy('track_stock', 'desc')->orderBy('stock_quantity', $dir),
+            'price' => $productsQuery->orderBy('price', $dir),
+            default => $productsQuery->orderBy('created_at', $dir)->orderBy('id', $dir),
+        };
+
+        $products = $productsQuery->paginate(20)->withQueryString();
 
         $products->getCollection()->transform(function ($product) {
             $product->image_url = $product->getImageUrlAttribute();
@@ -124,7 +148,21 @@ class ProductController extends Controller
             'categories' => $categories,
             'inventoryTypes' => InventoryType::LABELS,
             'lowStockCount' => $lowStockCount,
+            // Hitungan seluruh toko (bukan hanya halaman ini) untuk tombol ringkasan.
+            'counts' => [
+                'all' => $store->products()->count(),
+                'low' => $lowStockCount,
+                'inactive' => $store->products()->where('is_active', false)->count(),
+            ],
+            'categoryOptions' => ProductCategory::query()
+                ->where('store_id', $store->id)
+                ->orderBy('name')
+                ->get(['id', 'name']),
             'filters' => [
+                'status' => $statusFilter,
+                'stock' => $stockFilter,
+                'sort' => $sort,
+                'dir' => $dir,
                 'search' => $search,
                 'inventory_type' => $inventoryType,
                 'category' => $categoryFilter,
@@ -1346,6 +1384,62 @@ class ProductController extends Controller
     /**
      * @return array{product_category_id: int|null, category: string|null}
      */
+    /**
+     * Aktifkan / nonaktifkan satu produk dari daftar produk.
+     */
+    public function toggleActive(Request $request, Product $product): RedirectResponse
+    {
+        $this->authorize('update', $product);
+        $active = $request->validate(['is_active' => 'required|boolean'])['is_active'];
+
+        $product->update(['is_active' => (bool) $active]);
+
+        return back()->with('success', $active
+            ? "«{$product->name}» aktif dan tampil lagi di kasir."
+            : "«{$product->name}» dinonaktifkan dan tidak tampil di kasir. Riwayatnya tetap tersimpan.");
+    }
+
+    /**
+     * Aksi massal selain hapus: aktifkan, nonaktifkan, atau pindah kategori.
+     */
+    public function bulkUpdate(Request $request): RedirectResponse
+    {
+        $store = $request->user()->store;
+        abort_if(! $store, 404);
+
+        $validated = $request->validate([
+            'ids' => 'required|array|min:1|max:500',
+            'ids.*' => 'required|integer',
+            'action' => 'required|string|in:activate,deactivate,category',
+            'product_category_id' => 'nullable|integer|required_if:action,category',
+        ]);
+
+        $changes = match ($validated['action']) {
+            'activate' => ['is_active' => true],
+            'deactivate' => ['is_active' => false],
+            'category' => $this->categoryFieldsForStore($store, (int) $validated['product_category_id']),
+        };
+
+        // Dibatasi ke toko aktif agar id dari outlet lain tidak ikut berubah.
+        $products = Product::query()->where('store_id', $store->id)->whereIn('id', $validated['ids'])->get();
+        $updated = 0;
+        foreach ($products as $product) {
+            if ($request->user()->cannot('update', $product)) {
+                continue;
+            }
+            $product->update($changes);
+            $updated++;
+        }
+
+        $label = match ($validated['action']) {
+            'activate' => 'diaktifkan',
+            'deactivate' => 'dinonaktifkan',
+            'category' => 'dipindah ke kategori '.$changes['category'],
+        };
+
+        return back()->with('success', "{$updated} produk {$label}.");
+    }
+
     private function categoryFieldsForStore(Store $store, ?int $productCategoryId): array
     {
         if ($productCategoryId === null) {

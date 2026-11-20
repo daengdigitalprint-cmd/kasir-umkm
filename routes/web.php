@@ -261,6 +261,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('products.import');
         Route::post('products/bulk-delete', [App\Http\Controllers\ProductController::class, 'bulkDestroy'])
             ->name('products.bulk-delete');
+        Route::post('products/bulk-update', [App\Http\Controllers\ProductController::class, 'bulkUpdate'])
+            ->name('products.bulk-update');
+        Route::patch('products/{product}/active', [App\Http\Controllers\ProductController::class, 'toggleActive'])
+            ->name('products.toggle-active');
         Route::post('products/sample-services', [App\Http\Controllers\ProductController::class, 'sampleServices'])
             ->name('products.sample-services');
     });

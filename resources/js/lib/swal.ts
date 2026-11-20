@@ -152,6 +152,41 @@ export async function confirmDelete(title: string, text: string): Promise<boolea
     });
 }
 
+/**
+ * Dialog dua pilihan + batal. Mengembalikan 'primary', 'secondary', atau null bila dibatalkan.
+ * Pilihan utama memakai warna utama; pilihan kedua (mis. tindakan berisiko) berwarna merah.
+ */
+export async function choiceDialog(
+    title: string,
+    text: string,
+    options: { primaryText: string; secondaryText: string; cancelText?: string },
+): Promise<'primary' | 'secondary' | null> {
+    const result = await Swal.fire({
+        icon: 'question',
+        title,
+        text,
+        showCancelButton: true,
+        showDenyButton: true,
+        confirmButtonText: options.primaryText,
+        denyButtonText: options.secondaryText,
+        cancelButtonText: options.cancelText ?? 'Batal',
+        confirmButtonColor: '#7943e5',
+        denyButtonColor: '#dc2626',
+        cancelButtonColor: '#64748b',
+        customClass: {
+            popup: 'rounded-2xl font-sans',
+            title: 'text-lg font-bold text-slate-900',
+            htmlContainer: 'text-sm text-slate-600 text-left',
+            confirmButton: 'px-5 py-2 rounded-xl font-semibold',
+            denyButton: 'px-5 py-2 rounded-xl font-semibold',
+            cancelButton: 'px-5 py-2 rounded-xl font-semibold',
+        },
+    });
+    if (result.isConfirmed) return 'primary';
+    if (result.isDenied) return 'secondary';
+    return null;
+}
+
 /** Dialog konfirmasi dengan input teks — mengembalikan teks yang diinput jika Ya, null jika Batal. */
 export async function confirmWithInput(
     title: string,
