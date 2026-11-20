@@ -108,7 +108,7 @@ onUnmounted(() => {
                     <!-- Panel kanan: form -->
                     <div class="col-12 lp-auth-form-wrap">
                         <div class="lp-auth-form">
-                            <div class="lp-auth-mobile-logo d-lg-none mb-4 text-center">
+                            <div class="lp-auth-mobile-logo mb-4 text-center">
                                 <Link href="/">
                                     <img :src="maskotUrl" alt="Kasir UMKM by MaccaPOS" class="lp-auth-mobile-logo-img" />
                                 </Link>
@@ -294,8 +294,10 @@ onUnmounted(() => {
 }
 
 .lp-auth-mobile-logo-img {
+    display: block;
     height: 64px;
     width: auto;
+    margin: 0 auto;
 }
 
 .lp-auth-form .gt-section-title.style-3 h6 {
