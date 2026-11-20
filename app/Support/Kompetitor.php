@@ -138,6 +138,13 @@ final class Kompetitor
                 'best_for' => 'Usaha yang butuh omnichannel (Shopee, Lazada, online ordering) dan integrasi Accurate/Jurnal',
                 'consider' => 'Biaya bertambah untuk setiap kasir tambahan dan add-on',
             ],
+            'jurnal-pos' => [
+                'free' => 'Tidak tercantum paket gratis; ada uji coba dan demo gratis',
+                'price' => 'Essentials Rp299.000 / bulan (belum PPN; promo Rp209.300 untuk langganan 1 tahun)',
+                'billing' => 'Per paket; Plus untuk lebih dari 1 outlet',
+                'best_for' => 'Usaha F&B dan retail yang sudah memakai software akuntansi Mekari Jurnal',
+                'consider' => 'Keunggulan utamanya terasa bila memakai Mekari Jurnal',
+            ],
         ];
 
         $out = [];
@@ -1011,6 +1018,74 @@ final class Kompetitor
                     ['Apa alternatif iSeller yang lebih murah?', 'Kasir UMKM by MaccaPOS punya paket {free} gratis dan paket {paid} {paid_price} per outlet per bulan, tanpa biaya per kasir atau perangkat.'],
                     ['Berapa harga iSeller?', 'Menurut halaman harga iSeller, paket Starter Rp300.000, Pro Rp570.000, dan Advanced Rp1.110.000 per bulan (Software Only), dengan register tambahan Rp225.000 atau Rp450.000 per bulan dan add-on terpisah.'],
                     ['Apakah Kasir UMKM terhubung ke Shopee atau Accurate seperti iSeller?', 'Belum. Kasir UMKM berfokus pada kasir, stok, dan laporan untuk UMKM. Bila integrasi marketplace atau akuntansi penting, iSeller menyediakannya sebagai add-on.'],
+                ],
+            ],
+
+            'jurnal-pos' => [
+                'slug' => 'alternatif-jurnal-pos',
+                'name' => 'Jurnal POS',
+                'checked_at' => '2026-11-20',
+                'checked_label' => '20 November 2026',
+                'sources' => [
+                    ['label' => 'halaman harga Mekari POS', 'url' => 'https://pos.mekari.com/harga'],
+                    ['label' => 'halaman Mekari POS di Jurnal', 'url' => 'https://www.jurnal.id/id/fitur/mekari-pos/'],
+                ],
+                'h1' => 'Alternatif Jurnal POS (Mekari POS): aplikasi kasir mulai gratis untuk UMKM',
+                'description' => 'Mencari alternatif Jurnal POS atau Mekari POS? Bandingkan harga dan fitur dengan Kasir UMKM by MaccaPOS: ada paket gratis dan laporan keuangan bawaan.',
+                'lead' => 'Jurnal POS kini bernama Mekari POS: aplikasi kasir untuk F&B dan retail yang tersambung otomatis ke software akuntansi Mekari Jurnal, dengan paket mulai Rp299.000 per bulan (belum PPN). Bila Anda belum memakai Jurnal atau ingin mulai dengan biaya lebih ringan, berikut perbandingan yang jujur, termasuk kapan Mekari POS justru lebih cocok.',
+                'tldr' => [
+                    ['Harga', 'Kasir UMKM punya paket {free} gratis dan paket {paid} {paid_price} per outlet per bulan. Paket Essentials Mekari POS Rp299.000 per bulan, atau Rp209.300 dengan promo untuk pengguna baru berlangganan 1 tahun.'],
+                    ['Akuntansi', 'Kasir UMKM punya laporan laba rugi, neraca, dan jurnal sendiri. Mekari POS mencatat penjualan langsung ke Mekari Jurnal.'],
+                    ['Mekari POS lebih unggul', 'bila Anda sudah memakai Mekari Jurnal, butuh pesanan multi-channel terpusat, atau demo dan pelatihan langsung.'],
+                ],
+                'reasons' => [
+                    ['Belum memakai Mekari Jurnal', 'Kekuatan utama Mekari POS adalah sinkronisasi ke Mekari Jurnal. Bila belum memakai Jurnal, keuntungan ini belum terasa.'],
+                    ['Biaya bulanan cukup besar', 'Paket Essentials Mekari POS Rp299.000 per bulan, belum termasuk PPN.'],
+                    ['Usaha selain F&B dan retail', 'Mekari POS menyediakan versi F&B dan retail. Apotek, laundry, dan barbershop butuh fitur yang berbeda.'],
+                ],
+                'compare' => [
+                    ['Paket gratis', 'Ada: paket {free}, transaksi tanpa batas, {free_limits}', 'Tidak tercantum paket gratis; ada uji coba dan demo gratis'],
+                    ['Harga paket', '{paid}: {paid_price} / outlet / bulan', 'Essentials Rp299.000, Plus Rp399.000 / bulan (belum PPN); POS 360 lewat konsultasi'],
+                    ['Promo', '—', 'Diskon hingga 30% untuk pengguna baru dengan langganan 1 tahun'],
+                    ['Multi outlet', 'Add-on {outlet_addon} / outlet / bulan', 'Paket Plus untuk lebih dari 1 outlet'],
+                    ['Akuntansi', 'Laporan laba rugi, neraca, jurnal bawaan (paket {paid})', 'Penjualan, pembayaran, pajak, dan diskon tercatat otomatis ke Mekari Jurnal'],
+                    ['Jenis usaha', 'Kuliner, toko, apotek, laundry, barbershop', 'Versi F&B dan versi retail'],
+                    ['Fitur khusus', 'Mode apotek, laundry, barbershop, produksi & HPP', 'Tidak tercantum di halaman harga'],
+                ],
+                'source_note' => 'Halaman harga Mekari POS menyebut harga belum termasuk PPN; harga promo khusus pengguna baru dengan langganan 1 tahun.',
+                'cost' => [
+                    'title' => 'Contoh biaya bulanan: 1 outlet',
+                    'sub' => 'Kafe atau toko dengan satu outlet yang memakai paket berbayar terendah.',
+                    'outlets' => 1,
+                    'theirs_title' => 'Mekari POS (paket Essentials)',
+                    'theirs' => [
+                        ['Paket Essentials', 'Rp299.000'],
+                        ['Atau harga promo (langganan 1 tahun)', 'Rp209.300'],
+                    ],
+                    'theirs_total' => 'Rp209.300–Rp299.000 / bulan',
+                    'theirs_note' => 'Belum termasuk PPN. Paket Essentials sudah tersinkron ke Mekari Jurnal; fiturnya tidak identik dengan paket {paid}.',
+                    'ours' => [
+                        ['Paket {paid}', '{paid_price}'],
+                        ['Atau paket {free}', 'Gratis'],
+                    ],
+                    'ours_note' => 'Dalam Rupiah, tanpa biaya per karyawan atau perangkat.',
+                ],
+                'strengths' => [
+                    ['Tersambung ke Mekari Jurnal', 'Penjualan, pembayaran, pajak, dan diskon dari POS tercatat otomatis ke sistem akuntansi Mekari Jurnal.'],
+                    ['Pesanan multi-channel terpusat', 'Pesanan dari berbagai channel online dipantau dan diproses selaras dengan operasional outlet.'],
+                    ['Demo & pelatihan', 'Demo gratis online atau on-site, serta panduan setup dan pelatihan software & hardware.'],
+                    ['Skala besar', 'Paket POS 360 untuk full-service restaurant dan retail besar, hingga 50 user.'],
+                ],
+                'fit_us' => [
+                    'Belum memakai Mekari Jurnal dan ingin laporan keuangan langsung di aplikasi kasir',
+                    'Ingin mulai dengan paket gratis atau biaya bulanan yang ringan',
+                    'Butuh mode apotek, laundry, atau komisi kapster',
+                    'Ingin bayar bulanan dengan harga tetap, tanpa syarat promo',
+                ],
+                'faq' => [
+                    ['Apakah Jurnal POS sama dengan Mekari POS?', 'Ya. Situs Jurnal kini menautkan fitur POS-nya ke Mekari POS, aplikasi kasir yang tersambung ke software akuntansi Mekari Jurnal.'],
+                    ['Berapa harga Mekari POS?', 'Menurut halaman harga Mekari POS, paket Essentials Rp299.000 dan Plus Rp399.000 per bulan, belum termasuk PPN, dengan diskon hingga 30% untuk pengguna baru berlangganan 1 tahun. Paket POS 360 lewat konsultasi.'],
+                    ['Apa alternatif Jurnal POS untuk UMKM?', 'Kasir UMKM by MaccaPOS punya paket {free} gratis dan paket {paid} {paid_price} per outlet per bulan, lengkap dengan laporan laba rugi, neraca, dan jurnal di dalam aplikasi.'],
                 ],
             ],
         ];
