@@ -42,14 +42,32 @@ class CashTransactionController extends Controller
         }
 
         $openShift = $this->resolveOpenShift($request, $store, $user);
+        $canManage = $user->canAccessBackOffice();
 
         if (! $openShift) {
+            // Pengelola tetap bisa membuka pengaturan laci & persetujuan tanpa membuka shift.
+            if ($canManage) {
+                return Inertia::render('CashTransactions/Index', [
+                    'transactions' => [],
+                    'shift' => null,
+                    'summary' => null,
+                    'canViewReport' => true,
+                    'canManage' => true,
+                    'drawerSettings' => CashDrawerSettings::forPage($store),
+                ]);
+            }
+
             return redirect()
                 ->route('cash-shifts.index')
                 ->with('error', 'Anda harus membuka kasir terlebih dahulu.');
         }
 
         $summary = $this->buildShiftSummary($openShift);
+        if (! $canManage) {
+            // Hitung buta: kasir tidak melihat saldo laci maupun total penjualan tunai shift ini.
+            $summary['sales_cash'] = null;
+            $summary['expected_cash'] = null;
+        }
         // Riwayat menampilkan juga entri yang dibatalkan (dicoret) agar jejaknya terlihat.
         $transactions = $this->serializeTransactions(
             CashTransaction::query()
@@ -71,8 +89,8 @@ class CashTransactionController extends Controller
                 'expected_cash' => $summary['expected_cash'],
             ],
             'summary' => $summary,
-            'canViewReport' => $user->canAccessBackOffice(),
-            'canManage' => $user->canAccessBackOffice(),
+            'canViewReport' => $canManage,
+            'canManage' => $canManage,
             'drawerSettings' => CashDrawerSettings::forPage($store),
         ]);
     }
@@ -150,6 +168,7 @@ class CashTransactionController extends Controller
         $validated = $request->validate([
             'approval_limit' => 'required|integer|min:0|max:1000000000',
             'cashier_discount_limit' => 'nullable|integer|min:0|max:100',
+            'void_requires_approval' => 'nullable|boolean',
             'approval_pin' => ['nullable', 'string', 'regex:/^\d{4,6}$/'],
             'remove_approval_pin' => 'nullable|boolean',
             'presets' => 'present|array|max:'.CashDrawerSettings::MAX_PRESETS,
@@ -178,6 +197,9 @@ class CashTransactionController extends Controller
 
         $settings = $store->settings ?? [];
         $settings['cash_out_approval_limit'] = (int) $validated['approval_limit'];
+        if (array_key_exists('void_requires_approval', $validated) && $validated['void_requires_approval'] !== null) {
+            $settings['cashier_void_requires_approval'] = (bool) $validated['void_requires_approval'];
+        }
         if (array_key_exists('cashier_discount_limit', $validated) && $validated['cashier_discount_limit'] !== null) {
             $settings['cashier_discount_limit_percent'] = (int) $validated['cashier_discount_limit'];
         }

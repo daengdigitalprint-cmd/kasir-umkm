@@ -82,6 +82,19 @@ class CashDrawerSettings
     }
 
     /**
+     * Pembatalan (void) penjualan oleh kasir perlu PIN persetujuan?
+     * Diatur pemilik di Kas Masuk/Keluar → Pengaturan. Bila belum pernah diatur,
+     * aktif hanya kalau toko sudah punya PIN persetujuan — toko tanpa PIN tidak
+     * tiba-tiba membuat kasir tidak bisa membatalkan transaksi.
+     */
+    public static function voidRequiresApproval(Store $store): bool
+    {
+        $raw = $store->settings['cashier_void_requires_approval'] ?? null;
+
+        return $raw === null ? self::hasApprovalPin($store) : (bool) $raw;
+    }
+
+    /**
      * Batas diskon manual per baris (persen dari subtotal baris) yang boleh diberi kasir tanpa PIN.
      * Di atas batas ini kasir perlu PIN persetujuan. Bawaan 20%.
      */
@@ -115,6 +128,7 @@ class CashDrawerSettings
             'approval_limit' => self::approvalLimit($store),
             'has_approval_pin' => self::hasApprovalPin($store),
             'cashier_discount_limit' => self::cashierDiscountLimit($store),
+            'void_requires_approval' => self::voidRequiresApproval($store),
             'presets' => self::presets($store),
         ];
     }

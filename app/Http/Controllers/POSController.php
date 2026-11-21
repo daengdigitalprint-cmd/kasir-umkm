@@ -339,7 +339,7 @@ class POSController extends Controller
             'transactions' => $transactions,
             'readonly' => true,
             // Kasir perlu PIN persetujuan untuk void (lihat TransactionController::void).
-            'voidNeedsPin' => ! $user->canAccessBackOffice(),
+            'voidNeedsPin' => ! $user->canAccessBackOffice() && \App\Support\CashDrawerSettings::voidRequiresApproval($store),
             'hasApprovalPin' => \App\Support\CashDrawerSettings::hasApprovalPin($store),
         ]);
     }

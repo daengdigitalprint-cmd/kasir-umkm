@@ -97,8 +97,8 @@ $pinSettings = fn () => ['cash_approval_pin_hash' => Hash::make('4826')];
 
 // ---------- 1. Void ----------
 
-test('kasir tidak bisa void tanpa PIN bila toko belum mengatur PIN', function () {
-    $store = cashierStore();
+test('persetujuan void aktif tanpa PIN: kasir tidak bisa void', function () {
+    $store = cashierStore(['cashier_void_requires_approval' => true]);
     $cashier = cashierMember($store, 'cashier');
     cashierShift($store, $cashier);
     cashierSale($this, $cashier, cashierProduct($store))->assertOk();
@@ -109,6 +109,43 @@ test('kasir tidak bisa void tanpa PIN bila toko belum mengatur PIN', function ()
         ->assertJsonPath('approval_pin_missing', true);
 
     expect($trx->fresh()->status)->toBe('completed');
+});
+
+test('toko tanpa PIN & belum mengatur saklar: kasir tetap bisa void seperti biasa', function () {
+    $store = cashierStore();
+    $cashier = cashierMember($store, 'cashier');
+    cashierShift($store, $cashier);
+    cashierSale($this, $cashier, cashierProduct($store))->assertOk();
+    $trx = Transaction::query()->where('store_id', $store->id)->firstOrFail();
+
+    $this->actingAs($cashier)->postJson("/pos/transactions/{$trx->id}/void", ['void_reason' => 'Salah'])->assertOk();
+    expect($trx->fresh()->status)->toBe('void');
+});
+
+test('persetujuan void dimatikan: kasir void tanpa PIN walau toko punya PIN', function () use ($pinSettings) {
+    $store = cashierStore($pinSettings() + ['cashier_void_requires_approval' => false]);
+    $cashier = cashierMember($store, 'cashier');
+    cashierShift($store, $cashier);
+    cashierSale($this, $cashier, cashierProduct($store))->assertOk();
+    $trx = Transaction::query()->where('store_id', $store->id)->firstOrFail();
+
+    $this->actingAs($cashier)->get('/pos/transactions')
+        ->assertInertia(fn (Assert $page) => $page->where('voidNeedsPin', false));
+    $this->actingAs($cashier)->postJson("/pos/transactions/{$trx->id}/void", ['void_reason' => 'Salah'])->assertOk();
+    expect($trx->fresh()->status)->toBe('void');
+});
+
+test('pemilik dapat menyalakan dan mematikan persetujuan void', function () {
+    $store = cashierStore();
+    $admin = cashierMember($store, 'admin');
+
+    $payload = ['approval_limit' => 0, 'presets' => [], 'approval_pin' => '4826', 'void_requires_approval' => true];
+    $this->actingAs($admin)->put('/cash-shifts/transactions/settings', $payload)->assertSessionHasNoErrors();
+    expect(\App\Support\CashDrawerSettings::voidRequiresApproval($store->fresh()))->toBeTrue();
+
+    $this->actingAs($admin)->put('/cash-shifts/transactions/settings', ['approval_limit' => 0, 'presets' => [], 'void_requires_approval' => false])
+        ->assertSessionHasNoErrors();
+    expect(\App\Support\CashDrawerSettings::voidRequiresApproval($store->fresh()))->toBeFalse();
 });
 
 test('kasir void perlu PIN yang benar', function () use ($pinSettings) {
@@ -207,4 +244,27 @@ test('POS memberi tahu kasir siapa yang masih memegang shift', function () {
         ->assertInertia(fn (Assert $page) => $page
             ->where('cashShiftOpen', null)
             ->where('shiftHeldBy.user_name', 'Hendra'));
+});
+
+test('halaman kas: kasir tidak melihat saldo laci, pengelola bisa membuka pengaturan tanpa shift', function () {
+    $store = cashierStore();
+    $cashier = cashierMember($store, 'cashier');
+    cashierShift($store, $cashier);
+
+    $this->actingAs($cashier)->get('/cash-shifts/transactions')
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('CashTransactions/Index')
+            ->where('summary.expected_cash', null)
+            ->where('summary.sales_cash', null)
+            ->where('canManage', false));
+
+    CashShift::query()->update(['closed_at' => now()]);
+    $admin = cashierMember($store, 'admin');
+
+    $this->actingAs($admin)->get('/cash-shifts/transactions')
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('CashTransactions/Index')
+            ->where('shift', null)
+            ->where('canManage', true)
+            ->has('drawerSettings.void_requires_approval'));
 });

@@ -122,7 +122,7 @@ test('membatalkan entri mengeluarkannya dari saldo dan membalik jurnal', functio
     $this->actingAs($cashier)->get('/cash-shifts/transactions')
         ->assertInertia(fn ($page) => $page
             ->where('summary.cash_out', 0)
-            ->where('summary.expected_cash', 100000)
+            ->where('summary.expected_cash', null) // hitung buta untuk kasir
             ->where('transactions.0.void_reason', 'Salah ketik'));
 
     // Tidak bisa dibatalkan dua kali.

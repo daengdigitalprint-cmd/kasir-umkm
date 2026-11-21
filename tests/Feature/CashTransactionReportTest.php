@@ -63,7 +63,8 @@ test('halaman kas masuk keluar menampilkan ringkasan shift', function () {
         ->component('CashTransactions/Index')
         ->where('summary.opening_cash', 100000)
         ->where('summary.cash_in', 50000)
-        ->where('summary.expected_cash', 150000)
+        // Hitung buta: kasir tidak menerima saldo laci.
+        ->where('summary.expected_cash', null)
         ->has('transactions', 1)
     );
 });

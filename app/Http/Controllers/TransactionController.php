@@ -159,9 +159,9 @@ class TransactionController extends Controller
             'approval_pin' => 'nullable|string|max:12',
         ]);
 
-        // Kasir (bukan pengelola) membatalkan penjualan perlu PIN persetujuan owner/supervisor:
-        // mencegah pola "terima tunai lalu void". Pengelola tidak perlu PIN.
-        if (! auth()->user()->canAccessBackOffice()) {
+        // Kasir (bukan pengelola) membatalkan penjualan perlu PIN persetujuan owner/supervisor
+        // bila saklar "persetujuan pembatalan" aktif: mencegah pola "terima tunai lalu void".
+        if (! auth()->user()->canAccessBackOffice() && \App\Support\CashDrawerSettings::voidRequiresApproval($store)) {
             if (! \App\Support\CashDrawerSettings::hasApprovalPin($store)) {
                 return response()->json([
                     'message' => 'Pembatalan oleh kasir perlu PIN persetujuan. Minta admin/manajer membatalkan, atau atur PIN persetujuan di Kas Masuk/Keluar → Pengaturan.',

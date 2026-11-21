@@ -53,12 +53,20 @@ interface Preset {
 }
 
 const props = defineProps<{
-    shift: { id: number; shift_number: string; opened_at?: string | null; opening_cash: number; expected_cash: number };
-    summary: { opening_cash: number; sales_cash: number; cash_in: number; cash_out: number; expected_cash: number };
+    /** null: pengelola membuka halaman tanpa shift (hanya pengaturan). */
+    shift: { id: number; shift_number: string; opened_at?: string | null; opening_cash: number; expected_cash: number | null } | null;
+    /** sales_cash & expected_cash null untuk kasir (hitung buta). */
+    summary: { opening_cash: number; sales_cash: number | null; cash_in: number; cash_out: number; expected_cash: number | null } | null;
     transactions: TransactionRow[];
     canViewReport?: boolean;
     canManage?: boolean;
-    drawerSettings?: { approval_limit: number; has_approval_pin: boolean; cashier_discount_limit?: number; presets: Preset[] };
+    drawerSettings?: {
+        approval_limit: number;
+        has_approval_pin: boolean;
+        cashier_discount_limit?: number;
+        void_requires_approval?: boolean;
+        presets: Preset[];
+    };
 }>();
 
 const settings = computed(() => props.drawerSettings ?? { approval_limit: 0, has_approval_pin: false, presets: [] });
@@ -116,8 +124,8 @@ const amountDisplay = computed({
 const amountNum = computed(() => Number(form.amount || 0));
 const quickAmounts = [10000, 20000, 50000, 100000];
 
-const balance = computed(() => props.summary.expected_cash);
-const overdraw = computed(() => dir.value === 'out' && amountNum.value > 0 && amountNum.value > balance.value);
+const balance = computed(() => props.summary?.expected_cash ?? null);
+const overdraw = computed(() => balance.value !== null && dir.value === 'out' && amountNum.value > 0 && amountNum.value > balance.value);
 const needsPin = computed(
     () =>
         dir.value === 'out' &&
@@ -126,7 +134,7 @@ const needsPin = computed(
         settings.value.approval_limit > 0 &&
         amountNum.value > settings.value.approval_limit,
 );
-const balanceAfter = computed(() => balance.value + (dir.value === 'in' ? amountNum.value : -amountNum.value));
+const balanceAfter = computed(() => (balance.value ?? 0) + (dir.value === 'in' ? amountNum.value : -amountNum.value));
 
 const presetsForDir = computed(() => settings.value.presets.filter((p) => p.type === dir.value));
 const applyPreset = (p: Preset) => {
@@ -208,6 +216,7 @@ const showSettings = ref(false);
 const settingsForm = useForm({
     approval_limit: 0 as number,
     cashier_discount_limit: 20 as number,
+    void_requires_approval: false as boolean,
     approval_pin: '',
     remove_approval_pin: false,
     presets: [] as Preset[],
@@ -216,6 +225,7 @@ const openSettings = () => {
     settingsForm.clearErrors();
     settingsForm.approval_limit = settings.value.approval_limit;
     settingsForm.cashier_discount_limit = settings.value.cashier_discount_limit ?? 20;
+    settingsForm.void_requires_approval = settings.value.void_requires_approval ?? false;
     settingsForm.approval_pin = '';
     settingsForm.remove_approval_pin = false;
     settingsForm.presets = settings.value.presets.map((p) => ({ ...p }));
@@ -254,10 +264,11 @@ const fieldClass = 'flex h-10 w-full rounded-md border border-input bg-backgroun
             <div class="flex flex-wrap items-end justify-between gap-3">
                 <div>
                     <h2 class="text-lg font-bold text-slate-900">Kas masuk & keluar</h2>
-                    <p class="text-sm text-slate-500">
+                    <p v-if="shift" class="text-sm text-slate-500">
                         Shift <b class="text-slate-700">{{ shift.shift_number }}</b>
                         <template v-if="shift.opened_at"> · dibuka {{ time(shift.opened_at) }}</template>
                     </p>
+                    <p v-else class="text-sm text-slate-500">Belum ada shift yang Anda buka.</p>
                 </div>
                 <div class="flex flex-wrap gap-2">
                     <Link href="/cash-shifts"
@@ -272,8 +283,21 @@ const fieldClass = 'flex h-10 w-full rounded-md border border-input bg-backgroun
                 </div>
             </div>
 
-            <!-- Saldo laci (satu-satunya tempat saldo ditampilkan) -->
-            <div class="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:grid-cols-[auto_1fr] sm:items-center sm:gap-6">
+            <!-- Tanpa shift: pengelola hanya bisa membuka pengaturan -->
+            <div v-if="!shift" class="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-600">
+                <p class="font-semibold text-slate-900">Pengaturan laci & persetujuan</p>
+                <p class="mt-1">
+                    Atur batas uang keluar, PIN persetujuan, persetujuan pembatalan (void), batas diskon kasir, dan tombol cepat. Untuk
+                    mencatat kas masuk/keluar, buka shift dulu.
+                </p>
+                <Button class="mt-3 gap-1.5 rounded-xl" size="sm" @click="openSettings"><Settings2 class="h-4 w-4" /> Buka pengaturan</Button>
+            </div>
+
+            <!-- Saldo laci (satu-satunya tempat saldo ditampilkan); disembunyikan untuk kasir (hitung buta) -->
+            <div
+                v-if="summary && balance !== null"
+                class="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:grid-cols-[auto_1fr] sm:items-center sm:gap-6"
+            >
                 <div class="flex items-center gap-3">
                     <div
                         class="flex h-12 w-12 items-center justify-center rounded-xl"
@@ -295,7 +319,7 @@ const fieldClass = 'flex h-10 w-full rounded-md border border-input bg-backgroun
                     </div>
                     <div class="rounded-xl bg-slate-50 px-3 py-2">
                         <p class="text-[11px] text-slate-500">Penjualan tunai</p>
-                        <p class="font-semibold text-sky-700 tabular-nums">+ {{ rupiah(summary.sales_cash) }}</p>
+                        <p class="font-semibold text-sky-700 tabular-nums">+ {{ rupiah(summary.sales_cash ?? 0) }}</p>
                     </div>
                     <div class="rounded-xl bg-slate-50 px-3 py-2">
                         <p class="text-[11px] text-slate-500">Kas masuk</p>
@@ -308,7 +332,7 @@ const fieldClass = 'flex h-10 w-full rounded-md border border-input bg-backgroun
                 </div>
             </div>
 
-            <div class="grid gap-5 lg:grid-cols-[minmax(0,26rem)_1fr]">
+            <div v-if="shift" class="grid gap-5 lg:grid-cols-[minmax(0,26rem)_1fr]">
                 <!-- ===== Formulir (di HP tampil paling atas) ===== -->
                 <form class="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5" @submit.prevent="submit">
                     <div class="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
@@ -439,7 +463,7 @@ const fieldClass = 'flex h-10 w-full rounded-md border border-input bg-backgroun
                     <!-- Peringatan saldo -->
                     <div v-if="overdraw" class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                         <p class="flex items-center gap-1.5 font-semibold"><TriangleAlert class="h-4 w-4" /> Melebihi saldo laci</p>
-                        <p class="mt-0.5">Saldo laci {{ rupiah(balance) }}. Setelah dicatat menjadi {{ rupiah(balanceAfter) }}.</p>
+                        <p v-if="balance !== null" class="mt-0.5">Saldo laci {{ rupiah(balance) }}. Setelah dicatat menjadi {{ rupiah(balanceAfter) }}.</p>
                         <label class="mt-2 flex items-center gap-2 font-medium">
                             <input v-model="form.confirm_overdraw" type="checkbox" class="h-4 w-4 rounded border-amber-300" /> Saya yakin, tetap catat
                         </label>
@@ -652,9 +676,28 @@ const fieldClass = 'flex h-10 w-full rounded-md border border-input bg-backgroun
                                     <Input id="set_disc_limit" v-model.number="settingsForm.cashier_discount_limit" type="number" min="0" max="100" class="h-10 pr-9" />
                                     <span class="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-slate-500">%</span>
                                 </div>
-                                <p class="text-xs text-slate-500">Di atas batas ini kasir perlu PIN. Pembatalan (void) oleh kasir selalu perlu PIN.</p>
+                                <p class="text-xs text-slate-500">Di atas batas ini kasir perlu PIN.</p>
                                 <p v-if="settingsForm.errors.cashier_discount_limit" class="text-sm text-red-600">{{ settingsForm.errors.cashier_discount_limit }}</p>
                             </div>
+                            <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 sm:col-span-2">
+                                <input
+                                    v-model="settingsForm.void_requires_approval"
+                                    type="checkbox"
+                                    class="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                                />
+                                <span class="min-w-0">
+                                    <span class="block text-sm font-semibold text-slate-800">Persetujuan pembatalan (void)</span>
+                                    <span class="block text-xs text-slate-500">
+                                        Kasir perlu PIN persetujuan untuk membatalkan penjualan. Owner, admin, dan manajer tidak perlu PIN.
+                                    </span>
+                                    <span
+                                        v-if="settingsForm.void_requires_approval && !settings.has_approval_pin && !settingsForm.approval_pin"
+                                        class="mt-1 block text-xs font-semibold text-amber-700"
+                                    >
+                                        Isi PIN persetujuan juga. Tanpa PIN, kasir tidak bisa membatalkan transaksi sendiri.
+                                    </span>
+                                </span>
+                            </label>
                             <div class="space-y-1.5">
                                 <Label for="set_pin">{{ settings.has_approval_pin ? 'Ganti PIN persetujuan' : 'PIN persetujuan' }}</Label>
                                 <Input
