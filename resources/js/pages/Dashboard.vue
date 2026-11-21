@@ -16,6 +16,7 @@ import DashboardPeakHours from '@/components/dashboard/DashboardPeakHours.vue';
 import DashboardTopProducts from '@/components/dashboard/DashboardTopProducts.vue';
 import DashboardTrendChart from '@/components/dashboard/DashboardTrendChart.vue';
 import NewStoreChecklistCard from '@/components/dashboard/NewStoreChecklistCard.vue';
+import TrialBanner from '@/components/dashboard/TrialBanner.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -177,6 +178,7 @@ const isWarehouse = computed(() => {
 });
 
 const subscription = computed(() => page.props.subscription);
+const isProTrialActive = computed(() => Boolean((page.props as { trial?: { active?: boolean } | null }).trial?.active));
 
 const canBackoffice = computed(() => Boolean(page.props.abilities?.backoffice));
 
@@ -499,11 +501,15 @@ const daysUntilExpiry = (dateString: string) => {
             </div>
         </template>
         <template v-else>
-            <!-- Subscription Alert Banner -->
+            <!-- Trial Pro (pola reverse trial) -->
+            <TrialBanner />
+
+            <!-- Subscription Alert Banner (bukan untuk toko yang sedang trial: itu ditangani TrialBanner) -->
             <div
                 v-if="
                     subscription &&
                     store &&
+                    !isProTrialActive &&
                     (subscription.status === 'expiring' || subscription.status === 'expired') &&
                     subscriptionPlanBadge?.style !== 'starter' &&
                     !subscriptionBannerDismissed

@@ -12,6 +12,7 @@ use App\Models\Voucher;
 use App\Services\AttendancePayrollAddOnService;
 use App\Services\CentralKitchenAddOnService;
 use App\Services\OutletAddOnService;
+use App\Services\TrialService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
@@ -118,10 +119,24 @@ class SubscriptionController extends Controller
             ],
             'centralKitchenInfo' => CentralKitchenAddOnService::info($store),
             'plans' => $planPayload,
+            // Promo tahunan pengguna baru: tampil selama trial s/d beberapa hari setelahnya.
+            'promoEligible' => TrialService::promoEligible($store),
+            'promoDeadline' => TrialService::promoEligible($store) ? TrialService::promoDeadline($store)?->toISOString() : null,
             'yearlyDiscountPercentLabel' => $yearlyDiscountPercentLabel,
             'latestPayment' => $latestPayment,
             'paymentHistory' => $paymentHistory,
         ]);
+    }
+
+    /**
+     * Promo tahunan pengguna baru hanya untuk toko yang masih trial atau baru selesai trial
+     * (lihat TrialService::PROMO_GRACE_DAYS). Toko lama tanpa riwayat trial tidak dibatasi di sini.
+     */
+    private function promoExpired(Store $store, SubscriptionPlan $plan): bool
+    {
+        return str_starts_with((string) $plan->slug, 'promo-onboarding')
+            && $store->pro_trial_used
+            && ! TrialService::promoEligible($store);
     }
 
     /**
@@ -177,6 +192,11 @@ class SubscriptionController extends Controller
         if ((float) $plan->price <= 0) {
             return redirect()->route('subscription.index')
                 ->with('info', 'Paket ini tidak memerlukan pembayaran melalui halaman checkout.');
+        }
+
+        if ($this->promoExpired($store, $plan)) {
+            return redirect()->route('subscription.index')
+                ->with('info', 'Promo tahunan pengguna baru sudah berakhir. Silakan pilih paket lain.');
         }
 
         // Check if there's already a pending payment
@@ -379,6 +399,13 @@ class SubscriptionController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Paket ini tidak dapat dibayar melalui formulir ini.',
+            ], 422);
+        }
+
+        if ($this->promoExpired($store, $plan)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Promo tahunan pengguna baru sudah berakhir. Silakan pilih paket lain.',
             ], 422);
         }
 

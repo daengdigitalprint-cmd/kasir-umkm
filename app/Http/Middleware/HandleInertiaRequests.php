@@ -10,6 +10,7 @@ use App\Modules\Attendance\Models\LeaveRequest;
 use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Attendance\Support\AttendanceSettings;
 use App\Services\AttendancePayrollAddOnService;
+use App\Services\TrialService;
 use App\Support\Accounting\AccountingFeatures;
 use App\Support\Accounting\AccountingPeriodGuard;
 use App\Support\BarbershopFeatures;
@@ -204,6 +205,12 @@ class HandleInertiaRequests extends Middleware
             'ai_chat_enabled' => $activeStore ? PlanModules::settingOn($activeStore, 'ai_chat_enabled') : true,
             // Menu & saklar yang dikunci paket Gratis (ditampilkan nonaktif dengan ajakan upgrade).
             'plan_locked_menus' => ($user && $activeStore) ? PlanModules::lockedMenus($activeStore) : [],
+            // Trial Pro (pola reverse trial): status, sisa hari, pesan yang belum dibaca. Hanya pemilik/admin.
+            'trial' => ($user && $activeStore && $user->canManageStoreSettings()) ? TrialService::payload($activeStore) : null,
+            // Selama trial, menu berbayar diberi lencana "Pro" agar pengguna tahu apa yang akan dikunci nanti.
+            'plan_pro_menus' => ($activeStore && $activeStore->pro_trial_active)
+                ? array_values(array_unique(array_merge(...array_values(array_map(fn (array $m) => $m['menus'], PlanModules::MODULES)))))
+                : [],
             'plan_locked_settings' => ($user && $activeStore)
                 ? array_values(array_filter(
                     array_map(fn (array $m) => $m['setting'] ?? null, PlanModules::MODULES),

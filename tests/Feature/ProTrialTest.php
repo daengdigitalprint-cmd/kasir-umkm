@@ -83,7 +83,7 @@ class ProTrialTest extends TestCase
         $this->assertTrue($store->pro_trial_active);
         $this->assertTrue($store->pro_trial_used);
         $this->assertEquals('bisnis', $store->subscriptionPlan->slug);
-        $this->assertEquals(7, $store->subscription_days);
+        $this->assertEquals(TrialService::TRIAL_DAYS, $store->subscription_days);
         $this->assertNotNull($store->pro_trial_start);
         $this->assertNotNull($store->pro_trial_end);
         $this->assertEquals('activated', $log->action);
@@ -155,14 +155,14 @@ class ProTrialTest extends TestCase
 
     // === Service Layer: Auto-Expire ===
 
-    public function test_trial_expires_after_7_days(): void
+    public function test_trial_expires_after_trial_period(): void
     {
         $admin = $this->createSuperAdmin();
         $store = $this->createFreeStore();
 
         TrialService::activate($store, $admin);
 
-        // Simulate 7+ days passing
+        // Simulasikan masa trial sudah lewat
         $store->update(['pro_trial_end' => now()->subHour()]);
 
         $count = TrialService::expireExpiredTrials();
@@ -219,7 +219,7 @@ class ProTrialTest extends TestCase
 
         $notif = TrialNotification::where('store_id', $store->id)->where('type', 'trial_activated')->first();
         $this->assertNotNull($notif);
-        $this->assertStringContainsString('Trial Pro Diaktifkan', $notif->title);
+        $this->assertStringContainsString('fitur Pro aktif', $notif->title);
         $this->assertStringContainsString('GrowUp', $notif->body);
     }
 
@@ -247,7 +247,8 @@ class ProTrialTest extends TestCase
 
         $notif = TrialNotification::where('store_id', $store->id)->where('type', 'trial_expired')->first();
         $this->assertNotNull($notif);
-        $this->assertStringContainsString('Berakhir', $notif->title);
+        $this->assertStringContainsString('selesai', $notif->title);
+        $this->assertStringContainsString('Data Anda aman', $notif->body);
     }
 
     public function test_reminder_creates_notification(): void
@@ -264,7 +265,8 @@ class ProTrialTest extends TestCase
 
         $notif = TrialNotification::where('store_id', $store->id)->where('type', 'trial_expiring_soon')->first();
         $this->assertNotNull($notif);
-        $this->assertStringContainsString('akan berakhir', $notif->body);
+        $this->assertStringContainsString('Besok', $notif->body);
+        $this->assertStringContainsString('Data Anda aman', $notif->body);
     }
 
     public function test_reminder_no_duplicate(): void

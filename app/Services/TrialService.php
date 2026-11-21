@@ -2,41 +2,75 @@
 
 namespace App\Services;
 
+use App\Models\CashShift;
+use App\Models\Discount;
+use App\Models\ProductVariant;
+use App\Models\Purchase;
 use App\Models\Store;
+use App\Models\StockTransfer;
 use App\Models\SubscriptionPlan;
 use App\Models\TrialActivationLog;
 use App\Models\TrialNotification;
 use App\Models\User;
+use App\Support\PlanModules;
+use App\Support\StorePlanLimits;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Trial Pro (paket GrowUp) dengan pola "reverse trial": toko pertama mulai di GrowUp,
+ * lalu turun ke paket Gratis (Starter) tanpa kehilangan data.
+ *
+ * Urutan pesan ke pemilik toko (TrialNotification, tampil di dashboard):
+ *   hari 0  trial_activated      sambutan + fitur yang bisa dicoba
+ *   H-3     trial_recap          rekap pemakaian pribadi (transaksi, produk, fitur Pro yang dipakai)
+ *   H-1     trial_expiring_soon  apa yang berubah besok + jaminan data aman
+ *   hari 0  trial_expired        sudah di paket Gratis + penawaran tahunan (berlaku PROMO_GRACE_DAYS)
+ *   H+3     trial_followup       pengingat terakhir, sekali saja
+ */
 final class TrialService
 {
-    public const TRIAL_DAYS = 7;
+    public const TRIAL_DAYS = 14;
+
+    /** Promo tahunan (paket promo-onboarding) masih bisa dibeli sekian hari setelah trial berakhir. */
+    public const PROMO_GRACE_DAYS = 7;
+
+    /** Pengingat terakhir dikirim sekian hari setelah trial berakhir. */
+    public const FOLLOWUP_AFTER_DAYS = 3;
+
+    public const RECAP_DAYS_BEFORE = 3;
+
+    /** Jenis notifikasi yang ditampilkan ke pemilik toko di dashboard. */
+    public const NOTICE_TYPES = ['trial_activated', 'trial_recap', 'trial_expiring_soon', 'trial_expired', 'trial_followup'];
 
     /**
-     * Aktifkan trial 7 hari paket Pro (GrowUp) untuk toko yang pakai paket gratis.
+     * Trial otomatis untuk toko baru. Hanya toko pertama pemilik yang mendapat trial;
+     * toko berikutnya (atau pemilik yang pernah trial) langsung di paket Gratis.
      *
-     * @throws \Exception jika validasi gagal
+     * @return bool true bila trial dimulai
      */
-    public static function activate(Store $store, User $admin): TrialActivationLog
+    public static function startForNewStore(Store $store, User $owner): bool
     {
-        self::assertCanActivate($store);
+        $usedBefore = $owner->stores()
+            ->where('stores.id', '!=', $store->id)
+            ->where('pro_trial_used', true)
+            ->exists();
 
-        $growupPlan = SubscriptionPlan::where('slug', 'bisnis')
-            ->where('is_active', true)
-            ->first();
+        $growupPlan = self::growupPlan();
 
-        if (! $growupPlan) {
-            throw new \Exception('Paket GrowUp (Pro) tidak tersedia di sistem.');
+        if ($usedBefore || ! $growupPlan) {
+            self::applyStarter($store, $usedBefore
+                ? 'Registrasi: paket Gratis (trial Pro sudah dipakai di toko lain).'
+                : 'Registrasi: paket Gratis (paket Pro belum tersedia).');
+
+            return false;
         }
 
-        $oldPlanSlug = $store->subscriptionPlan?->slug;
         $now = now();
+        $trialEnd = $now->copy()->addDays(self::TRIAL_DAYS);
 
-        return DB::transaction(function () use ($store, $admin, $growupPlan, $oldPlanSlug, $now) {
-            $trialEnd = $now->copy()->addDays(self::TRIAL_DAYS);
-
-            $store->update([
+        DB::transaction(function () use ($store, $growupPlan, $now, $trialEnd) {
+            $store->forceFill([
                 'pro_trial_used' => true,
                 'pro_trial_active' => true,
                 'pro_trial_start' => $now,
@@ -46,7 +80,59 @@ final class TrialService
                 'subscription_end' => $trialEnd,
                 'subscription_days' => self::TRIAL_DAYS,
                 'is_subscription_active' => true,
-                'subscription_notes' => 'Trial Pro 7 hari diaktifkan oleh admin.',
+                'subscription_notes' => 'Registrasi: Trial Pro '.self::TRIAL_DAYS.' hari otomatis.',
+            ])->save();
+
+            TrialActivationLog::create([
+                'store_id' => $store->id,
+                'admin_id' => null,
+                'action' => 'activated',
+                'old_plan_slug' => null,
+                'new_plan_slug' => $growupPlan->slug,
+                'trial_start' => $now,
+                'trial_end' => $trialEnd,
+                'notes' => 'Trial Pro '.self::TRIAL_DAYS.' hari otomatis saat registrasi.',
+            ]);
+
+            self::welcome($store, $trialEnd);
+        });
+
+        return true;
+    }
+
+    /**
+     * Aktifkan trial paket Pro (GrowUp) secara manual oleh super admin untuk toko paket gratis.
+     *
+     * @throws \Exception jika validasi gagal
+     */
+    public static function activate(Store $store, User $admin): TrialActivationLog
+    {
+        self::assertCanActivate($store);
+
+        $growupPlan = self::growupPlan();
+
+        if (! $growupPlan) {
+            throw new \Exception('Paket GrowUp (Pro) tidak tersedia di sistem.');
+        }
+
+        $oldPlanSlug = $store->subscriptionPlan?->slug;
+        $now = now();
+        $days = self::TRIAL_DAYS;
+
+        return DB::transaction(function () use ($store, $admin, $growupPlan, $oldPlanSlug, $now, $days) {
+            $trialEnd = $now->copy()->addDays($days);
+
+            $store->update([
+                'pro_trial_used' => true,
+                'pro_trial_active' => true,
+                'pro_trial_start' => $now,
+                'pro_trial_end' => $trialEnd,
+                'subscription_plan_id' => $growupPlan->id,
+                'subscription_start' => $store->subscription_start ?? $now,
+                'subscription_end' => $trialEnd,
+                'subscription_days' => $days,
+                'is_subscription_active' => true,
+                'subscription_notes' => "Trial Pro {$days} hari diaktifkan oleh admin.",
             ]);
 
             $log = TrialActivationLog::create([
@@ -57,16 +143,10 @@ final class TrialService
                 'new_plan_slug' => $growupPlan->slug,
                 'trial_start' => $now,
                 'trial_end' => $trialEnd,
-                'notes' => "Trial Pro 7 hari diaktifkan oleh {$admin->name}.",
+                'notes' => "Trial Pro {$days} hari diaktifkan oleh {$admin->name}.",
             ]);
 
-            // Database notification untuk store
-            TrialNotification::create([
-                'store_id' => $store->id,
-                'type' => 'trial_activated',
-                'title' => 'Trial Pro Diaktifkan',
-                'body' => "Akun Anda telah di-upgrade ke paket GrowUp (Pro) selama 7 hari oleh admin. Masa trial berakhir pada {$trialEnd->translatedFormat('d M Y H:i')}.",
-            ]);
+            self::welcome($store, $trialEnd);
 
             return $log;
         });
@@ -82,11 +162,7 @@ final class TrialService
         }
 
         $oldPlanSlug = $store->subscriptionPlan?->slug;
-        $starterPlan = SubscriptionPlan::where('slug', 'starter')
-            ->where('is_active', true)
-            ->orderByRaw("case when coalesce(billing_cycle, 'monthly') = 'monthly' then 0 else 1 end")
-            ->orderBy('sort_order')
-            ->first();
+        $starterPlan = self::starterPlan();
 
         return DB::transaction(function () use ($store, $admin, $starterPlan, $oldPlanSlug) {
             $store->update([
@@ -113,7 +189,7 @@ final class TrialService
                 'store_id' => $store->id,
                 'type' => 'trial_stopped',
                 'title' => 'Trial Pro Dihentikan',
-                'body' => 'Masa trial Pro telah dihentikan oleh admin. Akun Anda kembali ke paket Starter.',
+                'body' => 'Masa trial Pro telah dihentikan oleh admin. Akun Anda kembali ke paket Gratis. '.self::DATA_SAFE,
             ]);
 
             return $log;
@@ -133,79 +209,239 @@ final class TrialService
             return 0;
         }
 
-        // Load plan sekali saja untuk semua toko
-        $starterPlan = SubscriptionPlan::where('slug', 'starter')
-            ->where('is_active', true)
-            ->orderByRaw("case when coalesce(billing_cycle, 'monthly') = 'monthly' then 0 else 1 end")
-            ->orderBy('sort_order')
-            ->first();
-
-        $count = 0;
+        $starterPlan = self::starterPlan();
 
         foreach ($expiredStores as $store) {
             self::expire($store, $starterPlan);
-            $count++;
         }
 
-        return $count;
+        return $expiredStores->count();
     }
 
     /**
-     * Kirim notifikasi reminder 24 jam sebelum trial berakhir.
+     * Pengingat bertahap: rekap H-3, peringatan H-1, dan pengingat terakhir H+3.
+     * Tiap jenis hanya dikirim sekali per toko.
+     *
+     * @return int jumlah notifikasi yang dibuat
      */
-    public static function sendExpiryReminders(): int
+    public static function sendReminders(): int
     {
-        $expiringStores = Store::where('pro_trial_active', true)
+        $created = 0;
+
+        $active = Store::where('pro_trial_active', true)
             ->where('pro_trial_end', '>', now())
-            ->where('pro_trial_end', '<=', now()->addDay())
-            ->with('users')
+            ->where('pro_trial_end', '<=', now()->addDays(self::RECAP_DAYS_BEFORE))
             ->get();
 
-        if ($expiringStores->isEmpty()) {
+        foreach ($active as $store) {
+            $hoursLeft = now()->diffInHours($store->pro_trial_end, false);
+
+            if ($hoursLeft <= 24) {
+                $created += self::notifyOnce($store, 'trial_expiring_soon', 'Trial Pro berakhir besok', self::expiringSoonBody($store));
+            } else {
+                $created += self::notifyOnce($store, 'trial_recap', 'Rekap trial Pro Anda', self::recapBody($store));
+            }
+        }
+
+        $followups = Store::where('pro_trial_used', true)
+            ->where('pro_trial_active', false)
+            ->whereNotNull('pro_trial_end')
+            ->where('pro_trial_end', '<=', now()->subDays(self::FOLLOWUP_AFTER_DAYS))
+            ->where('pro_trial_end', '>=', now()->subDays(self::FOLLOWUP_AFTER_DAYS + 7))
+            ->get();
+
+        foreach ($followups as $store) {
+            if (! PlanModules::onFreePlan($store)) {
+                continue; // sudah berlangganan
+            }
+            $created += self::notifyOnce($store, 'trial_followup', 'Masih ingin memakai fitur Pro?', self::followupBody($store));
+        }
+
+        return $created;
+    }
+
+    /** Nama lama, dipertahankan untuk pemanggil yang sudah ada. */
+    public static function sendExpiryReminders(): int
+    {
+        return self::sendReminders();
+    }
+
+    /**
+     * Ringkasan pemakaian selama trial, untuk pesan pengingat yang personal.
+     *
+     * @return array{transactions: int, products: int, customers: int, max_products: int, max_customers: int, pro_features: list<string>}
+     */
+    public static function usage(Store $store): array
+    {
+        $since = $store->pro_trial_start ?? now()->subDays(self::TRIAL_DAYS);
+        $starter = self::starterPlan();
+
+        $proFeatures = [];
+        $checks = [
+            'shift kasir' => fn () => CashShift::where('store_id', $store->id)->exists(),
+            'pembelian dari supplier' => fn () => Purchase::where('store_id', $store->id)->exists(),
+            'varian produk' => fn () => ProductVariant::where('store_id', $store->id)->exists(),
+            'diskon' => fn () => Discount::where('store_id', $store->id)->exists(),
+            'transfer stok' => fn () => StockTransfer::where('from_store_id', $store->id)->orWhere('to_store_id', $store->id)->exists(),
+        ];
+        foreach ($checks as $label => $check) {
+            if ($check()) {
+                $proFeatures[] = $label;
+            }
+        }
+
+        return [
+            'transactions' => (int) $store->transactions()->where('created_at', '>=', $since)->count(),
+            'products' => StorePlanLimits::currentProductCount($store),
+            'customers' => StorePlanLimits::currentCustomerCount($store),
+            'max_products' => (int) ($starter?->max_products ?? StorePlanLimits::STARTER_MAX_PRODUCTS),
+            'max_customers' => (int) ($starter?->max_customers ?? 50),
+            'pro_features' => $proFeatures,
+        ];
+    }
+
+    /** Promo tahunan khusus pengguna baru: selama trial dan PROMO_GRACE_DAYS hari sesudahnya. */
+    public static function promoEligible(Store $store): bool
+    {
+        if (! $store->pro_trial_used || ! $store->pro_trial_end) {
+            return false;
+        }
+
+        if (! $store->pro_trial_active && $store->pro_trial_end->lt(now()->subDays(self::PROMO_GRACE_DAYS))) {
+            return false;
+        }
+
+        return self::promoPlan() !== null;
+    }
+
+    public static function promoDeadline(Store $store): ?Carbon
+    {
+        return $store->pro_trial_end?->copy()->addDays(self::PROMO_GRACE_DAYS);
+    }
+
+    /**
+     * Data trial untuk frontend (props bersama). null bila toko tidak pernah trial.
+     *
+     * @return array<string, mixed>|null
+     */
+    public static function payload(Store $store): ?array
+    {
+        if (! $store->pro_trial_used || ! $store->pro_trial_end) {
+            return null;
+        }
+
+        $notice = TrialNotification::query()
+            ->where('store_id', $store->id)
+            ->whereIn('type', self::NOTICE_TYPES)
+            ->whereNull('read_at')
+            ->latest('id')
+            ->first();
+
+        $active = (bool) $store->pro_trial_active && $store->pro_trial_end->isFuture();
+        $promo = self::promoEligible($store);
+
+        return [
+            'active' => $active,
+            'days_total' => self::TRIAL_DAYS,
+            'days_left' => $active ? max(1, (int) ceil(now()->diffInHours($store->pro_trial_end) / 24)) : 0,
+            'ends_at' => $store->pro_trial_end->toISOString(),
+            'ended' => ! $active,
+            'on_free_plan' => PlanModules::onFreePlan($store),
+            'promo_eligible' => $promo,
+            'promo_deadline' => $promo ? self::promoDeadline($store)?->toISOString() : null,
+            'notice' => $notice ? [
+                'id' => $notice->id,
+                'type' => $notice->type,
+                'title' => $notice->title,
+                'body' => $notice->body,
+            ] : null,
+        ];
+    }
+
+    // ───────────────────────── Teks pesan ─────────────────────────
+
+    private const DATA_SAFE = 'Data Anda aman: semua produk, pelanggan, dan riwayat transaksi tetap ada dan tetap bisa dipakai berjualan.';
+
+    private static function welcome(Store $store, Carbon $trialEnd): void
+    {
+        TrialNotification::create([
+            'store_id' => $store->id,
+            'type' => 'trial_activated',
+            'title' => 'Semua fitur Pro aktif '.self::TRIAL_DAYS.' hari',
+            'body' => 'Selamat datang! Sampai '.self::tanggal($trialEnd).' Anda bisa mencoba semua fitur GrowUp tanpa biaya: '
+                .'shift kasir, pembelian & stok opname, diskon & loyalitas, varian produk, scan QR meja & antrean dapur, dan produk tanpa batas. '
+                .'Fitur bertanda Pro di menu adalah fitur GrowUp. Tidak perlu kartu atau pembayaran di awal.',
+        ]);
+    }
+
+    private static function recapBody(Store $store): string
+    {
+        $u = self::usage($store);
+        $days = max(1, (int) ceil(now()->diffInHours($store->pro_trial_end) / 24));
+
+        $parts = ["Trial Pro tersisa {$days} hari. Selama trial, toko Anda mencatat {$u['transactions']} transaksi."];
+        if ($u['pro_features']) {
+            $parts[] = 'Fitur GrowUp yang sudah Anda pakai: '.self::joinList($u['pro_features']).'.';
+        }
+        if ($u['products'] > $u['max_products']) {
+            $parts[] = "Anda punya {$u['products']} produk, sedangkan paket Gratis menampung {$u['max_products']}. Produk yang sudah ada tetap bisa dijual; hanya menambah produk baru yang dikunci.";
+        }
+        $parts[] = 'Lanjutkan Pro agar semua fitur tetap aktif.';
+
+        return implode(' ', $parts);
+    }
+
+    private static function expiringSoonBody(Store $store): string
+    {
+        $u = self::usage($store);
+        $parts = ['Besok toko Anda pindah ke paket Gratis.'];
+        $lost = ['shift kasir', 'pembelian & stok opname', 'diskon & loyalitas', 'varian produk'];
+        $parts[] = 'Yang berubah: fitur GrowUp seperti '.self::joinList($lost).' dikunci'
+            .($u['products'] > $u['max_products'] ? ", dan produk baru tidak bisa ditambah di atas {$u['max_products']} produk" : '').'.';
+        $parts[] = self::DATA_SAFE;
+
+        return implode(' ', $parts);
+    }
+
+    private static function expiredBody(Store $store): string
+    {
+        $body = 'Trial Pro sudah selesai dan toko Anda sekarang di paket Gratis. '.self::DATA_SAFE;
+        if (self::promoPlan()) {
+            $deadline = self::tanggal(self::promoDeadline($store));
+            $body .= " Khusus pengguna baru, paket tahunan GrowUp bisa diambil dengan bayar 8 bulan untuk 12 bulan sampai {$deadline}.";
+        }
+
+        return $body;
+    }
+
+    private static function followupBody(Store $store): string
+    {
+        $u = self::usage($store);
+        $body = "Selama trial Anda mencatat {$u['transactions']} transaksi dengan fitur Pro.";
+        if (self::promoEligible($store)) {
+            $deadline = self::tanggal(self::promoDeadline($store));
+            $body .= " Promo tahunan pengguna baru (bayar 8 bulan untuk 12 bulan) berakhir {$deadline}.";
+        }
+
+        return $body.' Ini pengingat terakhir dari kami; paket Gratis tetap bisa Anda pakai selamanya.';
+    }
+
+    // ───────────────────────── Internal ─────────────────────────
+
+    private static function notifyOnce(Store $store, string $type, string $title, string $body): int
+    {
+        if (TrialNotification::where('store_id', $store->id)->where('type', $type)->exists()) {
             return 0;
         }
 
-        // Batch-load recent reminders to avoid N+1 queries
-        $storeIds = $expiringStores->pluck('id')->values();
-        $recentReminderStoreIds = TrialNotification::query()
-            ->whereIn('store_id', $storeIds)
-            ->where('type', 'trial_expiring_soon')
-            ->whereNull('read_at')
-            ->where('created_at', '>=', now()->subHours(12))
-            ->pluck('store_id')
-            ->flip();
+        TrialNotification::create(['store_id' => $store->id, 'type' => $type, 'title' => $title, 'body' => $body]);
 
-        foreach ($expiringStores as $store) {
-            if ($recentReminderStoreIds->has($store->id)) {
-                continue;
-            }
-
-            $hoursLeft = now()->diffInHours($store->pro_trial_end, false);
-            $hoursText = max(1, (int) $hoursLeft);
-
-            TrialNotification::create([
-                'store_id' => $store->id,
-                'type' => 'trial_expiring_soon',
-                'title' => 'Trial Pro Akan Berakhir',
-                'body' => "Masa trial Pro Anda akan berakhir dalam {$hoursText} jam. Silakan perpanjang langganan agar fitur premium tetap aktif.",
-            ]);
-
-            // Log untuk audit trail
-            \Log::info("Trial reminder: Toko {$store->name} (ID: {$store->id}) trial akan berakhir pada {$store->pro_trial_end}.");
-        }
-
-        return $expiringStores->count();
+        return 1;
     }
 
-    private static function expire(Store $store, ?\App\Models\SubscriptionPlan $starterPlan = null): void
+    private static function expire(Store $store, ?SubscriptionPlan $starterPlan = null): void
     {
-        if (! $starterPlan) {
-            $starterPlan = SubscriptionPlan::where('slug', 'starter')
-                ->where('is_active', true)
-                ->orderByRaw("case when coalesce(billing_cycle, 'monthly') = 'monthly' then 0 else 1 end")
-                ->orderBy('sort_order')
-                ->first();
-        }
+        $starterPlan ??= self::starterPlan();
 
         DB::transaction(function () use ($store, $starterPlan) {
             $store->update([
@@ -219,7 +455,7 @@ final class TrialService
 
             TrialActivationLog::create([
                 'store_id' => $store->id,
-                'admin_id' => null, // system / automated
+                'admin_id' => null,
                 'action' => 'expired',
                 'old_plan_slug' => 'bisnis',
                 'new_plan_slug' => $starterPlan?->slug ?? 'starter',
@@ -228,13 +464,74 @@ final class TrialService
                 'notes' => 'Trial Pro berakhir otomatis.',
             ]);
 
+            // Pesan lama yang belum dibaca tidak relevan lagi.
+            TrialNotification::where('store_id', $store->id)
+                ->whereIn('type', ['trial_activated', 'trial_recap', 'trial_expiring_soon'])
+                ->whereNull('read_at')
+                ->update(['read_at' => now()]);
+
             TrialNotification::create([
                 'store_id' => $store->id,
                 'type' => 'trial_expired',
-                'title' => 'Trial Pro Berakhir',
-                'body' => 'Masa trial Pro telah berakhir. Akun Anda telah kembali ke paket Starter.',
+                'title' => 'Trial Pro selesai',
+                'body' => self::expiredBody($store),
             ]);
         });
+
+        PlanModules::forgetCache($store);
+    }
+
+    private static function applyStarter(Store $store, string $note): void
+    {
+        $starter = self::starterPlan();
+
+        $store->forceFill([
+            'subscription_plan_id' => $starter?->id,
+            'subscription_start' => $store->subscription_start ?? now(),
+            'subscription_end' => null,
+            'subscription_days' => $starter?->duration_days ?? 30,
+            'is_subscription_active' => true,
+            'subscription_notes' => $note,
+        ])->save();
+    }
+
+    private static function growupPlan(): ?SubscriptionPlan
+    {
+        return SubscriptionPlan::where('slug', 'bisnis')->where('is_active', true)->first();
+    }
+
+    private static function starterPlan(): ?SubscriptionPlan
+    {
+        return SubscriptionPlan::where('slug', 'starter')
+            ->where('is_active', true)
+            ->orderByRaw("case when coalesce(billing_cycle, 'monthly') = 'monthly' then 0 else 1 end")
+            ->orderBy('sort_order')
+            ->first();
+    }
+
+    public static function promoPlan(): ?SubscriptionPlan
+    {
+        return SubscriptionPlan::where('slug', 'like', 'promo-onboarding%')
+            ->where('is_active', true)
+            ->orderByDesc('price')
+            ->first();
+    }
+
+    /** Tanggal bahasa Indonesia, mis. "5 Desember 2026". */
+    private static function tanggal(?Carbon $date): string
+    {
+        return $date ? $date->copy()->locale('id')->translatedFormat('j F Y') : '';
+    }
+
+    /** @param  list<string>  $items */
+    private static function joinList(array $items): string
+    {
+        if (count($items) <= 1) {
+            return $items[0] ?? '';
+        }
+        $last = array_pop($items);
+
+        return implode(', ', $items).' dan '.$last;
     }
 
     private static function assertCanActivate(Store $store): void

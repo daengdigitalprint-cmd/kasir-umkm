@@ -73,6 +73,9 @@ interface Props {
     };
     plans: Plan[];
     yearlyDiscountPercentLabel?: string;
+    /** Promo tahunan pengguna baru masih berlaku (selama trial s/d beberapa hari sesudahnya). */
+    promoEligible?: boolean;
+    promoDeadline?: string | null;
     latestPayment?: Payment;
     paymentHistory: Payment[];
     outletInfo?: OutletInfo;
@@ -90,7 +93,12 @@ const props = withDefaults(defineProps<Props>(), {
     yearlyDiscountPercentLabel: '16,7',
 });
 
-const { store, plans, latestPayment, paymentHistory, yearlyDiscountPercentLabel, outletInfo, attendancePayrollInfo, centralKitchenInfo } = props;
+const { store, plans, latestPayment, paymentHistory, yearlyDiscountPercentLabel, outletInfo, attendancePayrollInfo, centralKitchenInfo, promoEligible, promoDeadline } = props;
+
+const proTrialActive = computed(() => Boolean((usePage().props as { trial?: { active?: boolean } | null }).trial?.active));
+const promoDeadlineText = promoDeadline
+    ? new Date(promoDeadline).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+    : '';
 
 const page = usePage();
 const sharedSubscription = computed(
@@ -151,7 +159,7 @@ const visiblePlans = computed(() =>
     plans.filter(
         (p) =>
             (p.billing_cycle ?? 'monthly') === billingTab.value &&
-            !p.slug.startsWith('promo-onboarding'),
+            (!p.slug.startsWith('promo-onboarding') || Boolean(promoEligible)),
     ),
 );
 
@@ -422,8 +430,17 @@ const hasPendingPayment = computed(() => latestPayment?.status === 'pending');
                     <div class="text-center mb-8">
                         <h2 class="text-xl font-bold text-slate-900">Pilih Paket Subscription</h2>
                         <p class="mt-1 text-sm text-slate-500">
-                            Perpanjang masa aktif toko Anda dengan pilihan paket terbaik
+                            {{ proTrialActive ? 'Lanjutkan Pro setelah trial selesai. Data Anda tetap aman apa pun paket yang dipilih.' : 'Perpanjang masa aktif toko Anda dengan pilihan paket terbaik' }}
                         </p>
+                    </div>
+
+                    <!-- Promo pengguna baru (batas waktu nyata, dijaga juga di server) -->
+                    <div
+                        v-if="promoEligible && promoDeadlineText"
+                        class="mx-auto mb-6 max-w-2xl rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-center text-sm text-violet-800"
+                    >
+                        <b>Promo pengguna baru:</b> GrowUp tahunan bayar 8 bulan untuk 12 bulan, berlaku sampai {{ promoDeadlineText }}.
+                        Lihat di tab tahunan.
                     </div>
 
                     <!-- Billing tab switcher -->

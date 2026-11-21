@@ -760,47 +760,6 @@ class Store extends Model
         $this->save();
     }
 
-    /**
-     * Set masa aktif awal setelah pembuatan toko: mengikuti paket Starter (bulanan) di database, atau 30 hari jika tidak ada.
-     * Menghindari subscription_end kosong yang ditampilkan sebagai "Unlimited" di UI.
-     */
-    public function applyInitialStarterTrialFromPlans(): void
-    {
-        $now = now();
-        $trialEnd = $now->copy()->addDays(7);
-
-        // Cari paket Bisnis (Pro/GrowUp) untuk trial
-        $proPlan = SubscriptionPlan::query()
-            ->where('slug', 'bisnis')
-            ->where('is_active', true)
-            ->first();
-
-        // Fallback ke Starter jika paket Bisnis tidak ada
-        $fallbackPlan = SubscriptionPlan::query()
-            ->where('slug', 'starter')
-            ->where('is_active', true)
-            ->orderByRaw("case when coalesce(billing_cycle, 'monthly') = 'monthly' then 0 else 1 end")
-            ->orderBy('sort_order')
-            ->first();
-
-        $plan = $proPlan ?? $fallbackPlan;
-
-        $this->forceFill([
-            'subscription_start' => $this->subscription_start ?? $now,
-            'subscription_end' => $trialEnd,
-            'subscription_days' => 7,
-            'is_subscription_active' => true,
-            'subscription_plan_id' => $plan?->id,
-            'pro_trial_used' => true,
-            'pro_trial_active' => true,
-            'pro_trial_start' => $now,
-            'pro_trial_end' => $trialEnd,
-            'subscription_notes' => $proPlan
-                ? 'Registrasi: Trial Pro 7 hari otomatis.'
-                : "Registrasi: Trial 7 hari (paket Pro belum tersedia, menggunakan {$fallbackPlan?->name}).",
-        ])->save();
-    }
-
     public function getRouteKeyName()
     {
         return 'slug';

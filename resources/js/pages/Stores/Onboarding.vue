@@ -97,6 +97,11 @@ const firstName = props.userName.trim().split(/\s+/)[0] ?? '';
                 <p class="mt-2 text-sm leading-relaxed text-slate-600">
                     Cukup dua hal ini untuk mulai berjualan. Alamat, struk, dan pengaturan lain bisa dilengkapi nanti.
                 </p>
+                <!-- Trial Pro otomatis untuk toko pertama (lihat App\Services\TrialService::startForNewStore) -->
+                <p class="mt-3 rounded-xl bg-violet-50 px-3 py-2 text-xs leading-relaxed text-violet-800">
+                    <b>Bonus: semua fitur Pro gratis 14 hari.</b> Tanpa kartu dan tanpa pembayaran di awal. Setelahnya toko otomatis
+                    pindah ke paket Gratis, dan data Anda tetap aman.
+                </p>
 
                 <form class="mt-6 space-y-6" @submit.prevent="submit">
                     <div class="space-y-2">

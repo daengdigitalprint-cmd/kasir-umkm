@@ -85,6 +85,8 @@ type NavItem = {
     hideOnLaundry?: boolean;
     /** Diskon & transfer antar outlet — paket GrowUp ke atas. */
     advancedRetailOnly?: boolean;
+    /** Selama trial Pro: tandai menu berbayar dengan lencana "Pro". */
+    proBadge?: boolean;
     /** Hanya tampil jika menu Resep diaktifkan di pengaturan toko. */
     recipesOnly?: boolean;
     /** Hanya tampil jika menu Produksi diaktifkan di pengaturan toko. */
@@ -531,6 +533,9 @@ const navigationItems = computed((): ProcessedNavItem[] => {
     const simpleVisibleMenus = (page.props as { simple_visible_menus?: string[] }).simple_visible_menus ?? [];
     // Modul berbayar yang dikunci paket Gratis (dihitung server, lihat PlanModules.php).
     const planLockedMenus = (page.props as { plan_locked_menus?: string[] }).plan_locked_menus ?? [];
+    // Selama trial Pro: menu berbayar diberi lencana "Pro" (dihitung server, lihat HandleInertiaRequests).
+    const planProMenus = (page.props as { plan_pro_menus?: string[] }).plan_pro_menus ?? [];
+    const proTrialActive = Boolean((page.props as { trial?: { active?: boolean } | null }).trial?.active);
 
     return navigationSource.flatMap((item): ProcessedNavItem[] => {
         // Cek apakah menu ini diizinkan secara eksplisit lewat Manage Staff
@@ -610,6 +615,10 @@ const navigationItems = computed((): ProcessedNavItem[] => {
         // Filter paket berlangganan
         if ((item.advancedRetailOnly && !allowAdvanced) || (item.menuKey && planLockedMenus.includes(item.menuKey))) {
             return [{ ...item, disabled: true, disabledReason: 'Upgrade ke paket berbayar untuk mengakses fitur ini' }];
+        }
+
+        if (proTrialActive && (item.advancedRetailOnly || (item.menuKey && planProMenus.includes(item.menuKey)))) {
+            item = { ...item, proBadge: true };
         }
 
         // Badge antrian dapur
@@ -923,8 +932,11 @@ const isStarterPlan = computed(() => {
     return slug === 'starter' || slug === 'starter-tahunan';
 });
 
+const proTrial = computed(() => (page.props as { trial?: { active?: boolean; days_left?: number } | null }).trial ?? null);
+
 const subscriptionStatusText = computed(() => {
     if (!subscription.value) return '';
+    if (proTrial.value?.active) return `Trial Pro · ${proTrial.value.days_left} hari lagi`;
     if (isStarterPlan.value && subscription.value.is_active) return 'Aktif';
     switch (subscription.value.status) {
         case 'active':
@@ -942,6 +954,7 @@ const subscriptionStatusText = computed(() => {
 
 /** Kartu ungu pastel (bukan status peringatan merah/oranye) */
 const subscriptionCardSoft = computed(() => {
+    if (proTrial.value?.active) return true;
     if (isStarterPlan.value && subscription.value?.is_active) return true;
     const s = subscription.value?.status;
     return s !== 'expiring' && s !== 'expired';
@@ -1038,6 +1051,15 @@ const subscriptionCardSoft = computed(() => {
                                 ]"
                             >
                                 <ArrowRight class="size-4 text-white" />
+                            </span>
+
+                            <!-- Lencana Pro selama trial: fitur ini akan dikunci di paket Gratis -->
+                            <span
+                                v-if="entry.item.proBadge && !entry.item.disabled"
+                                class="z-10 ml-auto rounded-md bg-amber-100 px-1.5 py-0.5 text-[9px] font-black tracking-wide text-amber-700 uppercase"
+                                title="Fitur GrowUp — gratis selama trial"
+                            >
+                                Pro
                             </span>
 
                             <!-- Badge notifikasi antrian pending -->

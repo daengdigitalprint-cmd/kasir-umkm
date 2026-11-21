@@ -249,6 +249,14 @@ Route::get('payment', function () {
 Route::post('payment/process', [App\Http\Controllers\PaymentController::class, 'processPayment'])->middleware(['auth', 'verified', 'role.billing'])->name('payment.process');
 Route::get('payment/plans', [App\Http\Controllers\PaymentController::class, 'getPlans'])->middleware(['auth', 'verified', 'role.billing'])->name('payment.plans');
 
+// Pesan trial Pro di dashboard: tandai sudah dibaca (hanya pemilik/admin toko yang aktif).
+Route::post('trial-notifications/{notification}/read', function (App\Models\TrialNotification $notification) {
+    abort_unless($notification->store_id === request()->user()->store_id, 403);
+    $notification->update(['read_at' => now()]);
+
+    return back();
+})->middleware(['auth', 'verified', 'role.billing'])->name('trial-notifications.read');
+
 // Subscription Routes (User-facing) — hanya pemilik/admin toko (lihat EnsureBillingAccess).
 Route::middleware(['auth', 'verified', 'role.billing'])->prefix('subscription')->name('subscription.')->group(function () {
     Route::get('/', [SubscriptionController::class, 'index'])->name('index');

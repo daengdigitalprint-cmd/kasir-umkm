@@ -9,14 +9,14 @@ class ExpireProTrialsCommand extends Command
 {
     protected $signature = 'trial:expire';
 
-    protected $description = 'Expire all Pro trials that have passed their end date and send 24h reminders';
+    protected $description = 'Akhiri trial Pro yang lewat waktu dan kirim pengingat bertahap (H-3, H-1, H+3)';
 
     public function handle(): int
     {
         $expired = TrialService::expireExpiredTrials();
         $this->info("Expired {$expired} trial(s).");
 
-        $reminders = TrialService::sendExpiryReminders();
+        $reminders = TrialService::sendReminders();
         $this->info("Sent {$reminders} reminder(s).");
 
         return self::SUCCESS;

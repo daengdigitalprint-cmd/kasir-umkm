@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Organization;
 use App\Models\Store;
 use App\Models\User;
+use App\Services\TrialService;
 use App\Support\BusinessTypePresets;
 use App\Support\InventoryType;
 use App\Support\OptionalFeatures;
@@ -324,13 +325,20 @@ class StoreController extends Controller implements HasMiddleware
                     'subscription_end' => $sibling->subscription_end,
                     'is_subscription_active' => true,
                     'subscription_notes' => "Warisan paket dari {$sibling->name}.",
+                    // Outlet yang mewarisi paket dari toko yang sedang trial ikut berakhir bersama trial itu.
+                    ...($sibling->pro_trial_active ? [
+                        'pro_trial_used' => true,
+                        'pro_trial_active' => true,
+                        'pro_trial_start' => $sibling->pro_trial_start,
+                        'pro_trial_end' => $sibling->pro_trial_end,
+                    ] : []),
                 ])->save();
                 $inherited = true;
             }
         }
 
         if (! $inherited) {
-            $store->applyInitialStarterTrialFromPlans();
+            TrialService::startForNewStore($store, $owner);
         }
 
         // Outlet pertama di grup usaha otomatis menjadi Outlet Utama.

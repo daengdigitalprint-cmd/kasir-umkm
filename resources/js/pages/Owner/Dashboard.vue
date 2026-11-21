@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import TrialBanner from '@/components/dashboard/TrialBanner.vue';
 import OwnerHrSummary, { type HrSummary } from '@/components/owner/OwnerHrSummary.vue';
 import { Button } from '@/components/ui/button';
 import AdminLayout from '@/layouts/AdminLayout.vue';
@@ -347,6 +348,7 @@ const selectClass =
     <Head title="Dashboard Owner" />
     <AdminLayout title="Dashboard Owner">
         <div class="mx-auto space-y-5 pb-8" style="max-width: 90rem">
+            <TrialBanner />
             <!-- Kepala: rentang aktif + aksi (selalu terlihat, juga di HP) -->
             <div class="flex flex-wrap items-end justify-between gap-3">
                 <div>
