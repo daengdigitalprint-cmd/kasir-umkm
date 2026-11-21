@@ -63,7 +63,8 @@ const props = defineProps<{
     drawerSettings?: {
         approval_limit: number;
         has_approval_pin: boolean;
-        cashier_discount_limit?: number;
+        /** null = tanpa batas diskon kasir. */
+        cashier_discount_limit?: number | null;
         void_requires_approval?: boolean;
         presets: Preset[];
     };
@@ -215,7 +216,7 @@ const photoUrl = ref<string | null>(null);
 const showSettings = ref(false);
 const settingsForm = useForm({
     approval_limit: 0 as number,
-    cashier_discount_limit: 20 as number,
+    cashier_discount_limit: null as number | null,
     void_requires_approval: false as boolean,
     approval_pin: '',
     remove_approval_pin: false,
@@ -224,7 +225,7 @@ const settingsForm = useForm({
 const openSettings = () => {
     settingsForm.clearErrors();
     settingsForm.approval_limit = settings.value.approval_limit;
-    settingsForm.cashier_discount_limit = settings.value.cashier_discount_limit ?? 20;
+    settingsForm.cashier_discount_limit = settings.value.cashier_discount_limit ?? null;
     settingsForm.void_requires_approval = settings.value.void_requires_approval ?? false;
     settingsForm.approval_pin = '';
     settingsForm.remove_approval_pin = false;
@@ -673,10 +674,18 @@ const fieldClass = 'flex h-10 w-full rounded-md border border-input bg-backgroun
                             <div class="space-y-1.5">
                                 <Label for="set_disc_limit">Diskon kasir per barang di atas</Label>
                                 <div class="relative">
-                                    <Input id="set_disc_limit" v-model.number="settingsForm.cashier_discount_limit" type="number" min="0" max="100" class="h-10 pr-9" />
+                                    <Input
+                                        id="set_disc_limit"
+                                        v-model.number="settingsForm.cashier_discount_limit"
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        placeholder="Kosong = tanpa batas"
+                                        class="h-10 pr-9"
+                                    />
                                     <span class="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-slate-500">%</span>
                                 </div>
-                                <p class="text-xs text-slate-500">Di atas batas ini kasir perlu PIN.</p>
+                                <p class="text-xs text-slate-500">Di atas batas ini kasir perlu PIN. Kosongkan untuk mematikan.</p>
                                 <p v-if="settingsForm.errors.cashier_discount_limit" class="text-sm text-red-600">{{ settingsForm.errors.cashier_discount_limit }}</p>
                             </div>
                             <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 sm:col-span-2">

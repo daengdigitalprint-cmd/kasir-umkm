@@ -148,8 +148,19 @@ test('pemilik dapat menyalakan dan mematikan persetujuan void', function () {
     expect(\App\Support\CashDrawerSettings::voidRequiresApproval($store->fresh()))->toBeFalse();
 });
 
-test('kasir void perlu PIN yang benar', function () use ($pinSettings) {
+test('toko lama dengan PIN tetapi saklar belum diatur: kasir void tanpa PIN (bawaan nonaktif)', function () use ($pinSettings) {
     $store = cashierStore($pinSettings());
+    $cashier = cashierMember($store, 'cashier');
+    cashierShift($store, $cashier);
+    cashierSale($this, $cashier, cashierProduct($store))->assertOk();
+    $trx = Transaction::query()->where('store_id', $store->id)->firstOrFail();
+
+    $this->actingAs($cashier)->postJson("/pos/transactions/{$trx->id}/void", ['void_reason' => 'Salah'])->assertOk();
+    expect($trx->fresh()->status)->toBe('void');
+});
+
+test('kasir void perlu PIN yang benar', function () use ($pinSettings) {
+    $store = cashierStore($pinSettings() + ['cashier_void_requires_approval' => true]);
     $cashier = cashierMember($store, 'cashier');
     cashierShift($store, $cashier);
     cashierSale($this, $cashier, cashierProduct($store))->assertOk();
@@ -177,8 +188,16 @@ test('admin void tanpa PIN', function () {
 
 // ---------- 2. Diskon manual ----------
 
-test('diskon kasir dalam batas tidak perlu PIN', function () use ($pinSettings) {
+test('tanpa batas diskon (bawaan), diskon kasir berapa pun tidak perlu PIN', function () use ($pinSettings) {
     $store = cashierStore($pinSettings());
+    $cashier = cashierMember($store, 'cashier');
+    cashierShift($store, $cashier);
+
+    cashierSale($this, $cashier, cashierProduct($store), 20000)->assertOk(); // 100%
+});
+
+test('diskon kasir dalam batas tidak perlu PIN', function () use ($pinSettings) {
+    $store = cashierStore($pinSettings() + ['cashier_discount_limit_percent' => 20]);
     $cashier = cashierMember($store, 'cashier');
     cashierShift($store, $cashier);
 
@@ -186,7 +205,7 @@ test('diskon kasir dalam batas tidak perlu PIN', function () use ($pinSettings) 
 });
 
 test('diskon kasir di atas batas perlu PIN persetujuan', function () use ($pinSettings) {
-    $store = cashierStore($pinSettings());
+    $store = cashierStore($pinSettings() + ['cashier_discount_limit_percent' => 20]);
     $cashier = cashierMember($store, 'cashier');
     cashierShift($store, $cashier);
     $product = cashierProduct($store);

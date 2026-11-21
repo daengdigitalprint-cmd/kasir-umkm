@@ -630,6 +630,7 @@ class POSController extends Controller
             $lineDiscountTotal = 0.0;
             $productDiscountEnabled = ProductDiscountFeatures::enabled($store);
             // Kasir (bukan pengelola): diskon manual per baris di atas batas % perlu PIN persetujuan.
+            // null = tanpa batas (bawaan), atau pengelola yang tidak dibatasi.
             $cashierDiscountLimit = $user->canAccessBackOffice() ? null : \App\Support\CashDrawerSettings::cashierDiscountLimit($store);
             $needsDiscountApproval = false;
             $cartHasPrescription = false;

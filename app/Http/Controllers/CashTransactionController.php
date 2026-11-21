@@ -200,8 +200,13 @@ class CashTransactionController extends Controller
         if (array_key_exists('void_requires_approval', $validated) && $validated['void_requires_approval'] !== null) {
             $settings['cashier_void_requires_approval'] = (bool) $validated['void_requires_approval'];
         }
-        if (array_key_exists('cashier_discount_limit', $validated) && $validated['cashier_discount_limit'] !== null) {
-            $settings['cashier_discount_limit_percent'] = (int) $validated['cashier_discount_limit'];
+        // Kosong = tanpa batas diskon kasir (bawaan).
+        if (array_key_exists('cashier_discount_limit', $validated)) {
+            if ($validated['cashier_discount_limit'] === null) {
+                unset($settings['cashier_discount_limit_percent']);
+            } else {
+                $settings['cashier_discount_limit_percent'] = (int) $validated['cashier_discount_limit'];
+            }
         }
         $settings['cash_quick_presets'] = $presets;
 
