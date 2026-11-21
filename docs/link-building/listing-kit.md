@@ -95,10 +95,10 @@ Diperbarui: 20 November 2026. Harga di sini mengikuti produksi (cek ulang di htt
 
 | Aset | Status | File / catatan |
 |---|---|---|
-| Logo persegi PNG | Ada, 512×512 | `public/logo.png` — **perlu versi 1024×1024** untuk G2/Capterra/Product Hunt |
+| Logo persegi PNG | Ada, 512×512 | `public/logo.png`; versi 1024×1024 ada di `docs/link-building/aset/logo-1024.png` |
 | Logo horizontal | Ada, 1200×801 | `public/logo-kasir-umkm.png` |
 | Logo SVG | **Belum ada** | Diminta sebagian direktori |
 | Favicon | Ada | `public/favicon-32.png`, `public/favicon.png` |
 | Gambar OG / banner | Ada | `public/og-share.jpg` |
-| Screenshot produk asli 1920×1080 | **Belum ada** | Yang ada mockup marketing (`public/Pencatatan.webp`, `public/laporan-keuangan.webp`, dll.). Ambil 5–8 screenshot asli: kasir, stok, laporan, QR meja, layar dapur, mode apotek |
+| Screenshot produk asli 1920×1080 | Ada 4 | `docs/link-building/aset/screenshot/` (dashboard, kasir, produk, laporan). Belum: QR meja, layar dapur, mode apotek |
 | Video demo 60–90 detik | **Belum ada** (video edukasi di `video-konten/` bukan demo produk) | Opsional tetapi menaikkan konversi listing |
