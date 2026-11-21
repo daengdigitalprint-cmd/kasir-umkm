@@ -21,7 +21,7 @@ import { printKitchenTicket } from '@/lib/kitchenTicketPrint';
 import { printCupLabels } from '@/lib/cupLabelPrint';
 import { getCachedProducts } from '@/lib/offlineDb';
 import { buildKotPlainLines, buildReceiptPlainLinesFromPosResponse } from '@/lib/receiptPlainText';
-import { confirmDialog, modalError, popupSuccessCenter, toastError, toastInfo, toastSuccess, toastWarning } from '@/lib/swal';
+import { confirmDialog, modalError, popupSuccessCenter, promptApprovalPin, toastError, toastInfo, toastSuccess, toastWarning } from '@/lib/swal';
 import { mergeReceiptConfig, printThermalReceipt, type ReceiptConfig } from '@/lib/thermalReceipt';
 import { dashboard } from '@/routes';
 import { Link, router, usePage } from '@inertiajs/vue3';
@@ -331,7 +331,8 @@ interface CashShiftOpen {
     shift_number: string;
     opened_at: string | null;
     opening_cash: number;
-    expected_cash: number;
+    /** null untuk kasir (hitung buta). */
+    expected_cash: number | null;
     expected_non_cash: number;
 }
 
@@ -380,6 +381,8 @@ interface Props {
     businessTypeLabel?: string;
     preOrderHydration?: PreOrderHydration | null;
     cashShiftOpen?: CashShiftOpen | null;
+    /** Shift orang lain yang masih terbuka di outlet ini (menghalangi buka shift). */
+    shiftHeldBy?: { user_name: string; opened_at: string | null; shift_number: string } | null;
     cashier_login_mode?: string;
     active_cashier?: { employee_id: number; employee_name: string; logged_in_at?: string } | null;
     cashiers?: Array<{ id: number; name: string; has_pin: boolean }>;
@@ -393,7 +396,14 @@ const props = withDefaults(defineProps<Props>(), {
     businessTypeLabel: 'Umum',
     preOrderHydration: null,
     cashShiftOpen: null,
+    shiftHeldBy: null,
     accountingPeriodLock: null,
+});
+
+/** "20 Nov, 09.19" untuk pesan shift yang masih dipegang orang lain. */
+const shiftHeldSince = computed(() => {
+    const iso = props.shiftHeldBy?.opened_at;
+    return iso ? new Date(iso).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
 });
 
 /**
@@ -460,11 +470,19 @@ async function requireOpenCashShift(): Promise<boolean> {
         return false;
     }
 
-    const shouldOpenShift = await confirmDialog('Shift kasir belum dibuka', 'Silakan buka shift kasir terlebih dahulu sebelum melakukan transaksi.', {
-        confirmText: 'Buka Kasir',
-        cancelText: 'Nanti',
-        icon: 'warning',
-    });
+    const held = props.shiftHeldBy;
+    const shouldOpenShift = held
+        ? await confirmDialog(
+              'Shift masih dipakai',
+              `Shift ${held.shift_number} masih dibuka oleh ${held.user_name}${shiftHeldSince.value ? ' sejak ' + shiftHeldSince.value : ''}. ` +
+                  `Minta ${held.user_name} atau admin menutup shift itu dulu, lalu Anda bisa membuka shift sendiri.`,
+              { confirmText: 'Lihat shift', cancelText: 'Tutup', icon: 'info' },
+          )
+        : await confirmDialog('Shift kasir belum dibuka', 'Silakan buka shift kasir terlebih dahulu sebelum melakukan transaksi.', {
+              confirmText: 'Buka Kasir',
+              cancelText: 'Nanti',
+              icon: 'warning',
+          });
     if (shouldOpenShift) {
         router.visit('/cash-shifts');
     }
@@ -2669,7 +2687,7 @@ function applyOptimisticCashShiftUpdate(cashPortion: number, totalAmount: number
     const cash = Math.max(0, Math.min(cashPortion, totalAmount));
     cashShiftOpen.value = {
         ...shift,
-        expected_cash: shift.expected_cash + cash,
+        expected_cash: shift.expected_cash === null ? null : shift.expected_cash + cash,
         expected_non_cash: (shift.expected_non_cash ?? 0) + (totalAmount - cash),
     };
 }
@@ -3238,22 +3256,47 @@ const processPayment = async () => {
 
     // ─── Mode ONLINE: kirim ke server seperti biasa
     try {
-        const response = await fetch('/pos/process-payment', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-XSRF-TOKEN': csrfTokenPos(),
-                'X-Pos-Idempotency-Key': currentIdempotencyKey(),
-                Accept: 'application/json',
-            },
-            body: JSON.stringify(paymentData),
-        });
+        const sendPayment = () =>
+            fetch('/pos/process-payment', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-XSRF-TOKEN': csrfTokenPos(),
+                    'X-Pos-Idempotency-Key': currentIdempotencyKey(),
+                    Accept: 'application/json',
+                },
+                body: JSON.stringify(paymentData),
+            });
+
+        let response = await sendPayment();
 
         // Server bisa mengembalikan HTML (mis. 419 CSRF, 500, atau redirect ke login)
         // alih-alih JSON. Parse dengan aman agar pesan error asli tetap terbaca.
-        const rawBody = await response.text();
+        let rawBody = await response.text();
         let result: Record<string, unknown> = {};
+
+        // Diskon kasir di atas batas: minta PIN owner/supervisor lalu kirim ulang (maks. 3x).
+        for (let attempt = 0; attempt < 3; attempt++) {
+            let parsed: Record<string, unknown> = {};
+            try {
+                parsed = rawBody ? JSON.parse(rawBody) : {};
+            } catch {
+                break;
+            }
+            const pinError = (parsed.errors as Record<string, string[]> | undefined)?.approval_pin?.[0];
+            if (response.status !== 422 || !pinError) break;
+            if (/belum mengatur PIN/.test(pinError)) break;
+            const pin = await promptApprovalPin('Perlu persetujuan', pinError);
+            if (!pin) {
+                isProcessingPayment.value = false;
+                return;
+            }
+            (paymentData as Record<string, unknown>).approval_pin = pin;
+            response = await sendPayment();
+            rawBody = await response.text();
+        }
+
         try {
             result = rawBody ? JSON.parse(rawBody) : {};
         } catch {
@@ -3876,7 +3919,8 @@ const sendWhatsAppInvoice = () => {
                         </span>
                         <div class="leading-tight">
                             <p class="text-[10px] font-semibold tracking-wide text-emerald-700 uppercase">Shift {{ cashShiftOpen?.shift_number }}</p>
-                            <p class="text-xs font-bold text-emerald-900 tabular-nums">{{ formatCurrency(cashShiftOpen?.expected_cash ?? 0) }}</p>
+                            <p v-if="cashShiftOpen?.expected_cash != null" class="text-xs font-bold text-emerald-900 tabular-nums">{{ formatCurrency(cashShiftOpen.expected_cash) }}</p>
+                            <p v-else class="text-xs font-bold text-emerald-900">Aktif</p>
                         </div>
                         <!-- Tombol Tutup Shift -->
                         <button
@@ -4026,9 +4070,19 @@ const sendWhatsAppInvoice = () => {
                 v-if="allowsAdvancedRetail && !cashShiftOpen"
                 class="mx-4 mb-4 rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-950 sm:mx-6"
             >
-                <p class="font-semibold">Shift kasir belum dibuka</p>
-                <p class="mt-1 text-xs leading-relaxed text-orange-900">Transaksi tidak dapat diproses sampai Anda membuka shift kasir.</p>
-                <Link href="/cash-shifts" class="mt-2 inline-flex text-xs font-bold text-primary hover:underline">Buka Kasir →</Link>
+                <template v-if="shiftHeldBy">
+                    <p class="font-semibold">Shift masih dipakai {{ shiftHeldBy.user_name }}</p>
+                    <p class="mt-1 text-xs leading-relaxed text-orange-900">
+                        Shift {{ shiftHeldBy.shift_number }} dibuka {{ shiftHeldSince }} dan belum ditutup. Minta
+                        {{ shiftHeldBy.user_name }} atau admin menutupnya, lalu buka shift Anda sendiri.
+                    </p>
+                    <Link href="/cash-shifts" class="mt-2 inline-flex text-xs font-bold text-primary hover:underline">Lihat shift →</Link>
+                </template>
+                <template v-else>
+                    <p class="font-semibold">Shift kasir belum dibuka</p>
+                    <p class="mt-1 text-xs leading-relaxed text-orange-900">Transaksi tidak dapat diproses sampai Anda membuka shift kasir.</p>
+                    <Link href="/cash-shifts" class="mt-2 inline-flex text-xs font-bold text-primary hover:underline">Buka Kasir →</Link>
+                </template>
             </div>
             <div
                 v-else-if="allowsAdvancedRetail && cashShiftOpen"
@@ -4056,9 +4110,10 @@ const sendWhatsAppInvoice = () => {
                 <div class="flex items-center gap-3 border-t border-emerald-200/60 bg-emerald-100/40 px-4 py-2">
                     <div class="flex-1 text-center">
                         <p class="text-[10px] font-medium tracking-wider text-emerald-600 uppercase">Tunai</p>
-                        <p class="text-sm font-bold text-emerald-900 tabular-nums transition-all duration-300">
+                        <p v-if="cashShiftOpen.expected_cash != null" class="text-sm font-bold text-emerald-900 tabular-nums transition-all duration-300">
                             {{ formatCurrency(cashShiftOpen.expected_cash) }}
                         </p>
+                        <p v-else class="text-xs font-semibold text-emerald-800">Dihitung saat tutup</p>
                     </div>
                     <div class="h-6 w-px bg-emerald-200" />
                     <div class="flex-1 text-center">

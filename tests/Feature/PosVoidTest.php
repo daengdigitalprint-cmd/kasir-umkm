@@ -26,6 +26,8 @@ function makeVoidableSale(): array
         'name' => 'Toko Uji Void POS',
         'slug' => 'pos-void-'.uniqid(),
         'business_type' => 'general',
+        // Void oleh kasir perlu PIN persetujuan owner/supervisor.
+        'settings' => ['cash_approval_pin_hash' => \Illuminate\Support\Facades\Hash::make('4826')],
         'is_active' => true,
         'is_subscription_active' => true,
         'subscription_plan_id' => $plan->id,
@@ -78,7 +80,7 @@ test('kasir dapat void transaksinya sendiri dari POS dan stok dikembalikan', fun
     expect((float) $product->fresh()->stock_quantity)->toBe(18.0);
 
     $this->actingAs($cashier)
-        ->postJson("/pos/transactions/{$transaction->id}/void", ['void_reason' => 'Salah input'])
+        ->postJson("/pos/transactions/{$transaction->id}/void", ['void_reason' => 'Salah input', 'approval_pin' => '4826'])
         ->assertOk();
 
     $transaction->refresh();
@@ -112,7 +114,7 @@ test('kasir tidak dapat void transaksi milik kasir lain', function () {
     $store->members()->attach($otherCashier->id, ['role' => 'cashier']);
 
     $this->actingAs($otherCashier)
-        ->postJson("/pos/transactions/{$transaction->id}/void", ['void_reason' => 'Coba'])
+        ->postJson("/pos/transactions/{$transaction->id}/void", ['void_reason' => 'Coba', 'approval_pin' => '4826'])
         ->assertForbidden();
 
     expect($transaction->fresh()->status)->toBe('completed');
@@ -122,11 +124,11 @@ test('transaksi yang sudah void tidak dapat di-void ulang', function () {
     [, $cashier, $product, $transaction] = makeVoidableSale();
 
     $this->actingAs($cashier)
-        ->postJson("/pos/transactions/{$transaction->id}/void", ['void_reason' => 'Pertama'])
+        ->postJson("/pos/transactions/{$transaction->id}/void", ['void_reason' => 'Pertama', 'approval_pin' => '4826'])
         ->assertOk();
 
     $this->actingAs($cashier)
-        ->postJson("/pos/transactions/{$transaction->id}/void", ['void_reason' => 'Kedua'])
+        ->postJson("/pos/transactions/{$transaction->id}/void", ['void_reason' => 'Kedua', 'approval_pin' => '4826'])
         ->assertUnprocessable();
 
     expect((float) $product->fresh()->stock_quantity)->toBe(20.0);
@@ -146,7 +148,7 @@ test('void ditolak bila shift kasir sudah ditutup', function () {
     $transaction->forceFill(['cash_shift_id' => $shift->id])->save();
 
     $this->actingAs($cashier)
-        ->postJson("/pos/transactions/{$transaction->id}/void", ['void_reason' => 'Terlambat'])
+        ->postJson("/pos/transactions/{$transaction->id}/void", ['void_reason' => 'Terlambat', 'approval_pin' => '4826'])
         ->assertUnprocessable();
 
     expect($transaction->fresh()->status)->toBe('completed');
@@ -174,7 +176,7 @@ test('void melepas voucher loyalitas yang dipakai sehingga bisa digunakan lagi',
     ]);
 
     $this->actingAs($cashier)
-        ->postJson("/pos/transactions/{$transaction->id}/void", ['void_reason' => 'Batal'])
+        ->postJson("/pos/transactions/{$transaction->id}/void", ['void_reason' => 'Batal', 'approval_pin' => '4826'])
         ->assertOk();
 
     $redemption->refresh();
@@ -187,7 +189,7 @@ test('riwayat transaksi POS menampilkan transaksi void', function () {
     [, $cashier, , $transaction] = makeVoidableSale();
 
     $this->actingAs($cashier)
-        ->postJson("/pos/transactions/{$transaction->id}/void", ['void_reason' => 'Batal'])
+        ->postJson("/pos/transactions/{$transaction->id}/void", ['void_reason' => 'Batal', 'approval_pin' => '4826'])
         ->assertOk();
 
     $this->actingAs($cashier)

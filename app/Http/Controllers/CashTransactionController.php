@@ -17,7 +17,6 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -150,6 +149,7 @@ class CashTransactionController extends Controller
 
         $validated = $request->validate([
             'approval_limit' => 'required|integer|min:0|max:1000000000',
+            'cashier_discount_limit' => 'nullable|integer|min:0|max:100',
             'approval_pin' => ['nullable', 'string', 'regex:/^\d{4,6}$/'],
             'remove_approval_pin' => 'nullable|boolean',
             'presets' => 'present|array|max:'.CashDrawerSettings::MAX_PRESETS,
@@ -178,6 +178,9 @@ class CashTransactionController extends Controller
 
         $settings = $store->settings ?? [];
         $settings['cash_out_approval_limit'] = (int) $validated['approval_limit'];
+        if (array_key_exists('cashier_discount_limit', $validated) && $validated['cashier_discount_limit'] !== null) {
+            $settings['cashier_discount_limit_percent'] = (int) $validated['cashier_discount_limit'];
+        }
         $settings['cash_quick_presets'] = $presets;
 
         if ($request->boolean('remove_approval_pin')) {
@@ -194,21 +197,7 @@ class CashTransactionController extends Controller
     /** Pesan galat bila PIN persetujuan salah/terkunci; null bila benar. */
     private function checkApprovalPin($store, User $user, ?string $pin): ?string
     {
-        $key = 'cash-approval-pin:'.$store->id.':'.$user->id;
-
-        if (RateLimiter::tooManyAttempts($key, 5)) {
-            return 'Terlalu banyak percobaan PIN. Coba lagi dalam '.RateLimiter::availableIn($key).' detik.';
-        }
-
-        if (! CashDrawerSettings::verifyApprovalPin($store, $pin)) {
-            RateLimiter::hit($key, 300);
-
-            return $pin ? 'PIN persetujuan salah.' : 'Masukkan PIN persetujuan dari owner/supervisor.';
-        }
-
-        RateLimiter::clear($key);
-
-        return null;
+        return CashDrawerSettings::checkApprovalPin($store, $user, $pin);
     }
 
     /**

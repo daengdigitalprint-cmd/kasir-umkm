@@ -176,7 +176,8 @@ class CashShiftController extends Controller
                 'shift_number' => $openShift->shift_number,
                 'opened_at' => $openShift->opened_at?->toIso8601ZuluString(),
                 'opening_cash' => (float) $openShift->opening_cash,
-                'expected_cash' => $expectedOpen,
+                // Hitung buta: kasir mengisi uang fisik tanpa melihat kas seharusnya.
+                'expected_cash' => $user->canAccessBackOffice() ? $expectedOpen : null,
             ];
         }
 
@@ -421,7 +422,9 @@ class CashShiftController extends Controller
 
         $response = redirect()
             ->route('cash-shifts.index')
-            ->with('success', 'Shift kasir ditutup. Selisih: '.number_format($diff, 0, ',', '.'));
+            ->with('success', $user->canAccessBackOffice()
+                ? 'Shift kasir ditutup. Selisih: '.number_format($diff, 0, ',', '.')
+                : 'Shift kasir ditutup. Hasil hitung kas sudah dicatat untuk diperiksa pengelola.');
 
         return $this->jsonRedirect($request, $response, [
             'cash_shift' => [

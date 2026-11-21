@@ -58,7 +58,7 @@ const props = defineProps<{
     transactions: TransactionRow[];
     canViewReport?: boolean;
     canManage?: boolean;
-    drawerSettings?: { approval_limit: number; has_approval_pin: boolean; presets: Preset[] };
+    drawerSettings?: { approval_limit: number; has_approval_pin: boolean; cashier_discount_limit?: number; presets: Preset[] };
 }>();
 
 const settings = computed(() => props.drawerSettings ?? { approval_limit: 0, has_approval_pin: false, presets: [] });
@@ -207,6 +207,7 @@ const photoUrl = ref<string | null>(null);
 const showSettings = ref(false);
 const settingsForm = useForm({
     approval_limit: 0 as number,
+    cashier_discount_limit: 20 as number,
     approval_pin: '',
     remove_approval_pin: false,
     presets: [] as Preset[],
@@ -214,6 +215,7 @@ const settingsForm = useForm({
 const openSettings = () => {
     settingsForm.clearErrors();
     settingsForm.approval_limit = settings.value.approval_limit;
+    settingsForm.cashier_discount_limit = settings.value.cashier_discount_limit ?? 20;
     settingsForm.approval_pin = '';
     settingsForm.remove_approval_pin = false;
     settingsForm.presets = settings.value.presets.map((p) => ({ ...p }));
@@ -643,6 +645,15 @@ const fieldClass = 'flex h-10 w-full rounded-md border border-input bg-backgroun
                                 </div>
                                 <p class="text-xs text-slate-500">Isi 0 untuk mematikan. Owner/admin tidak perlu PIN.</p>
                                 <p v-if="settingsForm.errors.approval_limit" class="text-sm text-red-600">{{ settingsForm.errors.approval_limit }}</p>
+                            </div>
+                            <div class="space-y-1.5">
+                                <Label for="set_disc_limit">Diskon kasir per barang di atas</Label>
+                                <div class="relative">
+                                    <Input id="set_disc_limit" v-model.number="settingsForm.cashier_discount_limit" type="number" min="0" max="100" class="h-10 pr-9" />
+                                    <span class="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-slate-500">%</span>
+                                </div>
+                                <p class="text-xs text-slate-500">Di atas batas ini kasir perlu PIN. Pembatalan (void) oleh kasir selalu perlu PIN.</p>
+                                <p v-if="settingsForm.errors.cashier_discount_limit" class="text-sm text-red-600">{{ settingsForm.errors.cashier_discount_limit }}</p>
                             </div>
                             <div class="space-y-1.5">
                                 <Label for="set_pin">{{ settings.has_approval_pin ? 'Ganti PIN persetujuan' : 'PIN persetujuan' }}</Label>

@@ -92,9 +92,11 @@ test('diskon per baris mengurangi total dan tercatat di item transaksi', functio
 
 test('diskon per baris dibatasi maksimal sebesar nilai baris', function () {
     [$store, $cashier, $product] = makeLineDiscountStore();
+    // Diskon di atas batas kasir (20%) perlu PIN persetujuan.
+    $store->update(['settings' => array_merge($store->settings ?? [], ['cash_approval_pin_hash' => \Illuminate\Support\Facades\Hash::make('4826')])]);
 
     $this->actingAs($cashier)
-        ->postJson('/pos/process-payment', lineDiscountPayload($product->id, 99999, 0))
+        ->postJson('/pos/process-payment', lineDiscountPayload($product->id, 99999, 0) + ['approval_pin' => '4826'])
         ->assertOk();
 
     $transaction = Transaction::query()->where('store_id', $store->id)->with('items')->firstOrFail();

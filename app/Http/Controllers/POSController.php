@@ -148,6 +148,24 @@ class POSController extends Controller
             ->whereNull('closed_at')
             ->first();
 
+        // Satu shift aktif per outlet: bila shift orang lain masih terbuka, kasir ini tidak bisa
+        // membuka shift. Beri tahu siapa pemegangnya agar POS bisa menjelaskan langkahnya.
+        $shiftHeldBy = null;
+        if (! $openCashShift) {
+            $blocker = CashShift::query()
+                ->where('store_id', $store->id)
+                ->whereNull('closed_at')
+                ->with('user:id,name')
+                ->first();
+            if ($blocker) {
+                $shiftHeldBy = [
+                    'user_name' => $blocker->user?->name ?? 'kasir lain',
+                    'opened_at' => $blocker->opened_at?->toIso8601String(),
+                    'shift_number' => $blocker->shift_number,
+                ];
+            }
+        }
+
         $cashShiftOpen = null;
         if ($openCashShift) {
             $salesCash = (float) Transaction::query()
@@ -178,7 +196,8 @@ class POSController extends Controller
                 'shift_number' => $openCashShift->shift_number,
                 'opened_at' => $openCashShift->opened_at?->toIso8601String(),
                 'opening_cash' => (float) $openCashShift->opening_cash,
-                'expected_cash' => $expectedCash,
+                // Hitung buta: kasir tidak melihat kas seharusnya, supaya selisih tidak bisa "disamakan".
+                'expected_cash' => $user->canAccessBackOffice() ? $expectedCash : null,
                 'expected_non_cash' => $expectedNonCash,
             ];
         }
@@ -269,6 +288,7 @@ class POSController extends Controller
             'activeDiscounts' => $activeDiscounts,
             'businessTypeLabel' => BusinessTypePresets::TYPES[$bt] ?? BusinessTypePresets::TYPES['general'],
             'cashShiftOpen' => $cashShiftOpen,
+            'shiftHeldBy' => $shiftHeldBy,
             'cashier_login_mode' => $store->cashier_login_mode ?? 'email',
             'active_cashier' => session('active_cashier'),
             'cashiers' => $cashiersForPin,
@@ -318,6 +338,9 @@ class POSController extends Controller
             ],
             'transactions' => $transactions,
             'readonly' => true,
+            // Kasir perlu PIN persetujuan untuk void (lihat TransactionController::void).
+            'voidNeedsPin' => ! $user->canAccessBackOffice(),
+            'hasApprovalPin' => \App\Support\CashDrawerSettings::hasApprovalPin($store),
         ]);
     }
 
@@ -372,7 +395,8 @@ class POSController extends Controller
                 'shift_number' => $openCashShift->shift_number,
                 'opened_at' => $openCashShift->opened_at?->toIso8601String(),
                 'opening_cash' => (float) $openCashShift->opening_cash,
-                'expected_cash' => $expectedCash,
+                // Hitung buta: kasir tidak melihat kas seharusnya, supaya selisih tidak bisa "disamakan".
+                'expected_cash' => $user->canAccessBackOffice() ? $expectedCash : null,
                 'expected_non_cash' => $expectedNonCash,
             ],
         ]);
@@ -447,6 +471,8 @@ class POSController extends Controller
                 'items.*.modifiers.*.key' => 'required|string|max:64',
                 'items.*.notes' => 'nullable|string|max:150',
                 'items.*.line_discount' => 'nullable|numeric|min:0',
+                // PIN owner/supervisor bila kasir memberi diskon manual di atas batas.
+                'approval_pin' => 'nullable|string|max:12',
                 'payment_method' => 'required|in:cash,card,ewallet,transfer,other,credit',
                 'amount_paid' => 'required|numeric|min:0',
                 'payments' => 'nullable|array|max:5',
@@ -603,6 +629,9 @@ class POSController extends Controller
             $subtotal = 0.0;
             $lineDiscountTotal = 0.0;
             $productDiscountEnabled = ProductDiscountFeatures::enabled($store);
+            // Kasir (bukan pengelola): diskon manual per baris di atas batas % perlu PIN persetujuan.
+            $cashierDiscountLimit = $user->canAccessBackOffice() ? null : \App\Support\CashDrawerSettings::cashierDiscountLimit($store);
+            $needsDiscountApproval = false;
             $cartHasPrescription = false;
             $cartHasLimited = false;
             $cartPrescriptionItems = [];
@@ -753,6 +782,10 @@ class POSController extends Controller
                         ? bcadd($cartPrescriptionItems[$product->id], $qty, ProductQuantity::SCALE)
                         : $qty;
                 }
+                if ($cashierDiscountLimit !== null && $lineDiscount > 0
+                    && $lineDiscount > round($lineTotal * $cashierDiscountLimit / 100, 2)) {
+                    $needsDiscountApproval = true;
+                }
                 $cartLines[] = [
                     'product' => $product,
                     'variant' => $variant,
@@ -762,6 +795,19 @@ class POSController extends Controller
                     'unit_price' => $unitPrice,
                     'modifiers' => $modifiers,
                 ];
+            }
+
+            if ($needsDiscountApproval) {
+                if (! \App\Support\CashDrawerSettings::hasApprovalPin($store)) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'approval_pin' => "Diskon di atas {$cashierDiscountLimit}% per barang perlu PIN persetujuan, tetapi toko belum mengatur PIN. Minta admin/manajer, atau atur PIN di Kas Masuk/Keluar → Pengaturan.",
+                    ]);
+                }
+                if ($pinError = \App\Support\CashDrawerSettings::checkApprovalPin($store, $user, $request->input('approval_pin'))) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'approval_pin' => "Diskon di atas {$cashierDiscountLimit}% per barang perlu persetujuan. {$pinError}",
+                    ]);
+                }
             }
 
             $subtotal = round($subtotal, 2);

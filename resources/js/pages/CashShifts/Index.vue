@@ -29,7 +29,8 @@ interface OpenShift {
     shift_number: string;
     opened_at: string | null;
     opening_cash: number;
-    expected_cash: number;
+    /** null untuk kasir (hitung buta). */
+    expected_cash: number | null;
 }
 
 /** Shift aktif milik kasir lain di outlet yang sama. */
@@ -208,8 +209,10 @@ function formatDt(iso: string | null) {
                 <CardHeader>
                     <CardTitle>Shift aktif: {{ openShift.shift_number }}</CardTitle>
                     <CardDescription>
-                        Dibuka {{ formatDt(openShift.opened_at) }} · Kas awal Rp {{ formatMoney(openShift.opening_cash) }} · Perkiraan kas (tunai
-                        selesai) Rp {{ formatMoney(openShift.expected_cash) }}
+                        Dibuka {{ formatDt(openShift.opened_at) }} · Kas awal Rp {{ formatMoney(openShift.opening_cash) }}
+                        <template v-if="openShift.expected_cash != null">
+                            · Perkiraan kas (tunai selesai) Rp {{ formatMoney(openShift.expected_cash) }}
+                        </template>
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -222,9 +225,12 @@ function formatDt(iso: string | null) {
                                 type="text"
                                 inputmode="numeric"
                                 class="rounded-xl"
-                                :placeholder="formatMoney(openShift.expected_cash)"
+                                :placeholder="openShift.expected_cash != null ? formatMoney(openShift.expected_cash) : 'Hitung uang di laci'"
                                 required
                             />
+                            <p v-if="openShift.expected_cash == null" class="text-xs text-slate-500">
+                                Hitung semua uang tunai di laci, lalu isi jumlahnya. Selisih diperiksa oleh pengelola.
+                            </p>
                             <p v-if="closeForm.errors.closing_cash_counted" class="text-sm text-red-600">
                                 {{ closeForm.errors.closing_cash_counted }}
                             </p>

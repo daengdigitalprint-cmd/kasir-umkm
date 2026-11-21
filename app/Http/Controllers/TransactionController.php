@@ -156,7 +156,23 @@ class TransactionController extends Controller
 
         $validated = $request->validate([
             'void_reason' => 'required|string|max:500',
+            'approval_pin' => 'nullable|string|max:12',
         ]);
+
+        // Kasir (bukan pengelola) membatalkan penjualan perlu PIN persetujuan owner/supervisor:
+        // mencegah pola "terima tunai lalu void". Pengelola tidak perlu PIN.
+        if (! auth()->user()->canAccessBackOffice()) {
+            if (! \App\Support\CashDrawerSettings::hasApprovalPin($store)) {
+                return response()->json([
+                    'message' => 'Pembatalan oleh kasir perlu PIN persetujuan. Minta admin/manajer membatalkan, atau atur PIN persetujuan di Kas Masuk/Keluar → Pengaturan.',
+                    'needs_approval_pin' => true,
+                    'approval_pin_missing' => true,
+                ], 403);
+            }
+            if ($pinError = \App\Support\CashDrawerSettings::checkApprovalPin($store, auth()->user(), $validated['approval_pin'] ?? null)) {
+                return response()->json(['message' => $pinError, 'needs_approval_pin' => true], 422);
+            }
+        }
 
         $transaction->load([
             'items.product',

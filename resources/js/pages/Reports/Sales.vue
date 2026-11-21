@@ -89,6 +89,9 @@ const props = withDefaults(
         barberUserId?: number | null;
         barberBreakdown?: BarberRow[];
         readonly?: boolean;
+        /** Kasir perlu PIN persetujuan untuk void. */
+        voidNeedsPin?: boolean;
+        hasApprovalPin?: boolean;
     }>(),
     {
         hppSummary: () => ({ total_revenue: 0, total_cost: 0, total_gross_profit: 0, items_with_hpp: 0 }),
@@ -98,6 +101,8 @@ const props = withDefaults(
         barberUserId: null,
         barberBreakdown: () => [],
         readonly: false,
+        voidNeedsPin: false,
+        hasApprovalPin: false,
     },
 );
 
@@ -195,6 +200,16 @@ function openInvoiceModal(transactionId: number) {
     invoiceModalOpen.value = true;
 }
 
+/** Label paginasi Laravel ("&laquo; Previous" / "Next &raquo;") ke Bahasa Indonesia, tanpa v-html. */
+function pageLabel(label: string): string {
+    return label
+        .replace(/&laquo;\s*Previous/i, '« Sebelumnya')
+        .replace(/Next\s*&raquo;/i, 'Berikutnya »')
+        .replace(/&laquo;/g, '«')
+        .replace(/&raquo;/g, '»')
+        .replace(/&hellip;|\.\.\./g, '…');
+}
+
 /* ── Void modal ── */
 const voidModalOpen = ref(false);
 const voidSaving = ref(false);
@@ -203,6 +218,7 @@ const voidForm = reactive({
     transaction_number: '',
     total_amount: 0,
     reason: '',
+    approval_pin: '',
 });
 
 function openVoidModal(t: Transaction) {
@@ -210,6 +226,7 @@ function openVoidModal(t: Transaction) {
     voidForm.transaction_number = t.transaction_number;
     voidForm.total_amount = Number(t.total_amount);
     voidForm.reason = '';
+    voidForm.approval_pin = '';
     voidModalOpen.value = true;
 }
 
@@ -229,7 +246,10 @@ async function submitVoid() {
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
                 'Accept': 'application/json',
             },
-            body: JSON.stringify({ void_reason: voidForm.reason.trim() }),
+            body: JSON.stringify({
+                void_reason: voidForm.reason.trim(),
+                ...(props.voidNeedsPin ? { approval_pin: voidForm.approval_pin } : {}),
+            }),
         });
 
         if (!res.ok) {
@@ -507,7 +527,63 @@ async function saveEditTransaction() {
                     {{ store.name }} — {{ transactions.data?.length ?? 0 }} entri di halaman ini
                 </CardDescription>
             </CardHeader>
-            <CardContent class="overflow-x-auto">
+            <CardContent>
+                <!-- HP: kartu per transaksi (Total & aksi selalu terlihat) -->
+                <ul class="space-y-2 md:hidden">
+                    <li v-for="t in transactions.data" :key="'m-' + t.id" class="rounded-xl border border-slate-200 bg-white p-3">
+                        <div class="flex items-start justify-between gap-3">
+                            <button
+                                type="button"
+                                class="min-w-0 text-left"
+                                @click="openInvoiceModal(t.id)"
+                            >
+                                <span class="block truncate font-mono text-xs text-teal-700" :class="{ 'line-through text-slate-400': t.is_void }">
+                                    {{ t.transaction_number }}
+                                </span>
+                                <span class="block text-xs text-slate-500">
+                                    {{ formatDate(t.created_at) }} · {{ paymentLabel(t.payment_method) }}<template v-if="t.customer?.name"> · {{ t.customer.name }}</template>
+                                </span>
+                            </button>
+                            <span class="shrink-0 text-right">
+                                <span class="block text-sm font-bold text-slate-900" :class="{ 'line-through text-slate-400': t.is_void }">
+                                    Rp {{ formatCurrency(t.total_amount) }}
+                                </span>
+                                <span v-if="t.is_void" class="mt-0.5 inline-block rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-700">VOID</span>
+                            </span>
+                        </div>
+                        <div v-if="!t.is_void" class="mt-2 flex justify-end gap-1.5">
+                            <Button
+                                v-if="!readonly"
+                                variant="outline"
+                                size="sm"
+                                class="h-8 gap-1 rounded-lg border-blue-200 px-2 text-blue-600"
+                                @click="openEditModal(t)"
+                            >
+                                <Pencil class="h-3 w-3" /> Edit
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                class="h-8 gap-1 rounded-lg border-amber-200 px-2 text-amber-600"
+                                @click="openVoidModal(t)"
+                            >
+                                <Ban class="h-3 w-3" /> Void
+                            </Button>
+                            <Button
+                                v-if="!readonly"
+                                variant="outline"
+                                size="sm"
+                                class="h-8 gap-1 rounded-lg border-red-200 px-2 text-red-600"
+                                @click="deleteTransaction(t)"
+                            >
+                                <Trash2 class="h-3 w-3" /> Hapus
+                            </Button>
+                        </div>
+                    </li>
+                    <li v-if="!transactions.data?.length" class="py-10 text-center text-sm text-slate-500">Tidak ada transaksi di periode ini.</li>
+                </ul>
+
+                <div class="hidden overflow-x-auto md:block">
                 <table class="w-full text-sm">
                     <thead>
                         <tr class="border-b text-left text-slate-500">
@@ -591,6 +667,7 @@ async function saveEditTransaction() {
                         </tr>
                     </tbody>
                 </table>
+                </div>
 
                 <div v-if="transactions.links && transactions.links.length > 3" class="mt-6 flex justify-center">
                     <nav class="flex flex-wrap items-center justify-center gap-1">
@@ -602,8 +679,8 @@ async function saveEditTransaction() {
                                 'px-3 py-2 text-sm rounded-xl font-semibold transition-colors',
                                 link.active ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100',
                             ]"
-                            v-html="link.label"
-                        />
+                            >{{ pageLabel(link.label) }}</Link
+                        >
                     </nav>
                 </div>
             </CardContent>
@@ -707,6 +784,24 @@ async function saveEditTransaction() {
                             rows="3" 
                         />
                     </div>
+                    <div v-if="voidNeedsPin && hasApprovalPin" class="space-y-2">
+                        <Label for="void-approval-pin">PIN persetujuan owner/supervisor <span class="text-red-500">*</span></Label>
+                        <Input
+                            id="void-approval-pin"
+                            v-model="voidForm.approval_pin"
+                            type="password"
+                            inputmode="numeric"
+                            autocomplete="off"
+                            maxlength="6"
+                            class="tracking-widest"
+                            placeholder="4–6 angka"
+                        />
+                        <p class="text-xs text-slate-500">Minta owner atau supervisor memasukkan PIN untuk menyetujui pembatalan.</p>
+                    </div>
+                    <p v-else-if="voidNeedsPin" class="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                        Pembatalan oleh kasir perlu PIN persetujuan, tetapi toko belum mengaturnya. Minta admin/manajer
+                        membatalkan transaksi ini, atau atur PIN di Kas Masuk/Keluar → Pengaturan.
+                    </p>
                 </div>
 
                 <DialogFooter>
@@ -724,7 +819,7 @@ async function saveEditTransaction() {
                         variant="destructive"
                         class="rounded-xl"
                         @click="submitVoid"
-                        :disabled="voidSaving || !voidForm.reason.trim()"
+                        :disabled="voidSaving || !voidForm.reason.trim() || (voidNeedsPin && (!hasApprovalPin || voidForm.approval_pin.length < 4))"
                     >
                         {{ voidSaving ? 'Memproses...' : 'Proses Void' }}
                     </Button>

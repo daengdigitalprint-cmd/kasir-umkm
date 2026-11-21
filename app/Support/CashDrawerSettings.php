@@ -59,6 +59,42 @@ class CashDrawerSettings
     }
 
     /**
+     * Periksa PIN persetujuan dengan batas percobaan (5x, kunci 5 menit) per toko & pengguna.
+     * Mengembalikan pesan kesalahan, atau null bila PIN benar.
+     */
+    public static function checkApprovalPin(Store $store, \App\Models\User $user, ?string $pin): ?string
+    {
+        $key = 'cash-approval-pin:'.$store->id.':'.$user->id;
+
+        if (\Illuminate\Support\Facades\RateLimiter::tooManyAttempts($key, 5)) {
+            return 'Terlalu banyak percobaan PIN. Coba lagi dalam '.\Illuminate\Support\Facades\RateLimiter::availableIn($key).' detik.';
+        }
+
+        if (! self::verifyApprovalPin($store, $pin)) {
+            \Illuminate\Support\Facades\RateLimiter::hit($key, 300);
+
+            return $pin ? 'PIN persetujuan salah.' : 'Masukkan PIN persetujuan dari owner/supervisor.';
+        }
+
+        \Illuminate\Support\Facades\RateLimiter::clear($key);
+
+        return null;
+    }
+
+    /**
+     * Batas diskon manual per baris (persen dari subtotal baris) yang boleh diberi kasir tanpa PIN.
+     * Di atas batas ini kasir perlu PIN persetujuan. Bawaan 20%.
+     */
+    public const DEFAULT_CASHIER_DISCOUNT_LIMIT = 20;
+
+    public static function cashierDiscountLimit(Store $store): int
+    {
+        $raw = $store->settings['cashier_discount_limit_percent'] ?? self::DEFAULT_CASHIER_DISCOUNT_LIMIT;
+
+        return max(0, min(100, (int) $raw));
+    }
+
+    /**
      * Uang keluar senilai ini butuh PIN persetujuan? Hanya berlaku bila batas & PIN sudah diatur.
      */
     public static function outNeedsApproval(Store $store, float $amount): bool
@@ -78,6 +114,7 @@ class CashDrawerSettings
         return [
             'approval_limit' => self::approvalLimit($store),
             'has_approval_pin' => self::hasApprovalPin($store),
+            'cashier_discount_limit' => self::cashierDiscountLimit($store),
             'presets' => self::presets($store),
         ];
     }

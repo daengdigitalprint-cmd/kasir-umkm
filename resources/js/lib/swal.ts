@@ -187,6 +187,41 @@ export async function choiceDialog(
     return null;
 }
 
+/** Minta PIN persetujuan (angka, disamarkan). Mengembalikan PIN, atau null bila dibatalkan. */
+export async function promptApprovalPin(title: string, text?: string): Promise<string | null> {
+    const result = await Swal.fire({
+        icon: 'warning',
+        title,
+        text,
+        input: 'password',
+        inputPlaceholder: 'PIN 4–6 angka',
+        inputAttributes: { inputmode: 'numeric', maxlength: '6', autocomplete: 'off', 'aria-label': 'PIN persetujuan' },
+        showCancelButton: true,
+        confirmButtonText: 'Setujui',
+        cancelButtonText: 'Batal',
+        confirmButtonColor: '#7c3aed',
+        cancelButtonColor: '#64748b',
+        reverseButtons: true,
+        customClass: {
+            popup: 'rounded-2xl shadow-2xl font-sans',
+            title: 'text-lg font-bold text-slate-900',
+            htmlContainer: 'text-sm text-slate-600',
+            input: 'mt-3 w-full px-4 py-2 border border-slate-300 rounded-xl text-center tracking-widest',
+            confirmButton: 'px-6 py-2 rounded-xl font-semibold',
+            cancelButton: 'px-6 py-2 rounded-xl font-semibold',
+        },
+        preConfirm: (value) => {
+            if (!/^\d{4,6}$/.test(String(value ?? ''))) {
+                Swal.showValidationMessage('PIN harus 4–6 angka');
+                return false;
+            }
+            return value;
+        },
+    });
+
+    return result.isConfirmed && result.value ? String(result.value) : null;
+}
+
 /** Dialog konfirmasi dengan input teks — mengembalikan teks yang diinput jika Ya, null jika Batal. */
 export async function confirmWithInput(
     title: string,
