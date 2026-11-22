@@ -227,6 +227,7 @@ class CashShiftController extends Controller
             'suggestedOpeningCash' => $lastClosed ? (float) $lastClosed->closing_cash_counted : null,
             'longOpenHours' => self::LONG_OPEN_HOURS,
             'justClosed' => $justClosed,
+            'signatureEnabled' => self::signatureEnabled($store),
         ]);
     }
 
@@ -247,6 +248,7 @@ class CashShiftController extends Controller
         $canSeeCash = $user->canAccessBackOffice();
 
         $isClosed = $cashShift->closed_at !== null;
+        $signatureEnabled = self::signatureEnabled($store);
 
         return view('cash-shifts.print', [
             'store' => $store,
@@ -256,8 +258,9 @@ class CashShiftController extends Controller
             'totals' => $totals,
             'payments' => $this->paymentRows($totals['payments'], $canSeeCash),
             'canSeeCash' => $canSeeCash,
-            'canSignCashier' => $isClosed && ! $cashShift->cashier_signature && $this->isShiftOwner($request, $user, $store, $cashShift),
-            'canSignManager' => $isClosed && ! $cashShift->manager_signature && $canSeeCash,
+            'signatureEnabled' => $signatureEnabled,
+            'canSignCashier' => $signatureEnabled && $isClosed && ! $cashShift->cashier_signature && $this->isShiftOwner($request, $user, $store, $cashShift),
+            'canSignManager' => $signatureEnabled && $isClosed && ! $cashShift->manager_signature && $canSeeCash,
             'managerName' => $user->name,
         ]);
     }
@@ -279,6 +282,10 @@ class CashShiftController extends Controller
             'role' => ['required', 'in:cashier,manager'],
             'signature' => ['required', 'string', 'max:400000', 'starts_with:data:image/png;base64,'],
         ]);
+
+        if (! self::signatureEnabled($store)) {
+            return response()->json(['message' => 'Tanda tangan digital sedang dinonaktifkan pemilik toko.'], 422);
+        }
 
         if ($cashShift->closed_at === null) {
             return response()->json(['message' => 'Tanda tangan hanya bisa dibuat setelah shift ditutup.'], 422);
@@ -326,6 +333,44 @@ class CashShiftController extends Controller
         );
 
         return response()->json(['message' => 'Tanda tangan tersimpan.']);
+    }
+
+    /**
+     * Aktifkan/nonaktifkan tanda tangan digital di laporan shift (pemilik, admin, manajer).
+     */
+    public function updateSettings(Request $request): RedirectResponse
+    {
+        $user = Auth::user();
+        $store = $user->store;
+
+        if (! $store || ! $user->canAccessBackOffice()) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'signature_enabled' => ['required', 'boolean'],
+        ]);
+
+        $settings = $store->settings ?? [];
+        $settings['shift_digital_signature'] = (bool) $validated['signature_enabled'];
+        $store->update(['settings' => $settings]);
+
+        ActivityLogger::log(
+            store: $store,
+            action: 'cash_shift.settings',
+            description: 'Tanda tangan digital laporan shift '.($settings['shift_digital_signature'] ? 'diaktifkan' : 'dinonaktifkan')." oleh {$user->name}.",
+            user: $user
+        );
+
+        return back()->with('success', $settings['shift_digital_signature']
+            ? 'Tanda tangan digital di laporan shift diaktifkan.'
+            : 'Tanda tangan digital di laporan shift dinonaktifkan.');
+    }
+
+    /** Tanda tangan digital aktif kecuali pemilik menonaktifkannya (bawaan: aktif). */
+    public static function signatureEnabled($store): bool
+    {
+        return (bool) (($store->settings ?? [])['shift_digital_signature'] ?? true);
     }
 
     /** Kasir pemilik shift (user, atau karyawan PIN yang sedang aktif). */

@@ -113,7 +113,7 @@
             </div>
         @endforeach
     </div>
-    @if (! $shift->closed_at)
+    @if ($signatureEnabled && ! $shift->closed_at)
         <div class="center muted small" style="margin-top:6px">Tanda tangan digital tersedia setelah shift ditutup.</div>
     @endif
     <div class="center muted" style="margin-top:12px">Dicetak {{ now()->timezone($timezone)->translatedFormat('d M Y, H.i') }}</div>
