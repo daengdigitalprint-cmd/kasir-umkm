@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, ChevronDown, Loader2, Upload, X, Plus, Trash2, ScanLine } from 'lucide-vue-next';
+import { ArrowLeft, ChevronDown, Loader2, Upload, X, Plus, Trash2, ScanLine, Save } from 'lucide-vue-next';
 import { ref, computed, watch } from 'vue';
 import BarcodeScanner from '@/components/BarcodeScanner.vue';
 import BarcodeGenerator from '@/components/BarcodeGenerator.vue';
@@ -286,6 +286,14 @@ const form = useForm({
 // Produk yang sudah memakai varian/paket/bahan baku selalu dibuka di mode lengkap.
 // ── Jenis produk & cara stok ────────────────────────────────────────────
 const isMaterial = computed(() => form.inventory_type === 'raw_material' || form.inventory_type === 'packaging');
+
+/** Persen keuntungan (markup) = (harga jual - modal) / modal × 100. Null bila modal belum diisi. */
+const profitPercent = computed<number | null>(() => {
+    const price = Number(form.price) || 0;
+    const cost = Number(form.cost_price) || 0;
+    if (cost <= 0) return null;
+    return Math.round(((price - cost) / cost) * 10000) / 100;
+});
 
 /** Satu pilihan cara stok yang memetakan ke track_stock + unlimited_stock. */
 const stockMode = computed<StockMode>({
@@ -1113,11 +1121,11 @@ const submit = () => {
 </script>
 
 <template>
-    <AdminLayout title="Edit Produk">
+    <AdminLayout title="Edit Produk" hide-bottom-nav>
         <template #header-actions>
             <div class="flex flex-wrap items-center gap-3 sm:gap-4">
                 <Button
-                    as="a"
+                    :as="Link"
                     href="/products"
                     variant="outline"
                     size="sm"
@@ -1133,7 +1141,7 @@ const submit = () => {
         </template>
         <template #mobile-header-actions>
             <Button
-                as="a"
+                :as="Link"
                 href="/products"
                 variant="ghost"
                 size="sm"
@@ -1218,6 +1226,13 @@ const submit = () => {
                                 <div v-if="form.errors.price" class="text-sm text-red-600">
                                     {{ form.errors.price }}
                                 </div>
+                                <p
+                                    v-if="canViewCost && profitPercent !== null"
+                                    class="text-xs font-medium"
+                                    :class="profitPercent >= 0 ? 'text-emerald-600' : 'text-red-600'"
+                                >
+                                    Keuntungan {{ profitPercent }}% dari modal
+                                </p>
                             </div>
 </template>
                             <div v-if="props.wholesaleEnabled && !isMaterial" class="space-y-2">
@@ -2134,13 +2149,23 @@ const submit = () => {
                 <!-- Bilah simpan melayang -->
                 <div class="h-20" aria-hidden="true" />
                 <div
-                    class="fixed right-4 bottom-[5.5rem] left-4 z-40 flex items-center justify-end gap-2 rounded-2xl border bg-white px-3 py-2.5 lg:bottom-4 lg:left-auto lg:w-auto"
+                    class="fixed right-4 bottom-4 left-4 z-40 flex items-center justify-end gap-2 rounded-2xl border bg-white px-3 py-2.5 lg:bottom-4 lg:left-auto lg:w-auto"
                     :class="form.isDirty ? 'border-primary/40' : 'border-slate-200'"
                 >
                     <span v-if="form.isDirty" class="mr-auto pl-1 text-sm font-semibold text-slate-700 lg:mr-2">Ada perubahan belum disimpan</span>
-                    <Button type="button" variant="ghost" as="a" href="/products">Batal</Button>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        :as="Link"
+                        href="/products"
+                        class="border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700"
+                    >
+                        <X class="mr-1 h-4 w-4" />
+                        Batal
+                    </Button>
                     <Button type="submit" :disabled="form.processing">
                         <Loader2 v-if="form.processing" class="mr-1 h-4 w-4 animate-spin" />
+                        <Save v-else class="mr-1 h-4 w-4" />
                         {{ form.processing ? 'Menyimpan…' : 'Simpan perubahan' }}
                     </Button>
                 </div>

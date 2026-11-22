@@ -144,6 +144,38 @@ export async function confirmDialog(
     return result.isConfirmed;
 }
 
+/**
+ * Konfirmasi meninggalkan halaman dengan perubahan belum disimpan.
+ * Tombol aman ("Tetap di sini") jadi tombol utama dan terfokus; true = pengguna memilih keluar.
+ */
+export async function confirmLeave(): Promise<boolean> {
+    const result = await Swal.fire({
+        icon: 'warning',
+        iconColor: '#f59e0b',
+        title: 'Tinggalkan halaman ini?',
+        html: 'Perubahan yang Anda isi <b>belum disimpan</b> dan akan hilang jika keluar sekarang.',
+        showCancelButton: true,
+        confirmButtonText: 'Tetap keluar',
+        cancelButtonText: 'Tetap di sini',
+        buttonsStyling: false,
+        reverseButtons: true,
+        focusCancel: true,
+        width: '24rem',
+        customClass: {
+            popup: '!rounded-3xl shadow-2xl !font-sans !p-6',
+            icon: '!mt-1 !mb-4 scale-75',
+            title: '!p-0 !text-xl !leading-snug !font-bold !text-slate-900',
+            htmlContainer: '!mx-0 !mt-2 !p-0 !text-base !leading-relaxed !text-slate-600',
+            actions: '!mt-6 !w-full flex-col-reverse gap-2 sm:flex-row',
+            cancelButton:
+                'w-full sm:w-auto sm:flex-1 rounded-xl bg-primary px-5 py-3 text-base font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 focus:outline-none focus:ring-4 focus:ring-primary/30',
+            confirmButton:
+                'w-full sm:w-auto sm:flex-1 rounded-xl border border-red-200 bg-red-50 px-5 py-3 text-base font-semibold text-red-600 hover:bg-red-100 focus:outline-none focus:ring-4 focus:ring-red-200',
+        },
+    });
+    return result.isConfirmed;
+}
+
 export async function confirmDelete(title: string, text: string): Promise<boolean> {
     return confirmDialog(title, text, {
         confirmText: 'Hapus',

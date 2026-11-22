@@ -25,6 +25,22 @@ const page = usePage();
 const trial = computed(() => (page.props as { trial?: TrialPayload | null }).trial ?? null);
 const hidden = ref(false);
 
+/**
+ * Banner trial aktif yang ditutup pengguna diingat per perangkat (per periode trial).
+ * Muncul lagi otomatis saat masuk masa mendesak (sisa ≤ 3 hari) atau ada pesan baru.
+ */
+const DISMISS_KEY = 'trial_banner_dismissed';
+type DismissState = { ends_at: string; urgent: boolean };
+function readDismiss(): DismissState | null {
+    try {
+        const raw = localStorage.getItem(DISMISS_KEY);
+        return raw ? (JSON.parse(raw) as DismissState) : null;
+    } catch {
+        return null;
+    }
+}
+const dismissed = ref<DismissState | null>(readDismiss());
+
 const formatDate = (iso: string | null) =>
     iso ? new Date(iso).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
 
@@ -34,18 +50,35 @@ const progress = computed(() => {
     return Math.min(100, Math.max(4, Math.round(((t.days_total - t.days_left) / t.days_total) * 100)));
 });
 
+const urgent = computed(() => Boolean(trial.value?.active && trial.value.days_left <= 3));
+
 /** Setelah trial: tampil hanya bila ada pesan baru atau promo masih berlaku. */
 const show = computed(() => {
     const t = trial.value;
     if (!t || hidden.value) return false;
-    if (t.active) return true;
+    if (t.active) {
+        const d = dismissed.value;
+        const stillDismissed = !t.notice && d?.ends_at === t.ends_at && (d.urgent || !urgent.value);
+        return !stillDismissed;
+    }
     return t.on_free_plan && (t.notice !== null || t.promo_eligible);
 });
 
-const urgent = computed(() => Boolean(trial.value?.active && trial.value.days_left <= 3));
 
 function dismiss() {
-    const id = trial.value?.notice?.id;
+    const t = trial.value;
+    // Trial aktif tanpa pesan: sembunyikan & ingat sampai masa mendesak.
+    if (t?.active && !t.notice) {
+        const state = { ends_at: t.ends_at, urgent: urgent.value };
+        dismissed.value = state;
+        try {
+            localStorage.setItem(DISMISS_KEY, JSON.stringify(state));
+        } catch {
+            /* penyimpanan diblokir: cukup sembunyikan untuk halaman ini */
+        }
+        return;
+    }
+    const id = t?.notice?.id;
     hidden.value = !trial.value?.active;
     if (id) {
         router.post(`/trial-notifications/${id}/read`, {}, { preserveScroll: true, preserveState: true });
@@ -66,10 +99,10 @@ function dismiss() {
         ]"
     >
         <button
-            v-if="trial.notice || !trial.active"
             type="button"
             class="absolute top-3 right-3 rounded-lg p-1 text-slate-400 transition hover:bg-white/70 hover:text-slate-600"
             aria-label="Tutup"
+            title="Sembunyikan"
             @click="dismiss"
         >
             <X class="h-4 w-4" />

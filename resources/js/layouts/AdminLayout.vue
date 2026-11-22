@@ -26,10 +26,13 @@ interface Props {
     title: string;
     /** Mode layar penuh: sembunyikan sidebar, header, & bottom nav (khusus halaman POS tablet/desktop). */
     fullscreen?: boolean;
+    /** Sembunyikan bottom nav mobile (mis. formulir tambah/ubah produk agar fokus & tidak salah tekan). */
+    hideBottomNav?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
     fullscreen: false,
+    hideBottomNav: false,
 });
 const page = usePage();
 
@@ -644,7 +647,7 @@ const isCurrentRoute = (href: string) => {
                     :class="[
                         props.fullscreen
                             ? ''
-                            : 'max-w-7xl px-4 sm:px-6 lg:px-8 pt-5 sm:pt-6 lg:pt-8 pb-24 lg:pb-8',
+                            : `max-w-7xl px-4 sm:px-6 lg:px-8 pt-5 sm:pt-6 lg:pt-8 lg:pb-8 ${props.hideBottomNav ? 'pb-6' : 'pb-24'}`,
                         showDesktopSidebar && !props.fullscreen ? 'ml-auto' : 'mx-auto',
                     ]"
                 >
@@ -659,7 +662,8 @@ const isCurrentRoute = (href: string) => {
         <div 
             class="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 z-30 shadow-[0_-10px_20px_rgba(0,0,0,0.03)] selection:bg-transparent transition-opacity duration-200"
             :class="{
-                'opacity-0 pointer-events-none': (isLandscape && isMobileOrTablet) || props.fullscreen
+                'opacity-0 pointer-events-none': (isLandscape && isMobileOrTablet) || props.fullscreen,
+                hidden: props.hideBottomNav,
             }"
         >
             <!-- Owner Mobile Nav -->

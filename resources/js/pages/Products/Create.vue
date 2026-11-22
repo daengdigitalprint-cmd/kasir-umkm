@@ -719,11 +719,11 @@ const submitAndAddAnother = () => {
 </script>
 
 <template>
-    <AdminLayout title="Tambah Produk Baru">
+    <AdminLayout title="Tambah Produk Baru" hide-bottom-nav>
         <template #header-actions>
             <div class="flex flex-wrap items-center gap-3 sm:gap-4">
                 <Button
-                    as="a"
+                    :as="Link"
                     href="/products"
                     variant="outline"
                     size="sm"
@@ -739,7 +739,7 @@ const submitAndAddAnother = () => {
         </template>
         <template #mobile-header-actions>
             <Button
-                as="a"
+                :as="Link"
                 href="/products"
                 variant="ghost"
                 size="sm"
@@ -1740,18 +1740,38 @@ const submitAndAddAnother = () => {
                 <!-- Bilah simpan melayang -->
                 <div class="h-20" aria-hidden="true" />
                 <div
-                    class="fixed right-4 bottom-[5.5rem] left-4 z-40 flex items-center justify-end gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 lg:bottom-4 lg:left-auto lg:w-auto"
+                    class="fixed right-4 bottom-4 left-4 z-40 flex items-center justify-end gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 lg:bottom-4 lg:left-auto lg:w-auto"
                 >
-                    <Button type="button" variant="ghost" as="a" href="/products">Batal</Button>
-                    <Button type="button" :disabled="form.processing" variant="outline" @click="submitAndAddAnother">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        :as="Link"
+                        href="/products"
+                        class="border-red-200 bg-red-50 px-3 text-red-600 hover:bg-red-100 hover:text-red-700"
+                    >
+                        <X class="h-4 w-4 sm:mr-1" />
+                        <span class="hidden sm:inline">Batal</span>
+                        <span class="sr-only sm:hidden">Batal</span>
+                    </Button>
+                    <Button
+                        type="button"
+                        :disabled="form.processing"
+                        variant="outline"
+                        title="Simpan produk ini lalu langsung buka formulir kosong untuk produk berikutnya"
+                        @click="submitAndAddAnother"
+                    >
                         <Plus class="mr-1 h-4 w-4" />
-                        <span class="hidden sm:inline">Simpan &amp; tambah lagi</span>
-                        <span class="sm:hidden">Lagi</span>
+                        <span class="hidden sm:inline">Simpan &amp; tambah produk lain</span>
+                        <span class="sm:hidden">Simpan &amp; baru</span>
                     </Button>
                     <Button type="submit" :disabled="form.processing">
                         <Loader2 v-if="form.processing" class="mr-1 h-4 w-4 animate-spin" />
                         <Package v-else class="mr-1 h-4 w-4" />
-                        {{ form.processing ? 'Menyimpan…' : 'Simpan produk' }}
+                        <span v-if="form.processing">Menyimpan…</span>
+                        <template v-else>
+                            <span class="hidden sm:inline">Simpan produk</span>
+                            <span class="sm:hidden">Simpan</span>
+                        </template>
                     </Button>
                 </div>
             </form>
