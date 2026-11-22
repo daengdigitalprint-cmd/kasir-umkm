@@ -179,6 +179,8 @@ class HandleInertiaRequests extends Middleware
             'delivery_enabled' => \App\Support\DeliveryFeatures::enabled($activeStore),
             // F8 Saran Menu (menu disembunyikan sampai dinyalakan).
             'upsell_enabled' => \App\Support\UpsellSuggestions::enabled($activeStore),
+            // Kartu stempel digital (menu & pilih pelanggan di kasir muncul saat dinyalakan).
+            'stamp_card_enabled' => \App\Support\StampCardSettings::enabled($activeStore),
             // Gudang Pusat Pro (Permintaan Stok, Pantau Stok) — add-on per grup usaha.
             'central_kitchen_enabled' => \App\Support\CentralKitchenModule::enabled($activeStore),
             // Badge menu Permintaan Stok: permintaan masuk yang menunggu disetujui.

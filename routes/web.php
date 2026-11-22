@@ -387,6 +387,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('customers/quick-store', [App\Http\Controllers\CustomerController::class, 'quickStore'])
         ->name('pos.customers.quick-store')
         ->middleware(['store.active', 'role.pos']);
+    // Kartu Stempel Digital — kasir: cari kartu (QR/no. WA), lihat kartu, tukar hadiah.
+    Route::middleware(['store.active', 'role.pos'])->prefix('pos/stamp-card')->name('pos.stamp-card.')->group(function () {
+        Route::get('lookup', [App\Http\Controllers\StampCardController::class, 'lookup'])->name('lookup');
+        Route::get('customers/{customer}', [App\Http\Controllers\StampCardController::class, 'card'])->name('card');
+        Route::post('customers/{customer}/redeem', [App\Http\Controllers\StampCardController::class, 'redeem'])->name('redeem');
+    });
+    // Kartu Stempel Digital — pengelola (hak akses mengikuti menu Pelanggan).
+    Route::middleware(['store.active', 'role.backoffice'])->prefix('stamp-card')->name('stamp-card.')->group(function () {
+        Route::get('/', [App\Http\Controllers\StampCardController::class, 'index'])->name('index');
+        Route::put('settings', [App\Http\Controllers\StampCardController::class, 'updateSettings'])->name('settings');
+        Route::post('customers/{customer}/adjust', [App\Http\Controllers\StampCardController::class, 'adjust'])->name('adjust');
+        Route::get('customers/{customer}/history', [App\Http\Controllers\StampCardController::class, 'history'])->name('history');
+    });
     // F9 Segmen pelanggan (sebelum resource agar tidak tertangkap customers/{customer})
     Route::get('customers/segments', [App\Http\Controllers\CustomerSegmentController::class, 'index'])
         ->name('customers.segments')->middleware(['store.active', 'role.backoffice']);
@@ -913,6 +926,12 @@ Route::get('/m/{slug}', [App\Http\Controllers\GuestMenuController::class, 'show'
 
 Route::get('/m/{slug}/status/{statusToken}', [App\Http\Controllers\GuestMenuController::class, 'status'])
     ->name('guest.menu.status');
+
+// Kartu stempel digital pelanggan (tanpa login), dilindungi kode acak per pelanggan.
+Route::get('/k/{token}', [App\Http\Controllers\StampCardController::class, 'publicShow'])
+    ->where('token', '[A-Za-z0-9]{12,40}')
+    ->middleware('throttle:60,1')
+    ->name('stamp-card.public');
 
 // Unduh PDF struk publik tanpa login, dilindungi token acak (status_token) per transaksi.
 Route::get('/i/pdf/{statusToken}', [App\Http\Controllers\POSController::class, 'exportPublicPdf'])

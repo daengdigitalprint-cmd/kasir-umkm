@@ -304,6 +304,17 @@ export function buildThermalReceiptInnerHtml(
         payBlock += `<div class="struk-row struk-bold"><span>Kembali</span><span>${formatCurrency(Number(tx.change_amount))}</span></div>`;
     }
 
+    let stampBlock = '';
+    const sc = (tx.payment_details as { stamp_card?: { added?: number; count?: number; target?: number; rewards_ready?: number; reward?: string } } | null | undefined)
+        ?.stamp_card;
+    if (sc && Number(sc.added) > 0) {
+        stampBlock = `<div class="struk-row"><span>Stempel</span><span>+${Number(sc.added)} (${Number(sc.count)}/${Number(sc.target)})</span></div>`;
+        if (Number(sc.rewards_ready) > 0) {
+            stampBlock += `<div class="struk-small" style="font-weight:700">Hadiah siap ditukar: ${escapeHtml(String(sc.reward ?? ''))}</div>`;
+        }
+        stampBlock += '<div class="struk-rule"></div>';
+    }
+
     const foot2 = r.footer_line2.trim()
         ? `<div class="struk-foot2">${escapeHtml(r.footer_line2.trim())}</div>`
         : '';
@@ -338,6 +349,7 @@ export function buildThermalReceiptInnerHtml(
                 <div class="struk-rule"></div>
                 ${payBlock}
                 <div class="struk-rule"></div>
+                ${stampBlock}
                 ${pharmacyDisclaimer}
                 <div class="struk-foot">${escapeHtml(r.footer)}</div>
                 ${foot2}

@@ -3,6 +3,7 @@ import { Link, router, usePage } from '@inertiajs/vue3';
 import type { LucideIcon } from 'lucide-vue-next';
 import {
     Activity,
+    Stamp,
     ArrowRight,
     ArrowRightLeft,
     Banknote,
@@ -99,6 +100,8 @@ type NavItem = {
     deliveryMenu?: boolean;
     /** F8: menu Saran menu — hanya tampil setelah modul Saran Menu dinyalakan (Fitur Tambahan). */
     upsellMenu?: boolean;
+    /** Menu Kartu stempel: hanya tampil setelah modul Kartu Stempel dinyalakan di Pengaturan. */
+    stampCardMenu?: boolean;
     /** Wajib owner, juga saat role dikonfigurasi (mode strict). */
     requiresOwner?: boolean;
     /** Hanya tampil jika Modul Antrian diaktifkan di pengaturan toko. */
@@ -383,6 +386,17 @@ const navigationSource: NavItem[] = [
         receivablesOnly: true,
     },
     {
+        name: 'Kartu stempel',
+        href: '/stamp-card',
+        icon: Stamp,
+        // Hak akses mengikuti menu Pelanggan (rute stamp-card.* dipetakan ke "customers").
+        menuKey: 'customers',
+        stampCardMenu: true,
+        section: 'pelanggan_promo',
+        backofficeOnly: true,
+        hideOnWarehouse: true,
+    },
+    {
         name: 'Loyalitas',
         href: '/loyalty',
         icon: Gift,
@@ -502,6 +516,7 @@ const navigationItems = computed((): ProcessedNavItem[] => {
     const centralKitchenEnabled = Boolean((page.props as { central_kitchen_enabled?: boolean }).central_kitchen_enabled);
     const deliveryEnabled = Boolean((page.props as { delivery_enabled?: boolean }).delivery_enabled);
     const upsellEnabled = Boolean((page.props as { upsell_enabled?: boolean }).upsell_enabled);
+    const stampCardEnabled = Boolean((page.props as { stamp_card_enabled?: boolean }).stamp_card_enabled);
     const pendingStockRequests = Number((page.props as { pending_stock_requests?: number }).pending_stock_requests ?? 0);
     const incomingTransferCount = Number((page.props as { incoming_transfer_count?: number }).incoming_transfer_count ?? 0);
     const cashierPinEnabled = String((page.props as { cashier_login_mode?: string }).cashier_login_mode ?? 'email') === 'pin';
@@ -562,6 +577,7 @@ const navigationItems = computed((): ProcessedNavItem[] => {
         if (item.requiresOwner && !isOwner) return [];
         if (item.deliveryMenu && !deliveryEnabled) return [];
         if (item.upsellMenu && !upsellEnabled) return [];
+        if (item.stampCardMenu && !stampCardEnabled) return [];
         if (item.queueModuleOnly && !queueModuleEnabled) return [];
         if (item.scanMejaOnly && !scanMejaEnabled) return [];
         if (item.attendanceOnly && !attendanceEnabled) return [];

@@ -3,6 +3,8 @@ import BarcodeScanner from '@/components/BarcodeScanner.vue';
 import PinLoginModal from '@/components/CashierPin/PinLoginModal.vue';
 import ThermalReceiptStruk from '@/components/pos/ThermalReceiptStruk.vue';
 import KitchenReadyNotice from '@/components/pos/KitchenReadyNotice.vue';
+import StampCardPicker from '@/components/pos/StampCardPicker.vue';
+import type { StampCardCustomer, StampReceiptSummary } from '@/composables/useStampCard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -912,6 +914,21 @@ function resetProductGridScroll() {
 const paymentMethod = ref<string | null>(null);
 const amountPaid = ref(0);
 const customerName = ref('');
+// Kartu stempel: pelanggan yang dipilih kasir lewat no. WA / QR (dikaitkan ke transaksi lewat ID).
+const stampCardEnabled = computed(() => Boolean((page.props as { stamp_card_enabled?: boolean }).stamp_card_enabled));
+const stampCustomer = ref<StampCardCustomer | null>(null);
+watch(stampCustomer, (c, prev) => {
+    if (c && (!customerName.value.trim() || customerName.value === prev?.name)) customerName.value = c.name;
+    if (!c && prev && customerName.value === prev.name) customerName.value = '';
+});
+function notifyStamps(summary: StampReceiptSummary | null | undefined) {
+    if (!summary || !summary.added) return;
+    if (summary.new_rewards > 0) {
+        void toastSuccess(`Kartu stempel penuh! Hadiah siap ditukar: ${summary.reward}`, 5000);
+    } else {
+        void toastSuccess(`+${summary.added} stempel (${summary.count}/${summary.target})`, 3500);
+    }
+}
 const customerType = ref<'ecer' | 'grosir'>('ecer');
 
 // ─── State kredit / piutang ───────────────────────────────────────────────
@@ -2650,6 +2667,7 @@ function resetCartState() {
     cart.value = [];
     amountPaid.value = 0;
     customerName.value = '';
+    stampCustomer.value = null;
     customerType.value = 'ecer';
     customerPhone.value = '';
     pharmacySaleReference.value = '';
@@ -3163,7 +3181,7 @@ const processPayment = async () => {
         created_at: new Date().toISOString(),
         // ── Kredit / piutang
         is_credit: isCredit.value || false,
-        customer_id: isCredit.value ? creditCustomerId.value : null,
+        customer_id: isCredit.value ? creditCustomerId.value : (stampCustomer.value?.id ?? null),
         debt_due_at: isCredit.value && debtDueAt.value ? debtDueAt.value : null,
     };
     if (props.store?.fnb_enabled) {
@@ -3315,6 +3333,7 @@ const processPayment = async () => {
 
         if (result.success) {
             transactionData.value = result.transaction;
+            notifyStamps((result.transaction as { stamp_card?: StampReceiptSummary } | undefined)?.stamp_card);
             playSuccessSound();
             lastCustomerPhone.value = customerPhone.value;
             showInvoicePopup.value = true;
@@ -3404,6 +3423,7 @@ async function payActiveOpenBill() {
         const payload: Record<string, unknown> = {
             ...buildPaymentFields(),
             discount_code: appliedDiscount.value?.code || null,
+            customer_id: stampCustomer.value?.id ?? null,
         };
         if (props.store?.fnb_enabled) {
             payload.service_charge_percent = serviceChargePercent.value;
@@ -3441,6 +3461,7 @@ async function payActiveOpenBill() {
         }
 
         transactionData.value = result.transaction;
+        notifyStamps((result.transaction as { stamp_card?: StampReceiptSummary } | undefined)?.stamp_card);
         playSuccessSound();
         showInvoicePopup.value = true;
         applyOptimisticCashShiftUpdate(cashPortionForShift, totalAmount.value);
@@ -3470,6 +3491,7 @@ const clearCart = async () => {
     cart.value = [];
     amountPaid.value = 0;
     customerName.value = '';
+    stampCustomer.value = null;
     customerType.value = 'ecer';
     customerPhone.value = '';
     pharmacySaleReference.value = '';
@@ -4675,6 +4697,9 @@ const sendWhatsAppInvoice = () => {
 
                                     <!-- ═══ Step 2: Pilih metode pembayaran ═══ -->
                                     <div v-if="paymentStep === 'method'" class="flex-1 space-y-4 overflow-y-auto px-5 pt-12 pb-4">
+                                        <!-- Kartu stempel (modul opsional) -->
+                                        <StampCardPicker v-if="stampCardEnabled && !isCredit" v-model="stampCustomer" :store-name="store?.name ?? ''" />
+
                                         <!-- Nama Pelanggan -->
                                         <div class="space-y-3">
                                             <Label for="customer" class="text-sm font-medium text-gray-700">Nama Pelanggan (Opsional)</Label>

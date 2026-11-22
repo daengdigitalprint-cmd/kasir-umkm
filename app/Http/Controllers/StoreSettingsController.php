@@ -58,6 +58,7 @@ class StoreSettingsController extends Controller
             'pos_show_barcode' => 'sometimes|boolean',
             'ai_chat_enabled' => 'sometimes|boolean',
             'shift_digital_signature' => 'sometimes|boolean',
+            'stamp_card_enabled' => 'sometimes|boolean',
             'recipes_enabled' => 'sometimes|boolean',
             'productions_enabled' => 'sometimes|boolean',
             'kitchen_queue_enabled' => 'sometimes|boolean',
@@ -125,6 +126,12 @@ class StoreSettingsController extends Controller
         if (array_key_exists('shift_digital_signature', $validated)) {
             $settings['shift_digital_signature'] = (bool) $validated['shift_digital_signature'];
             unset($validated['shift_digital_signature']);
+        }
+
+        // Kartu stempel digital (bawaan nonaktif, tersedia di semua paket).
+        if (array_key_exists('stamp_card_enabled', $validated)) {
+            $settings['stamp_card_enabled'] = (bool) $validated['stamp_card_enabled'];
+            unset($validated['stamp_card_enabled']);
         }
 
         if (array_key_exists('ai_chat_enabled', $validated)) {

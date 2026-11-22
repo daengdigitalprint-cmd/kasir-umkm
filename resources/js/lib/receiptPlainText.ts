@@ -67,6 +67,18 @@ function rule(width: number): string {
 }
 
 /** Payload dari respons transaksi POS (setelah pembayaran) + meta toko. */
+/** Baris kartu stempel di struk (dari payment_details.stamp_card). */
+function stampCardLines(pd: unknown, w: number): string[] {
+    const sc = (pd as { stamp_card?: { added?: number; count?: number; target?: number; new_rewards?: number; rewards_ready?: number; reward?: string } } | null | undefined)
+        ?.stamp_card;
+    if (!sc || !Number(sc.added)) return [];
+    const out = [rowLR('Stempel', `+${Number(sc.added)} (${Number(sc.count)}/${Number(sc.target)})`, w)];
+    if (Number(sc.rewards_ready) > 0) {
+        for (const chunk of wrapText(`Hadiah siap ditukar: ${String(sc.reward ?? '')}`, w)) out.push(chunk);
+    }
+    return out;
+}
+
 export function buildReceiptPlainLinesFromPosResponse(
     tx: Record<string, unknown>,
     store: {
@@ -283,6 +295,11 @@ export function buildReceiptPlainLinesFromPosResponse(
         lines.push(rowLR('Kembali', formatCurrencyId(Number(tx.change_amount)), w));
     }
     lines.push(rule(w));
+    const stampLinesPos = stampCardLines(tx.payment_details, w);
+    if (stampLinesPos.length) {
+        lines.push(...stampLinesPos);
+        lines.push(rule(w));
+    }
 
     if (store.pharmacy_enabled === true) {
         for (const chunk of wrapText(
@@ -507,6 +524,11 @@ export function buildReceiptPlainLinesFromInvoicePage(
         lines.push(rowLR('Kembali', formatCurrencyId(tx.change_amount), w));
     }
     lines.push(rule(w));
+    const stampLinesInv = stampCardLines(tx.payment_details, w);
+    if (stampLinesInv.length) {
+        lines.push(...stampLinesInv);
+        lines.push(rule(w));
+    }
     if (pharmacyEnabled) {
         for (const chunk of wrapText(
             'Obat dipakai sesuai resep dan aturan. Software ini tidak menggantikan kewajiban hukum atau kewenangan apoteker.',

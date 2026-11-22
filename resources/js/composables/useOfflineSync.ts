@@ -100,6 +100,8 @@ async function syncPending() {
                 amount_paid: rest.amount_paid,
                 ...(rest.payments?.length ? { payments: rest.payments } : {}),
                 customer_name: rest.customer_name ?? null,
+                // Pelanggan kartu stempel yang dipilih kasir (dikaitkan lewat ID, bukan nama).
+                ...(rest.customer_id ? { customer_id: rest.customer_id } : {}),
                 ...(rest.customer_type !== undefined ? { customer_type: rest.customer_type } : {}),
                 discount_code: rest.discount_code ?? null,
                 ...(rest.loyalty_voucher_code ? { loyalty_voucher_code: rest.loyalty_voucher_code } : {}),

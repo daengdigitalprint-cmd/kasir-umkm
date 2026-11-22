@@ -41,7 +41,14 @@ class Customer extends Model
         'is_active' => 'boolean',
         'last_purchase_at' => 'datetime',
         'last_purchase_amount' => 'decimal:2',
+        'stamp_count' => 'integer',
+        'stamp_rewards_ready' => 'integer',
+        'stamp_rewards_redeemed' => 'integer',
+        'stamp_last_at' => 'datetime',
     ];
+
+    /** Kode tautan kartu stempel publik tidak ikut dikirim ke JSON umum. */
+    protected $hidden = ['stamp_card_token'];
 
     public function store(): BelongsTo
     {
@@ -61,6 +68,11 @@ class Customer extends Model
     public function redemptions(): HasMany
     {
         return $this->hasMany(LoyaltyRedemption::class);
+    }
+
+    public function stampLedgers(): HasMany
+    {
+        return $this->hasMany(StampCardLedger::class);
     }
 
     public function referredBy(): BelongsTo

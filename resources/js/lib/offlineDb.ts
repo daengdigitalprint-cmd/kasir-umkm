@@ -41,6 +41,8 @@ export interface OfflineSale {
     total_amount: number;
     discount_amount: number;
     customer_name: string | null;
+    /** Pelanggan yang dipilih kasir (kartu stempel); dikaitkan lewat ID saat sinkron. */
+    customer_id?: number | null;
     customer_type?: 'ecer' | 'grosir';
     discount_code: string | null;
     loyalty_voucher_code?: string | null;

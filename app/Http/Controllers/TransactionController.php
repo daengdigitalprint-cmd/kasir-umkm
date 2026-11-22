@@ -356,6 +356,11 @@ class TransactionController extends Controller
                     if ($pointsReversed > 0) {
                         $details['loyalty_points_reversed'] = $pointsReversed;
                     }
+
+                    $stampsReversed = app(\App\Services\StampCardService::class)->reverseForTransaction($transaction, auth()->id());
+                    if ($stampsReversed > 0) {
+                        $details['stamps_reversed'] = $stampsReversed;
+                    }
                 }
 
                 $details['loyalty_vouchers_released'] = app(\App\Services\LoyaltyService::class)
@@ -653,6 +658,11 @@ class TransactionController extends Controller
 
                     if ($pointsReversed > 0) {
                         $details['loyalty_points_reversed'] = $pointsReversed;
+                    }
+
+                    $stampsReversed = app(\App\Services\StampCardService::class)->reverseForTransaction($transaction, auth()->id());
+                    if ($stampsReversed > 0) {
+                        $details['stamps_reversed'] = $stampsReversed;
                     }
                 }
 

@@ -28,6 +28,7 @@ import {
     QrCode,
     ScanBarcode,
     Split,
+    Stamp,
     Tag,
     Trash2,
     Undo2,
@@ -97,6 +98,7 @@ interface StoreProps {
     scan_meja_enabled?: boolean;
     accounting_enabled?: boolean;
     shift_digital_signature?: boolean;
+    stamp_card_enabled?: boolean;
     max_backdate_days?: number;
     product_discount_enabled?: boolean;
     scan_meja_payment_methods?: PaymentMethod[];
@@ -435,6 +437,7 @@ const modules = reactive({
     attendance_enabled: s.value?.attendance_enabled === true,
     accounting_enabled: s.value?.accounting_enabled === true,
     shift_digital_signature: s.value?.shift_digital_signature === true,
+    stamp_card_enabled: s.value?.stamp_card_enabled === true,
 });
 watch(
     () => props.store,
@@ -443,6 +446,7 @@ watch(
         modules.attendance_enabled = st?.attendance_enabled === true;
         modules.accounting_enabled = st?.accounting_enabled === true;
         modules.shift_digital_signature = st?.shift_digital_signature === true;
+        modules.stamp_card_enabled = st?.stamp_card_enabled === true;
         backdateDays.value = Number(st?.max_backdate_days ?? 7);
     },
 );
@@ -975,6 +979,14 @@ const inputClass =
                         :locked="lockedSettings.includes('shift_digital_signature')"
                         :loading="savingModule === 'shift_digital_signature'"
                         @update:model-value="setModule('shift_digital_signature', $event)"
+                    />
+                    <SettingSwitch
+                        :model-value="modules.stamp_card_enabled"
+                        :icon="Stamp"
+                        title="Kartu stempel digital"
+                        description="Pengganti kartu stempel kertas: kasir cari pelanggan lewat no. WA atau QR, stempel bertambah otomatis, kartu penuh jadi hadiah. Aturannya di menu Pelanggan & Promo → Kartu stempel."
+                        :loading="savingModule === 'stamp_card_enabled'"
+                        @update:model-value="setModule('stamp_card_enabled', $event)"
                     />
                     <SettingSwitch
                         :model-value="modules.accounting_enabled"

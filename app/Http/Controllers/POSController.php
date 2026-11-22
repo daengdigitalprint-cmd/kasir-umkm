@@ -1043,7 +1043,14 @@ class POSController extends Controller
             }
 
             $customer = null;
-            if ($request->customer_name) {
+            // Pelanggan yang dipilih kasir (cari no. WA / pindai kartu stempel) dikaitkan lewat ID,
+            // bukan dicocokkan dari nama, supaya stempel/poin tidak salah orang.
+            $chosenCustomer = $request->filled('customer_id')
+                ? Customer::query()->where('id', $request->input('customer_id'))->where('store_id', $store->id)->first()
+                : null;
+            if ($chosenCustomer) {
+                $customer = $chosenCustomer;
+            } elseif ($request->customer_name) {
                 $customer = Customer::firstOrCreate([
                     'store_id' => $store->id,
                     'name' => $request->customer_name,
@@ -1330,6 +1337,8 @@ class POSController extends Controller
                 }
             }
 
+            $stampCard = $this->earnStamps($transaction);
+
             DB::commit();
 
             // Log aktivitas transaksi
@@ -1349,6 +1358,7 @@ class POSController extends Controller
 
             $payload = $this->receiptTransactionPayload($transaction, $store);
             $payload['loyalty_points_earned'] = $pointsEarned;
+            $payload['stamp_card'] = $stampCard;
 
             // Antrean otomatis: Papan Dapur (Antrian Dapur) atau Antrian Pelanggan.
             \App\Support\KitchenOrders::enqueue($store, $transaction, [
@@ -1747,6 +1757,7 @@ class POSController extends Controller
                 'payments.*.method' => ['required_with:payments', 'string', Rule::in(TransactionPayment::METHODS)],
                 'payments.*.amount' => 'required_with:payments|numeric|min:0.01',
                 'payments.*.reference' => 'nullable|string|max:100',
+                'customer_id' => 'nullable|integer',
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
@@ -1899,6 +1910,15 @@ class POSController extends Controller
                 }
             }
 
+            // Pelanggan bisa dipilih saat bayar open bill (cari no. WA / pindai kartu stempel).
+            if (! $transaction->customer_id && $request->filled('customer_id')) {
+                $payCustomer = Customer::query()->where('id', $request->input('customer_id'))->where('store_id', $store->id)->first();
+                if ($payCustomer) {
+                    $transaction->update(['customer_id' => $payCustomer->id]);
+                    $transaction->load('customer');
+                }
+            }
+
             if ($transaction->customer) {
                 $transaction->customer->increment('total_orders');
                 $transaction->customer->increment('total_spent', $totalAmount);
@@ -1919,6 +1939,8 @@ class POSController extends Controller
                 }
             }
 
+            $stampCard = $this->earnStamps($transaction->fresh());
+
             DB::commit();
 
             \App\Services\ActivityLogger::log(
@@ -1936,6 +1958,7 @@ class POSController extends Controller
 
             $payload = $this->receiptTransactionPayload($transaction->fresh(), $store);
             $payload['loyalty_points_earned'] = $pointsEarned;
+            $payload['stamp_card'] = $stampCard;
 
             return response()->json([
                 'success' => true,
@@ -2405,6 +2428,30 @@ class POSController extends Controller
      *
      * @return array<string, mixed>
      */
+    /**
+     * Stempel kartu pelanggan, ditulis di dalam transaksi DB penjualan (atomik).
+     * Gagal menambah stempel tidak boleh menggagalkan penjualan.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function earnStamps(Transaction $transaction): ?array
+    {
+        if (! $transaction->customer_id) {
+            return null;
+        }
+
+        try {
+            return app(\App\Services\StampCardService::class)->earnFromTransaction($transaction);
+        } catch (\Throwable $e) {
+            Log::warning('[stamp-card] gagal menambah stempel', [
+                'transaction_id' => $transaction->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
     private function receiptTransactionPayload(Transaction $transaction, Store $store): array
     {
         $transaction->loadMissing(['items', 'store', 'user', 'discount', 'customer', 'barber:id,name', 'payments']);
