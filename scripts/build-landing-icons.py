@@ -13,6 +13,7 @@ Jalankan ulang setiap menambah ikon baru di komponen landing, LALU bundle ulang 
 Butuh: pip install fonttools brotli
 """
 
+import hashlib
 import re
 from pathlib import Path
 
@@ -93,9 +94,11 @@ def main():
         subset.save_font(font, str(OUT_FONTS / out), opts)
         size = (OUT_FONTS / out).stat().st_size
         print(f'{out}: {size / 1024:.1f} KB')
+        # ?v=<hash isi font> supaya browser tidak memakai subset lama dari cache saat ikon bertambah.
+        ver = hashlib.md5((OUT_FONTS / out).read_bytes()).hexdigest()[:8]
         faces.append(
             "@font-face{font-family:'%s';font-style:normal;font-weight:%d;font-display:block;"
-            'src:url("../fonts/landing/%s") format("woff2")}' % (family, weight, out)
+            'src:url("../fonts/landing/%s?v=%s") format("woff2")}' % (family, weight, out, ver)
         )
 
     rules = [

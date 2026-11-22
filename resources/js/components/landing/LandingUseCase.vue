@@ -132,14 +132,14 @@ const useCases: UseCase[] = [
     align-items: center;
     justify-content: center;
     font-size: 26px;
-    color: #0d1738;
+    color: #533afd;
     border-radius: 15px;
-    background: #e8f4ff;
+    background: #efecff;
     margin-bottom: 20px;
     transition: all 0.4s ease-in-out;
 }
 .fs-usecase-item:hover .xb-item--icon {
-    background: #0d1738;
+    background: #533afd;
     color: #ffffff;
 }
 
