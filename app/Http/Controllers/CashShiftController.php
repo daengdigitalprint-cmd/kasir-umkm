@@ -59,10 +59,15 @@ class CashShiftController extends Controller
             ->where('store_id', $store->id)
             ->with('user:id,name', 'employee:id,name');
 
-        if ($isPinMode && $activeCashier) {
-            $shiftsQuery->where('employee_id', $activeCashier['employee_id']);
-        } else {
-            $shiftsQuery->where('user_id', $user->id);
+        // Admin dan pemilik melihat riwayat semua shift outlet; kasir hanya shift miliknya.
+        $showsOutletShifts = $user->canManageStoreSettings() || $user->isOwner();
+
+        if (! $showsOutletShifts) {
+            if ($isPinMode && $activeCashier) {
+                $shiftsQuery->where('employee_id', $activeCashier['employee_id']);
+            } else {
+                $shiftsQuery->where('user_id', $user->id);
+            }
         }
 
         $shifts = $shiftsQuery->orderByDesc('opened_at')->limit(100)->get();
@@ -224,6 +229,7 @@ class CashShiftController extends Controller
             'activeShiftByOther' => $activeShiftByOther,
             'timezone' => $store->timezone ?: 'Asia/Jakarta',
             'canViewAllShifts' => $canSeeCash,
+            'showsOutletShifts' => $showsOutletShifts,
             'suggestedOpeningCash' => $lastClosed ? (float) $lastClosed->closing_cash_counted : null,
             'longOpenHours' => self::LONG_OPEN_HOURS,
             'justClosed' => $justClosed,

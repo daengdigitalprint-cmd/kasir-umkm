@@ -300,3 +300,22 @@ test('mode PIN: kasir di perangkat lain tidak bisa menutup shift orang lain dan 
 
     expect($shift->fresh()->closed_at)->toBeNull();
 });
+
+test('riwayat shift: admin melihat shift semua kasir, kasir hanya shift miliknya', function () {
+    [$store, $cashier, $admin] = makeUsabilityOrg();
+    $other = User::factory()->create(['store_id' => $store->id, 'role' => 'cashier', 'email_verified_at' => now()]);
+    $store->members()->attach($other->id, ['role' => 'cashier']);
+
+    $closed = ['closed_at' => now()->subHour(), 'closing_cash_counted' => 100000, 'expected_cash' => 100000, 'difference_amount' => 0];
+    makeShift($store, $cashier, $closed);
+    makeShift($store, $other, $closed);
+    makeShift($store, $admin, $closed);
+
+    test()->actingAs($admin)->get('/cash-shifts')->assertInertia(fn (Assert $page) => $page
+        ->where('showsOutletShifts', true)
+        ->has('shifts', 3));
+
+    test()->actingAs($cashier)->get('/cash-shifts')->assertInertia(fn (Assert $page) => $page
+        ->where('showsOutletShifts', false)
+        ->has('shifts', 1));
+});

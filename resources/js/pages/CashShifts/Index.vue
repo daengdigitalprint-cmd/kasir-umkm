@@ -79,6 +79,7 @@ const props = defineProps<{
     activeShiftByOther?: ActiveShiftByOther | null;
     timezone?: string;
     canViewAllShifts?: boolean;
+    showsOutletShifts?: boolean;
     suggestedOpeningCash?: number | null;
     longOpenHours?: number;
     justClosed?: JustClosed | null;
@@ -448,8 +449,8 @@ function diffClass(n: number) {
         <Card class="border-0 shadow-lg mt-8">
             <CardHeader class="flex flex-row flex-wrap items-start justify-between gap-3">
                 <div>
-                    <CardTitle>Riwayat shift Anda</CardTitle>
-                    <CardDescription>100 shift terakhir.</CardDescription>
+                    <CardTitle>{{ showsOutletShifts ? 'Riwayat shift outlet' : 'Riwayat shift Anda' }}</CardTitle>
+                    <CardDescription>{{ showsOutletShifts ? '100 shift terakhir dari semua kasir di outlet ini.' : '100 shift terakhir.' }}</CardDescription>
                 </div>
                 <Link v-if="canViewAllShifts" href="/reports/cash-shifts" class="text-sm font-medium text-primary hover:underline">
                     Lihat semua shift kasir →
