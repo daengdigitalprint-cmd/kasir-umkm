@@ -223,3 +223,40 @@ it('paket Gratis: sakelar tidak bisa dinyalakan dari Pengaturan', function () {
 
     expect((bool) ($store->fresh()->settings['stamp_card_enabled'] ?? false))->toBeFalse();
 });
+
+it('pengelola menghapus kartu: stempel & hadiah kosong, tautan lama mati, pelanggan tetap ada', function () {
+    [$store, $user, , $customer] = stampStore();
+    $service = app(StampCardService::class);
+    $token = $service->ensureToken($customer);
+    $service->adjust($store, $customer, 4, 'Pindahan', $user->id); // 4 stempel, target 3 = 1 hadiah + 1 stempel
+
+    $this->actingAs($user)->delete("/stamp-card/customers/{$customer->id}")->assertRedirect();
+
+    $fresh = $customer->fresh();
+    expect($fresh)->not->toBeNull()
+        ->and($fresh->stamp_count)->toBe(0)
+        ->and($fresh->stamp_rewards_ready)->toBe(0)
+        ->and($fresh->stamp_last_at)->toBeNull()
+        ->and($fresh->stamp_card_token)->toBeNull()
+        ->and(StampCardLedger::query()->where('customer_id', $customer->id)->where('type', 'remove')->exists())->toBeTrue();
+
+    $this->get('/k/'.$token)->assertNotFound();
+    $this->actingAs($user)->get('/stamp-card')
+        ->assertInertia(fn ($page) => $page->where('stats.members', 0));
+});
+
+it('kartu toko lain dan kasir tidak bisa menghapus kartu', function () {
+    [$store, $user] = stampStore();
+    [$otherStore, , , $other] = stampStore();
+    app(StampCardService::class)->adjust($otherStore, $other, 2, 'x', null);
+
+    $this->actingAs($user)->delete("/stamp-card/customers/{$other->id}")->assertNotFound();
+
+    $cashier = User::factory()->create(['store_id' => $store->id, 'role' => 'cashier', 'email_verified_at' => now()]);
+    $cashier->stores()->attach($store->id, ['role' => 'cashier']);
+    $mine = $store->customers()->first();
+    app(StampCardService::class)->adjust($store, $mine, 2, 'x', null);
+    $this->actingAs($cashier)->delete("/stamp-card/customers/{$mine->id}")->assertRedirect();
+
+    expect($other->fresh()->stamp_count)->toBe(2)->and($mine->fresh()->stamp_count)->toBe(2);
+});

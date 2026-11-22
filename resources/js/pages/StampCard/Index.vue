@@ -3,10 +3,10 @@ import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { History, MessageCircle, Search, Settings2, SlidersHorizontal, Stamp, X } from 'lucide-vue-next';
+import { History, MessageCircle, Search, Settings2, SlidersHorizontal, Stamp, Trash2, X } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 import { stampCardShareLink, type StampCardCustomer } from '@/composables/useStampCard';
-import { toastError } from '@/lib/swal';
+import { confirmDelete, toastError } from '@/lib/swal';
 
 interface Rules {
     title: string;
@@ -119,7 +119,25 @@ const typeLabel: Record<string, string> = {
     redeem: 'Tukar hadiah',
     adjust: 'Koreksi',
     expire: 'Hangus',
+    remove: 'Kartu dihapus',
 };
+
+// ── Hapus kartu ──
+async function removeCard(row: Row) {
+    const rewards = row.rewards_ready > 0 ? ` dan ${row.rewards_ready} hadiah yang belum ditukar` : '';
+    const ok = await confirmDelete(
+        `Kartu stempel ${row.name}`,
+        `${row.count} stempel${rewards} akan dihapus dan tautan kartunya tidak berlaku lagi. Data pelanggan tetap ada.`,
+    );
+    if (!ok) return;
+    removingId.value = row.id;
+    router.delete(`/stamp-card/customers/${row.id}`, {
+        preserveScroll: true,
+        preserveState: true,
+        onFinish: () => (removingId.value = null),
+    });
+}
+const removingId = ref<number | null>(null);
 
 // ── Koreksi ──
 const adjustFor = ref<Row | null>(null);
@@ -300,7 +318,12 @@ const shareLink = (row: Row) => stampCardShareLink(row, props.store_name);
                         Belum ada pelanggan di daftar ini. Stempel pertama muncul setelah kasir memilih pelanggan saat bayar.
                     </div>
 
-                    <div v-for="row in customers.data" :key="row.id" class="flex flex-wrap items-center gap-3 border-t border-slate-100 py-3 first:border-0">
+                    <div
+                        v-for="row in customers.data"
+                        :key="row.id"
+                        class="flex flex-wrap items-center gap-3 border-t border-slate-100 py-3 transition-opacity first:border-0"
+                        :class="removingId === row.id && 'pointer-events-none opacity-40'"
+                    >
                         <div class="min-w-0 flex-1">
                             <div class="truncate font-semibold text-slate-900">{{ row.name }}</div>
                             <div class="text-xs text-slate-500">{{ row.phone || 'Tanpa no. WA' }} · terakhir {{ fmtDate(row.last_at) }}</div>
@@ -327,6 +350,10 @@ const shareLink = (row: Row) => stampCardShareLink(row, props.store_name);
                             </button>
                             <button type="button" class="rounded-lg p-2 text-slate-500 hover:bg-slate-100" title="Koreksi stempel" aria-label="Koreksi stempel" @click="openAdjust(row)">
                                 <SlidersHorizontal class="h-4 w-4" />
+                            </button>
+                            <button type="button" class="rounded-lg p-2 text-red-500 hover:bg-red-50" title="Hapus kartu" aria-label="Hapus kartu" @click="removeCard(row)">
+                                <Trash2 v-if="removingId !== row.id" class="h-4 w-4" />
+                                <span v-else class="text-xs">Menghapus…</span>
                             </button>
                         </div>
                     </div>

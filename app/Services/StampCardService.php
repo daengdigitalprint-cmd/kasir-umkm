@@ -145,6 +145,39 @@ class StampCardService
         return $this->addStamps($store, $customer, $delta, 'adjust', $note, $userId);
     }
 
+    /**
+     * Hapus kartu stempel pelanggan: stempel & hadiah yang belum ditukar dikosongkan, tautan kartu
+     * lama tidak berlaku lagi, dan pelanggan hilang dari daftar Kartu stempel. Data pelanggan dan
+     * riwayat stempel tetap disimpan (riwayat dapat entri "hapus kartu").
+     */
+    public function removeCard(Store $store, Customer $customer, ?int $userId): void
+    {
+        DB::transaction(function () use ($store, $customer, $userId) {
+            $locked = Customer::query()->lockForUpdate()->findOrFail($customer->id);
+
+            StampCardLedger::query()->create([
+                'store_id' => $store->id,
+                'customer_id' => $locked->id,
+                'type' => 'remove',
+                'stamps' => -(int) $locked->stamp_count,
+                'rewards_delta' => -(int) $locked->stamp_rewards_ready,
+                'count_after' => 0,
+                'rewards_after' => 0,
+                'note' => 'Kartu dihapus',
+                'created_by' => $userId,
+            ]);
+
+            $locked->forceFill([
+                'stamp_count' => 0,
+                'stamp_rewards_ready' => 0,
+                'stamp_last_at' => null,
+                'stamp_card_token' => null,
+            ])->save();
+
+            $customer->setRawAttributes($locked->getAttributes(), true);
+        });
+    }
+
     /** Tukar 1 hadiah yang siap. */
     public function redeem(Store $store, Customer $customer, ?int $userId): array
     {

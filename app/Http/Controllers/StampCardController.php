@@ -134,6 +134,19 @@ class StampCardController extends Controller
         return back()->with('success', 'Stempel '.$customer->name.' dikoreksi.');
     }
 
+    public function destroy(Customer $customer): RedirectResponse
+    {
+        $store = $this->store();
+        $this->ownCustomer($store, $customer);
+
+        $before = ['stamps' => (int) $customer->stamp_count, 'rewards_ready' => (int) $customer->stamp_rewards_ready];
+        $this->service->removeCard($store, $customer, auth()->id());
+
+        ActivityLogger::log(store: $store, action: 'stamp_card.removed', description: "Menghapus kartu stempel {$customer->name}", subject: $customer, metadata: $before);
+
+        return back()->with('success', 'Kartu stempel '.$customer->name.' dihapus.');
+    }
+
     public function history(Customer $customer): JsonResponse
     {
         $store = $this->store();

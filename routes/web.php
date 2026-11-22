@@ -399,6 +399,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::put('settings', [App\Http\Controllers\StampCardController::class, 'updateSettings'])->name('settings');
         Route::post('customers/{customer}/adjust', [App\Http\Controllers\StampCardController::class, 'adjust'])->name('adjust');
         Route::get('customers/{customer}/history', [App\Http\Controllers\StampCardController::class, 'history'])->name('history');
+        Route::delete('customers/{customer}', [App\Http\Controllers\StampCardController::class, 'destroy'])->name('destroy');
     });
     // F9 Segmen pelanggan (sebelum resource agar tidak tertangkap customers/{customer})
     Route::get('customers/segments', [App\Http\Controllers\CustomerSegmentController::class, 'index'])
