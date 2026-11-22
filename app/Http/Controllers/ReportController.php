@@ -1241,7 +1241,7 @@ class ReportController extends Controller
                 ->sum('cash_amount');
 
             // Nama kasir: prioritaskan employee (PIN mode), fallback ke user
-            $cashierName = $shift->employee?->name ?? $shift->user?->name ?? '—';
+            $cashierName = $shift->cashierDisplayName();
 
             return [
                 'id' => $shift->id,
@@ -1328,7 +1328,7 @@ class ReportController extends Controller
             ->count();
 
         $shifts = (clone $base)
-            ->with(['user:id,name'])
+            ->with(['user:id,name', 'employee:id,name'])
             ->withCount(['transactions' => fn ($q) => $q->where('status', 'completed')])
             ->orderByDesc('closed_at')
             ->get();
@@ -1351,7 +1351,7 @@ class ReportController extends Controller
             $rows[] = [
                 $index + 1,
                 $shift->shift_number,
-                $shift->user?->name ?? '—',
+                $shift->cashierDisplayName(),
                 $shift->opened_at?->format('d/m/Y H:i') ?? '',
                 $shift->closed_at?->format('d/m/Y H:i') ?? '',
                 round((float) $shift->opening_cash, 2),

@@ -13,6 +13,7 @@ class CashShift extends Model
         'store_id',
         'user_id',
         'employee_id',
+        'cashier_name',
         'shift_number',
         'opened_at',
         'closed_at',
@@ -70,6 +71,11 @@ class CashShift extends Model
                 }
 
                 $name = $name ?? 'KASIR';
+
+                // Simpan nama kasir saat ini agar laporan tidak berubah bila nama akun diganti.
+                if (empty($shift->cashier_name)) {
+                    $shift->cashier_name = Str::limit($name, 100, '');
+                }
                 $firstName = Str::before($name, ' ');
                 $code = Str::upper(Str::slug($firstName, ''));
 
@@ -84,6 +90,12 @@ class CashShift extends Model
                 $shift->shift_number = $code.'-'.str_pad((string) $nextNumber, 3, '0', STR_PAD_LEFT);
             }
         });
+    }
+
+    /** Nama kasir untuk tampilan: karyawan (PIN) → nama tersimpan saat dibuka → nama akun. */
+    public function cashierDisplayName(?string $fallback = '—'): ?string
+    {
+        return $this->employee?->name ?? $this->cashier_name ?? $this->user?->name ?? $fallback;
     }
 
     public function store(): BelongsTo

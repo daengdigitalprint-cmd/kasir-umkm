@@ -138,7 +138,7 @@ class CashShiftController extends Controller
             return [
                 'id' => $shift->id,
                 'shift_number' => $shift->shift_number,
-                'user_name' => $shift->employee?->name ?? $shift->user?->name ?? null,
+                'user_name' => $shift->cashierDisplayName(null),
                 'opened_at' => $shift->opened_at?->toIso8601ZuluString(),
                 'closed_at' => $shift->closed_at?->toIso8601ZuluString(),
                 'opening_cash' => (float) $shift->opening_cash,
@@ -180,7 +180,7 @@ class CashShiftController extends Controller
                 } else {
                     $activeShiftByOther = [
                         'shift_number' => $blocker->shift_number,
-                        'user_name' => $blocker->employee?->name ?? $blocker->user?->name ?? 'Kasir lain',
+                        'user_name' => $blocker->cashierDisplayName('Kasir lain'),
                         'opened_at' => $blocker->opened_at?->toIso8601ZuluString(),
                         'hours_open' => $this->hoursOpen($blocker),
                     ];
@@ -253,7 +253,7 @@ class CashShiftController extends Controller
         return view('cash-shifts.print', [
             'store' => $store,
             'shift' => $cashShift,
-            'cashierName' => $cashShift->employee?->name ?? $cashShift->user?->name ?? 'Kasir',
+            'cashierName' => $cashShift->cashierDisplayName('Kasir'),
             'timezone' => $store->timezone ?: 'Asia/Jakarta',
             'totals' => $totals,
             'payments' => $this->paymentRows($totals['payments'], $canSeeCash),
@@ -305,7 +305,7 @@ class CashShiftController extends Controller
             }
             $cashShift->update([
                 'cashier_signature' => $validated['signature'],
-                'cashier_signed_name' => $cashShift->employee?->name ?? $cashShift->user?->name ?? $user->name,
+                'cashier_signed_name' => $cashShift->cashierDisplayName($user->name),
                 'cashier_signed_at' => now(),
             ]);
         } else {
@@ -445,7 +445,7 @@ class CashShiftController extends Controller
         return [
             'id' => $shift->id,
             'shift_number' => $shift->shift_number,
-            'owner_name' => $shift->employee?->name ?? $shift->user?->name ?? 'Kasir',
+            'owner_name' => $shift->cashierDisplayName('Kasir'),
             'is_own' => $isOwn,
             'opened_at' => $shift->opened_at?->toIso8601ZuluString(),
             'hours_open' => $this->hoursOpen($shift),
@@ -517,7 +517,7 @@ class CashShiftController extends Controller
             ->first();
 
         if ($blocker) {
-            $blockerName = $blocker->employee?->name ?? $blocker->user?->name ?? 'Kasir lain';
+            $blockerName = $blocker->cashierDisplayName('Kasir lain');
 
             return redirect()
                 ->route('cash-shifts.index')
