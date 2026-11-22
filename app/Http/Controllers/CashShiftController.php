@@ -15,7 +15,7 @@ use Inertia\Response;
 
 class CashShiftController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request): Response|RedirectResponse
     {
         $user = Auth::user();
         $store = $user->store;
