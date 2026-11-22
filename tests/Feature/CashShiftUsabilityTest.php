@@ -258,3 +258,45 @@ test('tanda tangan digital bawaan nonaktif dan diatur dari pengaturan toko (modu
         ->assertSee('Tanda tangan Kasir', false)
         ->assertDontSee('Tanda tangan di layar');
 });
+
+/** Mode PIN: satu akun perangkat dipakai bergantian oleh karyawan berbeda. */
+function makePinHandover(): array
+{
+    [$store, $device, $admin] = makeUsabilityOrg();
+    $store->update(['cashier_login_mode' => 'pin']);
+
+    $first = \App\Modules\Attendance\Models\Employee::query()->create(['store_id' => $store->id, 'name' => 'Nuraeni', 'is_active' => true]);
+    $second = \App\Modules\Attendance\Models\Employee::query()->create(['store_id' => $store->id, 'name' => 'Aisyah', 'is_active' => true]);
+
+    return [$store->fresh(), $device, $admin, $first, $second];
+}
+
+test('mode PIN: kasir pengganti di perangkat yang sama bisa menutup shift kasir sebelumnya', function () {
+    [$store, $device, , $first, $second] = makePinHandover();
+    $shift = makeShift($store, $device, ['employee_id' => $first->id]);
+
+    test()->actingAs($device)
+        ->withSession(['_token' => 'csrf-token', 'active_cashier' => ['employee_id' => $second->id, 'employee_name' => 'Aisyah', 'user_id' => $device->id]])
+        ->post("/cash-shifts/{$shift->id}/close", ['_token' => 'csrf-token', 'closing_cash_counted' => 100000])
+        ->assertRedirect();
+
+    expect($shift->fresh()->closed_at)->not->toBeNull();
+    $this->assertDatabaseHas('activity_logs', ['action' => 'cash_shift.closed', 'subject_id' => $shift->id]);
+    expect(\App\Models\ActivityLog::query()->where('action', 'cash_shift.closed')->value('description'))->toContain('Aisyah');
+});
+
+test('mode PIN: kasir di perangkat lain tidak bisa menutup shift orang lain dan mendapat pesan, bukan 403', function () {
+    [$store, $device, , $first, $second] = makePinHandover();
+    $shift = makeShift($store, $device, ['employee_id' => $first->id]);
+
+    $otherDevice = User::factory()->create(['store_id' => $store->id, 'role' => 'cashier', 'email_verified_at' => now()]);
+    $store->members()->attach($otherDevice->id, ['role' => 'cashier']);
+
+    test()->actingAs($otherDevice)
+        ->withSession(['_token' => 'csrf-token', 'active_cashier' => ['employee_id' => $second->id, 'employee_name' => 'Aisyah', 'user_id' => $otherDevice->id]])
+        ->post("/cash-shifts/{$shift->id}/close", ['_token' => 'csrf-token', 'closing_cash_counted' => 100000])
+        ->assertRedirect(route('cash-shifts.index'))
+        ->assertSessionHas('error');
+
+    expect($shift->fresh()->closed_at)->toBeNull();
+});

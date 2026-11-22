@@ -347,10 +347,14 @@ class CashShiftController extends Controller
         $isPinMode = ($store->cashier_login_mode ?? 'email') === 'pin';
         $activeCashier = $request->session()->get('active_cashier');
 
-        if ($isPinMode && $activeCashier && $cashShift->employee_id) {
-            return (int) $cashShift->employee_id === (int) $activeCashier['employee_id'];
+        if ($isPinMode && $activeCashier && $cashShift->employee_id
+            && (int) $cashShift->employee_id === (int) $activeCashier['employee_id']) {
+            return true;
         }
 
+        // Shift dibuka dari akun login (perangkat) yang sama. Di mode PIN satu tablet bisa dipakai
+        // bergantian; POS dan halaman shift memakai shift perangkat ini, jadi kasir pengganti
+        // juga boleh menutupnya.
         return (int) $cashShift->user_id === (int) $user->id;
     }
 
@@ -579,20 +583,14 @@ class CashShiftController extends Controller
         $isPinMode = ($store->cashier_login_mode ?? 'email') === 'pin';
         $activeCashier = $request->session()->get('active_cashier');
 
-        if ($isPinMode && $activeCashier) {
-            // PIN mode: cek employee_id jika shift punya employee_id
-            if ($cashShift->employee_id) {
-                if ((int) $cashShift->employee_id !== (int) $activeCashier['employee_id'] && ! $user->canManageStoreSettings() && ! $user->isOwner()) {
-                    abort(403);
-                }
-            } else {
-                // Shift lama tanpa employee_id: cek user_id
-                if ((int) $cashShift->user_id !== (int) $user->id && ! $user->canManageStoreSettings() && ! $user->isOwner()) {
-                    abort(403);
-                }
+        if (! $this->canActOnShift($request, $user, $store, $cashShift)) {
+            $message = 'Shift ini milik '.$cashShift->cashierDisplayName('kasir lain').'. Minta kasir tersebut atau pemilik/admin toko untuk menutupnya.';
+
+            if (! $request->header('X-Inertia') && ($request->expectsJson() || $request->ajax())) {
+                return response()->json(['success' => false, 'message' => $message], 403);
             }
-        } elseif ((int) $cashShift->user_id !== (int) $user->id && ! $user->canManageStoreSettings() && ! $user->isOwner()) {
-            abort(403);
+
+            return redirect()->route('cash-shifts.index')->with('error', $message);
         }
 
         if (! StorePlanLimits::allowsAdvancedRetailFeatures($store)) {
@@ -641,11 +639,15 @@ class CashShiftController extends Controller
             'closing_notes' => $validated['closing_notes'] ?? null,
         ]);
 
+        $closedByName = $isPinMode && $activeCashier
+            ? ($activeCashier['employee_name'] ?? $user->name)
+            : $user->name;
+
         // Catat penutupan shift ke activity log (audit trail)
         ActivityLogger::log(
             store: $store,
             action: 'cash_shift.closed',
-            description: "Shift #{$cashShift->id} ditutup oleh {$user->name}. Selisih kas: ".number_format($diff, 0, ',', '.'),
+            description: "Shift #{$cashShift->id} ditutup oleh {$closedByName}. Selisih kas: ".number_format($diff, 0, ',', '.'),
             subject: $cashShift,
             metadata: [
                 'opening_cash' => (float) $cashShift->opening_cash,
@@ -654,6 +656,7 @@ class CashShiftController extends Controller
                 'difference_amount' => $diff,
                 'opened_by' => $cashShift->opened_by,
                 'closed_by' => $user->id,
+                'closed_by_employee_id' => $isPinMode && $activeCashier ? $activeCashier['employee_id'] : null,
             ],
             user: $user
         );
