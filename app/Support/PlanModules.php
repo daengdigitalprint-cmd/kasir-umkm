@@ -85,6 +85,14 @@ final class PlanModules
             'menus' => ['upsell'],
             'routes' => ['upsell-rules.*'],
         ],
+        'stamp_card' => [
+            'label' => 'Kartu Stempel Digital',
+            'setting' => 'stamp_card_enabled',
+            // Menu Kartu stempel memakai menu_key "customers" (dipakai bersama menu Pelanggan),
+            // jadi tidak dikunci lewat menu; menunya disembunyikan oleh props stamp_card_enabled.
+            'menus' => [],
+            'routes' => ['stamp-card.*', 'pos.stamp-card.*'],
+        ],
         'ai_chat' => [
             'label' => 'Asisten AI',
             'setting' => 'ai_chat_enabled',

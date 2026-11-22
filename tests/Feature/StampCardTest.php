@@ -17,24 +17,31 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
-function stampStore(bool $enabled = true, array $rules = []): array
+/**
+ * Toko uji. Bawaan: paket berbayar (tanpa paket & tanpa masa berakhir = akses penuh) dengan shift terbuka.
+ * $freePlan = true: paket Starter (Gratis), tempat kartu stempel dikunci.
+ */
+function stampStore(bool $enabled = true, array $rules = [], bool $freePlan = false): array
 {
-    // Paket Starter (gratis): kartu stempel tersedia di semua paket, dan POS tidak butuh shift terbuka.
-    $plan = \App\Models\SubscriptionPlan::query()->firstOrCreate(
-        ['slug' => 'starter'],
-        ['name' => 'Paket Starter', 'price' => 0, 'billing_cycle' => 'monthly', 'is_active' => true],
-    );
+    $planFields = [];
+    if ($freePlan) {
+        $plan = \App\Models\SubscriptionPlan::query()->firstOrCreate(
+            ['slug' => 'starter'],
+            ['name' => 'Paket Starter', 'price' => 0, 'billing_cycle' => 'monthly', 'is_active' => true],
+        );
+        $planFields = ['subscription_plan_id' => $plan->id, 'subscription_end' => now()->addDay()];
+    }
     $store = Store::query()->create([
         'name' => 'Kedai Kopi Senja',
         'slug' => 'senja-'.uniqid(),
         'is_active' => true,
         'is_subscription_active' => true,
-        'subscription_plan_id' => $plan->id,
-        'subscription_end' => now()->addDay(),
         'settings' => ['stamp_card_enabled' => $enabled, 'stamp_card' => array_merge(['target' => 3, 'reward' => '1 Es Kopi gratis'], $rules)],
-    ]);
+    ] + $planFields);
     $user = User::factory()->create(['store_id' => $store->id, 'role' => 'admin', 'email_verified_at' => now()]);
     $user->stores()->attach($store->id, ['role' => 'admin']);
+    // Paket berbayar mewajibkan shift kasir terbuka untuk berjualan.
+    \App\Models\CashShift::query()->create(['store_id' => $store->id, 'user_id' => $user->id, 'opening_cash' => 0, 'opened_at' => now()]);
     $product = Product::query()->create([
         'store_id' => $store->id,
         'name' => 'Kopi Susu',
@@ -192,4 +199,27 @@ it('kasir tidak bisa membuka halaman pengaturan kartu stempel', function () {
     $this->actingAs($cashier)->get('/stamp-card')->assertRedirect();
     $this->actingAs($cashier)->post("/stamp-card/customers/{$store->customers()->first()->id}/adjust", ['delta' => 5, 'note' => 'x'])->assertRedirect();
     expect($store->customers()->first()->stamp_count)->toBe(0);
+});
+
+it('paket Gratis: modul terkunci walau sakelarnya tersimpan menyala', function () {
+    [$store, $user, $product, $customer] = stampStore(true, [], freePlan: true);
+
+    expect(StampCardSettings::enabled($store))->toBeFalse();
+
+    // Penjualan tetap jalan, tanpa stempel.
+    stampSale($this, $user, $product, $customer)->assertOk()->assertJsonPath('transaction.stamp_card', null);
+    expect($customer->fresh()->stamp_count)->toBe(0);
+
+    // Halaman & endpoint kasir ditolak dengan ajakan upgrade.
+    $this->actingAs($user)->get('/stamp-card')->assertRedirect(route('dashboard'));
+    $this->actingAs($user)->getJson('/pos/stamp-card/lookup?q=08112223333')
+        ->assertForbidden()->assertJsonPath('upgrade_required', true);
+});
+
+it('paket Gratis: sakelar tidak bisa dinyalakan dari Pengaturan', function () {
+    [$store, $user] = stampStore(false, [], freePlan: true);
+
+    $this->actingAs($user)->put('/settings/store', ['stamp_card_enabled' => true]);
+
+    expect((bool) ($store->fresh()->settings['stamp_card_enabled'] ?? false))->toBeFalse();
 });

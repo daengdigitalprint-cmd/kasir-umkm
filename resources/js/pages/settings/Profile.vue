@@ -985,6 +985,7 @@ const inputClass =
                         :icon="Stamp"
                         title="Kartu stempel digital"
                         description="Pengganti kartu stempel kertas: kasir cari pelanggan lewat no. WA atau QR, stempel bertambah otomatis, kartu penuh jadi hadiah. Aturannya di menu Pelanggan & Promo → Kartu stempel."
+                        :locked="lockedSettings.includes('stamp_card_enabled')"
                         :loading="savingModule === 'stamp_card_enabled'"
                         @update:model-value="setModule('stamp_card_enabled', $event)"
                     />

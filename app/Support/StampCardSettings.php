@@ -6,7 +6,7 @@ use App\Models\Store;
 
 /**
  * Aturan Kartu Stempel per toko.
- * Sakelar modul: stores.settings['stamp_card_enabled'] (bawaan nonaktif, semua paket).
+ * Sakelar modul: stores.settings['stamp_card_enabled'] (bawaan nonaktif, paket GrowUp ke atas).
  * Aturan: stores.settings['stamp_card'].
  */
 final class StampCardSettings
@@ -29,7 +29,8 @@ final class StampCardSettings
 
     public static function enabled(?Store $store): bool
     {
-        return (bool) ($store?->settings['stamp_card_enabled'] ?? false);
+        // Mati otomatis di paket Gratis (lihat PlanModules 'stamp_card').
+        return PlanModules::settingOn($store, 'stamp_card_enabled');
     }
 
     /** @return array<string, mixed> */

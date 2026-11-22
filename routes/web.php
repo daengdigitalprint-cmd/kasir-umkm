@@ -931,7 +931,7 @@ Route::get('/m/{slug}/status/{statusToken}', [App\Http\Controllers\GuestMenuCont
 Route::get('/k/{token}', [App\Http\Controllers\StampCardController::class, 'publicShow'])
     ->where('token', '[A-Za-z0-9]{12,40}')
     ->middleware('throttle:60,1')
-    ->name('stamp-card.public');
+    ->name('stamp-card-public');
 
 // Unduh PDF struk publik tanpa login, dilindungi token acak (status_token) per transaksi.
 Route::get('/i/pdf/{statusToken}', [App\Http\Controllers\POSController::class, 'exportPublicPdf'])
