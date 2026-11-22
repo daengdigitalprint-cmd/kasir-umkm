@@ -9,15 +9,22 @@ use App\Http\Controllers\TaxSettingsController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
-Route::middleware('auth')->group(function () {
-    Route::redirect('settings', '/settings/profile');
+// Pengalihan alamat lama memakai redirectGet (hanya GET/HEAD). Route::redirect() menangkap SEMUA
+// metode: dengan route:cache di produksi, PUT ke alamat yang sama ikut dialihkan dan tidak pernah
+// sampai ke controller (sakelar Pengaturan toko tampak "Tersimpan" padahal tidak tersimpan).
+$redirectGet = fn (string $uri, string $to) => Route::get($uri, '\Illuminate\Routing\RedirectController')
+    ->defaults('destination', $to)
+    ->defaults('status', 302);
+
+Route::middleware('auth')->group(function () use ($redirectGet) {
+    $redirectGet('settings', '/settings/profile');
 
     Route::get('settings/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('settings/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('settings/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     // Pengaturan toko dipecah per bagian, masing-masing punya alamat sendiri.
-    Route::redirect('settings/store', '/settings/store/profil')->middleware('role.store_admin');
+    $redirectGet('settings/store', '/settings/store/profil')->middleware('role.store_admin');
     Route::get('settings/store/{section}', [ProfileController::class, 'editStore'])
         ->middleware('role.store_admin')
         ->whereIn('section', ProfileController::STORE_SECTIONS)
@@ -32,7 +39,7 @@ Route::middleware('auth')->group(function () {
         ->name('settings.ui-mode.update');
 
     // Fitur Tambahan kini satu tempat dengan modul lain di Pengaturan → Fitur.
-    Route::redirect('settings/features', '/settings/store/fitur')
+    $redirectGet('settings/features', '/settings/store/fitur')
         ->middleware('role.store_admin');
     Route::put('settings/features/{feature}', [FeatureController::class, 'update'])
         ->middleware('role.store_admin')
@@ -61,7 +68,7 @@ Route::middleware('auth')->group(function () {
     })->name('bluetooth-printer');
 
     // Backup routes
-    Route::redirect('settings/backup', '/settings/store/backup')
+    $redirectGet('settings/backup', '/settings/store/backup')
         ->middleware('role.store_admin');
     // Backup berisi seluruh data toko (transaksi, pelanggan, akuntansi): hanya pemilik/admin toko.
     Route::get('settings/backup/history', [BackupController::class, 'history'])
