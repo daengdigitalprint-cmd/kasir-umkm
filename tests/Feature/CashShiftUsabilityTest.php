@@ -319,3 +319,19 @@ test('riwayat shift: admin melihat shift semua kasir, kasir hanya shift miliknya
         ->where('showsOutletShifts', false)
         ->has('shifts', 1));
 });
+
+test('riwayat shift: admin cukup 10 terakhir, kasir tetap sampai 100', function () {
+    [$store, $cashier, $admin] = makeUsabilityOrg();
+    $closed = ['closed_at' => now()->subHour(), 'closing_cash_counted' => 100000, 'expected_cash' => 100000, 'difference_amount' => 0];
+    foreach (range(1, 12) as $i) {
+        makeShift($store, $cashier, array_merge($closed, ['opened_at' => now()->subHours(2 + $i)]));
+    }
+
+    test()->actingAs($admin)->get('/cash-shifts')->assertInertia(fn (Assert $page) => $page
+        ->where('historyLimit', 10)
+        ->has('shifts', 10));
+
+    test()->actingAs($cashier)->get('/cash-shifts')->assertInertia(fn (Assert $page) => $page
+        ->where('historyLimit', 100)
+        ->has('shifts', 12));
+});

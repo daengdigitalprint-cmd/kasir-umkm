@@ -70,7 +70,10 @@ class CashShiftController extends Controller
             }
         }
 
-        $shifts = $shiftsQuery->orderByDesc('opened_at')->limit(100)->get();
+        // Yang punya tombol "Lihat semua shift kasir" (laporan) cukup melihat 10 terakhir di sini.
+        $historyLimit = $user->canAccessBackOffice() ? 10 : 100;
+
+        $shifts = $shiftsQuery->orderByDesc('opened_at')->limit($historyLimit)->get();
 
         $shiftIds = $shifts->pluck('id');
 
@@ -230,6 +233,7 @@ class CashShiftController extends Controller
             'timezone' => $store->timezone ?: 'Asia/Jakarta',
             'canViewAllShifts' => $canSeeCash,
             'showsOutletShifts' => $showsOutletShifts,
+            'historyLimit' => $historyLimit,
             'suggestedOpeningCash' => $lastClosed ? (float) $lastClosed->closing_cash_counted : null,
             'longOpenHours' => self::LONG_OPEN_HOURS,
             'justClosed' => $justClosed,
