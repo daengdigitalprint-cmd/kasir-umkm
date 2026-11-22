@@ -19,6 +19,7 @@ function makeUsabilityOrg(string $tz = 'Asia/Jakarta'): array
         'is_active' => true,
         'is_subscription_active' => true,
         'timezone' => $tz,
+        'settings' => ['shift_digital_signature' => true],
     ]);
 
     $cashier = User::factory()->create(['store_id' => $store->id, 'role' => 'cashier', 'email_verified_at' => now()]);
@@ -214,33 +215,46 @@ test('tanda tangan ditolak untuk shift terbuka, peran yang salah, dan gambar pal
     expect($closed->fresh()->cashier_signature)->toBeNull();
 });
 
-test('pengelola bisa menonaktifkan tanda tangan digital, kasir tidak', function () {
+test('tanda tangan digital bawaan nonaktif dan diatur dari pengaturan toko (modul)', function () {
     [$store, $cashier, $admin] = makeUsabilityOrg();
+    $store->update(['settings' => []]); // toko baru: belum pernah diatur
     $shift = makeShift($store, $cashier, ['closed_at' => now(), 'closing_cash_counted' => 100000]);
+    $admin = $admin->fresh();
+    $cashier = $cashier->fresh();
 
-    // Bawaan aktif.
+    $saveSetting = fn (User $user, bool $on) => test()->actingAs($user)
+        ->withSession(['_token' => 'csrf-token'])
+        ->put('/settings/store', [
+            '_token' => 'csrf-token',
+            'name' => $store->name,
+            'business_type' => 'general',
+            'shift_digital_signature' => $on,
+        ]);
+
+    // Bawaan nonaktif: tidak ada tombol, simpan ditolak, sakelar modul mati.
     $this->actingAs($admin)->get('/cash-shifts')
-        ->assertInertia(fn (Assert $page) => $page->where('signatureEnabled', true));
-
-    $this->actingAs($cashier)->withSession(['_token' => 'csrf-token'])
-        ->put('/cash-shifts/settings', ['_token' => 'csrf-token', 'signature_enabled' => false])
-        ->assertForbidden();
-
-    $this->actingAs($admin)->withSession(['_token' => 'csrf-token'])
-        ->put('/cash-shifts/settings', ['_token' => 'csrf-token', 'signature_enabled' => false])
-        ->assertRedirect();
-
-    expect($store->fresh()->settings['shift_digital_signature'])->toBeFalse();
-    $cashier = $cashier->fresh(); // relasi store yang tersimpan di objek tes sudah usang
-
-    // Nonaktif: tombol hilang dan simpan ditolak.
+        ->assertInertia(fn (Assert $page) => $page->where('signatureEnabled', false));
+    $this->actingAs($admin)->get('/settings/store/fitur')
+        ->assertInertia(fn (Assert $page) => $page->where('store.shift_digital_signature', false));
     $this->actingAs($cashier)->get("/cash-shifts/{$shift->id}/print")
         ->assertOk()
         ->assertDontSee('Tanda tangan di layar');
     signAs($cashier, $shift, 'cashier')->assertStatus(422);
 
-    // Aktif lagi: kasir bisa tanda tangan.
-    $this->actingAs($admin)->withSession(['_token' => 'csrf-token'])
-        ->put('/cash-shifts/settings', ['_token' => 'csrf-token', 'signature_enabled' => true]);
-    signAs($cashier->fresh(), $shift, 'cashier')->assertOk();
+    // Kasir tidak bisa menyalakannya.
+    $saveSetting($cashier, true); // dialihkan oleh middleware role.store_admin
+    expect(($store->fresh()->settings ?? [])['shift_digital_signature'] ?? false)->toBeFalse();
+
+    // Pengelola menyalakan: tombol muncul dan kasir bisa tanda tangan.
+    $saveSetting($admin, true)->assertRedirect();
+    expect($store->fresh()->settings['shift_digital_signature'])->toBeTrue();
+    $cashier = $cashier->fresh(); // relasi store yang tersimpan di objek tes sudah usang
+    $this->actingAs($cashier)->get("/cash-shifts/{$shift->id}/print")->assertSee('Tanda tangan di layar');
+    signAs($cashier, $shift, 'cashier')->assertOk();
+
+    // Dimatikan lagi: tanda tangan lama tetap tampil.
+    $saveSetting($admin->fresh(), false)->assertRedirect();
+    $this->actingAs($admin->fresh())->get("/cash-shifts/{$shift->id}/print")
+        ->assertSee('Tanda tangan Kasir', false)
+        ->assertDontSee('Tanda tangan di layar');
 });

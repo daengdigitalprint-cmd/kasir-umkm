@@ -284,7 +284,7 @@ class CashShiftController extends Controller
         ]);
 
         if (! self::signatureEnabled($store)) {
-            return response()->json(['message' => 'Tanda tangan digital sedang dinonaktifkan pemilik toko.'], 422);
+            return response()->json(['message' => 'Tanda tangan digital sedang dinonaktifkan di Pengaturan toko.'], 422);
         }
 
         if ($cashShift->closed_at === null) {
@@ -335,42 +335,10 @@ class CashShiftController extends Controller
         return response()->json(['message' => 'Tanda tangan tersimpan.']);
     }
 
-    /**
-     * Aktifkan/nonaktifkan tanda tangan digital di laporan shift (pemilik, admin, manajer).
-     */
-    public function updateSettings(Request $request): RedirectResponse
-    {
-        $user = Auth::user();
-        $store = $user->store;
-
-        if (! $store || ! $user->canAccessBackOffice()) {
-            abort(403);
-        }
-
-        $validated = $request->validate([
-            'signature_enabled' => ['required', 'boolean'],
-        ]);
-
-        $settings = $store->settings ?? [];
-        $settings['shift_digital_signature'] = (bool) $validated['signature_enabled'];
-        $store->update(['settings' => $settings]);
-
-        ActivityLogger::log(
-            store: $store,
-            action: 'cash_shift.settings',
-            description: 'Tanda tangan digital laporan shift '.($settings['shift_digital_signature'] ? 'diaktifkan' : 'dinonaktifkan')." oleh {$user->name}.",
-            user: $user
-        );
-
-        return back()->with('success', $settings['shift_digital_signature']
-            ? 'Tanda tangan digital di laporan shift diaktifkan.'
-            : 'Tanda tangan digital di laporan shift dinonaktifkan.');
-    }
-
-    /** Tanda tangan digital aktif kecuali pemilik menonaktifkannya (bawaan: aktif). */
+    /** Tanda tangan digital hanya aktif bila dinyalakan di Pengaturan toko → Fitur (bawaan: nonaktif). */
     public static function signatureEnabled($store): bool
     {
-        return (bool) (($store->settings ?? [])['shift_digital_signature'] ?? true);
+        return (bool) (($store->settings ?? [])['shift_digital_signature'] ?? false);
     }
 
     /** Kasir pemilik shift (user, atau karyawan PIN yang sedang aktif). */

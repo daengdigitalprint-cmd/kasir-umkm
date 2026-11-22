@@ -151,6 +151,7 @@ class ProfileController extends Controller
                 'cup_label_enabled' => (bool) ($store->settings['cup_label_enabled'] ?? false),
                 'scan_meja_enabled' => PlanModules::settingOn($store, 'scan_meja_enabled'),
                 'accounting_enabled' => AccountingFeatures::enabled($store),
+                'shift_digital_signature' => \App\Http\Controllers\CashShiftController::signatureEnabled($store),
                 'max_backdate_days' => (int) ($store->settings['max_backdate_days'] ?? 7),
                 'receivables_enabled' => PlanModules::settingOn($store, 'receivables_enabled'),
                 'product_discount_enabled' => ProductDiscountFeatures::enabled($store),

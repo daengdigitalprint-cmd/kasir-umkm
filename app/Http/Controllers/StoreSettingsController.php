@@ -57,6 +57,7 @@ class StoreSettingsController extends Controller
             'attach_organization_id' => 'nullable|integer|exists:organizations,id',
             'pos_show_barcode' => 'sometimes|boolean',
             'ai_chat_enabled' => 'sometimes|boolean',
+            'shift_digital_signature' => 'sometimes|boolean',
             'recipes_enabled' => 'sometimes|boolean',
             'productions_enabled' => 'sometimes|boolean',
             'kitchen_queue_enabled' => 'sometimes|boolean',
@@ -118,6 +119,12 @@ class StoreSettingsController extends Controller
         if (array_key_exists('pos_show_barcode', $validated)) {
             $settings['pos_show_barcode'] = (bool) $validated['pos_show_barcode'];
             unset($validated['pos_show_barcode']);
+        }
+
+        // Tanda tangan digital di laporan tutup shift (bawaan nonaktif bila belum pernah diatur).
+        if (array_key_exists('shift_digital_signature', $validated)) {
+            $settings['shift_digital_signature'] = (bool) $validated['shift_digital_signature'];
+            unset($validated['shift_digital_signature']);
         }
 
         if (array_key_exists('ai_chat_enabled', $validated)) {

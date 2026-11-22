@@ -23,6 +23,7 @@ import {
     KeyRound,
     Package,
     PackageOpen,
+    PenLine,
     Percent,
     QrCode,
     ScanBarcode,
@@ -95,6 +96,7 @@ interface StoreProps {
     attendance_enabled?: boolean;
     scan_meja_enabled?: boolean;
     accounting_enabled?: boolean;
+    shift_digital_signature?: boolean;
     max_backdate_days?: number;
     product_discount_enabled?: boolean;
     scan_meja_payment_methods?: PaymentMethod[];
@@ -432,6 +434,7 @@ const modules = reactive({
     ai_chat_enabled: s.value?.ai_chat_enabled === true,
     attendance_enabled: s.value?.attendance_enabled === true,
     accounting_enabled: s.value?.accounting_enabled === true,
+    shift_digital_signature: s.value?.shift_digital_signature === true,
 });
 watch(
     () => props.store,
@@ -439,6 +442,7 @@ watch(
         modules.ai_chat_enabled = st?.ai_chat_enabled === true;
         modules.attendance_enabled = st?.attendance_enabled === true;
         modules.accounting_enabled = st?.accounting_enabled === true;
+        modules.shift_digital_signature = st?.shift_digital_signature === true;
         backdateDays.value = Number(st?.max_backdate_days ?? 7);
     },
 );
@@ -962,6 +966,15 @@ const inputClass =
                         :locked="lockedSettings.includes('attendance_enabled')"
                         :loading="savingModule === 'attendance_enabled'"
                         @update:model-value="setModule('attendance_enabled', $event)"
+                    />
+                    <SettingSwitch
+                        :model-value="modules.shift_digital_signature"
+                        :icon="PenLine"
+                        title="Tanda tangan digital laporan shift"
+                        description="Kasir dan pengelola tanda tangan di layar pada laporan tutup shift. Bila dimatikan, laporan hanya berisi kolom tanda tangan manual."
+                        :locked="lockedSettings.includes('shift_digital_signature')"
+                        :loading="savingModule === 'shift_digital_signature'"
+                        @update:model-value="setModule('shift_digital_signature', $event)"
                     />
                     <SettingSwitch
                         :model-value="modules.accounting_enabled"

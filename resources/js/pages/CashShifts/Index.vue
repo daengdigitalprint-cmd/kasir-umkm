@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Clock, Banknote, LockKeyhole, Calculator, Printer, AlertTriangle, CheckCircle2, ChevronDown, Receipt, PenLine } from 'lucide-vue-next';
+import { Clock, Banknote, LockKeyhole, Calculator, Printer, AlertTriangle, CheckCircle2, ChevronDown, Receipt } from 'lucide-vue-next';
 import { confirmDialog } from '@/lib/swal';
 
 interface ShiftRow {
@@ -89,14 +89,8 @@ const page = usePage();
 const tz = computed(() => props.timezone || 'Asia/Jakarta');
 const longOpen = computed(() => props.longOpenHours ?? 16);
 
-// Sakelar tanda tangan digital (pengelola). Bawaan aktif.
-const signatureOn = computed(() => props.signatureEnabled !== false);
-const settingsForm = useForm({ signature_enabled: true });
-
-function toggleSignature() {
-    settingsForm.signature_enabled = !signatureOn.value;
-    settingsForm.put('/cash-shifts/settings', { preserveScroll: true });
-}
+// Tanda tangan digital diatur di Pengaturan toko → Fitur (bawaan nonaktif).
+const signatureOn = computed(() => props.signatureEnabled === true);
 
 const flashBlocked = computed(
     () => (page.props as { flash?: { shift_blocked?: ShiftBlockedInfo | null } }).flash?.shift_blocked ?? null,
@@ -449,39 +443,6 @@ function diffClass(n: number) {
                 </CardContent>
             </Card>
         </div>
-
-        <!-- Pengaturan (pengelola): tanda tangan digital di laporan shift -->
-        <Card v-if="canViewAllShifts" class="border-0 shadow-lg mt-8">
-            <CardContent class="py-5 flex items-start justify-between gap-4">
-                <div class="flex items-start gap-3 min-w-0">
-                    <PenLine class="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                    <div>
-                        <p class="font-semibold text-slate-900">Tanda tangan digital di laporan shift</p>
-                        <p class="text-sm text-slate-600">
-                            {{
-                                signatureOn
-                                    ? 'Aktif: kasir dan pengelola bisa tanda tangan di layar pada laporan shift yang sudah ditutup.'
-                                    : 'Nonaktif: laporan shift hanya berisi kolom tanda tangan manual untuk dicetak.'
-                            }}
-                        </p>
-                    </div>
-                </div>
-                <button
-                    type="button"
-                    role="switch"
-                    :aria-checked="signatureOn"
-                    aria-label="Tanda tangan digital di laporan shift"
-                    :disabled="settingsForm.processing"
-                    :class="[
-                        'relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors disabled:opacity-60',
-                        signatureOn ? 'bg-primary' : 'bg-slate-300',
-                    ]"
-                    @click="toggleSignature"
-                >
-                    <span :class="['inline-block h-5 w-5 rounded-full bg-white shadow transition-transform', signatureOn ? 'translate-x-6' : 'translate-x-1']" />
-                </button>
-            </CardContent>
-        </Card>
 
         <!-- Riwayat -->
         <Card class="border-0 shadow-lg mt-8">
