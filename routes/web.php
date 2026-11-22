@@ -613,6 +613,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::prefix('cash-shifts')->name('cash-shifts.')->middleware(['store.active', 'role.pos'])->group(function () {
         Route::get('/', [App\Http\Controllers\CashShiftController::class, 'index'])->name('index');
         Route::post('/open', [App\Http\Controllers\CashShiftController::class, 'open'])->name('open');
+        Route::get('/{cash_shift}/print', [App\Http\Controllers\CashShiftController::class, 'print'])->name('print');
+        Route::post('/{cash_shift}/signature', [App\Http\Controllers\CashShiftController::class, 'sign'])->name('sign');
         Route::post('/{cash_shift}/close', [App\Http\Controllers\CashShiftController::class, 'close'])->name('close');
 
         // Transaksi Kasir (Uang Masuk / Keluar)

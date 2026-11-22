@@ -214,7 +214,7 @@ test('menutup shift via inertia mengembalikan redirect bukan json', function () 
             'closing_cash_counted' => 100000,
         ]);
 
-    $response->assertRedirect(route('cash-shifts.index'));
+    $response->assertRedirect(route('cash-shifts.index', ['closed' => $shift->id]));
     $response->assertSessionHas('success');
 });
 

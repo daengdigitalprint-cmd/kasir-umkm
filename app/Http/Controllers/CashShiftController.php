@@ -152,34 +152,16 @@ class CashShiftController extends Controller
             ->values()
             ->all();
 
-        $openShiftPayload = null;
-        if ($openShift) {
-            $salesCashOpen = (float) Transaction::query()
-                ->where('cash_shift_id', $openShift->id)
-                ->where('status', 'completed')
-                ->sum('cash_amount');
-
-            $cashInOpen = (float) \App\Models\CashTransaction::query()
-                ->where('cash_shift_id', $openShift->id)
-                ->where('type', 'in')
-                ->sum('amount');
-
-            $cashOutOpen = (float) \App\Models\CashTransaction::query()
-                ->where('cash_shift_id', $openShift->id)
-                ->where('type', 'out')
-                ->sum('amount');
-
-            $expectedOpen = (float) $openShift->opening_cash + $salesCashOpen + $cashInOpen - $cashOutOpen;
-
-            $openShiftPayload = [
-                'id' => $openShift->id,
-                'shift_number' => $openShift->shift_number,
-                'opened_at' => $openShift->opened_at?->toIso8601ZuluString(),
-                'opening_cash' => (float) $openShift->opening_cash,
-                // Hitung buta: kasir mengisi uang fisik tanpa melihat kas seharusnya.
-                'expected_cash' => $user->canAccessBackOffice() ? $expectedOpen : null,
-            ];
+        // Hitung buta: staf tidak melihat perkiraan kas maupun selisih, termasuk di riwayat.
+        $canSeeCash = $user->canAccessBackOffice();
+        if (! $canSeeCash) {
+            $shifts = array_map(fn (array $row) => array_merge($row, [
+                'expected_cash' => null,
+                'difference_amount' => null,
+            ]), $shifts);
         }
+
+        $openShiftPayload = $openShift ? $this->openShiftPayload($openShift, $user, true) : null;
 
         // Deteksi shift aktif oleh kasir lain di outlet yang sama (untuk info UI).
         // Selama ada shift aktif milik kasir lain, kasir ini tidak boleh membuka shift baru.
@@ -193,22 +175,46 @@ class CashShiftController extends Controller
 
             if ($blocker && (int) $blocker->user_id !== (int) $user->id) {
                 if ($user->canManageStoreSettings() || $user->isOwner()) {
-                    // Admin atau owner bisa bertindak pada shift blocker
-                    $openShiftPayload = [
-                        'id' => $blocker->id,
-                        'shift_number' => $blocker->shift_number,
-                        'opened_at' => $blocker->opened_at?->toIso8601ZuluString(),
-                        'opening_cash' => (float) $blocker->opening_cash,
-                        // Hitung expected_cash untuk shift blocker agar admin bisa melihat nominalnya saat mau tutup
-                        'expected_cash' => (float) $blocker->opening_cash + (float) Transaction::query()->where('cash_shift_id', $blocker->id)->where('status', 'completed')->sum('cash_amount') + (float) \App\Models\CashTransaction::query()->where('cash_shift_id', $blocker->id)->where('type', 'in')->sum('amount') - (float) \App\Models\CashTransaction::query()->where('cash_shift_id', $blocker->id)->where('type', 'out')->sum('amount'),
-                    ];
+                    // Admin atau owner bisa menutup shift orang lain yang memblokir outlet.
+                    $openShiftPayload = $this->openShiftPayload($blocker, $user, false);
                 } else {
                     $activeShiftByOther = [
                         'shift_number' => $blocker->shift_number,
-                        'user_name' => $blocker->user?->name ?? 'Kasir lain',
+                        'user_name' => $blocker->employee?->name ?? $blocker->user?->name ?? 'Kasir lain',
                         'opened_at' => $blocker->opened_at?->toIso8601ZuluString(),
+                        'hours_open' => $this->hoursOpen($blocker),
                     ];
                 }
+            }
+        }
+
+        // Saran kas awal: hasil hitung uang laci pada shift terakhir yang ditutup di outlet ini.
+        $lastClosed = CashShift::query()
+            ->where('store_id', $store->id)
+            ->whereNotNull('closed_at')
+            ->whereNotNull('closing_cash_counted')
+            ->orderByDesc('closed_at')
+            ->first();
+
+        // Ringkasan shift yang baru saja ditutup (?closed=ID setelah tutup shift). Lewat URL, bukan flash,
+        // karena polling layout bisa "memakan" flash sebelum halaman tujuan dimuat.
+        $justClosed = null;
+        $justClosedId = (int) $request->query('closed', 0);
+        if ($justClosedId > 0) {
+            $closed = CashShift::query()
+                ->where('store_id', $store->id)
+                ->whereKey($justClosedId)
+                ->whereNotNull('closed_at')
+                ->where('closed_at', '>=', now()->subHours(2))
+                ->first();
+            if ($closed && $this->canActOnShift($request, $user, $store, $closed)) {
+                $justClosed = [
+                    'id' => $closed->id,
+                    'shift_number' => $closed->shift_number,
+                    'closing_cash_counted' => (float) $closed->closing_cash_counted,
+                    'difference_amount' => $canSeeCash && $closed->difference_amount !== null ? (float) $closed->difference_amount : null,
+                    'print_url' => route('cash-shifts.print', $closed),
+                ];
             }
         }
 
@@ -216,7 +222,240 @@ class CashShiftController extends Controller
             'shifts' => $shifts,
             'openShift' => $openShiftPayload,
             'activeShiftByOther' => $activeShiftByOther,
+            'timezone' => $store->timezone ?: 'Asia/Jakarta',
+            'canViewAllShifts' => $canSeeCash,
+            'suggestedOpeningCash' => $lastClosed ? (float) $lastClosed->closing_cash_counted : null,
+            'longOpenHours' => self::LONG_OPEN_HOURS,
+            'justClosed' => $justClosed,
         ]);
+    }
+
+    /**
+     * Laporan shift siap cetak (struk 58/80 mm atau kertas biasa).
+     */
+    public function print(Request $request, CashShift $cashShift)
+    {
+        $user = Auth::user();
+        $store = $user->store;
+
+        if (! $store || (int) $cashShift->store_id !== (int) $store->id || ! $this->canActOnShift($request, $user, $store, $cashShift)) {
+            abort(403);
+        }
+
+        $cashShift->loadMissing('user:id,name', 'employee:id,name');
+        $totals = $this->shiftTotals($cashShift);
+        $canSeeCash = $user->canAccessBackOffice();
+
+        $isClosed = $cashShift->closed_at !== null;
+
+        return view('cash-shifts.print', [
+            'store' => $store,
+            'shift' => $cashShift,
+            'cashierName' => $cashShift->employee?->name ?? $cashShift->user?->name ?? 'Kasir',
+            'timezone' => $store->timezone ?: 'Asia/Jakarta',
+            'totals' => $totals,
+            'payments' => $this->paymentRows($totals['payments'], $canSeeCash),
+            'canSeeCash' => $canSeeCash,
+            'canSignCashier' => $isClosed && ! $cashShift->cashier_signature && $this->isShiftOwner($request, $user, $store, $cashShift),
+            'canSignManager' => $isClosed && ! $cashShift->manager_signature && $canSeeCash,
+            'managerName' => $user->name,
+        ]);
+    }
+
+    /**
+     * Simpan tanda tangan digital kasir (penyerah kas) atau pengelola (penerima kas) pada shift yang sudah ditutup.
+     * Tanda tangan yang sudah tersimpan tidak bisa ditimpa.
+     */
+    public function sign(Request $request, CashShift $cashShift)
+    {
+        $user = Auth::user();
+        $store = $user->store;
+
+        if (! $store || (int) $cashShift->store_id !== (int) $store->id) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'role' => ['required', 'in:cashier,manager'],
+            'signature' => ['required', 'string', 'max:400000', 'starts_with:data:image/png;base64,'],
+        ]);
+
+        if ($cashShift->closed_at === null) {
+            return response()->json(['message' => 'Tanda tangan hanya bisa dibuat setelah shift ditutup.'], 422);
+        }
+
+        $binary = base64_decode(substr($validated['signature'], strlen('data:image/png;base64,')), true);
+        if ($binary === false || ! str_starts_with($binary, "\x89PNG\r\n\x1a\n") || strlen($binary) < 200) {
+            return response()->json(['message' => 'Tanda tangan tidak terbaca. Coba tanda tangan lagi.'], 422);
+        }
+
+        if ($validated['role'] === 'cashier') {
+            if (! $this->isShiftOwner($request, $user, $store, $cashShift)) {
+                abort(403, 'Hanya kasir pemilik shift yang bisa menandatangani sebagai kasir.');
+            }
+            if ($cashShift->cashier_signature) {
+                return response()->json(['message' => 'Kasir sudah menandatangani shift ini.'], 422);
+            }
+            $cashShift->update([
+                'cashier_signature' => $validated['signature'],
+                'cashier_signed_name' => $cashShift->employee?->name ?? $cashShift->user?->name ?? $user->name,
+                'cashier_signed_at' => now(),
+            ]);
+        } else {
+            if (! $user->canAccessBackOffice()) {
+                abort(403, 'Hanya pengelola yang bisa menandatangani sebagai penerima kas.');
+            }
+            if ($cashShift->manager_signature) {
+                return response()->json(['message' => 'Pengelola sudah menandatangani shift ini.'], 422);
+            }
+            $cashShift->update([
+                'manager_signature' => $validated['signature'],
+                'manager_signed_name' => $user->name,
+                'manager_signed_by' => $user->id,
+                'manager_signed_at' => now(),
+            ]);
+        }
+
+        ActivityLogger::log(
+            store: $store,
+            action: 'cash_shift.signed',
+            description: "Shift {$cashShift->shift_number} ditandatangani sebagai ".($validated['role'] === 'cashier' ? 'kasir' : 'pengelola')." oleh {$user->name}.",
+            subject: $cashShift,
+            metadata: ['role' => $validated['role']],
+            user: $user
+        );
+
+        return response()->json(['message' => 'Tanda tangan tersimpan.']);
+    }
+
+    /** Kasir pemilik shift (user, atau karyawan PIN yang sedang aktif). */
+    private function isShiftOwner(Request $request, $user, $store, CashShift $cashShift): bool
+    {
+        $isPinMode = ($store->cashier_login_mode ?? 'email') === 'pin';
+        $activeCashier = $request->session()->get('active_cashier');
+
+        if ($isPinMode && $activeCashier && $cashShift->employee_id) {
+            return (int) $cashShift->employee_id === (int) $activeCashier['employee_id'];
+        }
+
+        return (int) $cashShift->user_id === (int) $user->id;
+    }
+
+    /** Batas selisih kas (Rp) yang mewajibkan catatan alasan saat tutup shift. */
+    public const NOTE_REQUIRED_DIFFERENCE = 10000;
+
+    /** Shift yang terbuka lebih lama dari ini dianggap kemungkinan lupa ditutup. */
+    public const LONG_OPEN_HOURS = 16;
+
+    private const PAYMENT_LABELS = [
+        'cash' => 'Tunai',
+        'qris' => 'QRIS',
+        'ewallet' => 'E-wallet',
+        'transfer' => 'Transfer',
+        'bank_transfer' => 'Transfer bank',
+        'card' => 'Kartu debit/kredit',
+        'credit' => 'Bayar nanti',
+        'other' => 'Lainnya',
+    ];
+
+    /**
+     * Angka ringkas satu shift: penjualan per metode, kas masuk/keluar, perkiraan kas laci.
+     *
+     * @return array{transactions_count:int, sales_total:float, sales_cash:float, cash_in:float, cash_out:float, expected:float, payments:array<string,float>}
+     */
+    private function shiftTotals(CashShift $shift): array
+    {
+        $completed = Transaction::query()
+            ->where('cash_shift_id', $shift->id)
+            ->where('status', 'completed');
+
+        $salesCash = (float) (clone $completed)->sum('cash_amount');
+        $salesTotal = (float) (clone $completed)->sum('total_amount');
+        $count = (int) (clone $completed)->count();
+
+        $cashIn = (float) \App\Models\CashTransaction::query()
+            ->where('cash_shift_id', $shift->id)->where('type', 'in')->sum('amount');
+        $cashOut = (float) \App\Models\CashTransaction::query()
+            ->where('cash_shift_id', $shift->id)->where('type', 'out')->sum('amount');
+
+        $payments = \App\Models\TransactionPayment::query()
+            ->join('transactions', 'transactions.id', '=', 'transaction_payments.transaction_id')
+            ->where('transactions.cash_shift_id', $shift->id)
+            ->where('transactions.status', 'completed')
+            ->groupBy('transaction_payments.method')
+            ->selectRaw('transaction_payments.method as method, SUM(transaction_payments.amount) as total')
+            ->pluck('total', 'method')
+            ->map(fn ($v) => (float) $v)
+            ->all();
+
+        return [
+            'transactions_count' => $count,
+            'sales_total' => $salesTotal,
+            'sales_cash' => $salesCash,
+            'cash_in' => $cashIn,
+            'cash_out' => $cashOut,
+            'expected' => (float) $shift->opening_cash + $salesCash + $cashIn - $cashOut,
+            'payments' => $payments,
+        ];
+    }
+
+    /**
+     * Rincian metode bayar untuk ditampilkan. Staf tidak melihat baris tunai (hitung buta).
+     *
+     * @param  array<string,float>  $payments
+     * @return list<array{method:string,label:string,amount:float}>
+     */
+    private function paymentRows(array $payments, bool $canSeeCash): array
+    {
+        $rows = [];
+        foreach ($payments as $method => $amount) {
+            if ($amount <= 0 || (! $canSeeCash && $method === 'cash')) {
+                continue;
+            }
+            $rows[] = [
+                'method' => (string) $method,
+                'label' => self::PAYMENT_LABELS[$method] ?? ucfirst((string) $method),
+                'amount' => $amount,
+            ];
+        }
+        usort($rows, fn ($a, $b) => $b['amount'] <=> $a['amount']);
+
+        return $rows;
+    }
+
+    private function openShiftPayload(CashShift $shift, $user, bool $isOwn): array
+    {
+        $shift->loadMissing('user:id,name', 'employee:id,name');
+        $totals = $this->shiftTotals($shift);
+        $canSeeCash = $user->canAccessBackOffice();
+
+        return [
+            'id' => $shift->id,
+            'shift_number' => $shift->shift_number,
+            'owner_name' => $shift->employee?->name ?? $shift->user?->name ?? 'Kasir',
+            'is_own' => $isOwn,
+            'opened_at' => $shift->opened_at?->toIso8601ZuluString(),
+            'hours_open' => $this->hoursOpen($shift),
+            'opening_cash' => (float) $shift->opening_cash,
+            // Hitung buta: kasir mengisi uang fisik tanpa melihat kas seharusnya.
+            'expected_cash' => $canSeeCash ? $totals['expected'] : null,
+            'transactions_count' => $totals['transactions_count'],
+            'sales_total' => $canSeeCash ? $totals['sales_total'] : null,
+            'cash_in' => $canSeeCash ? $totals['cash_in'] : null,
+            'cash_out' => $canSeeCash ? $totals['cash_out'] : null,
+            'payments' => $this->paymentRows($totals['payments'], $canSeeCash),
+        ];
+    }
+
+    private function hoursOpen(CashShift $shift): int
+    {
+        return $shift->opened_at ? (int) floor($shift->opened_at->diffInMinutes(now()) / 60) : 0;
+    }
+
+    /** Pemilik shift (user atau karyawan PIN aktif), admin, atau owner boleh bertindak pada shift. */
+    private function canActOnShift(Request $request, $user, $store, CashShift $cashShift): bool
+    {
+        return $user->canManageStoreSettings() || $user->isOwner() || $this->isShiftOwner($request, $user, $store, $cashShift);
     }
 
     public function open(Request $request): RedirectResponse
@@ -369,25 +608,17 @@ class CashShiftController extends Controller
             'closing_notes' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $salesCash = (float) Transaction::query()
-            ->where('cash_shift_id', $cashShift->id)
-            ->where('status', 'completed')
-            ->sum('cash_amount');
-
-        $cashIn = (float) \App\Models\CashTransaction::query()
-            ->where('cash_shift_id', $cashShift->id)
-            ->where('type', 'in')
-            ->sum('amount');
-
-        $cashOut = (float) \App\Models\CashTransaction::query()
-            ->where('cash_shift_id', $cashShift->id)
-            ->where('type', 'out')
-            ->sum('amount');
-
-        $expected = (float) $cashShift->opening_cash + $salesCash + $cashIn - $cashOut;
+        $expected = $this->shiftTotals($cashShift)['expected'];
 
         $counted = (float) $validated['closing_cash_counted'];
         $diff = round($counted - $expected, 2);
+
+        // Selisih besar wajib disertai alasan. Kasir tetap tidak melihat angka perkiraan.
+        if (abs($diff) > self::NOTE_REQUIRED_DIFFERENCE && trim((string) ($validated['closing_notes'] ?? '')) === '') {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'closing_notes' => 'Hasil hitung berbeda cukup jauh dari catatan sistem. Hitung ulang uang di laci, atau tulis alasannya (mis. uang dipakai belanja, kembalian kurang) sebelum menutup shift.',
+            ]);
+        }
 
         $cashShift->update([
             'closed_at' => now(),
@@ -421,7 +652,7 @@ class CashShiftController extends Controller
         }
 
         $response = redirect()
-            ->route('cash-shifts.index')
+            ->route('cash-shifts.index', ['closed' => $cashShift->id])
             ->with('success', $user->canAccessBackOffice()
                 ? 'Shift kasir ditutup. Selisih: '.number_format($diff, 0, ',', '.')
                 : 'Shift kasir ditutup. Hasil hitung kas sudah dicatat untuk diperiksa pengelola.');

@@ -21,6 +21,19 @@ class CashShift extends Model
         'closing_cash_counted',
         'difference_amount',
         'closing_notes',
+        'cashier_signature',
+        'cashier_signed_name',
+        'cashier_signed_at',
+        'manager_signature',
+        'manager_signed_name',
+        'manager_signed_by',
+        'manager_signed_at',
+    ];
+
+    /** Gambar tanda tangan besar; jangan ikut terkirim saat model diserialisasi. */
+    protected $hidden = [
+        'cashier_signature',
+        'manager_signature',
     ];
 
     protected function casts(): array
@@ -32,6 +45,8 @@ class CashShift extends Model
             'expected_cash' => 'decimal:2',
             'closing_cash_counted' => 'decimal:2',
             'difference_amount' => 'decimal:2',
+            'cashier_signed_at' => 'datetime',
+            'manager_signed_at' => 'datetime',
         ];
     }
 
