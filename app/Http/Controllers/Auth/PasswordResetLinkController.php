@@ -16,8 +16,14 @@ class PasswordResetLinkController extends Controller
      */
     public function create(Request $request): Response
     {
+        $broker = (string) config('auth.defaults.passwords');
+
         return Inertia::render('auth/ForgotPassword', [
-            'status' => $request->session()->get('status'),
+            // Email tujuan setelah tautan dikirim. Sengaja bukan flash "status" agar tidak
+            // ikut muncul sebagai popup global (pesan jadi tampil dua kali).
+            'sentTo' => $request->session()->get('reset_link_sent_to'),
+            'resendSeconds' => (int) config("auth.passwords.{$broker}.throttle", 60),
+            'expireMinutes' => (int) config("auth.passwords.{$broker}.expire", 60),
         ]);
     }
 
@@ -30,12 +36,16 @@ class PasswordResetLinkController extends Controller
     {
         $request->validate([
             'email' => 'required|email',
+        ], [
+            'email.required' => 'Masukkan alamat email akun Anda.',
+            'email.email' => 'Format email belum benar, contoh: nama@tokoanda.com.',
         ]);
 
         Password::sendResetLink(
             $request->only('email')
         );
 
-        return back()->with('status', __('A reset link will be sent if the account exists.'));
+        // Pesan sama untuk email terdaftar maupun tidak, supaya daftar akun tidak bisa ditebak.
+        return back()->with('reset_link_sent_to', (string) $request->input('email'));
     }
 }

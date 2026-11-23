@@ -73,3 +73,35 @@ test('password cannot be reset with invalid token', function () {
 
     $response->assertSessionHasErrors('email');
 });
+
+test('setelah minta tautan reset, halaman menampilkan email tujuan tanpa flash status (tidak dobel popup)', function () {
+    Notification::fake();
+
+    $user = User::factory()->create();
+
+    $this->from(route('password.request'))
+        ->post(route('password.email'), ['email' => $user->email])
+        ->assertRedirect(route('password.request'))
+        ->assertSessionHas('reset_link_sent_to', $user->email)
+        ->assertSessionMissing('status');
+
+    Notification::assertSentToTimes($user, ResetPassword::class, 1);
+
+    $this->withSession(['reset_link_sent_to' => $user->email])
+        ->get(route('password.request'))
+        ->assertInertia(fn ($page) => $page
+            ->component('auth/ForgotPassword')
+            ->where('sentTo', $user->email)
+            ->where('resendSeconds', 60)
+            ->where('flash.status', null));
+});
+
+test('email yang tidak terdaftar tetap mendapat tampilan terkirim yang sama', function () {
+    Notification::fake();
+
+    $this->from(route('password.request'))
+        ->post(route('password.email'), ['email' => 'tidak-ada@contoh.test'])
+        ->assertSessionHas('reset_link_sent_to', 'tidak-ada@contoh.test');
+
+    Notification::assertNothingSent();
+});
