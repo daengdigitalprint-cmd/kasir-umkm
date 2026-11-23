@@ -2,7 +2,7 @@
  * Subset Font Awesome Pro 6.4.0 (Commercial License) untuk landing page. */
 @font-face{font-family:'Font Awesome 6 Pro';font-style:normal;font-weight:400;font-display:block;src:url("../fonts/landing/fa-regular-400.woff2?v=b8f37d3a") format("woff2")}
 @font-face{font-family:'Font Awesome 6 Pro';font-style:normal;font-weight:900;font-display:block;src:url("../fonts/landing/fa-solid-900.woff2?v=c91d4d61") format("woff2")}
-@font-face{font-family:'Font Awesome 6 Brands';font-style:normal;font-weight:400;font-display:block;src:url("../fonts/landing/fa-brands-400.woff2?v=d98842b3") format("woff2")}
+@font-face{font-family:'Font Awesome 6 Brands';font-style:normal;font-weight:400;font-display:block;src:url("../fonts/landing/fa-brands-400.woff2?v=9d100ca5") format("woff2")}
 :root{--fa-style-family-classic:'Font Awesome 6 Pro';--fa-style-family-brands:'Font Awesome 6 Brands';--fa-font-solid:normal 900 1em/1 'Font Awesome 6 Pro';--fa-font-regular:normal 400 1em/1 'Font Awesome 6 Pro';--fa-font-brands:normal 400 1em/1 'Font Awesome 6 Brands'}
 .fa{font-family:var(--fa-style-family,"Font Awesome 6 Pro");font-weight:var(--fa-style,900)}
 .fa,.fas,.fa-solid,.far,.fa-regular,.fab,.fa-brands{-moz-osx-font-smoothing:grayscale;-webkit-font-smoothing:antialiased;display:var(--fa-display,inline-block);font-style:normal;font-variant:normal;line-height:1;text-rendering:auto}
@@ -31,3 +31,4 @@
 .fa-triangle-exclamation::before{content:"\f071"}
 .fa-utensils::before{content:"\f2e7"}
 .fa-whatsapp::before{content:"\f232"}
+.fa-youtube::before{content:"\f167"}
