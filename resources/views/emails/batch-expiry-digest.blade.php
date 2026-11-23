@@ -1,43 +1,29 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Peringatan batch</title>
-</head>
-<body style="font-family: system-ui, sans-serif; line-height: 1.5; color: #1e293b; max-width: 640px; margin: 0 auto; padding: 24px;">
-    <h1 style="font-size: 1.25rem; margin: 0 0 8px;">Peringatan batch &amp; kedaluwarsa</h1>
-    <p style="margin: 0 0 16px; color: #64748b;">
-        <strong>{{ $store->name }}</strong> — batch berikut memiliki tanggal kedaluwarsa dalam
-        <strong>{{ $warnDays }} hari</strong> atau sudah lewat (sisa stok &gt; 0), sama seperti di dashboard Anda.
-    </p>
-    <table style="width: 100%; border-collapse: collapse; font-size: 0.875rem;">
-        <thead>
-            <tr style="background: #f1f5f9; text-align: left;">
-                <th style="padding: 8px; border: 1px solid #e2e8f0;">Produk</th>
-                <th style="padding: 8px; border: 1px solid #e2e8f0;">Kode batch</th>
-                <th style="padding: 8px; border: 1px solid #e2e8f0;">Sisa</th>
-                <th style="padding: 8px; border: 1px solid #e2e8f0;">ED</th>
-                <th style="padding: 8px; border: 1px solid #e2e8f0;">Status</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach ($batches as $b)
-                <tr>
-                    <td style="padding: 8px; border: 1px solid #e2e8f0;">{{ $b['product_name'] }}</td>
-                    <td style="padding: 8px; border: 1px solid #e2e8f0;">{{ $b['batch_code'] ?: '—' }}</td>
-                    <td style="padding: 8px; border: 1px solid #e2e8f0;">{{ $b['quantity_remaining'] }}</td>
-                    <td style="padding: 8px; border: 1px solid #e2e8f0;">{{ $b['expiry_date'] }}</td>
-                    <td style="padding: 8px; border: 1px solid #e2e8f0;">
-                        {{ $b['expiry_status'] === 'expired' ? 'Kadaluarsa' : 'Perlu perhatian' }}
-                    </td>
-                </tr>
-            @endforeach
-        </tbody>
-    </table>
-    <p style="margin-top: 24px; font-size: 0.75rem; color: #94a3b8;">
-        Email ini dikirim otomatis karena Anda mengaktifkan pemberitahuan batch di pengaturan toko.
-        Sesuaikan jendela peringatan (hari) di menu Pengaturan &gt; Profil &gt; Toko.
-    </p>
-</body>
-</html>
+@php
+    $expired = collect($batches)->where('expiry_status', 'expired')->count();
+@endphp
+<x-email.layout
+    title="Peringatan Batch dan Kedaluwarsa"
+    heading="Batch Perlu Perhatian"
+    :name="'Pengelola '.$store->name"
+    :preheader="count($batches).' batch di '.$store->name.' mendekati atau lewat tanggal kedaluwarsa'"
+    :intro="'Batch berikut kedaluwarsa dalam '.$warnDays.' hari atau sudah lewat (sisa stok masih ada), sama seperti di dashboard Anda.'"
+>
+    <x-email.row label="Toko" :value="$store->name" />
+    <x-email.row label="Jendela peringatan" :value="$warnDays.' hari'" />
+    <x-email.row label="Sudah kedaluwarsa" :value="$expired.' batch'" :color="$expired > 0 ? '#b91c1c' : '#333333'" />
+    <x-email.divider />
+    @foreach ($batches as $b)
+        @php($isExpired = $b['expiry_status'] === 'expired')
+        <x-email.row
+            :label="$b['product_name']"
+            :note="($b['batch_code'] ? 'Batch '.$b['batch_code'] : 'Tanpa kode batch').' · sisa '.$b['quantity_remaining']"
+            :value="($isExpired ? 'Kedaluwarsa ' : 'ED ').\Illuminate\Support\Carbon::parse($b['expiry_date'])->locale('id')->translatedFormat('d M Y')"
+            :color="$isExpired ? '#b91c1c' : '#c2410c'"
+        />
+    @endforeach
+    <x-email.total label="Total batch" :value="count($batches).' batch'" />
+
+    <x-slot:closing>
+        Email ini dikirim karena pemberitahuan batch aktif di pengaturan toko. Ubah jendela peringatan (hari) di menu Pengaturan &gt; Profil &gt; Toko.
+    </x-slot:closing>
+</x-email.layout>

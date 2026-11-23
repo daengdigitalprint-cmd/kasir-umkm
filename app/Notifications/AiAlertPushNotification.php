@@ -47,6 +47,7 @@ class AiAlertPushNotification extends Notification
             ->subject("[{$this->store->name}] {$title}")
             ->view('emails.ai-alert', [
                 'store' => $this->store,
+                'name' => $notifiable->name ?? null,
                 'alert' => $this->alert,
                 'actionLabel' => $actionLabel,
                 'actionUrl' => Route::has($actionRoute) ? route($actionRoute) : null,
