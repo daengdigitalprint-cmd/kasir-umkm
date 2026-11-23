@@ -14731,7 +14731,7 @@ body .mfp-wrap .mfp-container .mfp-content .mfp-close:hover::before, body .mfp-w
 
 .dm-social-media-wrap {
   display: grid;
-  grid-template-columns: repeat(4, 1fr); }
+  grid-template-columns: repeat(5, 1fr); }
   @media (max-width: 767px) {
     .dm-social-media-wrap {
       grid-template-columns: repeat(1, 1fr); } }
