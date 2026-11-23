@@ -8,6 +8,7 @@ use App\Models\Store;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Facades\Route;
 
 /**
  * Notifikasi email push peringatan proaktif / digest harian.
@@ -37,18 +38,19 @@ class AiAlertPushNotification extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         $title = (string) ($this->alert['title'] ?? 'Peringatan');
-        $message = (string) ($this->alert['message'] ?? '');
+        [$actionLabel, $actionRoute] = match ($this->alert['type'] ?? null) {
+            'low_stock' => ['Lihat stok produk', 'products.index'],
+            default => ['Buka dashboard', 'dashboard'],
+        };
 
-        $mail = (new MailMessage)
+        return (new MailMessage)
             ->subject("[{$this->store->name}] {$title}")
-            ->line($message);
-
-        $data = (array) ($this->alert['data'] ?? []);
-        if ($data !== []) {
-            $mail->line('Detail: '.json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
-        }
-
-        return $mail->line('— '.$this->store->name.' ('.config('app.name').')');
+            ->view('emails.ai-alert', [
+                'store' => $this->store,
+                'alert' => $this->alert,
+                'actionLabel' => $actionLabel,
+                'actionUrl' => Route::has($actionRoute) ? route($actionRoute) : null,
+            ]);
     }
 
     /**

@@ -36,18 +36,12 @@ class AlertPushService
 
     private function buildTextBody(Store $store, array $alert): string
     {
-        $lines = [
+        // Pesan sudah memuat ringkasan yang bisa dibaca; data mentah (JSON) tidak ditampilkan.
+        return implode("\n", [
             $alert['title'].' — '.$store->name,
             '',
             $alert['message'],
-        ];
-
-        if (! empty($alert['data'])) {
-            $lines[] = '';
-            $lines[] = 'Detail: '.json_encode($alert['data'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        }
-
-        return implode("\n", $lines);
+        ]);
     }
 
     private function pushMail(User $user, array $alert, Store $store): void

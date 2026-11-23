@@ -170,6 +170,7 @@ class GenerateAiProactiveAlerts extends Command
                     'name' => $product->name,
                     'stock_quantity' => (float) $product->stock_quantity,
                     'min_stock_level' => (float) $product->min_stock_level,
+                    'unit' => $product->unit,
                 ])->all(),
             ],
         ];
