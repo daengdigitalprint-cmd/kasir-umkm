@@ -322,7 +322,11 @@ function diffClass(n: number) {
             </Card>
 
             <!-- Shift aktif -->
-            <Card v-else-if="openShift" class="border-0 shadow-lg border-l-4" :class="openShift.is_own ? 'border-l-emerald-500' : 'border-l-amber-500'">
+            <Card
+                v-else-if="openShift"
+                class="border-0 shadow-lg border-l-4 lg:col-span-2"
+                :class="openShift.is_own ? 'border-l-emerald-500' : 'border-l-amber-500'"
+            >
                 <CardHeader>
                     <CardTitle class="flex flex-wrap items-center gap-2">
                         <span>Shift aktif {{ openShift.shift_number }}</span>
@@ -333,51 +337,59 @@ function diffClass(n: number) {
                         {{ formatMoney(openShift.opening_cash) }}
                     </CardDescription>
                 </CardHeader>
-                <CardContent class="space-y-5">
-                    <div v-if="!openShift.is_own" class="flex items-start gap-2 text-sm text-amber-800 bg-amber-50 rounded-xl p-3">
-                        <AlertTriangle class="h-4 w-4 shrink-0 mt-0.5" />
-                        <span>
-                            Ini shift milik <span class="font-semibold">{{ openShift.owner_name }}</span>. Selama shift ini terbuka, kasir lain di outlet ini
-                            tidak bisa membuka shift. Tutup bila memang sudah selesai.
-                        </span>
-                    </div>
-                    <div
-                        v-else-if="openShift.hours_open >= longOpen"
-                        class="flex items-start gap-2 text-sm text-amber-800 bg-amber-50 rounded-xl p-3"
-                    >
-                        <AlertTriangle class="h-4 w-4 shrink-0 mt-0.5" />
-                        <span>Shift ini sudah terbuka {{ durationLabel(openShift.hours_open) }}. Jangan lupa tutup di akhir hari agar kasir berikutnya bisa membuka shift.</span>
+                <CardContent class="grid gap-5 md:grid-cols-2 md:items-start md:gap-6">
+                    <!-- Kiri: peringatan + ringkasan -->
+                    <div class="space-y-4">
+                        <div v-if="!openShift.is_own" class="flex items-start gap-2 text-sm text-amber-800 bg-amber-50 rounded-xl p-3">
+                            <AlertTriangle class="h-4 w-4 shrink-0 mt-0.5" />
+                            <span>
+                                Ini shift milik <span class="font-semibold">{{ openShift.owner_name }}</span>. Selama shift ini terbuka, kasir lain di outlet ini
+                                tidak bisa membuka shift. Tutup bila memang sudah selesai.
+                            </span>
+                        </div>
+                        <div
+                            v-else-if="openShift.hours_open >= longOpen"
+                            class="flex items-start gap-2 text-sm text-amber-800 bg-amber-50 rounded-xl p-3"
+                        >
+                            <AlertTriangle class="h-4 w-4 shrink-0 mt-0.5" />
+                            <span>Shift ini sudah terbuka {{ durationLabel(openShift.hours_open) }}. Jangan lupa tutup di akhir hari agar kasir berikutnya bisa membuka shift.</span>
+                        </div>
+
+                        <!-- Ringkasan berjalan -->
+                        <div class="rounded-xl bg-slate-50 p-4 space-y-2 text-sm">
+                            <p class="flex items-center gap-2 font-semibold text-slate-800">
+                                <Receipt class="h-4 w-4 text-primary" />
+                                Ringkasan shift ini
+                            </p>
+                            <div class="flex justify-between"><span class="text-slate-600">Transaksi selesai</span><span class="font-semibold tabular-nums">{{ openShift.transactions_count }}</span></div>
+                            <div v-if="openShift.sales_total !== null" class="flex justify-between">
+                                <span class="text-slate-600">Total penjualan</span>
+                                <span class="font-semibold tabular-nums">Rp {{ formatMoney(openShift.sales_total) }}</span>
+                            </div>
+                            <div v-for="p in openShift.payments" :key="p.method" class="flex justify-between pl-3">
+                                <span class="text-slate-500">{{ p.label }}</span>
+                                <span class="tabular-nums">Rp {{ formatMoney(p.amount) }}</span>
+                            </div>
+                            <template v-if="openShift.cash_in !== null">
+                                <div class="flex justify-between"><span class="text-slate-600">Kas masuk</span><span class="tabular-nums">Rp {{ formatMoney(openShift.cash_in) }}</span></div>
+                                <div class="flex justify-between"><span class="text-slate-600">Kas keluar</span><span class="tabular-nums">− Rp {{ formatMoney(openShift.cash_out ?? 0) }}</span></div>
+                            </template>
+                            <div v-if="openShift.expected_cash !== null" class="flex justify-between border-t border-slate-200 pt-2">
+                                <span class="font-semibold text-slate-800">Seharusnya di laci</span>
+                                <span class="font-bold tabular-nums">Rp {{ formatMoney(openShift.expected_cash) }}</span>
+                            </div>
+                            <p v-if="openShift.expected_cash === null && openShift.payments.length" class="text-xs text-slate-500 pt-1">
+                                Cocokkan angka non-tunai dengan mesin EDC, QRIS, atau mutasi rekening.
+                            </p>
+                        </div>
                     </div>
 
-                    <!-- Ringkasan berjalan -->
-                    <div class="rounded-xl bg-slate-50 p-4 space-y-2 text-sm">
-                        <p class="flex items-center gap-2 font-semibold text-slate-800">
-                            <Receipt class="h-4 w-4 text-primary" />
-                            Ringkasan shift ini
+                    <!-- Kanan: tutup shift -->
+                    <form class="space-y-4 md:rounded-2xl md:border md:border-slate-200 md:p-5" @submit.prevent="submitClose">
+                        <p class="hidden md:flex items-center gap-2 font-semibold text-slate-800">
+                            <LockKeyhole class="h-4 w-4 text-red-500" />
+                            Tutup shift
                         </p>
-                        <div class="flex justify-between"><span class="text-slate-600">Transaksi selesai</span><span class="font-semibold tabular-nums">{{ openShift.transactions_count }}</span></div>
-                        <div v-if="openShift.sales_total !== null" class="flex justify-between">
-                            <span class="text-slate-600">Total penjualan</span>
-                            <span class="font-semibold tabular-nums">Rp {{ formatMoney(openShift.sales_total) }}</span>
-                        </div>
-                        <div v-for="p in openShift.payments" :key="p.method" class="flex justify-between pl-3">
-                            <span class="text-slate-500">{{ p.label }}</span>
-                            <span class="tabular-nums">Rp {{ formatMoney(p.amount) }}</span>
-                        </div>
-                        <template v-if="openShift.cash_in !== null">
-                            <div class="flex justify-between"><span class="text-slate-600">Kas masuk</span><span class="tabular-nums">Rp {{ formatMoney(openShift.cash_in) }}</span></div>
-                            <div class="flex justify-between"><span class="text-slate-600">Kas keluar</span><span class="tabular-nums">− Rp {{ formatMoney(openShift.cash_out ?? 0) }}</span></div>
-                        </template>
-                        <div v-if="openShift.expected_cash !== null" class="flex justify-between border-t border-slate-200 pt-2">
-                            <span class="font-semibold text-slate-800">Seharusnya di laci</span>
-                            <span class="font-bold tabular-nums">Rp {{ formatMoney(openShift.expected_cash) }}</span>
-                        </div>
-                        <p v-if="openShift.expected_cash === null && openShift.payments.length" class="text-xs text-slate-500 pt-1">
-                            Cocokkan angka non-tunai dengan mesin EDC, QRIS, atau mutasi rekening.
-                        </p>
-                    </div>
-
-                    <form class="space-y-4" @submit.prevent="submitClose">
                         <div class="space-y-2">
                             <div class="flex items-center justify-between gap-2">
                                 <Label for="closing_cash_counted">Uang tunai di laci saat tutup (Rp)</Label>
@@ -392,7 +404,7 @@ function diffClass(n: number) {
                                 v-model="closingCashDisplay"
                                 type="text"
                                 inputmode="numeric"
-                                class="rounded-xl text-lg font-semibold tabular-nums"
+                                class="h-11 rounded-xl text-lg font-semibold tabular-nums"
                                 placeholder="Hitung uang di laci"
                                 required
                             />
@@ -428,15 +440,17 @@ function diffClass(n: number) {
                                 id="closing_notes"
                                 v-model="closeForm.closing_notes"
                                 type="text"
-                                class="rounded-xl"
+                                class="h-11 rounded-xl"
                                 maxlength="2000"
                                 placeholder="Mis. uang dipakai beli es batu Rp 20.000"
                             />
                             <p v-if="closeForm.errors.closing_notes" class="text-sm text-red-600">{{ closeForm.errors.closing_notes }}</p>
                         </div>
-                        <div class="flex flex-wrap gap-3">
-                            <Button type="submit" variant="destructive" class="rounded-xl" :disabled="closeForm.processing">Tutup shift</Button>
-                            <Button as="a" :href="`/cash-shifts/${openShift.id}/print`" target="_blank" variant="outline" class="rounded-xl">
+                        <div class="flex flex-wrap gap-3 md:flex-col">
+                            <Button type="submit" variant="destructive" class="h-11 flex-1 rounded-xl md:flex-none" :disabled="closeForm.processing">
+                                Tutup shift
+                            </Button>
+                            <Button as="a" :href="`/cash-shifts/${openShift.id}/print`" target="_blank" variant="outline" class="h-11 rounded-xl">
                                 <Printer class="h-4 w-4 mr-2" />
                                 Cetak ringkasan
                             </Button>
