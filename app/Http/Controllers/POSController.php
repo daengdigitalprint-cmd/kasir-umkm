@@ -196,8 +196,8 @@ class POSController extends Controller
                 'shift_number' => $openCashShift->shift_number,
                 'opened_at' => $openCashShift->opened_at?->toIso8601String(),
                 'opening_cash' => (float) $openCashShift->opening_cash,
-                // Hitung buta: kasir tidak melihat kas seharusnya, supaya selisih tidak bisa "disamakan".
-                'expected_cash' => $user->canAccessBackOffice() ? $expectedCash : null,
+                // Uang tunai di laci terlihat oleh semua kasir di layar POS.
+                'expected_cash' => $expectedCash,
                 'expected_non_cash' => $expectedNonCash,
             ];
         }
@@ -395,8 +395,8 @@ class POSController extends Controller
                 'shift_number' => $openCashShift->shift_number,
                 'opened_at' => $openCashShift->opened_at?->toIso8601String(),
                 'opening_cash' => (float) $openCashShift->opening_cash,
-                // Hitung buta: kasir tidak melihat kas seharusnya, supaya selisih tidak bisa "disamakan".
-                'expected_cash' => $user->canAccessBackOffice() ? $expectedCash : null,
+                // Uang tunai di laci terlihat oleh semua kasir di layar POS.
+                'expected_cash' => $expectedCash,
                 'expected_non_cash' => $expectedNonCash,
             ],
         ]);

@@ -240,8 +240,9 @@ test('kasir tidak melihat kas seharusnya saat shift buka, admin melihat', functi
 
     $this->actingAs($cashier)->get('/cash-shifts')
         ->assertInertia(fn (Assert $page) => $page->where('openShift.expected_cash', null));
+    // Di POS, uang tunai laci tetap terlihat oleh kasir.
     $this->actingAs($cashier)->getJson('/pos/cash-shift-current')
-        ->assertJsonPath('cashShiftOpen.expected_cash', null);
+        ->assertJsonPath('cashShiftOpen.expected_cash', fn ($v) => (float) $v === 100000.0);
 
     CashShift::query()->update(['closed_at' => now()]);
     $admin = cashierMember($store, 'admin');
