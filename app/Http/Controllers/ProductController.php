@@ -61,7 +61,7 @@ class ProductController extends Controller
         $inventoryType = $request->string('inventory_type')->trim()->toString();
         $categoryFilter = $request->string('category')->trim()->toString();
         $statusFilter = in_array($request->string('status')->toString(), ['active', 'inactive'], true) ? $request->string('status')->toString() : '';
-        $stockFilter = $request->string('stock')->toString() === 'low' ? 'low' : '';
+        $stockFilter = in_array($request->string('stock')->toString(), ['low', 'out'], true) ? $request->string('stock')->toString() : '';
         $sort = in_array($request->string('sort')->toString(), ['latest', 'name', 'stock', 'price'], true) ? $request->string('sort')->toString() : 'latest';
         $dir = $request->string('dir')->toString() === 'asc' ? 'asc' : 'desc';
 
@@ -77,9 +77,9 @@ class ProductController extends Controller
         }
 
         if ($stockFilter === 'low') {
-            $productsQuery->whereColumn('stock_quantity', '<=', 'min_stock_level')
-                ->where('track_stock', true)
-                ->where('unlimited_stock', false);
+            $this->scopeLowStock($productsQuery);
+        } elseif ($stockFilter === 'out') {
+            $this->scopeOutOfStock($productsQuery);
         }
 
         if ($search !== '') {
@@ -150,7 +150,8 @@ class ProductController extends Controller
             // Hitungan seluruh toko (bukan hanya halaman ini) untuk tombol ringkasan.
             'counts' => [
                 'all' => $store->products()->count(),
-                'low' => $lowStockCount,
+                'low' => $this->scopeLowStock($store->products())->count(),
+                'out' => $this->scopeOutOfStock($store->products())->count(),
                 'inactive' => $store->products()->where('is_active', false)->count(),
             ],
             'categoryOptions' => ProductCategory::query()
@@ -167,6 +168,29 @@ class ProductController extends Controller
                 'category' => $categoryFilter,
             ],
         ]);
+    }
+
+    /**
+     * Stok habis: stok dihitung (bukan tanpa batas) dan sisa stok 0 atau minus.
+     * Produk bervarian memakai total stok semua varian, sama seperti kolom stok di daftar produk.
+     */
+    private function scopeOutOfStock($query)
+    {
+        return $query->where('track_stock', true)
+            ->where('unlimited_stock', false)
+            ->where('stock_quantity', '<=', 0);
+    }
+
+    /**
+     * Stok rendah: masih ada stoknya, tetapi sudah di batas minimum atau di bawahnya.
+     * Produk yang sudah habis masuk Stok habis, bukan di sini.
+     */
+    private function scopeLowStock($query)
+    {
+        return $query->where('track_stock', true)
+            ->where('unlimited_stock', false)
+            ->where('stock_quantity', '>', 0)
+            ->whereColumn('stock_quantity', '<=', 'min_stock_level');
     }
 
     /** Unduh seluruh produk toko sebagai file Excel yang formatnya sama dengan template impor. */

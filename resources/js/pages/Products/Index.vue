@@ -22,6 +22,7 @@ import {
     Loader2,
     MoreVertical,
     Package,
+    PackageX,
     Pencil,
     Plus,
     Search,
@@ -75,7 +76,7 @@ const props = defineProps<{
     filters?: Filters;
     categories?: string[];
     categoryOptions?: Array<{ id: number; name: string }>;
-    counts?: { all: number; low: number; inactive: number };
+    counts?: { all: number; low: number; out: number; inactive: number };
 }>();
 
 const productsList = computed(() => props.products.data ?? []);
@@ -84,7 +85,7 @@ const meta = computed(() => ({
     current_page: props.products.current_page,
     last_page: props.products.last_page,
 }));
-const counts = computed(() => props.counts ?? { all: meta.value.total, low: 0, inactive: 0 });
+const counts = computed(() => props.counts ?? { all: meta.value.total, low: 0, out: 0, inactive: 0 });
 
 // ── Filter, urutan, tampilan ─────────────────────────────────────────────
 const searchQuery = ref(props.filters?.search ?? '');
@@ -162,10 +163,12 @@ watch(searchQuery, () => {
 });
 watch([activeType, activeCategory, sortKey], () => applyFilters());
 
-/** Tombol ringkasan: Semua / Stok rendah / Nonaktif. */
-const quickFilter = computed(() => (activeStock.value === 'low' ? 'low' : activeStatus.value === 'inactive' ? 'inactive' : 'all'));
-function setQuickFilter(key: 'all' | 'low' | 'inactive') {
-    activeStock.value = key === 'low' ? 'low' : '';
+/** Tombol ringkasan: Semua / Stok rendah / Stok habis / Nonaktif. */
+const quickFilter = computed(() =>
+    activeStock.value === 'low' ? 'low' : activeStock.value === 'out' ? 'out' : activeStatus.value === 'inactive' ? 'inactive' : 'all',
+);
+function setQuickFilter(key: 'all' | 'low' | 'out' | 'inactive') {
+    activeStock.value = key === 'low' || key === 'out' ? key : '';
     activeStatus.value = key === 'inactive' ? 'inactive' : '';
     applyFilters();
 }
@@ -518,6 +521,7 @@ const selectClass =
                 v-for="q in [
                     { key: 'all', label: 'Semua produk', count: counts.all, icon: Package },
                     { key: 'low', label: 'Stok rendah', count: counts.low, icon: AlertTriangle },
+                    { key: 'out', label: 'Stok habis', count: counts.out, icon: PackageX },
                     { key: 'inactive', label: 'Nonaktif', count: counts.inactive, icon: EyeOff },
                 ] as const"
                 :key="q.key"
@@ -530,7 +534,15 @@ const selectClass =
                 <component
                     :is="q.icon"
                     class="h-4 w-4"
-                    :class="quickFilter === q.key ? 'text-primary' : q.key === 'low' && q.count > 0 ? 'text-amber-500' : 'text-slate-400'"
+                    :class="
+                        quickFilter === q.key
+                            ? 'text-primary'
+                            : q.key === 'low' && q.count > 0
+                              ? 'text-amber-500'
+                              : q.key === 'out' && q.count > 0
+                                ? 'text-red-500'
+                                : 'text-slate-400'
+                    "
                 />
                 <span class="text-sm font-semibold text-slate-700">{{ q.label }}</span>
                 <span
@@ -540,7 +552,9 @@ const selectClass =
                             ? 'bg-primary text-white'
                             : q.key === 'low' && q.count > 0
                               ? 'bg-amber-100 text-amber-700'
-                              : 'bg-slate-100 text-slate-600'
+                              : q.key === 'out' && q.count > 0
+                                ? 'bg-red-100 text-red-700'
+                                : 'bg-slate-100 text-slate-600'
                     "
                     >{{ q.count }}</span
                 >

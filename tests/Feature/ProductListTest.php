@@ -127,3 +127,33 @@ test('aksi massal hanya mengubah produk di toko aktif', function () {
     expect($mine->fresh()->product_category_id)->toBe($category->id)
         ->and($mine->fresh()->category)->toBe('Kategori Uji');
 });
+
+test('stok habis dipisah dari stok rendah, termasuk stok minus', function () {
+    $store = productListStore();
+    productListItem($store, ['name' => 'Aman']);
+    productListItem($store, ['name' => 'Menipis', 'stock_quantity' => 3]);
+    productListItem($store, ['name' => 'Kosong', 'stock_quantity' => 0, 'min_stock_level' => 0]);
+    productListItem($store, ['name' => 'Minus', 'stock_quantity' => -4]);
+    productListItem($store, ['name' => 'Tanpa batas', 'stock_quantity' => 0, 'unlimited_stock' => true]);
+    productListItem($store, ['name' => 'Menu resep', 'stock_quantity' => -2, 'track_stock' => false]);
+
+    // Produk bervarian memakai total stok semua varian (kolom stok produk).
+    productListItem($store, ['name' => 'Kaos', 'has_variants' => true, 'stock_quantity' => 0]);
+
+    $this->actingAs(productListAdmin($store));
+
+    $this->get('/products')->assertInertia(fn ($page) => $page
+        ->where('counts.low', 1)
+        ->where('counts.out', 3));
+
+    $this->get('/products?stock=out&sort=name&dir=asc')->assertInertia(fn ($page) => $page
+        ->where('filters.stock', 'out')
+        ->has('products.data', 3)
+        ->where('products.data.0.name', 'Kaos')
+        ->where('products.data.1.name', 'Kosong')
+        ->where('products.data.2.name', 'Minus'));
+
+    $this->get('/products?stock=low')->assertInertia(fn ($page) => $page
+        ->has('products.data', 1)
+        ->where('products.data.0.name', 'Menipis'));
+});
