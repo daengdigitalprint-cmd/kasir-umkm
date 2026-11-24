@@ -6,6 +6,7 @@ import LandingFaq from '@/components/landing/LandingFaq.vue';
 import LandingFooter from '@/components/landing/LandingFooter.vue';
 import LandingHero from '@/components/landing/LandingHero.vue';
 import LandingNav from '@/components/landing/LandingNav.vue';
+import LandingOnlineOrder from '@/components/landing/LandingOnlineOrder.vue';
 import LandingPricing, { type LandingPricingData } from '@/components/landing/LandingPricing.vue';
 import LandingUseCase from '@/components/landing/LandingUseCase.vue';
 import LandingValue from '@/components/landing/LandingValue.vue';
@@ -322,6 +323,7 @@ onUnmounted(() => {
                         <LandingHero :assets-base="assetsBase" />
                         <LandingValue :assets-base="assetsBase" />
                         <LandingBrand :assets-base="assetsBase" />
+                        <LandingOnlineOrder :assets-base="assetsBase" />
                         <LandingAudience :assets-base="assetsBase" />
                         <LandingUseCase :assets-base="assetsBase" />
                         <LandingPricing :assets-base="assetsBase" :pricing="props.pricing" />

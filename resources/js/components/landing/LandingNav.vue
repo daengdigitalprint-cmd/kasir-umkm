@@ -39,6 +39,9 @@ const waPanelOpen = ref(false);
                                         <a href="#fitur"><span>Fitur</span></a>
                                     </li>
                                     <li>
+                                        <a href="#pesanan-online"><span>Pesanan Online</span></a>
+                                    </li>
+                                    <li>
                                         <a href="#manfaat"><span>Manfaat</span></a>
                                     </li>
                                     <li>
@@ -90,6 +93,9 @@ const waPanelOpen = ref(false);
                                     </li>
                                     <li>
                                         <a href="#fitur"><span>Fitur</span></a>
+                                    </li>
+                                    <li>
+                                        <a href="#pesanan-online"><span>Pesanan Online</span></a>
                                     </li>
                                     <li>
                                         <a href="#manfaat"><span>Manfaat</span></a>

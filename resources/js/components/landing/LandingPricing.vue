@@ -74,6 +74,18 @@ const starterFeatures = computed<string[]>(() => {
     ];
 });
 
+/** Paket Custom: harga disepakati bersama, jadi tidak ada angka dari database. */
+const customFeatures: string[] = [
+    'Jumlah outlet & pengguna sesuai kebutuhan',
+    'Gudang pusat / central kitchen untuk banyak outlet',
+    'Fitur tambahan digabung dalam satu harga',
+    'Pendampingan awal untuk tim Anda',
+];
+
+const customWaUrl = `https://wa.me/6285242766676?text=${encodeURIComponent(
+    'Halo, saya tertarik dengan Paket Custom Kasir UMKM by MaccaPOS. Usaha saya: (jenis usaha, jumlah outlet). Mohon info harganya, terima kasih.',
+)}`;
+
 const growUpFeatures = computed<string[]>(() => {
     const outlet = data.value.paid.max_stores;
 
@@ -228,10 +240,45 @@ const growUpFeatures = computed<string[]>(() => {
                                 </div>
                             </div>
                         </div>
-                        <div class="fs-pricing-bottom text-center">
-                            <p class="text">Dapatkan paket khusus untuk volume tinggi atau kebutuhan bisnis unik.</p>
-                            <div class="fs-pricing-btn wow fadeInUp" data-wow-delay="0ms" data-wow-duration="600ms">
-                                <Link class="thm-btn fintech-btn" href="/subscription">Hubungi tim sales</Link>
+                        <!-- Paket Custom: untuk jaringan outlet / kebutuhan khusus, harga dibicarakan langsung -->
+                        <div class="row mt-30">
+                            <div class="col-12">
+                                <div class="fs-pricing-item lp-pricing-custom" id="paket-custom">
+                                    <div class="xb-item--holder">
+                                        <div class="xb-item--top ul_li_between">
+                                            <div class="xb-item--content">
+                                                <span class="lp-pricing-custom-tag">Untuk banyak outlet</span>
+                                                <h3 class="xb-item--title lp-fs-h2">Paket Custom</h3>
+                                                <p class="xb-item--text">
+                                                    Untuk jaringan outlet, waralaba, atau kebutuhan yang tidak pas dengan paket di atas. Kami susun paketnya bersama Anda.
+                                                </p>
+                                            </div>
+                                            <div class="xb-item--price_box">
+                                                <div class="xb-item--price lp-h3 lp-pricing-custom-price">Sesuai kebutuhan</div>
+                                                <span class="xb-item--text">Harga dibicarakan langsung</span>
+                                            </div>
+                                        </div>
+                                        <div class="xb-item--btn">
+                                            <a class="thm-btn fintech-btn" :href="customWaUrl" target="_blank" rel="noopener noreferrer">Konsultasi lewat WhatsApp</a>
+                                        </div>
+                                    </div>
+                                    <div class="xb-item--list_box">
+                                        <div class="xb-item--list_title lp-h3">Yang Bisa Disesuaikan</div>
+                                        <ul class="xb-item--list list-unstyled">
+                                            <li v-for="feature in customFeatures" :key="feature">
+                                                <img
+                                                    width="16"
+                                                    height="16"
+                                                    :src="`${base}/img/icon/check-primary04.svg`"
+                                                    alt=""
+                                                    loading="lazy"
+                                                    decoding="async"
+                                                />
+                                                {{ feature }}
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -259,3 +306,71 @@ const growUpFeatures = computed<string[]>(() => {
     </section>
     <!-- pricing end -->
 </template>
+
+<style>
+/* Paket Custom: kartu selebar dua paket di atasnya; info di kiri, daftar di kanan.
+   Selector sengaja `.fs-pricing-item.lp-pricing-custom` (lebih spesifik): di halaman asli
+   landing.min.css dimuat SETELAH CSS komponen ini, jadi aturan template `.fs-pricing-item .xb-item--*`
+   yang sama spesifiknya akan menang bila hanya memakai `.lp-pricing-custom`. */
+.fs-pricing-item.lp-pricing-custom {
+    display: grid;
+    gap: 10px 30px;
+    align-items: center;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    padding-bottom: 10px;
+}
+.fs-pricing-item.lp-pricing-custom .xb-item--list_box {
+    margin-top: 0;
+}
+.fs-pricing-item.lp-pricing-custom .xb-item--btn {
+    margin-top: 30px;
+}
+/* Teks tombol bisa turun dua baris di layar sempit: tetap rata tengah. */
+.fs-pricing-item.lp-pricing-custom .xb-item--btn a {
+    justify-content: center;
+    text-align: center;
+}
+/* Kotak harga berisi teks: jangan sampai menjepit kolom keterangan di sebelahnya. */
+.fs-pricing-item.lp-pricing-custom .xb-item--top {
+    gap: 20px;
+    /* Kolom sempit (tablet/laptop kecil): kotak harga turun ke bawah keterangan. */
+    flex-wrap: wrap;
+}
+.fs-pricing-item.lp-pricing-custom .xb-item--content {
+    flex: 1 1 260px;
+    min-width: 0;
+}
+.fs-pricing-item.lp-pricing-custom .xb-item--price_box {
+    flex: 0 0 auto;
+}
+.lp-pricing-custom-tag {
+    display: inline-block;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #533afd;
+    background: #efecff;
+    border-radius: 999px;
+}
+/* Teks, bukan angka: lebih kecil dari harga paket lain agar muat satu baris. */
+.fs-pricing-item.lp-pricing-custom .xb-item--price.lp-pricing-custom-price {
+    font-size: 24px;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+}
+
+@media (max-width: 991px) {
+    .fs-pricing-item.lp-pricing-custom {
+        grid-template-columns: minmax(0, 1fr);
+        padding-bottom: 25px;
+    }
+    .fs-pricing-item.lp-pricing-custom .xb-item--list_box {
+        margin-top: 25px;
+    }
+}
+@media (max-width: 767px) {
+    .fs-pricing-item.lp-pricing-custom .xb-item--top {
+        flex-wrap: wrap;
+    }
+}
+</style>
