@@ -205,9 +205,21 @@ createInertiaApp({
         const initial = (props as { initialPage?: { props?: { flash?: InertiaFlash } } }).initialPage?.props?.flash;
         processInertiaFlash(initial ?? null);
 
+        // Token CSRF berganti saat login/ganti sesi tanpa muat ulang halaman, sedangkan
+        // <meta name="csrf-token"> hanya diisi saat muat penuh. Selaraskan tiap navigasi
+        // agar fetch() yang membaca meta tidak ditolak 419 (aplikasi Android tidak punya tombol refresh).
+        const syncCsrfMeta = (pageProps?: { csrf_token?: unknown }) => {
+            const token = pageProps?.csrf_token;
+            if (typeof token === 'string' && token !== '') {
+                document.querySelector('meta[name="csrf-token"]')?.setAttribute('content', token);
+            }
+        };
+        syncCsrfMeta((props as { initialPage?: { props?: { csrf_token?: unknown } } }).initialPage?.props);
+
         router.on('success', (event) => {
-            const page = (event as CustomEvent<{ page: { props: { flash?: InertiaFlash } } }>).detail?.page;
+            const page = (event as CustomEvent<{ page: { props: { flash?: InertiaFlash; csrf_token?: unknown } } }>).detail?.page;
             processInertiaFlash(page?.props?.flash ?? null);
+            syncCsrfMeta(page?.props);
         });
 
         // ─── Tangani 419 (session expired) & 503 (server idle) ────

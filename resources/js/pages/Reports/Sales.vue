@@ -301,10 +301,17 @@ async function deleteTransaction(transaction: Transaction) {
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                'Accept': 'application/json',
             },
         });
 
         if (!res.ok) {
+            if (res.status === 419) {
+                // Sesi berganti: muat ulang halaman supaya token baru terpakai.
+                await toastError('Sesi sudah berganti. Halaman dimuat ulang, silakan hapus lagi.');
+                window.location.reload();
+                return;
+            }
             let errorMsg = 'Gagal menghapus transaksi';
             try {
                 const data = await res.json();
