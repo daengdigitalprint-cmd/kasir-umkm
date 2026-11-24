@@ -122,6 +122,8 @@ final class AutoStockRequest
             $items,
             'Dibuat otomatis dari Daftar Belanja ('.count($items).' barang di bawah Stok Minimum).',
             automatic: true,
+            // Outlet yang biasa membeli ke gudang tetap membeli; selain itu transfer biasa.
+            mode: InternalPurchase::defaultMode($store),
         );
     }
 }

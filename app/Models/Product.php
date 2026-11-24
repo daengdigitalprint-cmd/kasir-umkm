@@ -22,6 +22,7 @@ class Product extends Model
         'description',
         'price',
         'wholesale_price',
+        'online_prices',
         'cost_price',
         'average_cost',
         'stock_quantity',
@@ -56,6 +57,7 @@ class Product extends Model
     protected $casts = [
         'price' => 'decimal:2',
         'wholesale_price' => 'decimal:2',
+        'online_prices' => 'array',
         'cost_price' => 'decimal:2',
         'average_cost' => 'decimal:6',
         'tax_rate' => 'decimal:2',

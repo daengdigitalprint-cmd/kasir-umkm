@@ -3,7 +3,7 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CalendarClock, Inbox, Plus, Send } from 'lucide-vue-next';
+import { BarChart3, CalendarClock, Inbox, Plus, Send, ShoppingBag, Tag } from 'lucide-vue-next';
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 
 interface RequestRow {
@@ -11,6 +11,10 @@ interface RequestRow {
     request_number: string;
     status: string;
     status_label: string;
+    /** transfer = pindah stok biasa; purchase = lokasi peminta membeli ke pemasok. */
+    mode: 'transfer' | 'purchase';
+    total_amount: number;
+    payment_status: string | null;
     from_store: { id: number; name: string } | null;
     to_store: { id: number; name: string } | null;
     requester: string | null;
@@ -37,7 +41,19 @@ const props = defineProps<{
         timezone: string;
         can_manage: boolean;
     } | null;
+    /** Harga jual lokasi ini saat lokasi lain membeli ke sini: HPP + markup. */
+    pricing: { markup_percent: number; can_manage: boolean };
 }>();
+
+const rupiah = (n: number) => 'Rp' + new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(n);
+
+// ── Harga jual ke lokasi lain ──
+const markup = ref(props.pricing.markup_percent);
+const savingPricing = ref(false);
+function savePricing() {
+    savingPricing.value = true;
+    router.put('/stock-requests/pricing', { markup_percent: Number(markup.value) || 0 }, { preserveScroll: true, onFinish: () => (savingPricing.value = false) });
+}
 
 // ── Order otomatis ──
 const autoEnabled = ref(props.autoRequest?.enabled ?? false);
@@ -109,15 +125,42 @@ onBeforeUnmount(() => {
                 <div>
                     <h1 class="text-2xl font-black text-slate-900">Permintaan Stok</h1>
                     <p class="mt-1 text-sm text-slate-600">
-                        Minta barang ke lokasi lain dalam grup. Setelah disetujui, permintaan otomatis menjadi Transfer Stok yang dikirim.
+                        Minta atau beli barang ke lokasi lain dalam grup. Setelah disetujui, permintaan otomatis menjadi Transfer Stok yang dikirim.
                     </p>
                 </div>
-                <Button v-if="canCreate" as-child class="rounded-xl">
-                    <Link href="/stock-requests/create" class="inline-flex items-center gap-2">
-                        <Plus class="h-4 w-4" />
-                        Buat permintaan
-                    </Link>
-                </Button>
+                <div class="flex flex-wrap gap-2">
+                    <Button as-child variant="outline" class="rounded-xl">
+                        <Link href="/stock-requests/report" class="inline-flex items-center gap-2">
+                            <BarChart3 class="h-4 w-4" />
+                            Laporan jual-beli
+                        </Link>
+                    </Button>
+                    <Button v-if="canCreate" as-child class="rounded-xl">
+                        <Link href="/stock-requests/create" class="inline-flex items-center gap-2">
+                            <Plus class="h-4 w-4" />
+                            Buat permintaan
+                        </Link>
+                    </Button>
+                </div>
+            </div>
+
+            <!-- Harga jual lokasi ini bila lokasi lain MEMBELI ke sini -->
+            <div v-if="pricing.can_manage && (store.is_central_warehouse || pricing.markup_percent > 0)" class="rounded-2xl border border-slate-200 bg-white p-4" data-testid="pricing-card">
+                <div class="flex flex-wrap items-center gap-3">
+                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600"><Tag class="h-5 w-5" /></div>
+                    <div class="min-w-0 flex-1">
+                        <p class="font-bold text-slate-900">Harga jual ke lokasi lain</p>
+                        <p class="text-sm text-slate-600">
+                            Dipakai saat lokasi lain memilih "Beli ke gudang / CK". Harga bawaan tiap barang = HPP lokasi ini + markup. Masih bisa diubah per barang saat menyetujui.
+                        </p>
+                    </div>
+                    <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+                        Markup
+                        <input v-model.number="markup" type="number" min="0" max="1000" step="0.5" class="h-9 w-20 rounded-lg border border-slate-200 px-2 text-right" aria-label="Markup harga jual (persen)" />
+                        %
+                    </label>
+                    <Button size="sm" variant="outline" class="rounded-lg" :disabled="savingPricing" @click="savePricing">Simpan</Button>
+                </div>
             </div>
 
             <!-- Order otomatis ke Gudang Pusat -->
@@ -211,6 +254,13 @@ onBeforeUnmount(() => {
                                         {{ r.status_label }}
                                     </span>
                                 </span>
+                                <span v-if="r.mode === 'purchase'" class="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                                    <span class="inline-flex items-center gap-1 rounded bg-violet-100 px-1.5 py-0.5 font-semibold text-violet-800"><ShoppingBag class="h-3 w-3" /> Beli</span>
+                                    <span class="font-semibold text-slate-900">{{ rupiah(r.total_amount) }}</span>
+                                    <span v-if="r.payment_status" :class="r.payment_status === 'paid' ? 'text-emerald-700' : 'text-amber-700'">
+                                        {{ r.payment_status === 'paid' ? 'Lunas' : 'Belum dibayar' }}
+                                    </span>
+                                </span>
                                 <span class="mt-2 block text-xs text-slate-500">
                                     {{ r.lines_count }} barang · {{ formatWhen(r.created_at) }}
                                     <template v-if="r.is_automatic"> · Otomatis</template>
@@ -226,8 +276,10 @@ onBeforeUnmount(() => {
                                 <tr class="border-b bg-slate-50 text-left text-xs font-bold uppercase tracking-wide text-slate-600">
                                     <th class="p-3">Nomor</th>
                                     <th class="p-3">{{ tab === 'incoming' ? 'Dari' : 'Kepada' }}</th>
+                                    <th class="p-3">Jenis</th>
                                     <th class="p-3">Status</th>
                                     <th class="p-3">Barang</th>
+                                    <th class="p-3 text-right">Tagihan</th>
                                     <th class="p-3">Diminta</th>
                                     <th class="p-3">Transfer</th>
                                 </tr>
@@ -244,11 +296,29 @@ onBeforeUnmount(() => {
                                     </td>
                                     <td class="p-3">{{ tab === 'incoming' ? r.from_store?.name : r.to_store?.name }}</td>
                                     <td class="p-3">
+                                        <span
+                                            class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-semibold"
+                                            :class="r.mode === 'purchase' ? 'bg-violet-100 text-violet-800' : 'bg-slate-100 text-slate-600'"
+                                        >
+                                            <ShoppingBag v-if="r.mode === 'purchase'" class="h-3 w-3" />
+                                            {{ r.mode === 'purchase' ? 'Beli' : 'Transfer' }}
+                                        </span>
+                                    </td>
+                                    <td class="p-3">
                                         <span class="rounded-full px-2.5 py-1 text-xs font-semibold" :class="statusClass[r.status] ?? 'bg-slate-100'">
                                             {{ r.status_label }}
                                         </span>
                                     </td>
                                     <td class="p-3">{{ r.lines_count }}</td>
+                                    <td class="p-3 text-right tabular-nums">
+                                        <template v-if="r.mode === 'purchase'">
+                                            <span class="font-semibold text-slate-900">{{ rupiah(r.total_amount) }}</span>
+                                            <span v-if="r.payment_status" class="block text-xs" :class="r.payment_status === 'paid' ? 'text-emerald-700' : 'text-amber-700'">
+                                                {{ r.payment_status === 'paid' ? 'Lunas' : 'Belum dibayar' }}
+                                            </span>
+                                        </template>
+                                        <span v-else class="text-slate-400">—</span>
+                                    </td>
                                     <td class="p-3 text-slate-600">
                                         {{ formatWhen(r.created_at) }}
                                         <span v-if="r.is_automatic" class="mt-0.5 inline-block rounded bg-violet-100 px-1.5 text-[11px] font-semibold text-violet-700">Otomatis</span>

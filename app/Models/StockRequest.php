@@ -38,6 +38,13 @@ class StockRequest extends Model
         'from_store_id',
         'to_store_id',
         'status',
+        'mode',
+        'total_amount',
+        'payment_status',
+        'paid_at',
+        'paid_by',
+        'payment_method',
+        'payment_note',
         'is_automatic',
         'notes',
         'requested_by',
@@ -58,6 +65,8 @@ class StockRequest extends Model
             'rejected_at' => 'datetime',
             'cancelled_at' => 'datetime',
             'completed_at' => 'datetime',
+            'paid_at' => 'datetime',
+            'total_amount' => 'decimal:2',
             'is_automatic' => 'boolean',
         ];
     }
@@ -77,6 +86,22 @@ class StockRequest extends Model
     public function isRequested(): bool
     {
         return $this->status === self::STATUS_REQUESTED;
+    }
+
+    /** Outlet membeli ke gudang/CK (ada harga & tagihan), bukan sekadar pindah stok. */
+    public function isPurchase(): bool
+    {
+        return $this->mode === \App\Support\InternalPurchase::MODE_PURCHASE;
+    }
+
+    public function isPaid(): bool
+    {
+        return $this->payment_status === \App\Support\InternalPurchase::PAYMENT_PAID;
+    }
+
+    public function payer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'paid_by');
     }
 
     public function statusLabel(): string

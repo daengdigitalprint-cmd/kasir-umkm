@@ -150,7 +150,7 @@ class UiMode
 
             $hasDeliveryInProgress = DeliveryOrder::query()
                 ->where('store_id', $store->id)
-                ->whereIn('status', [DeliveryOrder::STATUS_PREPARING, DeliveryOrder::STATUS_ON_THE_WAY])
+                ->whereIn('status', [DeliveryOrder::STATUS_PENDING, DeliveryOrder::STATUS_PREPARING, DeliveryOrder::STATUS_ON_THE_WAY])
                 ->exists();
             if ($hasDeliveryInProgress) {
                 $menus[] = 'deliveries';

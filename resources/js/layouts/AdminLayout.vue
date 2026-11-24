@@ -39,6 +39,11 @@ const page = usePage();
 const aiChatEnabled = computed(() => Boolean((page.props as { ai_chat_enabled?: boolean }).ai_chat_enabled));
 const authUser = computed(() => page.props.auth?.user);
 const pendingTableOrderCount = computed(() => Number((page.props as { pending_table_order_count?: number }).pending_table_order_count ?? 0));
+/** Pesanan dari tautan pesan antar yang menunggu diterima/ditolak. */
+const pendingDeliveryOrderCount = computed(() => Number((page.props as { pending_delivery_order_count?: number }).pending_delivery_order_count ?? 0));
+const pendingIncomingCount = computed(() => pendingTableOrderCount.value + pendingDeliveryOrderCount.value);
+/** Lonceng membuka daftar yang punya pesanan menunggu; pesanan meja didahulukan. */
+const openIncomingOrders = () => router.visit(pendingTableOrderCount.value > 0 ? '/table-orders' : '/deliveries?status=pending');
 
 /** Store aktif user login — dipakai driver sinkronisasi offline global. */
 const activeStoreId = computed(() => Number((authUser.value as { store_id?: number | null } | undefined)?.store_id ?? 0));
@@ -286,7 +291,7 @@ let pendingOrderPollId: ReturnType<typeof setInterval> | null = null;
 
 const refreshPendingOrders = () => {
     try {
-        router.reload({ only: ['pending_table_order_count'], preserveScroll: true, preserveState: true });
+        router.reload({ only: ['pending_table_order_count', 'pending_delivery_order_count'], preserveScroll: true, preserveState: true });
     } catch (e) {
         console.debug('Refresh pesanan tertunda gagal:', e);
     }
@@ -326,28 +331,28 @@ const isCurrentRoute = (href: string) => {
                     </div>
                     <div class="flex items-center gap-2">
                         <Button
-                            v-if="pendingTableOrderCount > 0"
+                            v-if="pendingIncomingCount > 0"
                             variant="ghost"
                             size="sm"
                             class="relative size-9 rounded-2xl p-0 text-orange-600"
                             title="Pesanan masuk"
-                            @click="router.visit('/table-orders')"
+                            @click="openIncomingOrders"
                         >
                             <Bell class="h-5 w-5" />
-                            <span class="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-600 px-1 text-[10px] font-bold leading-5 text-white">{{ pendingTableOrderCount > 99 ? '99+' : pendingTableOrderCount }}</span>
-                            <span class="sr-only">{{ pendingTableOrderCount }} pesanan masuk</span>
+                            <span class="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-600 px-1 text-[10px] font-bold leading-5 text-white">{{ pendingIncomingCount > 99 ? '99+' : pendingIncomingCount }}</span>
+                            <span class="sr-only">{{ pendingIncomingCount }} pesanan masuk</span>
                         </Button>
                         <Button
-                            v-if="pendingTableOrderCount > 0"
+                            v-if="pendingIncomingCount > 0"
                             variant="ghost"
                             size="sm"
                             class="relative size-9 rounded-2xl p-0 text-orange-600"
                             title="Pesanan masuk"
-                            @click="router.visit('/table-orders')"
+                            @click="openIncomingOrders"
                         >
                             <Bell class="h-5 w-5" />
-                            <span class="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-600 px-1 text-[10px] font-bold leading-5 text-white">{{ pendingTableOrderCount > 99 ? '99+' : pendingTableOrderCount }}</span>
-                            <span class="sr-only">{{ pendingTableOrderCount }} pesanan masuk</span>
+                            <span class="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-600 px-1 text-[10px] font-bold leading-5 text-white">{{ pendingIncomingCount > 99 ? '99+' : pendingIncomingCount }}</span>
+                            <span class="sr-only">{{ pendingIncomingCount }} pesanan masuk</span>
                         </Button>
                         <DropdownMenu v-if="aiChatEnabled">
                             <DropdownMenuTrigger as-child>
@@ -595,16 +600,16 @@ const isCurrentRoute = (href: string) => {
                                     </DropdownMenuContent>
                                 </DropdownMenu>
                                 <Button
-                                    v-if="pendingTableOrderCount > 0"
+                                    v-if="pendingIncomingCount > 0"
                                     variant="ghost"
                                     size="sm"
                                     class="relative size-10 rounded-2xl p-0 text-orange-600"
                                     title="Pesanan masuk"
-                                    @click="router.visit('/table-orders')"
+                                    @click="openIncomingOrders"
                                 >
                                     <Bell class="h-5 w-5" />
-                                    <span class="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-600 px-1 text-[10px] font-bold leading-5 text-white">{{ pendingTableOrderCount > 99 ? '99+' : pendingTableOrderCount }}</span>
-                                    <span class="sr-only">{{ pendingTableOrderCount }} pesanan masuk</span>
+                                    <span class="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-600 px-1 text-[10px] font-bold leading-5 text-white">{{ pendingIncomingCount > 99 ? '99+' : pendingIncomingCount }}</span>
+                                    <span class="sr-only">{{ pendingIncomingCount }} pesanan masuk</span>
                                 </Button>
                                 <slot name="header-actions" />
                                 

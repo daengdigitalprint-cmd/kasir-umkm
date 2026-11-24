@@ -508,10 +508,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('stock-requests', [App\Http\Controllers\StockRequestController::class, 'store'])->name('stock-requests.store');
         Route::put('stock-requests/auto-settings', [App\Http\Controllers\StockRequestController::class, 'updateAutoSettings'])->name('stock-requests.auto-settings');
         Route::post('stock-requests/auto-run', [App\Http\Controllers\StockRequestController::class, 'runAuto'])->name('stock-requests.auto-run');
+        // Jual-beli internal: laporan pemasukan/pengeluaran, markup harga, pelunasan.
+        Route::get('stock-requests/report', [App\Http\Controllers\StockRequestController::class, 'report'])->name('stock-requests.report');
+        Route::put('stock-requests/pricing', [App\Http\Controllers\StockRequestController::class, 'updatePricing'])->name('stock-requests.pricing');
         Route::get('stock-requests/{stockRequest}', [App\Http\Controllers\StockRequestController::class, 'show'])->name('stock-requests.show');
         Route::post('stock-requests/{stockRequest}/approve', [App\Http\Controllers\StockRequestController::class, 'approve'])->name('stock-requests.approve');
         Route::post('stock-requests/{stockRequest}/reject', [App\Http\Controllers\StockRequestController::class, 'reject'])->name('stock-requests.reject');
         Route::post('stock-requests/{stockRequest}/cancel', [App\Http\Controllers\StockRequestController::class, 'cancel'])->name('stock-requests.cancel');
+        Route::post('stock-requests/{stockRequest}/pay', [App\Http\Controllers\StockRequestController::class, 'pay'])->name('stock-requests.pay');
     });
 
     Route::get('stock-transfers/match', [App\Http\Controllers\StockTransferController::class, 'match'])
@@ -632,6 +636,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('deliveries/settings', [App\Http\Controllers\DeliveryOrderController::class, 'settings'])->name('deliveries.settings');
         Route::patch('deliveries/{deliveryOrder}/status', [App\Http\Controllers\DeliveryOrderController::class, 'updateStatus'])->name('deliveries.status');
         Route::patch('deliveries/{deliveryOrder}/courier', [App\Http\Controllers\DeliveryOrderController::class, 'assignCourier'])->name('deliveries.courier');
+        // Pesanan dari tautan pesan antar: terima / tolak / catat pembayaran.
+        Route::post('deliveries/{deliveryOrder}/accept', [App\Http\Controllers\DeliveryOrderController::class, 'accept'])->name('deliveries.accept');
+        Route::post('deliveries/{deliveryOrder}/reject', [App\Http\Controllers\DeliveryOrderController::class, 'reject'])->name('deliveries.reject');
+        Route::post('deliveries/{deliveryOrder}/pay', [App\Http\Controllers\DeliveryOrderController::class, 'pay'])->name('deliveries.pay');
     });
 
     Route::prefix('cash-shifts')->name('cash-shifts.')->middleware(['store.active', 'role.pos'])->group(function () {
@@ -938,6 +946,13 @@ Route::get('/m/{slug}', [App\Http\Controllers\GuestMenuController::class, 'show'
 Route::get('/m/{slug}/status/{statusToken}', [App\Http\Controllers\GuestMenuController::class, 'status'])
     ->name('guest.menu.status');
 
+// ── Public Guest Routes: Pesan Antar (kurir toko) ──
+Route::get('/antar/{slug}', [App\Http\Controllers\GuestDeliveryController::class, 'show'])
+    ->name('guest.delivery');
+
+Route::get('/antar/{slug}/status/{statusToken}', [App\Http\Controllers\GuestDeliveryController::class, 'status'])
+    ->name('guest.delivery.status');
+
 // Kartu stempel digital pelanggan (tanpa login), dilindungi kode acak per pelanggan.
 Route::get('/k/{token}', [App\Http\Controllers\StampCardController::class, 'publicShow'])
     ->where('token', '[A-Za-z0-9]{12,40}')
@@ -953,6 +968,12 @@ Route::prefix('api/guest')->name('guest.')->group(function () {
         ->name('order.store');
     Route::get('/order/{statusToken}/status', [App\Http\Controllers\GuestOrderController::class, 'status'])
         ->name('order.status');
+    // Pesan antar tanpa login: dibatasi agar tautan publik tidak dibanjiri pesanan.
+    Route::post('/delivery-order', [App\Http\Controllers\GuestDeliveryController::class, 'store'])
+        ->middleware('throttle:6,1')
+        ->name('delivery-order.store');
+    Route::get('/delivery-order/{statusToken}/status', [App\Http\Controllers\GuestDeliveryController::class, 'statusJson'])
+        ->name('delivery-order.status');
 });
 
 // AI Assistant Routes

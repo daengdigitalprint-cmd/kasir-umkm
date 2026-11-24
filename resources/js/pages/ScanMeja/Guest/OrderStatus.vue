@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { ArrowLeft, Bell, Check, CheckCircle2, ChefHat, Clock, Copy, MessageCircle, Plus, Send, Utensils, XCircle } from 'lucide-vue-next';
+import { ArrowLeft, Bell, Bike, Check, CheckCircle2, ChefHat, Clock, Copy, MapPin, MessageCircle, Plus, Send, Utensils, XCircle } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 interface OrderItem {
@@ -19,6 +19,7 @@ interface TransactionData {
     payment_status: string;
     payment_method: string;
     subtotal: number;
+    delivery_fee?: number;
     total_amount: number;
     notes: string | null;
     reject_reason?: string | null;
@@ -37,7 +38,10 @@ interface PaymentMethod {
 }
 
 const props = defineProps<{
-    table: { id: number; name: string; slug: string; capacity: number | null };
+    /** Meja asal pesanan (Scan Meja). Null pada pesanan antar. */
+    table: { id: number; name: string; slug: string; capacity: number | null } | null;
+    /** Pesanan antar (kurir toko): status mengikuti pengantaran, bukan meja. */
+    delivery?: { slug: string; fee: number; recipient_name?: string | null; address?: string | null } | null;
     store: { id: number; name: string; currency: string; phone?: string | null; logo_url?: string | null; cover_url?: string | null };
     transaction: TransactionData;
     paymentMethod?: PaymentMethod | null;
@@ -64,11 +68,17 @@ const storeInitials = computed(() =>
         .map((w) => w[0]?.toUpperCase())
         .join(''),
 );
+const isDelivery = computed(() => !!props.delivery);
+/** Halaman menu untuk kembali memesan: tautan pesan antar atau menu meja. */
+const menuHref = computed(() => (props.delivery ? `/antar/${props.delivery.slug}` : `/m/${props.table?.slug}`));
+const placeLabel = computed(() => (isDelivery.value ? 'Pesan antar' : (props.table?.name ?? '')));
+
 const phoneDigits = computed(() => (props.store.phone ?? '').replace(/\D/g, ''));
 const waLink = computed(() => {
     if (!phoneDigits.value) return null;
     const n = phoneDigits.value.startsWith('0') ? `62${phoneDigits.value.slice(1)}` : phoneDigits.value;
-    const text = encodeURIComponent(`Halo ${props.store.name}, saya dari ${props.table.name} dengan pesanan ${current.value.number}.`);
+    const from = isDelivery.value ? 'saya memesan antar' : `saya dari ${props.table?.name}`;
+    const text = encodeURIComponent(`Halo ${props.store.name}, ${from} dengan pesanan ${current.value.number}.`);
     return `https://wa.me/${n}?text=${text}`;
 });
 
@@ -79,7 +89,11 @@ const isFinished = computed(() => isCancelled.value || isCompleted.value);
 const isPaid = computed(() => current.value.payment_status === 'paid');
 
 // 0 = dikirim, 1 = diterima kasir, 2 = disiapkan, 3 = selesai
+// Pesanan antar: 0 = dikirim, 1 = disiapkan, 2 = diantar, 3 = selesai
 const stage = computed(() => {
+    if (isDelivery.value) {
+        return { pending: 0, accepted: 1, on_the_way: 2, completed: 3 }[current.value.status] ?? 0;
+    }
     switch (current.value.status) {
         case 'pending':
             return 0;
@@ -95,12 +109,21 @@ const stage = computed(() => {
             return 0;
     }
 });
-const steps = [
-    { label: 'Dikirim', icon: Send },
-    { label: 'Diterima', icon: Check },
-    { label: 'Disiapkan', icon: ChefHat },
-    { label: 'Selesai', icon: CheckCircle2 },
-];
+const steps = computed(() =>
+    isDelivery.value
+        ? [
+              { label: 'Dikirim', icon: Send },
+              { label: 'Disiapkan', icon: ChefHat },
+              { label: 'Diantar', icon: Bike },
+              { label: 'Selesai', icon: CheckCircle2 },
+          ]
+        : [
+              { label: 'Dikirim', icon: Send },
+              { label: 'Diterima', icon: Check },
+              { label: 'Disiapkan', icon: ChefHat },
+              { label: 'Selesai', icon: CheckCircle2 },
+          ],
+);
 
 const hero = computed(() => {
     if (isCancelled.value)
@@ -108,14 +131,37 @@ const hero = computed(() => {
             icon: XCircle,
             tone: 'bg-red-50 text-red-600',
             title: 'Pesanan tidak dapat diproses',
-            body: 'Mohon maaf, pesanan Anda ditolak oleh kasir. Silakan hubungi staf atau pesan menu lain.',
+            body: isDelivery.value
+                ? 'Mohon maaf, pesanan Anda tidak dapat diproses oleh toko. Silakan hubungi toko atau pesan menu lain.'
+                : 'Mohon maaf, pesanan Anda ditolak oleh kasir. Silakan hubungi staf atau pesan menu lain.',
         };
     if (isCompleted.value)
         return {
             icon: CheckCircle2,
             tone: 'bg-emerald-50 text-emerald-600',
-            title: 'Pesanan selesai',
+            title: isDelivery.value ? 'Pesanan sudah sampai' : 'Pesanan selesai',
             body: 'Terima kasih! Selamat menikmati hidangan Anda.',
+        };
+    if (isDelivery.value && current.value.status === 'on_the_way')
+        return {
+            icon: Bike,
+            tone: 'bg-violet-50 text-violet-600',
+            title: 'Pesanan sedang diantar',
+            body: 'Kurir toko sedang menuju alamat Anda. Pastikan nomor HP Anda aktif.',
+        };
+    if (isDelivery.value && current.value.status === 'accepted')
+        return {
+            icon: ChefHat,
+            tone: 'bg-sky-50 text-sky-600',
+            title: 'Pesanan sedang disiapkan',
+            body: 'Toko sudah menerima pesanan dan sedang menyiapkannya untuk diantar.',
+        };
+    if (isDelivery.value)
+        return {
+            icon: Clock,
+            tone: 'bg-amber-50 text-amber-600',
+            title: 'Pesanan terkirim',
+            body: 'Menunggu konfirmasi toko. Biasanya hanya beberapa saat.',
         };
     if (current.value.status === 'ready')
         return {
@@ -149,7 +195,8 @@ const paymentLabel = computed(
 );
 const paymentHint = computed(() => {
     if (isPaid.value) return 'Pembayaran sudah diterima.';
-    if (current.value.payment_method === 'cash') return 'Bayar tunai langsung ke kasir.';
+    if (current.value.payment_method === 'cash') return isDelivery.value ? 'Bayar tunai ke kurir saat pesanan tiba.' : 'Bayar tunai langsung ke kasir.';
+    if (isDelivery.value) return props.paymentMethod?.instructions || 'Selesaikan pembayaran lalu kirim buktinya ke toko.';
     return props.paymentMethod?.instructions || 'Selesaikan pembayaran lalu tunjukkan bukti ke kasir.';
 });
 const showPaymentDetail = computed(
@@ -172,7 +219,10 @@ const copyAccount = () => {
 // ── Pembaruan otomatis ──
 const fetchStatus = async () => {
     try {
-        const response = await fetch(`/api/guest/order/${current.value.status_token}/status`, {
+        const statusUrl = isDelivery.value
+            ? `/api/guest/delivery-order/${current.value.status_token}/status`
+            : `/api/guest/order/${current.value.status_token}/status`;
+        const response = await fetch(statusUrl, {
             headers: { Accept: 'application/json' },
         });
         if (!response.ok) return;
@@ -204,7 +254,7 @@ onBeforeUnmount(() => {
         <header class="sticky top-0 z-20 border-b border-slate-200 bg-white">
             <div class="mx-auto flex max-w-md items-center gap-3 px-4 py-3">
                 <Link
-                    :href="`/m/${table.slug}`"
+                    :href="menuHref"
                     class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100"
                     aria-label="Kembali ke menu"
                 >
@@ -218,7 +268,7 @@ onBeforeUnmount(() => {
                 </div>
                 <div class="min-w-0">
                     <h1 class="truncate text-base leading-tight font-black text-slate-900">{{ store.name }}</h1>
-                    <p class="text-xs text-slate-500">{{ table.name }} · Status pesanan</p>
+                    <p class="text-xs text-slate-500">{{ placeLabel }} · Status pesanan</p>
                 </div>
             </div>
         </header>
@@ -275,6 +325,15 @@ onBeforeUnmount(() => {
                 </div>
             </section>
 
+            <!-- Alamat pengantaran (pesan antar) -->
+            <section v-if="isDelivery && delivery?.address" class="rounded-2xl border border-slate-200 bg-white p-5">
+                <p class="text-xs text-slate-500">Diantar ke</p>
+                <p v-if="delivery.recipient_name" class="font-bold text-slate-900">{{ delivery.recipient_name }}</p>
+                <p class="mt-1 flex items-start gap-1.5 text-sm text-slate-600">
+                    <MapPin class="mt-0.5 h-4 w-4 shrink-0 text-slate-400" /> {{ delivery.address }}
+                </p>
+            </section>
+
             <!-- Pembayaran -->
             <section class="rounded-2xl border border-slate-200 bg-white p-5">
                 <div class="flex items-center justify-between gap-3">
@@ -328,6 +387,10 @@ onBeforeUnmount(() => {
                         <span class="shrink-0 text-sm text-slate-700">{{ formatPrice(item.total) }}</span>
                     </li>
                 </ul>
+                <div v-if="isDelivery" class="mt-2 flex items-center justify-between border-t border-dashed border-slate-200 pt-3 text-sm text-slate-500">
+                    <span>Ongkir</span>
+                    <span class="text-slate-700">{{ Number(current.delivery_fee ?? 0) > 0 ? formatPrice(Number(current.delivery_fee)) : 'Gratis' }}</span>
+                </div>
                 <div class="mt-2 flex items-center justify-between border-t border-dashed border-slate-200 pt-3">
                     <span class="text-sm font-semibold text-slate-500">Total</span>
                     <span class="text-lg font-black text-slate-900">{{ formatPrice(current.total_amount) }}</span>
@@ -352,7 +415,7 @@ onBeforeUnmount(() => {
                     <MessageCircle class="h-4 w-4" /> Hubungi
                 </a>
                 <Link
-                    :href="`/m/${table.slug}`"
+                    :href="menuHref"
                     class="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-violet-600 px-5 py-3 text-sm font-bold text-white"
                 >
                     <Plus class="h-4 w-4" /> {{ isCancelled ? 'Pesan menu lain' : 'Pesan lagi' }}

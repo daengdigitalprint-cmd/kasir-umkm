@@ -89,6 +89,7 @@ interface StoreProps {
     is_allow_local_purchase?: boolean;
     blind_transfer_receiving?: boolean;
     online_sales_enabled?: boolean;
+    online_price_enabled?: boolean;
     online_commission_gofood?: number;
     online_commission_grabfood?: number;
     online_commission_shopeefood?: number;
@@ -98,6 +99,7 @@ interface StoreProps {
     wholesale_enabled?: boolean;
     attendance_enabled?: boolean;
     scan_meja_enabled?: boolean;
+    delivery_self_order_enabled?: boolean;
     accounting_enabled?: boolean;
     shift_digital_signature?: boolean;
     stamp_card_enabled?: boolean;
@@ -215,6 +217,7 @@ const storeForm = useForm({
     wholesale_enabled: s.value?.wholesale_enabled === true,
     delivery_default_fee: Number(s.value?.delivery_default_fee ?? 0),
     online_sales_enabled: s.value?.online_sales_enabled === true,
+    online_price_enabled: s.value?.online_price_enabled === true,
     online_commission_gofood: Number(s.value?.online_commission_gofood ?? 20),
     online_commission_grabfood: Number(s.value?.online_commission_grabfood ?? 20),
     online_commission_shopeefood: Number(s.value?.online_commission_shopeefood ?? 15),
@@ -268,6 +271,7 @@ const SECTION_FIELDS: Partial<Record<Section, string[]>> = {
         'wholesale_enabled',
         'delivery_default_fee',
         'online_sales_enabled',
+        'online_price_enabled',
         'online_commission_gofood',
         'online_commission_grabfood',
         'online_commission_shopeefood',
@@ -798,13 +802,20 @@ const inputClass =
                         </div>
                     </div>
                     <p class="mt-2 text-xs text-slate-500">Komisi bawaan; kasir masih bisa mengubahnya saat transaksi.</p>
+                    <div class="mt-3 rounded-xl border border-slate-200 px-4">
+                        <SettingSwitch
+                            v-model="storeForm.online_price_enabled"
+                            title="Harga khusus pesanan online"
+                            description="Tiap produk bisa diberi harga GoFood, GrabFood, dan ShopeeFood sendiri di form produk. Kasir otomatis memakai harga itu saat memilih sumber pesanannya; yang kosong tetap memakai harga toko."
+                        />
+                    </div>
                 </SettingSwitch>
             </SettingsCard>
 
             <SettingsCard
-                v-if="s?.scan_meja_enabled"
+                v-if="s?.scan_meja_enabled || s?.delivery_self_order_enabled"
                 title="Pembayaran menu digital"
-                description="Cara bayar yang muncul saat pelanggan memesan lewat QR meja."
+                description="Cara bayar yang muncul saat pelanggan memesan lewat QR meja atau tautan pesan antar."
             >
                 <input ref="qrisInputRef" type="file" accept="image/jpeg,image/png,image/webp" class="hidden" @change="onQrisFile" />
                 <div class="space-y-3">

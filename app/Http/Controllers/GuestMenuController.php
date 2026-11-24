@@ -34,55 +34,9 @@ class GuestMenuController extends Controller
             return Inertia::render('ScanMeja/Guest/TableInactive');
         }
 
-        // Ambil kategori produk yang memiliki produk aktif (tipe sellable)
-        $categories = ProductCategory::where('store_id', $store->id)
-            ->orderBy('sort_order')
-            ->orderBy('name')
-            ->get()
-            ->map(function ($cat) {
-                $products = $cat->products()
-                    ->where('is_active', true)
-                    ->where('inventory_type', 'sellable')
-                    ->orderBy('name')
-                    ->get()
-                    ->map(fn ($p) => [
-                        'id' => $p->id,
-                        'name' => $p->name,
-                        'price' => (float) $p->price,
-                        'description' => $p->description,
-                        'image' => $p->image_url ?? null,
-                        'has_variants' => $p->has_variants,
-                        'modifier_options' => $p->modifier_options,
-                    ]);
-
-                return [
-                    'id' => $cat->id,
-                    'name' => $cat->name,
-                    'products' => $products,
-                ];
-            })
-            ->filter(fn ($cat) => count($cat['products']) > 0)
-            ->values();
-
-        $bestSellingIds = TransactionItem::query()
-            ->whereHas('transaction', fn ($query) => $query
-                ->where('store_id', $store->id)
-                ->where('status', 'completed')
-                ->where('order_type', 'dine_in'))
-            ->whereNotNull('product_id')
-            ->selectRaw('product_id, SUM(quantity) as total_quantity')
-            ->groupBy('product_id')
-            ->orderByDesc('total_quantity')
-            ->limit(6)
-            ->pluck('product_id');
-
-        $bestSelling = collect($categories)
-            ->flatMap(fn ($category) => $category['products'])
-            ->filter(fn ($product) => $bestSellingIds->contains($product['id']))
-            ->sortBy(fn ($product) => $bestSellingIds->search($product['id']))
-            ->values();
-
-        $paymentMethods = $this->paymentMethods($store);
+        $categories = self::menuCategories($store);
+        $bestSelling = self::bestSelling($store, $categories, 'dine_in');
+        $paymentMethods = self::paymentMethods($store);
 
         return Inertia::render('ScanMeja/Guest/Menu', [
             'table' => [
@@ -150,7 +104,7 @@ class GuestMenuController extends Controller
                 ...\App\Support\ScanMejaAppearance::urls($store),
             ],
             // Detail metode bayar yang dipilih (gambar QRIS / rekening) agar pelanggan bisa membayar dari halaman ini.
-            'paymentMethod' => $this->paymentMethods($store)->firstWhere('type', $transaction->payment_method),
+            'paymentMethod' => self::paymentMethods($store)->firstWhere('type', $transaction->payment_method),
             'transaction' => [
                 'id' => $transaction->id,
                 'status_token' => $transaction->status_token,
@@ -169,11 +123,76 @@ class GuestMenuController extends Controller
     }
 
     /**
+     * Kategori berisi produk jual yang aktif, untuk halaman menu tamu
+     * (dipakai juga oleh halaman pesan antar).
+     *
+     * @return \Illuminate\Support\Collection<int, array<string, mixed>>
+     */
+    public static function menuCategories(\App\Models\Store $store): \Illuminate\Support\Collection
+    {
+        return ProductCategory::where('store_id', $store->id)
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get()
+            ->map(function ($cat) {
+                $products = $cat->products()
+                    ->where('is_active', true)
+                    ->where('inventory_type', 'sellable')
+                    ->orderBy('name')
+                    ->get()
+                    ->map(fn ($p) => [
+                        'id' => $p->id,
+                        'name' => $p->name,
+                        'price' => (float) $p->price,
+                        'description' => $p->description,
+                        'image' => $p->image_url ?? null,
+                        'has_variants' => $p->has_variants,
+                        'modifier_options' => $p->modifier_options,
+                    ]);
+
+                return [
+                    'id' => $cat->id,
+                    'name' => $cat->name,
+                    'products' => $products,
+                ];
+            })
+            ->filter(fn ($cat) => count($cat['products']) > 0)
+            ->values();
+    }
+
+    /**
+     * Enam menu terlaris untuk jenis pesanan tertentu (dine_in / delivery), urut dari yang paling laku.
+     *
+     * @param  \Illuminate\Support\Collection<int, array<string, mixed>>  $categories
+     * @return \Illuminate\Support\Collection<int, array<string, mixed>>
+     */
+    public static function bestSelling(\App\Models\Store $store, \Illuminate\Support\Collection $categories, string $orderType): \Illuminate\Support\Collection
+    {
+        $bestSellingIds = TransactionItem::query()
+            ->whereHas('transaction', fn ($query) => $query
+                ->where('store_id', $store->id)
+                ->where('status', 'completed')
+                ->where('order_type', $orderType))
+            ->whereNotNull('product_id')
+            ->selectRaw('product_id, SUM(quantity) as total_quantity')
+            ->groupBy('product_id')
+            ->orderByDesc('total_quantity')
+            ->limit(6)
+            ->pluck('product_id');
+
+        return collect($categories)
+            ->flatMap(fn ($category) => $category['products'])
+            ->filter(fn ($product) => $bestSellingIds->contains($product['id']))
+            ->sortBy(fn ($product) => $bestSellingIds->search($product['id']))
+            ->values();
+    }
+
+    /**
      * Metode pembayaran aktif dari settings toko.
      *
      * @return \Illuminate\Support\Collection<int, array<string, mixed>>
      */
-    private function paymentMethods(\App\Models\Store $store): \Illuminate\Support\Collection
+    public static function paymentMethods(\App\Models\Store $store): \Illuminate\Support\Collection
     {
         $rawMethods = $store->settings['scan_meja_payment_methods'] ?? [
             ['type' => 'cash', 'label' => 'Tunai', 'active' => true],

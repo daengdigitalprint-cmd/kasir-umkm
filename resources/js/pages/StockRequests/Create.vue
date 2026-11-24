@@ -3,7 +3,7 @@ import { Head, Link, useForm } from '@inertiajs/vue3';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Search, Send, Trash2 } from 'lucide-vue-next';
+import { ArrowLeft, ArrowRightLeft, Search, Send, ShoppingBag, Trash2 } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 interface ProductOpt {
@@ -22,11 +22,16 @@ const props = defineProps<{
     products: ProductOpt[];
     /** supplierId → productId → stok pemasok (null = pemasok tidak punya barang ini) */
     availability: Record<string, Record<string, number | null>>;
+    /** supplierId → productId → harga jual pemasok per satuan (untuk jenis beli) */
+    prices: Record<string, Record<string, number | null>>;
+    /** Jenis yang terakhir dipakai lokasi ini. */
+    defaultMode: 'transfer' | 'purchase';
     prefill: { product_id: number; quantity: number }[];
 }>();
 
 const form = useForm({
     to_store_id: props.suppliers[0]?.id ?? null,
+    mode: props.defaultMode as 'transfer' | 'purchase',
     notes: '',
     items: props.prefill.map((p) => ({ product_id: p.product_id, quantity: p.quantity })),
 });
@@ -37,6 +42,16 @@ const supplierStock = (productId: number): number | null => {
     return props.availability[String(form.to_store_id)]?.[String(productId)] ?? null;
 };
 const supplierName = computed(() => props.suppliers.find((s) => s.id === form.to_store_id)?.name ?? 'pemasok');
+
+// ── Jenis permintaan: transfer stok biasa, atau beli ke gudang/CK ──
+const isPurchase = computed(() => form.mode === 'purchase');
+const unitPrice = (productId: number): number | null => {
+    if (!form.to_store_id) return null;
+    return props.prices[String(form.to_store_id)]?.[String(productId)] ?? null;
+};
+const lineTotal = (item: { product_id: number; quantity: number }) => (unitPrice(item.product_id) ?? 0) * (Number(item.quantity) || 0);
+const estimatedTotal = computed(() => form.items.reduce((sum, item) => sum + lineTotal(item), 0));
+const rupiah = (n: number) => 'Rp' + new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(n);
 
 // Barang yang tidak dimiliki pemasok terpilih tidak bisa diminta.
 const unavailableItems = computed(() => form.items.filter((i) => supplierStock(i.product_id) === null));
@@ -74,9 +89,9 @@ function submit() {
 </script>
 
 <template>
-    <Head title="Buat Permintaan Stok" />
+    <Head :title="isPurchase ? 'Beli Stok ke Gudang' : 'Buat Permintaan Stok'" />
 
-    <AdminLayout title="Buat Permintaan Stok">
+    <AdminLayout :title="isPurchase ? 'Beli Stok ke Gudang' : 'Buat Permintaan Stok'">
         <div class="mx-auto max-w-5xl space-y-6 pb-8">
             <Button as-child variant="outline" size="sm" class="gap-2 rounded-xl">
                 <Link href="/stock-requests">
@@ -87,12 +102,42 @@ function submit() {
 
             <Card class="rounded-2xl border-slate-200 shadow-sm">
                 <CardHeader>
-                    <CardTitle>Minta stok untuk {{ store.name }}</CardTitle>
+                    <CardTitle>{{ isPurchase ? 'Beli stok' : 'Minta stok' }} untuk {{ store.name }}</CardTitle>
                 </CardHeader>
                 <CardContent class="space-y-5">
+                    <!-- Jenis permintaan -->
+                    <fieldset>
+                        <legend class="text-sm font-semibold text-slate-700">Jenis</legend>
+                        <div class="mt-1.5 grid gap-3 sm:grid-cols-2" data-testid="mode-picker">
+                            <label
+                                class="flex cursor-pointer gap-3 rounded-xl border p-3"
+                                :class="form.mode === 'transfer' ? 'border-violet-400 bg-violet-50/60' : 'border-slate-200 hover:bg-slate-50'"
+                            >
+                                <input v-model="form.mode" type="radio" value="transfer" class="mt-1 h-4 w-4" />
+                                <span>
+                                    <span class="flex items-center gap-1.5 text-sm font-bold text-slate-900"><ArrowRightLeft class="h-4 w-4" /> Transfer stok</span>
+                                    <span class="mt-0.5 block text-xs text-slate-500">Hanya memindahkan barang antar lokasi. Tidak ada tagihan.</span>
+                                </span>
+                            </label>
+                            <label
+                                class="flex cursor-pointer gap-3 rounded-xl border p-3"
+                                :class="form.mode === 'purchase' ? 'border-violet-400 bg-violet-50/60' : 'border-slate-200 hover:bg-slate-50'"
+                            >
+                                <input v-model="form.mode" type="radio" value="purchase" class="mt-1 h-4 w-4" />
+                                <span>
+                                    <span class="flex items-center gap-1.5 text-sm font-bold text-slate-900"><ShoppingBag class="h-4 w-4" /> Beli ke gudang / CK</span>
+                                    <span class="mt-0.5 block text-xs text-slate-500">
+                                        Barang dibeli dengan harga gudang. Tercatat sebagai pengeluaran lokasi ini dan pemasukan gudang.
+                                    </span>
+                                </span>
+                            </label>
+                        </div>
+                        <span v-if="form.errors.mode" class="text-xs text-red-600">{{ form.errors.mode }}</span>
+                    </fieldset>
+
                     <div class="grid gap-4 md:grid-cols-2">
                         <label class="space-y-1.5 text-sm">
-                            <span class="font-semibold text-slate-700">Minta ke</span>
+                            <span class="font-semibold text-slate-700">{{ isPurchase ? 'Beli ke' : 'Minta ke' }}</span>
                             <select v-model="form.to_store_id" class="h-10 w-full rounded-lg border border-slate-200 px-3">
                                 <option v-for="s in suppliers" :key="s.id" :value="s.id">
                                     {{ s.name }}{{ s.is_central_warehouse ? ' (Gudang Pusat)' : '' }}
@@ -150,7 +195,9 @@ function submit() {
                                     <th class="p-3">Barang</th>
                                     <th class="p-3 text-right">Stok di sini / Minimum</th>
                                     <th class="p-3 text-right">Stok {{ supplierName }}</th>
-                                    <th class="p-3">Jumlah diminta</th>
+                                    <th class="p-3">{{ isPurchase ? 'Jumlah dibeli' : 'Jumlah diminta' }}</th>
+                                    <th v-if="isPurchase" class="p-3 text-right">Harga</th>
+                                    <th v-if="isPurchase" class="p-3 text-right">Subtotal</th>
                                     <th class="p-3"></th>
                                 </tr>
                             </thead>
@@ -181,6 +228,10 @@ function submit() {
                                         <span v-if="form.errors[`items.${i}.quantity`]" class="text-xs text-red-600">{{ form.errors[`items.${i}.quantity`] }}</span>
                                         <span v-if="form.errors[`items.${i}.product_id`]" class="text-xs text-red-600">{{ form.errors[`items.${i}.product_id`] }}</span>
                                     </td>
+                                    <td v-if="isPurchase" class="p-3 text-right tabular-nums text-slate-700">
+                                        {{ unitPrice(item.product_id) === null ? '—' : rupiah(unitPrice(item.product_id)!) }}
+                                    </td>
+                                    <td v-if="isPurchase" class="p-3 text-right font-semibold tabular-nums text-slate-900">{{ rupiah(lineTotal(item)) }}</td>
                                     <td class="p-3 text-right">
                                         <button type="button" class="rounded-md p-1.5 text-red-600 hover:bg-red-50" @click="removeItem(i)">
                                             <Trash2 class="h-4 w-4" />
@@ -197,10 +248,20 @@ function submit() {
                     </p>
                     <p v-if="form.errors.items" class="text-xs text-red-600">{{ form.errors.items }}</p>
 
+                    <div v-if="isPurchase && form.items.length" class="rounded-xl bg-slate-50 px-4 py-3 text-sm" data-testid="purchase-estimate">
+                        <div class="flex items-center justify-between">
+                            <span class="font-semibold text-slate-700">Perkiraan total</span>
+                            <span class="text-lg font-black tabular-nums text-slate-900">{{ rupiah(estimatedTotal) }}</span>
+                        </div>
+                        <p class="mt-1 text-xs text-slate-500">
+                            Harga dari {{ supplierName }}. Harga dan jumlah final ditetapkan saat pesanan disetujui, dan tagihan mengikuti barang yang benar-benar diterima.
+                        </p>
+                    </div>
+
                     <div class="flex justify-end">
                         <Button class="rounded-xl" :disabled="!canSubmit || form.processing" @click="submit">
                             <Send class="mr-2 h-4 w-4" />
-                            Kirim permintaan
+                            {{ isPurchase ? 'Kirim pesanan beli' : 'Kirim permintaan' }}
                         </Button>
                     </div>
                 </CardContent>

@@ -10,6 +10,7 @@ use App\Models\StockTransfer;
 use App\Models\StockTransferLine;
 use App\Models\Store;
 use App\Models\User;
+use App\Support\InternalPurchase;
 use App\Support\InventoryCosting;
 use App\Support\ProductQuantity;
 use App\Support\StoreLocationType;
@@ -23,14 +24,21 @@ use Illuminate\Validation\ValidationException;
  * requested → (pemasok setujui, jumlah boleh direvisi) approved + Transfer Stok terkirim
  *           → completed saat peminta menerima transfer.
  * requested → rejected (pemasok) / cancelled (peminta). Tolak & batal tidak mengubah stok.
+ *
+ * Jenis permintaan (lihat App\Support\InternalPurchase):
+ * - transfer : pindah stok biasa, tanpa tagihan.
+ * - purchase : peminta MEMBELI ke pemasok — harga per barang dikunci saat disetujui,
+ *              tagihan mengikuti jumlah yang diterima, lalu pemasok mencatat pelunasan.
  */
 final class StockRequestWorkflow
 {
     /**
      * @param  list<array{product_id: int|string, quantity: int|float|string}>  $items
      */
-    public function create(?User $user, Store $requester, Store $supplier, array $items, ?string $notes = null, bool $automatic = false): StockRequest
+    public function create(?User $user, Store $requester, Store $supplier, array $items, ?string $notes = null, bool $automatic = false, string $mode = InternalPurchase::MODE_TRANSFER): StockRequest
     {
+        $mode = InternalPurchase::normalizeMode($mode);
+
         if ((int) $requester->id === (int) $supplier->id) {
             throw ValidationException::withMessages(['to_store_id' => 'Pilih lokasi pemasok yang berbeda.']);
         }
@@ -70,30 +78,52 @@ final class StockRequestWorkflow
             $resolved[] = compact('product', 'quantity', 'match');
         }
 
-        $request = DB::transaction(function () use ($user, $requester, $supplier, $resolved, $notes, $automatic) {
+        $purchase = $mode === InternalPurchase::MODE_PURCHASE;
+
+        $request = DB::transaction(function () use ($user, $requester, $supplier, $resolved, $notes, $automatic, $mode, $purchase) {
             $request = StockRequest::create([
                 'organization_id' => $requester->organization_id,
                 'from_store_id' => $requester->id,
                 'to_store_id' => $supplier->id,
                 'status' => StockRequest::STATUS_REQUESTED,
+                'mode' => $mode,
+                'payment_status' => $purchase ? InternalPurchase::PAYMENT_UNPAID : null,
                 'is_automatic' => $automatic,
                 'notes' => $notes,
                 'requested_by' => $user?->id,
             ]);
 
+            // Beli: perkiraan harga dari daftar harga pemasok (HPP + markup). Harga final
+            // dikunci pemasok saat menyetujui.
+            $estimate = '0.00';
             foreach ($resolved as $row) {
+                $unitPrice = $purchase ? InternalPurchase::defaultUnitPrice($row['match'], $supplier) : null;
+                $lineTotal = $purchase ? bcmul($row['quantity'], (string) $unitPrice, 2) : null;
                 $request->lines()->create([
                     'requester_product_id' => $row['product']->id,
                     'supplier_product_id' => $row['match']->id,
                     'quantity_requested' => $row['quantity'],
+                    'unit_price' => $unitPrice,
+                    'line_total' => $lineTotal,
                     'stock_at_request' => (string) $row['product']->stock_quantity,
                     'min_stock_at_request' => (string) $row['product']->min_stock_level,
                     'base_unit' => $row['product']->baseUnit(),
                 ]);
+                if ($purchase) {
+                    $estimate = bcadd($estimate, $lineTotal, 2);
+                }
+            }
+            if ($purchase) {
+                $request->update(['total_amount' => $estimate]);
             }
 
             return $request;
         });
+
+        // Permintaan berikutnya dari lokasi ini memakai jenis yang sama sebagai bawaan.
+        if (! $automatic) {
+            InternalPurchase::rememberMode($requester, $mode);
+        }
 
         StockRequestUpdated::dispatchFor($request, 'created');
 
@@ -105,10 +135,11 @@ final class StockRequestWorkflow
      * Transfer Stok dari pemasok ke peminta yang langsung berstatus Dikirim.
      *
      * @param  array<int, int|float|string>  $approved  line_id => jumlah disetujui
+     * @param  array<int, int|float|string>  $prices  line_id => harga jual per satuan (hanya jenis beli)
      */
-    public function approve(StockRequest $request, User $user, array $approved): StockRequest
+    public function approve(StockRequest $request, User $user, array $approved, array $prices = []): StockRequest
     {
-        $result = DB::transaction(function () use ($request, $user, $approved) {
+        $result = DB::transaction(function () use ($request, $user, $approved, $prices) {
             $locked = StockRequest::query()->whereKey($request->id)->lockForUpdate()->firstOrFail();
             if (! $locked->isRequested()) {
                 throw ValidationException::withMessages(['request' => 'Permintaan ini sudah diproses.']);
@@ -116,6 +147,7 @@ final class StockRequestWorkflow
 
             $supplier = $locked->toStore;
             $requester = $locked->fromStore;
+            $purchase = $locked->isPurchase();
             $lines = $locked->lines()->with(['requesterProduct', 'supplierProduct'])->get();
 
             $unknown = collect(array_keys($approved))->map(fn ($id) => (int) $id)->diff($lines->pluck('id'));
@@ -142,6 +174,10 @@ final class StockRequestWorkflow
                 $line->update(['quantity_approved' => $quantity]);
 
                 if (ProductQuantity::cmp($quantity, '0') <= 0) {
+                    if ($purchase) {
+                        $line->update(['quantity_billed' => '0', 'line_total' => '0']);
+                    }
+
                     continue;
                 }
 
@@ -161,7 +197,23 @@ final class StockRequestWorkflow
                     ]);
                 }
 
-                $toSend[] = ['source' => $source, 'destination' => $requesterProduct, 'quantity' => $quantity];
+                // Beli: harga jual dikunci di sini (boleh direvisi pemasok), HPP pemasok ikut dicatat.
+                $unitPrice = null;
+                if ($purchase) {
+                    $rawPrice = $prices[$line->id] ?? $line->unit_price ?? InternalPurchase::defaultUnitPrice($source, $supplier);
+                    if (! is_numeric($rawPrice) || (float) $rawPrice < 0) {
+                        throw ValidationException::withMessages(['lines' => "Harga «{$source->name}» tidak valid."]);
+                    }
+                    $unitPrice = number_format(round((float) $rawPrice, 2), 2, '.', '');
+                    $line->update([
+                        'unit_price' => $unitPrice,
+                        'unit_cost' => InventoryCosting::currentAverageCost($source),
+                        'quantity_billed' => $quantity,
+                        'line_total' => bcmul($quantity, $unitPrice, 2),
+                    ]);
+                }
+
+                $toSend[] = ['source' => $source, 'destination' => $requesterProduct, 'quantity' => $quantity, 'unit_price' => $unitPrice];
             }
 
             if ($toSend === []) {
@@ -177,7 +229,9 @@ final class StockRequestWorkflow
             ]);
 
             foreach ($toSend as $item) {
-                $unitCost = InventoryCosting::currentAverageCost($item['source']);
+                // Beli: barang masuk ke peminta dengan biaya = harga belinya, sehingga HPP
+                // peminta mencerminkan harga beli ke pemasok (bukan HPP pemasok).
+                $unitCost = $item['unit_price'] ?? InventoryCosting::currentAverageCost($item['source']);
                 $transferLine = StockTransferLine::create([
                     'stock_transfer_id' => $transfer->id,
                     'from_product_id' => $item['source']->id,
@@ -202,6 +256,7 @@ final class StockRequestWorkflow
                 'approved_by' => $user->id,
                 'approved_at' => now(),
                 'stock_transfer_id' => $transfer->id,
+                ...($purchase ? ['total_amount' => (string) $locked->lines()->sum('line_total')] : []),
             ]);
 
             return $locked;
@@ -254,6 +309,36 @@ final class StockRequestWorkflow
     }
 
     /**
+     * Catat pelunasan pembelian internal. Dilakukan pihak pemasok (penerima uang),
+     * setelah barang dikirim. Tidak mengubah stok.
+     */
+    public function markPaid(StockRequest $request, User $user, string $method, ?string $note = null): StockRequest
+    {
+        return DB::transaction(function () use ($request, $user, $method, $note) {
+            $locked = StockRequest::query()->whereKey($request->id)->lockForUpdate()->firstOrFail();
+            if (! $locked->isPurchase()) {
+                throw ValidationException::withMessages(['request' => 'Permintaan ini transfer stok biasa, tidak ada tagihan.']);
+            }
+            if (! in_array($locked->status, InternalPurchase::BILLABLE_STATUSES, true)) {
+                throw ValidationException::withMessages(['request' => 'Pembayaran hanya bisa dicatat setelah barang dikirim.']);
+            }
+            if ($locked->isPaid()) {
+                throw ValidationException::withMessages(['request' => 'Tagihan ini sudah lunas.']);
+            }
+
+            $locked->update([
+                'payment_status' => InternalPurchase::PAYMENT_PAID,
+                'paid_at' => now(),
+                'paid_by' => $user->id,
+                'payment_method' => array_key_exists($method, InternalPurchase::PAYMENT_METHODS) ? $method : 'other',
+                'payment_note' => $note !== null && trim($note) !== '' ? mb_substr(trim($note), 0, 255) : null,
+            ]);
+
+            return $locked;
+        });
+    }
+
+    /**
      * Ikuti status Transfer Stok hasil permintaan: diterima → Selesai,
      * dibatalkan → permintaan ikut Dibatalkan. Panggil di dalam transaksi transfer.
      */
@@ -268,6 +353,8 @@ final class StockRequestWorkflow
         }
 
         if ($transfer->status === StockTransfer::STATUS_RECEIVED) {
+            // Beli: tagihan mengikuti jumlah yang benar-benar diterima (kurang/rusak tidak ditagih).
+            InternalPurchase::billFromTransfer($request, $transfer);
             $request->update(['status' => StockRequest::STATUS_COMPLETED, 'completed_at' => now()]);
             StockRequestUpdated::dispatchFor($request, 'completed');
         } elseif ($transfer->status === StockTransfer::STATUS_CANCELLED) {

@@ -24,6 +24,7 @@ use App\Support\CacheKeys;
 use App\Support\CostVisibility;
 use App\Support\InventoryType;
 use App\Support\ModifierOptions;
+use App\Support\OnlinePrices;
 use App\Support\PharmacyFeatures;
 use App\Support\ProductQuantity;
 use App\Support\StockAdjustmentApproval;
@@ -408,6 +409,7 @@ class ProductController extends Controller
         return CostVisibility::render('Products/Create', [
             'store' => $store,
             'wholesaleEnabled' => (bool) ($store->settings['wholesale_enabled'] ?? false),
+            'onlinePricesEnabled' => OnlinePrices::enabled($store),
             'productCategories' => $productCategories,
             'catalogPresets' => BusinessTypePresets::catalog($store->business_type ?? 'general'),
             'inventoryTypes' => InventoryType::LABELS,
@@ -547,7 +549,7 @@ class ProductController extends Controller
             'service_duration_minutes' => 'nullable|integer|min:1|max:1440',
             'barber_commission_mode' => 'sometimes|nullable|string|in:percent,fixed',
             'barber_commission_value' => 'sometimes|nullable|numeric|min:0|max:100000000',
-        ], $this->pharmacyValidationRules($store)));
+        ], OnlinePrices::validationRules(), $this->pharmacyValidationRules($store)));
 
         $allowsDecimal = (bool) ($validated['allows_decimal'] ?? false);
         $hasVariants = (bool) ($validated['has_variants'] ?? false);
@@ -621,6 +623,7 @@ class ProductController extends Controller
                 && isset($validated['wholesale_price']) && is_numeric($validated['wholesale_price']) && (float) $validated['wholesale_price'] > 0
                 ? (float) $validated['wholesale_price']
                 : null,
+            'online_prices' => $this->onlinePricesForPayload($store, $validated['inventory_type'] ?? null, $validated['online_prices'] ?? null),
             'cost_price' => $initialCost,
             'average_cost' => $initialCost,
             'stock_quantity' => ($hasVariants || $isBundle)
@@ -785,6 +788,9 @@ class ProductController extends Controller
             'barcode' => $product->barcode ?? '',
             'description' => $product->description ?? '',
             'price' => $product->price ?? 0,
+            // Wajib ikut dikirim: form mengisi kolom Harga Grosir dari sini lalu menyimpannya kembali.
+            'wholesale_price' => $product->wholesale_price !== null ? (float) $product->wholesale_price : null,
+            'online_prices' => $product->online_prices ?? [],
             'cost_price' => $product->cost_price ?? 0,
             'average_cost' => $product->average_cost ?? $product->cost_price ?? 0,
             'stock_quantity' => $product->stock_quantity ?? 0,
@@ -829,6 +835,8 @@ class ProductController extends Controller
                 'sku' => $v->sku,
                 'barcode' => $v->barcode,
                 'price' => $v->price,
+                'wholesale_price' => $v->wholesale_price,
+                'online_prices' => $v->online_prices ?? [],
                 'cost_price' => $v->cost_price,
                 'stock_quantity' => $v->stock_quantity,
                 'min_stock_level' => $v->min_stock_level,
@@ -901,6 +909,7 @@ class ProductController extends Controller
                 'currency' => $store->currency,
             ],
             'wholesaleEnabled' => (bool) ($store->settings['wholesale_enabled'] ?? false),
+            'onlinePricesEnabled' => OnlinePrices::enabled($store),
             'productCategories' => $productCategories,
             'catalogPresets' => BusinessTypePresets::catalog($store->business_type ?? 'general'),
             'inventoryTypes' => InventoryType::LABELS,
@@ -1003,7 +1012,7 @@ class ProductController extends Controller
             'service_duration_minutes' => 'nullable|integer|min:1|max:1440',
             'barber_commission_mode' => 'sometimes|nullable|string|in:percent,fixed',
             'barber_commission_value' => 'sometimes|nullable|numeric|min:0|max:100000000',
-        ], $this->pharmacyValidationRules($product->store)));
+        ], OnlinePrices::validationRules(), $this->pharmacyValidationRules($product->store)));
 
         \Log::debug('[PRODUCT_UPDATE_VALIDATED] Hasil validasi:', [
             'unlimited_stock' => $validated['unlimited_stock'] ?? 'TIDAK ADA',
@@ -1088,10 +1097,6 @@ class ProductController extends Controller
             'barcode' => $validated['barcode'],
             'description' => $validated['description'],
             'price' => isset($validated['price']) && is_numeric($validated['price']) ? (float) $validated['price'] : 0,
-            'wholesale_price' => ($product->store->settings['wholesale_enabled'] ?? false)
-                && isset($validated['wholesale_price']) && is_numeric($validated['wholesale_price']) && (float) $validated['wholesale_price'] > 0
-                ? (float) $validated['wholesale_price']
-                : null,
             'cost_price' => $validated['cost_price'] ? (float) $validated['cost_price'] : null,
             'average_cost' => $validated['cost_price'] ? (float) $validated['cost_price'] : null,
             'stock_quantity' => $hasVariants
@@ -1120,6 +1125,25 @@ class ProductController extends Controller
             'is_active' => (bool) $validated['is_active'],
         ];
         $dataToUpdate = array_merge($dataToUpdate, $this->pharmacyFieldsForPayload($product->store, $validated));
+
+        // Harga grosir hanya diubah bila modulnya aktif (kolomnya tampil di form). Saat modul
+        // mati form mengirim 0, jadi nilai tersimpan dibiarkan agar tidak hilang diam-diam.
+        if ($product->store->settings['wholesale_enabled'] ?? false) {
+            $dataToUpdate['wholesale_price'] = isset($validated['wholesale_price'])
+                && is_numeric($validated['wholesale_price']) && (float) $validated['wholesale_price'] > 0
+                ? (float) $validated['wholesale_price']
+                : null;
+        }
+
+        // Harga toko online hanya diubah bila saklarnya aktif di Pengaturan dan form mengirim
+        // isiannya; selain itu nilai lama dibiarkan agar tidak hilang saat saklar dimatikan sementara.
+        if (OnlinePrices::enabled($product->store) && $request->has('online_prices')) {
+            $dataToUpdate['online_prices'] = $this->onlinePricesForPayload(
+                $product->store,
+                $dataToUpdate['inventory_type'],
+                $validated['online_prices'] ?? null,
+            );
+        }
 
         if (BarbershopFeatures::enabled($product->store)) {
             $dataToUpdate['service_duration_minutes'] = $validated['service_duration_minutes'] ?? null;
@@ -1600,6 +1624,24 @@ class ProductController extends Controller
     }
 
     /**
+     * Harga toko online (GoFood/GrabFood/ShopeeFood) untuk disimpan di produk.
+     * Hanya produk jual yang punya harga online; bahan baku & kemasan selalu null.
+     *
+     * @return array<string, float>|null
+     */
+    private function onlinePricesForPayload(Store $store, ?string $inventoryType, mixed $raw): ?array
+    {
+        if (! OnlinePrices::enabled($store)) {
+            return null;
+        }
+        if (in_array(InventoryType::normalize($inventoryType), [InventoryType::RAW_MATERIAL, InventoryType::PACKAGING], true)) {
+            return null;
+        }
+
+        return OnlinePrices::normalize($raw);
+    }
+
+    /**
      * @param  array<int, mixed>  $rows
      */
     private function replaceProductVariants(Product $product, Store $store, array $rows, Product $qtyContext): void
@@ -1607,6 +1649,7 @@ class ProductController extends Controller
         $this->assertVariantSkuBarcodeUniqueInStore($store, $product->id, $rows);
 
         $wholesaleEnabled = (bool) ($store->settings['wholesale_enabled'] ?? false);
+        $onlineEnabled = OnlinePrices::enabled($store);
         $normalized = [];
         $sort = 0;
 
@@ -1658,6 +1701,9 @@ class ProductController extends Controller
                 'price' => $price,
                 'cost_price' => $cost,
                 'wholesale_price' => $wholesalePrice,
+                // Tanpa kunci `online_prices` (saklar mati / klien lama) harga online varian lama dipertahankan.
+                'has_online_prices' => $onlineEnabled && array_key_exists('online_prices', $row),
+                'online_prices' => OnlinePrices::normalize($row['online_prices'] ?? null),
                 'stock_quantity' => ProductQuantity::normalizeStorageAmount($qtyContext, $row['stock_quantity'] ?? 0),
                 'min_stock_level' => ProductQuantity::normalizeStorageAmount($qtyContext, $row['min_stock_level'] ?? 0),
                 'is_active' => (bool) ($row['is_active'] ?? true),
@@ -1695,6 +1741,13 @@ class ProductController extends Controller
             // Varian lama yang disimpan staf tanpa akses HPP: HPP-nya tidak ikut diubah.
             if ($r['id'] && ! CostVisibility::canSee(auth()->user())) {
                 unset($fill['cost_price']);
+            }
+            if ($r['has_online_prices']) {
+                $fill['online_prices'] = $r['online_prices'];
+            }
+            // Modul grosir mati: kolom Grosir tidak tampil, jadi harga grosir varian lama tidak disentuh.
+            if ($r['id'] && ! $wholesaleEnabled) {
+                unset($fill['wholesale_price']);
             }
             $variant->fill($fill);
             $variant->save();

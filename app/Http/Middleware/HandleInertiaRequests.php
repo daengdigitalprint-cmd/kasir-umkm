@@ -243,6 +243,10 @@ class HandleInertiaRequests extends Middleware
                     })
                     ->count()
                 : 0,
+            // Pesanan dari tautan pesan antar yang menunggu diterima/ditolak kasir.
+            'pending_delivery_order_count' => $activeStore && \App\Support\DeliveryFeatures::enabled($activeStore)
+                ? \App\Support\DeliveryFeatures::pendingSelfOrderCount($activeStore)
+                : 0,
             // Pesanan meja yang sudah diterima tetapi belum dibayar (bukan Open Bill POS).
             'unpaid_table_order_count' => $activeStore && PlanModules::settingOn($activeStore, 'scan_meja_enabled')
                 ? \App\Support\TableOrders::unpaidCount($activeStore->id)

@@ -573,7 +573,7 @@ class DemoCentralKitchenSeeder extends Seeder
                 'phone' => $phone,
                 'address' => $address,
                 'delivery_fee' => 8000,
-                'courier_user_id' => $courierId,
+                'courier_name' => $courierId ? $courier->name : null,
                 'status' => $status,
                 'notes' => $status === DeliveryOrder::STATUS_PREPARING ? 'Sambal dipisah' : null,
                 'dispatched_at' => in_array($status, [DeliveryOrder::STATUS_ON_THE_WAY, DeliveryOrder::STATUS_DELIVERED], true) ? now()->subMinutes(25) : null,

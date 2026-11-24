@@ -32,6 +32,7 @@ use App\Support\FnBFeatures;
 use App\Support\InventoryCosting;
 use App\Support\InventoryType;
 use App\Support\LoyaltySettings;
+use App\Support\OnlinePrices;
 use App\Support\PharmacyFeatures;
 use App\Support\ProductDiscountFeatures;
 use App\Support\ProductQuantity;
@@ -72,7 +73,7 @@ class POSController extends Controller
                 $q->orWhere('is_bundle', true);    // bundle products
             })
             ->select([
-                'id', 'store_id', 'name', 'sku', 'barcode', 'price', 'wholesale_price', 'stock_quantity',
+                'id', 'store_id', 'name', 'sku', 'barcode', 'price', 'wholesale_price', 'online_prices', 'stock_quantity',
                 'category', 'product_category_id', 'inventory_type', 'unit', 'is_active', 'images', 'modifier_options', 'allows_decimal', 'has_variants', 'is_bundle',
                 'track_stock', 'unlimited_stock', 'allow_negative_stock', 'pharmacy_sale_class', 'min_stock_level',
             ])
@@ -233,7 +234,7 @@ class POSController extends Controller
             'delivery' => DeliveryFeatures::enabled($store) ? [
                 'enabled' => true,
                 'default_fee' => DeliveryFeatures::defaultFee($store),
-                'couriers' => DeliveryFeatures::couriers($store),
+                'couriers' => DeliveryFeatures::courierNames($store),
             ] : ['enabled' => false, 'default_fee' => 0, 'couriers' => []],
             // F8: saran tambahan menu (pemicu → yang ditawarkan); kosong bila modul mati.
             'upsellMap' => \App\Support\UpsellSuggestions::map($store),
@@ -281,6 +282,7 @@ class POSController extends Controller
                 'wholesale_enabled' => (bool) ($store->settings['wholesale_enabled'] ?? false),
                 'product_discount_enabled' => ProductDiscountFeatures::enabled($store),
                 'online_sales_enabled' => (bool) ($store->settings['online_sales_enabled'] ?? false),
+                'online_price_enabled' => OnlinePrices::enabled($store),
                 'online_commission_gofood' => (float) ($store->settings['online_commission_gofood'] ?? 20),
                 'online_commission_grabfood' => (float) ($store->settings['online_commission_grabfood'] ?? 20),
                 'online_commission_shopeefood' => (float) ($store->settings['online_commission_shopeefood'] ?? 15),
@@ -500,6 +502,8 @@ class POSController extends Controller
                 'delivery.phone' => 'nullable|string|max:30',
                 'delivery.address' => 'required_with:delivery|string|max:500',
                 'delivery.fee' => 'nullable|numeric|min:0|max:10000000',
+                // Kurir cukup nama; `courier_user_id` hanya diterima dari kasir versi lama.
+                'delivery.courier_name' => 'nullable|string|max:120',
                 'delivery.courier_user_id' => 'nullable|integer',
                 'delivery.notes' => 'nullable|string|max:500',
                 'pre_order_id' => 'nullable|integer|exists:pre_orders,id',
@@ -638,6 +642,22 @@ class POSController extends Controller
             $cartPrescriptionItems = [];
             $customerType = ($store->settings['wholesale_enabled'] ?? false) && $request->input('customer_type') === 'grosir' ? 'grosir' : 'ecer';
 
+            // Sales channel: dari mana transaksi datang (walk_in, gofood, dll).
+            // Ditentukan sebelum baris keranjang dihitung karena kanal aggregator
+            // (GoFood/GrabFood/ShopeeFood) bisa punya harga jual sendiri per produk.
+            $salesChannel = SalesChannel::tryFrom((string) $request->input('sales_channel', SalesChannel::WalkIn->value))
+                ?? SalesChannel::WalkIn;
+
+            // Guard: aggregator hanya tersedia jika modul online aktif.
+            if ($salesChannel->isAggregator() && ! OnlinePrices::salesEnabled($store)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'sales_channel' => 'Modul penjualan online belum diaktifkan. Aktifkan di Pengaturan > Toko.',
+                ]);
+            }
+
+            // Harga khusus pesanan online hanya dipakai bila saklarnya aktif di Pengaturan.
+            $onlinePricingEnabled = OnlinePrices::enabled($store);
+
             foreach ($request->items as $item) {
                 // Baris produk dikunci selama transaksi berjalan: tanpa ini dua kasir
                 // bisa sama-sama lolos pengecekan stok untuk unit terakhir yang sama.
@@ -766,9 +786,12 @@ class POSController extends Controller
                 foreach ($modifiers as $m) {
                     $modifierUnitSum += (float) $m['price'];
                 }
-                $baseUnit = $variant
-                    ? $this->resolveLinePrice($variant->wholesale_price ?? $product->wholesale_price, $variant->effectiveUnitPrice(), $customerType)
-                    : $this->resolveLinePrice($product->wholesale_price, (float) $product->price, $customerType);
+                // Harga toko online kanal ini didahulukan bila diisi; kosong = harga toko
+                // (ecer/grosir). Selalu dihitung di server, harga kiriman browser diabaikan.
+                $baseUnit = ($onlinePricingEnabled ? OnlinePrices::resolve($product, $variant, $salesChannel) : null)
+                    ?? ($variant
+                        ? $this->resolveLinePrice($variant->wholesale_price ?? $product->wholesale_price, $variant->effectiveUnitPrice(), $customerType)
+                        : $this->resolveLinePrice($product->wholesale_price, (float) $product->price, $customerType));
                 $unitPrice = round($baseUnit + $modifierUnitSum, 2);
                 $lineTotal = round($unitPrice * (float) $qty, 2);
                 // Diskon manual per baris dari kasir, dibatasi maksimal sebesar nilai baris.
@@ -968,12 +991,6 @@ class POSController extends Controller
                         'delivery' => 'Modul Pesanan Antar belum aktif. Aktifkan di menu Pengantaran.',
                     ]);
                 }
-                $courierId = $deliveryInput['courier_user_id'] ?? null;
-                if ($courierId !== null && ! DeliveryFeatures::isCourierOf($store, (int) $courierId)) {
-                    throw \Illuminate\Validation\ValidationException::withMessages([
-                        'delivery.courier_user_id' => 'Kurir harus karyawan toko ini.',
-                    ]);
-                }
                 $deliveryFee = max(0.0, round((float) ($deliveryInput['fee'] ?? 0), 2));
             }
 
@@ -989,17 +1006,6 @@ class POSController extends Controller
             $tableRef = $fnb ? mb_substr((string) $request->input('table_reference', ''), 0, 64) : null;
             if ($tableRef === '') {
                 $tableRef = null;
-            }
-
-            // Sales channel: dari mana transaksi datang (walk_in, gofood, dll).
-            $salesChannel = SalesChannel::tryFrom((string) $request->input('sales_channel', SalesChannel::WalkIn->value))
-                ?? SalesChannel::WalkIn;
-
-            // Guard: aggregator (GoFood/GrabFood/ShopeeFood) hanya tersedia jika modul online aktif.
-            if ($salesChannel->isAggregator() && ! (bool) ($store->settings['online_sales_enabled'] ?? false)) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
-                    'sales_channel' => 'Modul penjualan online belum diaktifkan. Aktifkan di Pengaturan > Toko.',
-                ]);
             }
 
             // Komisi aggregator: default per channel, bisa di-override dari input.
@@ -1220,7 +1226,8 @@ class POSController extends Controller
                     'phone' => mb_substr(trim((string) ($deliveryInput['phone'] ?? '')), 0, 30) ?: null,
                     'address' => trim((string) $deliveryInput['address']),
                     'delivery_fee' => $deliveryFee,
-                    'courier_user_id' => $deliveryInput['courier_user_id'] ?? null,
+                    'courier_name' => DeliveryFeatures::cleanCourierName($deliveryInput['courier_name'] ?? null)
+                        ?? DeliveryFeatures::legacyCourierName($store, $deliveryInput['courier_user_id'] ?? null),
                     'status' => DeliveryOrder::STATUS_PREPARING,
                     'notes' => mb_substr(trim((string) ($deliveryInput['notes'] ?? '')), 0, 500) ?: null,
                 ]);

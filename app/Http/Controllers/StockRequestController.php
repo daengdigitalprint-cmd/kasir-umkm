@@ -10,14 +10,19 @@ use App\Models\User;
 use App\Support\AutoStockRequest;
 use App\Support\CentralKitchenModule;
 use App\Support\CostVisibility;
+use App\Support\InternalPurchase;
 use App\Support\StoreLocationType;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Inertia\Response;
 
 /**
  * F6 — Permintaan Stok antar lokasi (Gudang Pusat Pro).
  * Outlet meminta → Gudang Pusat merevisi & menyetujui → Transfer Stok terkirim.
+ *
+ * Dua jenis permintaan: transfer stok biasa, atau BELI ke gudang/CK (ada harga,
+ * tagihan, pelunasan, dan laporan pemasukan/pengeluaran) — lihat InternalPurchase.
  */
 class StockRequestController extends Controller
 {
@@ -43,6 +48,9 @@ class StockRequestController extends Controller
                 'request_number' => $r->request_number,
                 'status' => $r->status,
                 'status_label' => $r->statusLabel(),
+                'mode' => $r->mode,
+                'total_amount' => (float) $r->total_amount,
+                'payment_status' => $r->isPurchase() && in_array($r->status, InternalPurchase::BILLABLE_STATUSES, true) ? $r->payment_status : null,
                 'from_store' => $r->fromStore?->only(['id', 'name']),
                 'to_store' => $r->toStore?->only(['id', 'name']),
                 'requester' => $r->is_automatic ? 'Otomatis' : $r->requester?->name,
@@ -62,6 +70,11 @@ class StockRequestController extends Controller
                 ->count(),
             'canCreate' => CentralKitchenModule::siblingStores($store)->isNotEmpty(),
             'autoRequest' => $this->autoRequestPayload($request->user(), $store),
+            // Harga jual lokasi ini saat lokasi lain MEMBELI ke sini: HPP + markup.
+            'pricing' => [
+                'markup_percent' => InternalPurchase::markupPercent($store),
+                'can_manage' => $this->canManageAuto($request->user()),
+            ],
         ]);
     }
 
@@ -76,13 +89,20 @@ class StockRequestController extends Controller
 
         $products = $this->transferableProducts($store);
 
-        // Stok pemasok untuk tiap barang peminta (null = pemasok tidak punya padanannya).
+        // Stok pemasok untuk tiap barang peminta (null = pemasok tidak punya padanannya),
+        // dan harga jual pemasok bila permintaannya berjenis beli.
         $availability = [];
+        $prices = [];
+        // siblingStores() hanya memuat kolom ringkas; markup harga ada di `settings` pemasok.
+        $pricingStores = Store::query()->whereKey($suppliers->pluck('id'))->get(['id', 'settings'])->keyBy('id');
         foreach ($suppliers as $supplier) {
             $index = $this->matchIndex($supplier);
             foreach ($products as $product) {
                 $match = $this->lookup($index, $product);
                 $availability[$supplier->id][$product->id] = $match ? (float) $match->stock_quantity : null;
+                $prices[$supplier->id][$product->id] = $match
+                    ? InternalPurchase::defaultUnitPrice($match, $pricingStores[$supplier->id] ?? $supplier)
+                    : null;
             }
         }
 
@@ -103,6 +123,8 @@ class StockRequestController extends Controller
                 'min_stock' => (float) $p->min_stock_level,
             ])->values(),
             'availability' => $availability,
+            'prices' => $prices,
+            'defaultMode' => InternalPurchase::defaultMode($store),
             'prefill' => $this->prefill($request, $products),
         ]);
     }
@@ -112,6 +134,7 @@ class StockRequestController extends Controller
         $user = $request->user();
         $validated = $request->validate([
             'to_store_id' => ['required', 'integer'],
+            'mode' => ['nullable', 'string', 'in:'.InternalPurchase::MODE_TRANSFER.','.InternalPurchase::MODE_PURCHASE],
             'notes' => ['nullable', 'string', 'max:2000'],
             'items' => ['required', 'array', 'min:1', 'max:200'],
             'items.*.product_id' => ['required', 'integer'],
@@ -126,10 +149,19 @@ class StockRequestController extends Controller
             return back()->withErrors(['to_store_id' => 'Lokasi pemasok tidak ditemukan.']);
         }
 
-        $stockRequest = $this->workflow->create($user, $user->store, $supplier, $validated['items'], $validated['notes'] ?? null);
+        $stockRequest = $this->workflow->create(
+            $user,
+            $user->store,
+            $supplier,
+            $validated['items'],
+            $validated['notes'] ?? null,
+            mode: InternalPurchase::normalizeMode($validated['mode'] ?? null),
+        );
 
         return redirect()->route('stock-requests.show', $stockRequest)
-            ->with('success', "Permintaan {$stockRequest->request_number} terkirim ke {$supplier->name}.");
+            ->with('success', $stockRequest->isPurchase()
+                ? "Pesanan beli {$stockRequest->request_number} terkirim ke {$supplier->name}."
+                : "Permintaan {$stockRequest->request_number} terkirim ke {$supplier->name}.");
     }
 
     public function show(Request $request, StockRequest $stockRequest): Response
@@ -144,9 +176,11 @@ class StockRequestController extends Controller
             'approver:id,name',
             'rejecter:id,name',
             'transfer:id,transfer_number,status',
+            'payer:id,name',
             'lines.requesterProduct:id,name,sku,base_unit,allows_decimal,stock_quantity',
             'lines.supplierProduct:id,name,sku,base_unit,allows_decimal,stock_quantity',
         ]);
+        $billable = $stockRequest->isPurchase() && in_array($stockRequest->status, InternalPurchase::BILLABLE_STATUSES, true);
 
         return CostVisibility::render('StockRequests/Show', [
             'request' => [
@@ -154,6 +188,16 @@ class StockRequestController extends Controller
                 'request_number' => $stockRequest->request_number,
                 'status' => $stockRequest->status,
                 'status_label' => $stockRequest->statusLabel(),
+                'mode' => $stockRequest->mode,
+                'total_amount' => (float) $stockRequest->total_amount,
+                'payment' => $billable ? [
+                    'status' => $stockRequest->payment_status ?? InternalPurchase::PAYMENT_UNPAID,
+                    'label' => InternalPurchase::PAYMENT_LABELS[$stockRequest->payment_status ?? InternalPurchase::PAYMENT_UNPAID] ?? null,
+                    'paid_at' => $stockRequest->paid_at?->toIso8601String(),
+                    'paid_by' => $stockRequest->payer?->name,
+                    'method' => InternalPurchase::PAYMENT_METHODS[$stockRequest->payment_method] ?? $stockRequest->payment_method,
+                    'note' => $stockRequest->payment_note,
+                ] : null,
                 'notes' => $stockRequest->notes,
                 'from_store' => $stockRequest->fromStore?->only(['id', 'name']),
                 'to_store' => $stockRequest->toStore?->only(['id', 'name']),
@@ -176,6 +220,11 @@ class StockRequestController extends Controller
                     'allows_decimal' => (bool) ($line->supplierProduct?->allows_decimal ?? $line->requesterProduct?->allows_decimal),
                     'quantity_requested' => (float) $line->quantity_requested,
                     'quantity_approved' => $line->quantity_approved === null ? null : (float) $line->quantity_approved,
+                    'unit_price' => $line->unit_price === null ? null : (float) $line->unit_price,
+                    // HPP pemasok: otomatis dibuang untuk staf tanpa akses biaya (CostVisibility).
+                    'unit_cost' => $line->unit_cost === null ? null : (float) $line->unit_cost,
+                    'quantity_billed' => $line->quantity_billed === null ? null : (float) $line->quantity_billed,
+                    'line_total' => $line->line_total === null ? null : (float) $line->line_total,
                     'stock_at_request' => (float) $line->stock_at_request,
                     'min_stock_at_request' => (float) $line->min_stock_at_request,
                     'supplier_stock' => $line->supplierProduct ? (float) $line->supplierProduct->stock_quantity : null,
@@ -183,6 +232,9 @@ class StockRequestController extends Controller
             ],
             'canApprove' => $stockRequest->isRequested() && $this->canDecide($user, $stockRequest),
             'canCancel' => $stockRequest->isRequested() && $this->canCancel($user, $stockRequest),
+            // Pelunasan dicatat pihak pemasok (penerima uang) setelah barang dikirim.
+            'canPay' => $billable && ! $stockRequest->isPaid() && $this->canDecide($user, $stockRequest),
+            'paymentMethods' => InternalPurchase::PAYMENT_METHODS,
         ]);
     }
 
@@ -194,15 +246,167 @@ class StockRequestController extends Controller
             'lines' => ['sometimes', 'array'],
             'lines.*.id' => ['required', 'integer'],
             'lines.*.quantity_approved' => ['required', 'numeric', 'min:0'],
+            'lines.*.unit_price' => ['nullable', 'numeric', 'min:0', 'max:9999999999999'],
         ]);
-        $approved = collect($validated['lines'] ?? [])
-            ->mapWithKeys(fn ($row) => [(int) $row['id'] => $row['quantity_approved']])
+        $rows = collect($validated['lines'] ?? []);
+        $approved = $rows->mapWithKeys(fn ($row) => [(int) $row['id'] => $row['quantity_approved']])->all();
+        // Harga hanya dipakai permintaan berjenis beli; baris tanpa harga memakai harga bawaan.
+        $prices = $rows->filter(fn ($row) => isset($row['unit_price']) && $row['unit_price'] !== '')
+            ->mapWithKeys(fn ($row) => [(int) $row['id'] => $row['unit_price']])
             ->all();
 
-        $result = $this->workflow->approve($stockRequest, $request->user(), $approved);
+        $result = $this->workflow->approve($stockRequest, $request->user(), $approved, $prices);
 
         return redirect()->route('stock-requests.show', $result)
-            ->with('success', 'Permintaan disetujui. Transfer Stok sudah dikirim ke '.$result->fromStore?->name.'.');
+            ->with('success', ($result->isPurchase() ? 'Pesanan beli disetujui.' : 'Permintaan disetujui.').' Transfer Stok sudah dikirim ke '.$result->fromStore?->name.'.');
+    }
+
+    /** Catat pelunasan pembelian internal (oleh lokasi pemasok). */
+    public function pay(Request $request, StockRequest $stockRequest): RedirectResponse
+    {
+        abort_unless($this->canDecide($request->user(), $stockRequest), 403);
+
+        $validated = $request->validate([
+            'payment_method' => ['required', 'string', 'in:'.implode(',', array_keys(InternalPurchase::PAYMENT_METHODS))],
+            'payment_note' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $this->workflow->markPaid($stockRequest, $request->user(), $validated['payment_method'], $validated['payment_note'] ?? null);
+
+        return redirect()->route('stock-requests.show', $stockRequest)->with('success', 'Pembayaran dicatat lunas.');
+    }
+
+    /** Markup harga jual lokasi ini untuk lokasi lain yang membeli ke sini. */
+    public function updatePricing(Request $request): RedirectResponse
+    {
+        abort_unless($this->canManageAuto($request->user()), 403);
+
+        $validated = $request->validate([
+            'markup_percent' => ['required', 'numeric', 'min:0', 'max:1000'],
+        ]);
+
+        $store = $request->user()->store;
+        $settings = $store->settings ?? [];
+        $settings['internal_sale_markup_percent'] = round((float) $validated['markup_percent'], 2);
+        $store->update(['settings' => $settings]);
+
+        return back()->with('success', 'Harga jual ke lokasi lain disimpan: HPP + '.rtrim(rtrim(number_format($settings['internal_sale_markup_percent'], 2, ',', '.'), '0'), ',').'%.');
+    }
+
+    /**
+     * Laporan jual-beli internal lokasi yang sedang aktif:
+     * - income  : pemasukan dari lokasi lain yang membeli ke sini (sisi gudang/CK).
+     * - expense : pengeluaran pembelian stok ke lokasi lain (sisi outlet).
+     * Hanya permintaan berjenis beli yang barangnya sudah dikirim/diterima.
+     */
+    public function report(Request $request): Response
+    {
+        $user = $request->user();
+        $store = $user->store;
+
+        $defaultDirection = StoreLocationType::isCentralWarehouse($store) ? 'income' : 'expense';
+        $direction = in_array($request->input('direction'), ['income', 'expense'], true) ? $request->input('direction') : $defaultDirection;
+        $mine = $direction === 'income' ? 'to_store_id' : 'from_store_id';
+        $other = $direction === 'income' ? 'from_store_id' : 'to_store_id';
+
+        $timezone = $store->timezone ?: config('app.timezone');
+        $from = $this->reportDate($request->input('from'), $timezone) ?? now($timezone)->startOfMonth();
+        $to = $this->reportDate($request->input('to'), $timezone) ?? now($timezone);
+        if ($to->lt($from)) {
+            [$from, $to] = [$to, $from];
+        }
+        $counterparty = $request->filled('store_id') ? (int) $request->input('store_id') : null;
+        $payment = in_array($request->input('payment'), [InternalPurchase::PAYMENT_PAID, InternalPurchase::PAYMENT_UNPAID], true)
+            ? $request->input('payment')
+            : null;
+
+        // Tanggal transaksi = saat disetujui (barang dikirim & harga dikunci).
+        $base = fn () => StockRequest::query()
+            ->where($mine, $store->id)
+            ->where('mode', InternalPurchase::MODE_PURCHASE)
+            ->whereIn('status', InternalPurchase::BILLABLE_STATUSES)
+            ->whereBetween('approved_at', [$from->copy()->startOfDay()->utc(), $to->copy()->endOfDay()->utc()])
+            ->when($counterparty !== null, fn ($q) => $q->where($other, $counterparty))
+            ->when($payment === InternalPurchase::PAYMENT_PAID, fn ($q) => $q->where('payment_status', InternalPurchase::PAYMENT_PAID))
+            ->when($payment === InternalPurchase::PAYMENT_UNPAID, fn ($q) => $q->where(fn ($w) => $w->whereNull('payment_status')->orWhere('payment_status', '!=', InternalPurchase::PAYMENT_PAID)));
+
+        $all = $base()->get(['id', $other.' as other_store_id', 'total_amount', 'payment_status']);
+        $paid = $all->where('payment_status', InternalPurchase::PAYMENT_PAID);
+        $summary = [
+            'count' => $all->count(),
+            'total' => (float) $all->sum('total_amount'),
+            'paid' => (float) $paid->sum('total_amount'),
+            'unpaid' => (float) $all->sum('total_amount') - (float) $paid->sum('total_amount'),
+        ];
+        // Laba kotor gudang: hanya untuk sisi pemasukan dan pengelola yang boleh melihat HPP.
+        if ($direction === 'income' && CostVisibility::canSee($user) && $all->isNotEmpty()) {
+            $cost = (float) \App\Models\StockRequestLine::query()
+                ->whereIn('stock_request_id', $all->pluck('id'))
+                ->selectRaw('COALESCE(SUM(quantity_billed * unit_cost), 0) as total')
+                ->value('total');
+            $summary['total_cost'] = round($cost, 2);
+            $summary['gross_profit'] = round($summary['total'] - $cost, 2);
+        }
+
+        $storeNames = Store::query()->whereIn('id', $all->pluck('other_store_id')->unique())->pluck('name', 'id');
+        $byStore = $all->groupBy('other_store_id')->map(function ($rows, $storeId) use ($storeNames) {
+            $paidRows = $rows->where('payment_status', InternalPurchase::PAYMENT_PAID);
+
+            return [
+                'store_id' => (int) $storeId,
+                'name' => $storeNames[$storeId] ?? 'Lokasi dihapus',
+                'count' => $rows->count(),
+                'total' => (float) $rows->sum('total_amount'),
+                'paid' => (float) $paidRows->sum('total_amount'),
+                'unpaid' => (float) $rows->sum('total_amount') - (float) $paidRows->sum('total_amount'),
+            ];
+        })->sortByDesc('total')->values();
+
+        $rows = $base()
+            ->with(['fromStore:id,name', 'toStore:id,name'])
+            ->withCount('lines')
+            ->latest('approved_at')
+            ->paginate(30)
+            ->withQueryString()
+            ->through(fn (StockRequest $r) => [
+                'id' => $r->id,
+                'request_number' => $r->request_number,
+                'status_label' => $r->statusLabel(),
+                'store' => ($direction === 'income' ? $r->fromStore : $r->toStore)?->name,
+                'lines_count' => $r->lines_count,
+                'total_amount' => (float) $r->total_amount,
+                'payment_status' => $r->payment_status ?? InternalPurchase::PAYMENT_UNPAID,
+                'approved_at' => $r->approved_at?->toIso8601String(),
+                'paid_at' => $r->paid_at?->toIso8601String(),
+            ]);
+
+        return CostVisibility::render('StockRequests/Report', [
+            'store' => ['id' => $store->id, 'name' => $store->name, 'is_central_warehouse' => StoreLocationType::isCentralWarehouse($store)],
+            'direction' => $direction,
+            'filters' => [
+                'from' => $from->toDateString(),
+                'to' => $to->toDateString(),
+                'store_id' => $counterparty,
+                'payment' => $payment,
+            ],
+            'summary' => $summary,
+            'byStore' => $byStore,
+            'rows' => $rows,
+            'stores' => CentralKitchenModule::siblingStores($store)->map(fn (Store $s) => ['id' => $s->id, 'name' => $s->name])->values(),
+        ]);
+    }
+
+    private function reportDate(mixed $value, string $timezone): ?Carbon
+    {
+        if (! is_string($value) || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+            return null;
+        }
+
+        try {
+            return Carbon::createFromFormat('Y-m-d', $value, $timezone)->startOfDay();
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     public function reject(Request $request, StockRequest $stockRequest): RedirectResponse
@@ -355,7 +559,7 @@ class StockRequestController extends Controller
             ->where('has_variants', false)
             ->where('is_bundle', false)
             ->orderBy('name')
-            ->get(['id', 'name', 'sku', 'barcode', 'base_unit', 'allows_decimal', 'stock_quantity', 'min_stock_level']);
+            ->get(['id', 'store_id', 'name', 'sku', 'barcode', 'base_unit', 'allows_decimal', 'stock_quantity', 'min_stock_level', 'average_cost', 'cost_price']);
     }
 
     /** Indeks produk pemasok per SKU (huruf kecil) dan barcode, untuk pencocokan cepat. */

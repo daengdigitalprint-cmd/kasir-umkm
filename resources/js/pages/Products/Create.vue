@@ -14,6 +14,8 @@ import BarcodeScanner from '@/components/BarcodeScanner.vue';
 import BarcodeGenerator from '@/components/BarcodeGenerator.vue';
 import OptionGroupsPicker from '@/components/products/OptionGroupsPicker.vue';
 import ProductTypePicker from '@/components/products/ProductTypePicker.vue';
+import OnlinePriceFields from '@/components/products/OnlinePriceFields.vue';
+import { ONLINE_PRICE_CHANNELS, onlinePricesToForm, onlinePricesToPayload, type OnlinePriceForm } from '@/lib/onlinePrices';
 import StockModePicker, { type StockMode } from '@/components/products/StockModePicker.vue';
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard';
 import { useProductFormMode } from '@/composables/useProductFormMode';
@@ -48,6 +50,7 @@ interface ProductCategoryOption {
 
 interface Props {
     wholesaleEnabled?: boolean;
+    onlinePricesEnabled?: boolean;
     store: {
         id: number;
         name: string;
@@ -76,6 +79,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
     wholesaleEnabled: false,
+    onlinePricesEnabled: false,
     catalogPresets: () => ({ categories: [], units: [] }),
     batchTrackingEnabled: false,
     fnbModifierEnabled: false,
@@ -184,6 +188,8 @@ const form = useForm({
     description: '',
     price: 0,
     wholesale_price: 0,
+    // Harga toko online per aplikasi; null = pakai harga toko.
+    online_prices: onlinePricesToPayload(onlinePricesToForm(null)),
     cost_price: 0,
     stock_quantity: 0,
     min_stock_level: 0,
@@ -254,6 +260,9 @@ const priceDisplay = moneyDisplay('price');
 const wholesalePriceDisplay = moneyDisplay('wholesale_price');
 const costPriceDisplay = moneyDisplay('cost_price');
 
+/** Isian harga toko online (GoFood/GrabFood/ShopeeFood); kosong = pakai harga toko. */
+const onlinePrices = ref<OnlinePriceForm>(onlinePricesToForm(null));
+
 /** Persen keuntungan (markup) = (harga jual - modal) / modal × 100. Null bila modal atau harga jual belum valid. */
 const profitPercent = computed<number | null>(() => {
     const price = Number(form.price) || 0;
@@ -277,6 +286,7 @@ interface VariantFormRow {
     barcode: string;
     price: number | '';
     wholesale_price: number | '';
+    online_prices: OnlinePriceForm;
     cost_price: number | '';
     stock_quantity: number;
     min_stock_level: number;
@@ -290,6 +300,7 @@ const variantRows = ref<VariantFormRow[]>([
         barcode: '',
         price: '',
         wholesale_price: '',
+        online_prices: onlinePricesToForm(null),
         cost_price: '',
         stock_quantity: 0,
         min_stock_level: 0,
@@ -304,6 +315,7 @@ function addVariantRow() {
         barcode: '',
         price: '',
         wholesale_price: '',
+        online_prices: onlinePricesToForm(null),
         cost_price: '',
         stock_quantity: 0,
         min_stock_level: 0,
@@ -345,6 +357,7 @@ function buildVariantsPayload(): Array<Record<string, unknown>> {
                 barcode: r.barcode.trim() === '' ? null : r.barcode.trim(),
                 price,
                 wholesale_price: wholesale,
+                ...(props.onlinePricesEnabled ? { online_prices: onlinePricesToPayload(r.online_prices) } : {}),
                 cost_price: cost,
                 stock_quantity: sq,
                 min_stock_level: mq,
@@ -707,6 +720,8 @@ const submit = () => {
 
     form.sale_consumptions_json = buildSaleConsumptionsPayload();
 
+    form.online_prices = onlinePricesToPayload(isMaterial.value ? onlinePricesToForm(null) : onlinePrices.value);
+
     form.post('/products', {
         forceFormData: true,
     });
@@ -881,6 +896,13 @@ const submitAndAddAnother = () => {
                                 </div>
                             </div>
                         </div>
+                        <OnlinePriceFields
+                            v-if="onlinePricesEnabled && !isMaterial"
+                            v-model="onlinePrices"
+                            :store-price="Number(form.price) || 0"
+                            :has-variants="form.has_variants"
+                            :errors="form.errors"
+                        />
                         <div v-if="barbershopEnabled" class="space-y-2">
                             <Label for="service_duration_minutes">Durasi Layanan (menit)</Label>
                             <Input
@@ -1533,7 +1555,7 @@ const submitAndAddAnother = () => {
                                 </Button>
                             </div>
                             <div class="overflow-x-auto rounded-lg border border-teal-200/80 bg-white">
-                                <table class="w-full text-sm min-w-[900px]">
+                                <table class="w-full text-sm" :class="props.onlinePricesEnabled ? 'min-w-[1230px]' : 'min-w-[900px]'">
                                     <thead>
                                         <tr class="border-b bg-teal-50/80 text-left text-xs text-teal-900">
                                             <th class="p-2 font-semibold min-w-[140px]">Nama *</th>
@@ -1541,6 +1563,11 @@ const submitAndAddAnother = () => {
                                             <th class="p-2 font-semibold w-[100px]">Barcode</th>
                                             <th class="p-2 font-semibold w-[120px]">Harga</th>
                                             <th v-if="props.wholesaleEnabled" class="p-2 font-semibold w-[110px]">Grosir</th>
+                                            <template v-if="props.onlinePricesEnabled">
+                                                <th v-for="channel in ONLINE_PRICE_CHANNELS" :key="channel.value" class="p-2 font-semibold w-[110px]">
+                                                    {{ channel.label }}
+                                                </th>
+                                            </template>
                                             <th v-if="canViewCost" class="p-2 font-semibold w-[110px]">HPP</th>
                                             <th class="p-2 font-semibold w-[80px]">Stok</th>
                                             <th class="p-2 font-semibold w-[80px]">Min</th>
@@ -1565,6 +1592,19 @@ const submitAndAddAnother = () => {
                                             <td v-if="props.wholesaleEnabled" class="p-2">
                                                 <Input v-model.number="row.wholesale_price" type="number" min="0" step="100" class="h-9" />
                                             </td>
+                                            <template v-if="props.onlinePricesEnabled">
+                                                <td v-for="channel in ONLINE_PRICE_CHANNELS" :key="channel.value" class="p-2">
+                                                    <Input
+                                                        v-model.number="row.online_prices[channel.value]"
+                                                        type="number"
+                                                        min="0"
+                                                        step="100"
+                                                        class="h-9"
+                                                        placeholder="Harga toko"
+                                                        :aria-label="`Harga ${channel.label} varian`"
+                                                    />
+                                                </td>
+                                            </template>
                                             <td v-if="canViewCost" class="p-2">
                                                 <Input v-model.number="row.cost_price" type="number" min="0" step="100" class="h-9" />
                                             </td>

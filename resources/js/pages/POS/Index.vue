@@ -22,6 +22,7 @@ import { imageUrlToEscPosRaster, printableDotsFor, receiptLinesToEscPos } from '
 import { printKitchenTicket } from '@/lib/kitchenTicketPrint';
 import { printCupLabels } from '@/lib/cupLabelPrint';
 import { getCachedProducts } from '@/lib/offlineDb';
+import { resolveOnlinePrice } from '@/lib/onlinePrices';
 import { buildKotPlainLines, buildReceiptPlainLinesFromPosResponse } from '@/lib/receiptPlainText';
 import { confirmDialog, modalError, popupSuccessCenter, promptApprovalPin, toastError, toastInfo, toastSuccess, toastWarning } from '@/lib/swal';
 import { mergeReceiptConfig, printThermalReceipt, type ReceiptConfig } from '@/lib/thermalReceipt';
@@ -103,6 +104,8 @@ interface ProductVariant {
     barcode: string | null;
     price: number | string | null;
     wholesale_price?: number | string | null;
+    /** Harga toko online per aplikasi (gofood/grabfood/shopeefood); kosong = harga toko. */
+    online_prices?: Record<string, number | string | null> | null;
     stock_quantity: number;
 }
 
@@ -149,6 +152,8 @@ interface Product {
     name: string;
     price: number;
     wholesale_price?: number | string | null;
+    /** Harga toko online per aplikasi (gofood/grabfood/shopeefood); kosong = harga toko. */
+    online_prices?: Record<string, number | string | null> | null;
     stock_quantity: number;
     sku: string;
     barcode: string;
@@ -350,7 +355,7 @@ interface Props {
     saleComponents?: SaleConsumptionComponent[];
     popularProductIds: number[];
     /** F10: Pesanan Antar mandiri (kurir sendiri). */
-    delivery?: { enabled: boolean; default_fee: number; couriers: { id: number; name: string }[] };
+    delivery?: { enabled: boolean; default_fee: number; /** Nama-nama kurir toko (tanpa akun). */ couriers: string[] };
     /** F8: produk pemicu → produk yang ditawarkan (kosong bila modul Saran Menu mati). */
     upsellMap?: Record<string, number[]> | number[];
     categories: ProductCategory[];
@@ -375,6 +380,7 @@ interface Props {
         wholesale_enabled?: boolean;
         product_discount_enabled?: boolean;
         online_sales_enabled?: boolean;
+        online_price_enabled?: boolean;
         online_commission_gofood?: number;
         online_commission_grabfood?: number;
         online_commission_shopeefood?: number;
@@ -1340,7 +1346,7 @@ const tipAmount = ref(0);
 // Open bill / pre-order dibayar lewat jalur lain yang belum membawa data antar → panel disembunyikan.
 const deliveryEnabled = computed(() => props.delivery?.enabled === true && activePreOrderId.value === null);
 const deliveryOn = ref(false);
-const deliveryForm = ref({ recipient_name: '', phone: '', address: '', fee: 0, courier_user_id: '' as number | '', notes: '' });
+const deliveryForm = ref({ recipient_name: '', phone: '', address: '', fee: 0, courier_name: '', notes: '' });
 const deliveryFee = computed(() => (deliveryEnabled.value && deliveryOn.value ? Math.max(0, Number(deliveryForm.value.fee) || 0) : 0));
 function toggleDelivery(on: boolean) {
     deliveryOn.value = on;
@@ -1352,7 +1358,7 @@ function toggleDelivery(on: boolean) {
 }
 function resetDelivery() {
     deliveryOn.value = false;
-    deliveryForm.value = { recipient_name: '', phone: '', address: '', fee: 0, courier_user_id: '', notes: '' };
+    deliveryForm.value = { recipient_name: '', phone: '', address: '', fee: 0, courier_name: '', notes: '' };
 }
 /** Data antar untuk server (null bila tidak diantar). */
 function deliveryPayload(): Record<string, unknown> | null {
@@ -1363,7 +1369,7 @@ function deliveryPayload(): Record<string, unknown> | null {
         phone: d.phone.trim() || null,
         address: d.address.trim(),
         fee: deliveryFee.value,
-        courier_user_id: d.courier_user_id === '' ? null : d.courier_user_id,
+        courier_name: d.courier_name.trim() || null,
         notes: d.notes.trim() || null,
     };
 }
@@ -1776,7 +1782,18 @@ function variantScopeKey(v: ProductVariant | null): string {
     return v ? `v:${v.id}` : 'v:';
 }
 
+/** Harga khusus sumber pesanan yang sedang dipilih; null = pakai harga toko.
+ *  Hanya berlaku bila "Harga khusus pesanan online" aktif di Pengaturan. */
+function channelPrice(product: Product, variant: ProductVariant | null): number | null {
+    if (props.store?.online_price_enabled !== true) return null;
+    return resolveOnlinePrice(product, variant, salesChannel.value);
+}
+
 function lineUnitPrice(product: Product, variant: ProductVariant | null): number {
+    // Sumber pesanan GoFood/GrabFood/ShopeeFood: harga toko online kanal itu didahulukan bila diisi.
+    const online = channelPrice(product, variant);
+    if (online !== null) return online;
+
     const retail = variant && variant.price != null && variant.price !== '' ? Math.max(0, Number(variant.price)) : Number(product.price) || 0;
 
     if (customerType.value === 'grosir') {
@@ -1795,11 +1812,13 @@ function lineUnitPrice(product: Product, variant: ProductVariant | null): number
 function productCardPrice(product: Product): { price: number; fromVariant: boolean } | null {
     if (product.has_variants && product.variants && product.variants.length > 0) {
         const prices = product.variants
-            .map((v) => (v.price != null && v.price !== '' ? Number(v.price) : 0))
+            .map((v) => channelPrice(product, v) ?? (v.price != null && v.price !== '' ? Number(v.price) : 0))
             .filter((p) => p > 0);
         if (prices.length === 0) return null;
         return { price: Math.min(...prices), fromVariant: prices.length > 1 };
     }
+    const online = channelPrice(product, null);
+    if (online !== null) return { price: online, fromVariant: false };
     if (!product.price || product.price <= 0) return null;
     return { price: product.price, fromVariant: false };
 }
@@ -2584,6 +2603,12 @@ watch(subtotal, () => {
 });
 
 watch(customerType, () => {
+    for (const item of cart.value) recalcLine(item);
+    if (!isCredit.value) amountPaid.value = balanceDue.value;
+});
+
+// Ganti sumber pesanan → harga tiap baris mengikuti harga kanal itu (kembali ke harga toko saat Walk In).
+watch(salesChannel, () => {
     for (const item of cart.value) recalcLine(item);
     if (!isCredit.value) amountPaid.value = balanceDue.value;
 });
@@ -5120,12 +5145,17 @@ const sendWhatsAppInvoice = () => {
                                                         <Label class="text-xs">Ongkir (Rp)</Label>
                                                         <Input v-model.number="deliveryForm.fee" type="number" min="0" step="500" class="h-9 text-sm" />
                                                     </div>
-                                                    <div class="space-y-1">
+                                                    <!-- Pilihan kurir hanya ada bila toko mengisi nama kurir; selain itu cukup "Kurir toko". -->
+                                                    <div v-if="(delivery?.couriers ?? []).length" class="space-y-1">
                                                         <Label class="text-xs">Kurir</Label>
-                                                        <select v-model="deliveryForm.courier_user_id" class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
-                                                            <option value="">Nanti saja</option>
-                                                            <option v-for="c in delivery?.couriers ?? []" :key="c.id" :value="c.id">{{ c.name }}</option>
+                                                        <select v-model="deliveryForm.courier_name" class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
+                                                            <option value="">Kurir toko</option>
+                                                            <option v-for="name in delivery?.couriers ?? []" :key="name" :value="name">{{ name }}</option>
                                                         </select>
+                                                    </div>
+                                                    <div v-else class="space-y-1">
+                                                        <Label class="text-xs">Kurir</Label>
+                                                        <p class="flex h-9 items-center rounded-md border border-dashed border-blue-200 px-2 text-sm text-blue-900/80">Kurir toko</p>
                                                     </div>
                                                 </div>
                                                 <Input v-model="deliveryForm.notes" class="h-9 text-sm" placeholder="Catatan untuk kurir (opsional)" aria-label="Catatan kurir" />

@@ -82,7 +82,7 @@ it('ongkir masuk total di luar pajak dan data pengantaran tercatat', function ()
         'phone' => '0812 1111 2222',
         'address' => 'Jl. Mawar 5, RT 02',
         'fee' => 10000,
-        'courier_user_id' => $shop['courier']->id,
+        'courier_name' => 'Joko',
         'notes' => 'Pagar hijau',
     ])->assertOk()->assertJsonPath('success', true);
 
@@ -97,7 +97,9 @@ it('ongkir masuk total di luar pajak dan data pengantaran tercatat', function ()
         ->and($delivery->transaction_id)->toBe($transaction->id)
         ->and($delivery->status)->toBe(DeliveryOrder::STATUS_PREPARING)
         ->and($delivery->recipient_name)->toBe('Pak Rudi')
-        ->and($delivery->courier_user_id)->toBe($shop['courier']->id)
+        // Kurir cukup nama: tidak ditautkan ke akun pengguna.
+        ->and($delivery->courier_name)->toBe('Joko')
+        ->and($delivery->courier_user_id)->toBeNull()
         ->and((float) $delivery->delivery_fee)->toBe(10000.0);
 });
 
@@ -134,11 +136,8 @@ it('tanpa data antar, checkout berjalan seperti biasa', function () {
         ->and(DeliveryOrder::query()->count())->toBe(0);
 });
 
-it('menolak data antar saat modul mati, alamat kosong, atau kurir toko lain', function (bool $enabled, array $delivery, string $errorKey) {
+it('menolak data antar saat modul mati atau alamat kosong', function (bool $enabled, array $delivery, string $errorKey) {
     $shop = deliveryShop($enabled);
-    if ($delivery['courier_user_id'] ?? null) {
-        $delivery['courier_user_id'] = User::factory()->create()->id;
-    }
 
     deliveryCheckout($this, $shop, $delivery)->assertStatus(422)->assertJsonValidationErrors($errorKey);
 
@@ -146,7 +145,6 @@ it('menolak data antar saat modul mati, alamat kosong, atau kurir toko lain', fu
 })->with([
     'modul mati' => [false, ['address' => 'Jl. A', 'fee' => 5000], 'delivery'],
     'alamat kosong' => [true, ['fee' => 5000, 'phone' => '0812'], 'delivery.address'],
-    'kurir asing' => [true, ['address' => 'Jl. A', 'fee' => 5000, 'courier_user_id' => 1], 'delivery.courier_user_id'],
 ]);
 
 it('status mengikuti alur Disiapkan → Diantar → Selesai', function () {
@@ -163,7 +161,9 @@ it('status mengikuti alur Disiapkan → Diantar → Selesai', function () {
     $delivery->refresh();
     expect($delivery->status)->toBe('on_the_way')
         ->and($delivery->dispatched_at)->not->toBeNull()
-        ->and($delivery->courier_user_id)->toBe($shop['courier']->id); // kurir yang menekan "Antar"
+        // Yang menekan "Antar" belum tentu kurirnya, jadi kurir tidak diisi otomatis.
+        ->and($delivery->courier_user_id)->toBeNull()
+        ->and($delivery->courier_name)->toBeNull();
 
     $this->actingAs($shop['courier'])->patch("/deliveries/{$delivery->id}/status", ['status' => 'delivered'])
         ->assertSessionHasNoErrors();
@@ -175,16 +175,13 @@ it('status mengikuti alur Disiapkan → Diantar → Selesai', function () {
         ->assertSessionHasErrors('status');
 });
 
-it('daftar pengantaran: pesanan aktif, filter pesanan saya, dan isolasi toko', function () {
+it('daftar pengantaran: pesanan aktif dan isolasi toko', function () {
     $shop = deliveryShop();
-    deliveryCheckout($this, $shop, ['address' => 'Jl. A', 'fee' => 5000, 'courier_user_id' => $shop['courier']->id])->assertOk();
+    deliveryCheckout($this, $shop, ['address' => 'Jl. A', 'fee' => 5000, 'courier_name' => 'Joko'])->assertOk();
     deliveryCheckout($this, $shop, ['address' => 'Jl. B', 'fee' => 5000])->assertOk();
 
     $this->actingAs($shop['admin'])->get('/deliveries')->assertOk()->assertInertia(
         fn ($page) => $page->component('Deliveries/Index')->has('orders.data', 2)->where('counts.active', 2)
-    );
-    $this->actingAs($shop['courier'])->get('/deliveries?mine=1')->assertOk()->assertInertia(
-        fn ($page) => $page->has('orders.data', 1)->where('orders.data.0.address', 'Jl. A')
     );
 
     $other = deliveryShop();
@@ -202,7 +199,8 @@ it('admin menyalakan modul dan mengatur ongkir bawaan; data kasir ikut', functio
     $this->actingAs($shop['admin'])->get('/pos')->assertOk()->assertInertia(
         fn ($page) => $page->where('delivery.enabled', true)
             ->where('delivery.default_fee', 12000)
-            ->where('delivery.couriers', fn ($c) => collect($c)->pluck('name')->contains('Kurir Joko'))
+            // Daftar kurir kini berisi nama yang diisi toko, bukan akun karyawan.
+            ->where('delivery.couriers', [])
     );
 
     // Kasir tidak bisa mengubah pengaturan.

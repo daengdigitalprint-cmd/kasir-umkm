@@ -142,6 +142,8 @@ class ProfileController extends Controller
                 'is_allow_local_purchase' => (bool) ($store->settings['is_allow_local_purchase'] ?? false),
                 'blind_transfer_receiving' => \App\Support\TransferReceiving::blindEnabled($store),
                 'online_sales_enabled' => (bool) ($store->settings['online_sales_enabled'] ?? false),
+                'online_price_enabled' => (bool) ($store->settings['online_price_enabled'] ?? false),
+                'delivery_self_order_enabled' => \App\Support\DeliveryFeatures::selfOrderEnabled($store),
                 'online_commission_gofood' => (float) ($store->settings['online_commission_gofood'] ?? 20),
                 'online_commission_grabfood' => (float) ($store->settings['online_commission_grabfood'] ?? 20),
                 'online_commission_shopeefood' => (float) ($store->settings['online_commission_shopeefood'] ?? 15),

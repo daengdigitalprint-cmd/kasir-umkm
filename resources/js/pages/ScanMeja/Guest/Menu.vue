@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
 import { ref, computed, onMounted } from 'vue';
-import { ShoppingCart, Plus, Minus, X, Check, Utensils, MapPin, Clock, Banknote, QrCode, Building, Flame, ExternalLink, Search, Phone, MessageCircle } from 'lucide-vue-next';
+import { ShoppingCart, Plus, Minus, X, Check, Utensils, MapPin, Clock, Banknote, QrCode, Building, Flame, ExternalLink, Search, Phone, MessageCircle, Bike } from 'lucide-vue-next';
 
 interface Product {
     id: number;
@@ -36,7 +36,10 @@ interface PaymentMethod {
 }
 
 const props = defineProps<{
-    table: { id: number; name: string; slug: string; capacity: number | null };
+    /** Meja asal pesanan (Scan Meja). Null pada mode pesan antar. */
+    table: { id: number; name: string; slug: string; capacity: number | null } | null;
+    /** Mode pesan antar (kurir toko): halaman dibuka dari tautan toko, bukan QR meja. */
+    delivery?: { slug: string; fee: number } | null;
     store: { id: number; name: string; currency: string; address?: string | null; phone?: string | null; logo_url?: string | null; cover_url?: string | null };
     categories: Category[];
     bestSelling?: Product[];
@@ -77,6 +80,14 @@ const orderTotal = ref('');
 const statusToken = ref('');
 const customerName = ref('');
 const selectedPaymentMethod = ref('');
+
+// ── Mode pesan antar ──
+const isDelivery = computed(() => !!props.delivery);
+const deliveryFee = computed(() => (props.delivery ? Math.max(0, Number(props.delivery.fee) || 0) : 0));
+const recipientPhone = ref('');
+const deliveryAddress = ref('');
+const deliveryNotes = ref('');
+const formError = ref('');
 
 // Set default ke metode pertama yang aktif setelah props tersedia
 const initPaymentMethod = () => {
@@ -173,6 +184,8 @@ const scrollToCategory = (categoryId: number) => {
 
 const cartCount = computed(() => cart.value.reduce((sum, item) => sum + item.quantity, 0));
 const cartSubtotal = computed(() => cart.value.reduce((sum, item) => sum + item.product.price * item.quantity, 0));
+/** Total yang dibayar: pesan antar ditambah ongkir. */
+const cartTotal = computed(() => cartSubtotal.value + deliveryFee.value);
 
 const addToCart = (product: Product) => {
     const existing = cart.value.find((item) => item.product.id === product.id);
@@ -230,34 +243,64 @@ const confirmAddFromDetail = () => {
     closeProduct();
 };
 
+/** Pesan antar: nama, nomor HP, dan alamat wajib diisi sebelum dikirim. */
+const deliveryFormProblem = (): string => {
+    if (customerName.value.trim().length < 2) return 'Isi nama penerima.';
+    if (recipientPhone.value.replace(/\D/g, '').length < 8) return 'Isi nomor HP yang bisa dihubungi kurir.';
+    if (deliveryAddress.value.trim().length < 10) return 'Isi alamat pengantaran lengkap dengan patokan.';
+    return '';
+};
+
 const submitOrder = async () => {
     if (cart.value.length === 0) return;
+    formError.value = isDelivery.value ? deliveryFormProblem() : '';
+    if (formError.value) return;
     submitting.value = true;
 
+    const items = cart.value.map((item) => ({
+        product_id: item.product.id,
+        quantity: item.quantity,
+        notes: item.notes || undefined,
+    }));
+
     try {
-        const response = await fetch('/api/guest/order', {
+        const response = await fetch(isDelivery.value ? '/api/guest/delivery-order' : '/api/guest/order', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
                 'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '',
             },
-            body: JSON.stringify({
-                table_slug: props.table.slug,
-                customer_name: customerName.value || undefined,
-                payment_method: selectedPaymentMethod.value,
-                items: cart.value.map((item) => ({
-                    product_id: item.product.id,
-                    quantity: item.quantity,
-                    notes: item.notes || undefined,
-                })),
-            }),
+            body: JSON.stringify(
+                isDelivery.value
+                    ? {
+                          store_slug: props.delivery!.slug,
+                          recipient_name: customerName.value.trim(),
+                          phone: recipientPhone.value.trim(),
+                          address: deliveryAddress.value.trim(),
+                          notes: deliveryNotes.value.trim() || undefined,
+                          payment_method: selectedPaymentMethod.value,
+                          items,
+                      }
+                    : {
+                          table_slug: props.table!.slug,
+                          customer_name: customerName.value || undefined,
+                          payment_method: selectedPaymentMethod.value,
+                          items,
+                      },
+            ),
         });
 
         const data = await response.json();
 
         if (!response.ok) {
-            throw new Error(data.error || 'Gagal membuat pesanan.');
+            // 422 validasi Laravel mengirim { message, errors }; yang lain { error }.
+            const firstError = data.errors ? (Object.values(data.errors)[0] as string[] | undefined)?.[0] : undefined;
+            const message =
+                response.status === 429
+                    ? 'Terlalu banyak pesanan dalam waktu singkat. Coba lagi sebentar lagi.'
+                    : data.error || firstError || data.message || 'Gagal membuat pesanan.';
+            throw new Error(message);
         }
 
         orderNumber.value = data.transaction?.number || 'Terima kasih';
@@ -268,13 +311,19 @@ const submitOrder = async () => {
 
         // Arahkan ke halaman status pesanan
         if (statusToken.value) {
-            window.location.href = `/m/${props.table.slug}/status/${statusToken.value}`;
+            window.location.href = isDelivery.value
+                ? `/antar/${props.delivery!.slug}/status/${statusToken.value}`
+                : `/m/${props.table!.slug}/status/${statusToken.value}`;
             return;
         }
 
         ordered.value = true;
     } catch (error: any) {
-        alert(error.message || 'Gagal membuat pesanan. Silakan coba lagi.');
+        if (isDelivery.value) {
+            formError.value = error.message || 'Gagal membuat pesanan. Silakan coba lagi.';
+        } else {
+            alert(error.message || 'Gagal membuat pesanan. Silakan coba lagi.');
+        }
     } finally {
         submitting.value = false;
     }
@@ -282,7 +331,7 @@ const submitOrder = async () => {
 </script>
 
 <template>
-    <Head :title="`${store.name} - Menu Digital`" />
+    <Head :title="`${store.name} - ${isDelivery ? 'Pesan Antar' : 'Menu Digital'}`" />
 
     <div class="min-h-screen bg-white flex flex-col">
         <!-- Sampul + kartu toko -->
@@ -293,7 +342,8 @@ const submitOrder = async () => {
                 <div class="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-transparent" />
             </div>
             <span class="absolute top-3 right-4 inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-xs font-bold text-slate-800">
-                <MapPin class="h-3.5 w-3.5 text-violet-600" /> {{ table.name }}
+                <template v-if="isDelivery"><Bike class="h-3.5 w-3.5 text-violet-600" /> Pesan antar</template>
+                <template v-else><MapPin class="h-3.5 w-3.5 text-violet-600" /> {{ table?.name }}</template>
             </span>
         </div>
 
@@ -305,11 +355,14 @@ const submitOrder = async () => {
                 </div>
                 <div class="min-w-0 flex-1 py-0.5">
                     <span class="inline-flex items-center gap-1 rounded-md bg-violet-50 px-1.5 py-0.5 text-[11px] font-bold text-violet-700">
-                        <Check class="h-3 w-3" /> Pesan dari meja
+                        <Check class="h-3 w-3" /> {{ isDelivery ? 'Pesan antar' : 'Pesan dari meja' }}
                     </span>
                     <h1 class="mt-1 truncate text-lg leading-tight font-black text-slate-900">{{ store.name }}</h1>
                     <p v-if="store.address" class="truncate text-xs text-slate-500">{{ store.address }}</p>
-                    <p class="mt-1 text-xs text-slate-600">
+                    <p v-if="isDelivery" class="mt-1 text-xs text-slate-600">
+                        Diantar kurir toko · Ongkir {{ deliveryFee > 0 ? formatPrice(deliveryFee) : 'gratis' }}
+                    </p>
+                    <p v-else-if="table" class="mt-1 text-xs text-slate-600">
                         {{ table.name }}<template v-if="table.capacity"> · {{ table.capacity }} orang</template>
                     </p>
                 </div>
@@ -331,8 +384,15 @@ const submitOrder = async () => {
             <!-- Info singkat -->
             <div class="mt-3 grid grid-cols-2 gap-2">
                 <div class="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white p-2.5">
-                    <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600"><Clock class="h-4 w-4" /></div>
-                    <div class="min-w-0">
+                    <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
+                        <Bike v-if="isDelivery" class="h-4 w-4" />
+                        <Clock v-else class="h-4 w-4" />
+                    </div>
+                    <div v-if="isDelivery" class="min-w-0">
+                        <p class="text-xs font-bold text-slate-800">Diantar ke alamat</p>
+                        <p class="truncate text-[11px] text-slate-500">Ongkir {{ deliveryFee > 0 ? formatPrice(deliveryFee) : 'gratis' }}</p>
+                    </div>
+                    <div v-else class="min-w-0">
                         <p class="text-xs font-bold text-slate-800">Langsung ke kasir</p>
                         <p class="truncate text-[11px] text-slate-500">Tanpa antre</p>
                     </div>
@@ -559,7 +619,8 @@ const submitOrder = async () => {
                     </button>
                 </div>
 
-                <div class="flex-1 overflow-y-auto p-4 space-y-3">
+                <div :class="isDelivery ? 'min-h-0 flex-1 overflow-y-auto' : 'contents'">
+                <div :class="isDelivery ? 'space-y-3 p-4' : 'flex-1 overflow-y-auto p-4 space-y-3'">
                     <div v-if="cart.length === 0" class="text-center py-10">
                         <p class="text-sm text-slate-400">Keranjang kosong</p>
                     </div>
@@ -589,7 +650,58 @@ const submitOrder = async () => {
                 </div>
 
                 <div v-if="cart.length > 0" class="p-4 border-t border-slate-100 space-y-3">
-                    <div>
+                    <!-- Pesan antar: data penerima dan alamat wajib diisi -->
+                    <template v-if="isDelivery">
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label for="delivery_name" class="text-xs font-bold text-slate-600">Nama penerima</label>
+                                <input
+                                    id="delivery_name"
+                                    v-model="customerName"
+                                    type="text"
+                                    autocomplete="name"
+                                    placeholder="Nama Anda"
+                                    class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300"
+                                />
+                            </div>
+                            <div>
+                                <label for="delivery_phone" class="text-xs font-bold text-slate-600">Nomor HP</label>
+                                <input
+                                    id="delivery_phone"
+                                    v-model="recipientPhone"
+                                    type="tel"
+                                    inputmode="tel"
+                                    autocomplete="tel"
+                                    placeholder="08xxxxxxxxxx"
+                                    class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300"
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label for="delivery_address" class="text-xs font-bold text-slate-600">Alamat pengantaran</label>
+                            <textarea
+                                id="delivery_address"
+                                v-model="deliveryAddress"
+                                rows="2"
+                                maxlength="500"
+                                autocomplete="street-address"
+                                placeholder="Jalan, nomor rumah, dan patokan"
+                                class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300"
+                            />
+                        </div>
+                        <div>
+                            <label for="delivery_notes" class="text-xs font-bold text-slate-600">Catatan untuk toko (opsional)</label>
+                            <input
+                                id="delivery_notes"
+                                v-model="deliveryNotes"
+                                type="text"
+                                maxlength="500"
+                                placeholder="Contoh: titip di pos satpam"
+                                class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300"
+                            />
+                        </div>
+                    </template>
+                    <div v-else>
                         <label class="text-xs font-bold text-slate-600">Nama Pemesan (opsional)</label>
                         <input
                             v-model="customerName"
@@ -639,10 +751,21 @@ const submitOrder = async () => {
                         </div>
                     </div>
 
+                    <div v-if="isDelivery" class="space-y-1 text-sm text-slate-500">
+                        <div class="flex items-center justify-between">
+                            <span>Subtotal</span>
+                            <span class="text-slate-700">{{ formatPrice(cartSubtotal) }}</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span>Ongkir</span>
+                            <span class="text-slate-700">{{ deliveryFee > 0 ? formatPrice(deliveryFee) : 'Gratis' }}</span>
+                        </div>
+                    </div>
                     <div class="flex items-center justify-between">
                         <span class="text-sm font-bold text-slate-500">Total</span>
-                        <span class="font-black text-slate-900 text-lg">{{ formatPrice(cartSubtotal) }}</span>
+                        <span class="font-black text-slate-900 text-lg">{{ formatPrice(cartTotal) }}</span>
                     </div>
+                    <p v-if="formError" role="alert" class="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{{ formError }}</p>
                     <button
                         @click="submitOrder"
                         :disabled="submitting"
@@ -650,6 +773,7 @@ const submitOrder = async () => {
                     >
                         {{ submitting ? 'Memproses...' : 'Konfirmasi Pesanan' }}
                     </button>
+                </div>
                 </div>
             </div>
         </div>

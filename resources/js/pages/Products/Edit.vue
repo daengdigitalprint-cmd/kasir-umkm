@@ -11,6 +11,8 @@ import BarcodeScanner from '@/components/BarcodeScanner.vue';
 import BarcodeGenerator from '@/components/BarcodeGenerator.vue';
 import OptionGroupsPicker from '@/components/products/OptionGroupsPicker.vue';
 import ProductTypePicker from '@/components/products/ProductTypePicker.vue';
+import OnlinePriceFields from '@/components/products/OnlinePriceFields.vue';
+import { ONLINE_PRICE_CHANNELS, onlinePricesToForm, onlinePricesToPayload, type OnlinePriceForm } from '@/lib/onlinePrices';
 import StockModePicker, { type StockMode } from '@/components/products/StockModePicker.vue';
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard';
 import PurchaseUnitsEditor, { type PurchaseUnitRow } from '@/components/products/PurchaseUnitsEditor.vue';
@@ -45,6 +47,7 @@ interface Props {
         description: string;
         price: number;
         wholesale_price?: number | string | null;
+        online_prices?: Record<string, number | string | null> | unknown[] | null;
         cost_price: number;
         average_cost?: number | string;
         stock_quantity: number;
@@ -88,6 +91,7 @@ interface Props {
         batch_code: string;
     }>;
     wholesaleEnabled?: boolean;
+    onlinePricesEnabled?: boolean;
     fnbModifierEnabled?: boolean;
     modifierGroups?: OptionGroup[];
     pharmacyFieldsEnabled?: boolean;
@@ -132,6 +136,7 @@ interface Props {
         barcode: string | null;
         price: number | string | null;
         wholesale_price: number | string | null;
+        online_prices?: Record<string, number | string | null> | unknown[] | null;
         cost_price: number | string | null;
         stock_quantity: number | string;
         min_stock_level: number | string;
@@ -247,6 +252,8 @@ const form = useForm({
     description: product.description ?? '',
     price: typeof product.price === 'string' ? parseFloat(product.price) : (product.price ?? 0),
     wholesale_price: typeof product.wholesale_price === 'string' ? parseFloat(product.wholesale_price) : (product.wholesale_price ?? 0),
+    // Harga toko online per aplikasi; null = pakai harga toko.
+    online_prices: onlinePricesToPayload(onlinePricesToForm(product.online_prices)),
     cost_price: typeof product.cost_price === 'string' ? parseFloat(product.cost_price) : (product.cost_price ?? 0),
     stock_quantity:
         typeof product.stock_quantity === 'string'
@@ -282,6 +289,9 @@ const form = useForm({
     barber_commission_mode: product.barber_commission_mode ?? '',
     barber_commission_value: product.barber_commission_value ?? null,
 });
+
+/** Isian harga toko online (GoFood/GrabFood/ShopeeFood); kosong = pakai harga toko. */
+const onlinePrices = ref<OnlinePriceForm>(onlinePricesToForm(product.online_prices));
 
 // Produk yang sudah memakai varian/paket/bahan baku selalu dibuka di mode lengkap.
 // ── Jenis produk & cara stok ────────────────────────────────────────────
@@ -371,6 +381,7 @@ interface VariantFormRow {
     barcode: string;
     price: number | '';
     wholesale_price: number | '';
+    online_prices: OnlinePriceForm;
     cost_price: number | '';
     stock_quantity: number;
     min_stock_level: number;
@@ -393,6 +404,7 @@ function initVariantRows(): VariantFormRow[] {
                 v.wholesale_price != null && v.wholesale_price !== ''
                     ? Math.max(0, typeof v.wholesale_price === 'number' ? v.wholesale_price : Number(v.wholesale_price))
                     : '',
+            online_prices: onlinePricesToForm(v.online_prices),
             cost_price:
                 v.cost_price != null && v.cost_price !== ''
                     ? Math.max(0, typeof v.cost_price === 'number' ? v.cost_price : Number(v.cost_price))
@@ -416,6 +428,7 @@ function initVariantRows(): VariantFormRow[] {
             barcode: '',
             price: '',
             wholesale_price: '',
+            online_prices: onlinePricesToForm(null),
             cost_price: '',
             stock_quantity: 0,
             min_stock_level: 0,
@@ -434,6 +447,7 @@ function addVariantRow() {
         barcode: '',
         price: '',
         wholesale_price: '',
+        online_prices: onlinePricesToForm(null),
         cost_price: '',
         stock_quantity: 0,
         min_stock_level: 0,
@@ -476,6 +490,7 @@ function buildVariantsPayload(): Array<Record<string, unknown>> {
                 barcode: r.barcode.trim() === '' ? null : r.barcode.trim(),
                 price,
                 wholesale_price: wholesale,
+                ...(props.onlinePricesEnabled ? { online_prices: onlinePricesToPayload(r.online_prices) } : {}),
                 cost_price: cost,
                 stock_quantity: sq,
                 min_stock_level: mq,
@@ -927,6 +942,8 @@ const submit = () => {
         return;
     }
     
+    form.online_prices = onlinePricesToPayload(isMaterial.value ? onlinePricesToForm(null) : onlinePrices.value);
+
     // Ensure all required fields have valid values before submission
     const normalizedData = {
         name: form.name || '',
@@ -1010,6 +1027,10 @@ const submit = () => {
         formData.append('description', normalizedData.description || '');
         formData.append('price', String(normalizedData.price || 0));
         formData.append('wholesale_price', String(normalizedData.wholesale_price || 0));
+        for (const channel of ONLINE_PRICE_CHANNELS) {
+            const onlinePrice = form.online_prices[channel.value];
+            formData.append(`online_prices[${channel.value}]`, onlinePrice === null ? '' : String(onlinePrice));
+        }
         formData.append('cost_price', String(normalizedData.cost_price || 0));
         formData.append('stock_quantity', String(normalizedData.stock_quantity || 0));
         formData.append('min_stock_level', String(normalizedData.min_stock_level || 0));
@@ -1265,6 +1286,13 @@ const submit = () => {
                                 </div>
                             </div>
                         </div>
+                        <OnlinePriceFields
+                            v-if="props.onlinePricesEnabled && !isMaterial"
+                            v-model="onlinePrices"
+                            :store-price="Number(form.price) || 0"
+                            :has-variants="form.has_variants"
+                            :errors="form.errors"
+                        />
                             <div v-if="barbershopEnabled" class="space-y-2">
                                 <Label for="service_duration_minutes">Durasi Layanan (menit)</Label>
                                 <Input
@@ -1935,14 +1963,19 @@ const submit = () => {
                                     </Button>
                                 </div>
                                 <div class="overflow-x-auto rounded-lg border border-teal-200/80 bg-white">
-                                    <table class="w-full text-sm min-w-[900px]">
+                                    <table class="w-full text-sm" :class="props.onlinePricesEnabled ? 'min-w-[1230px]' : 'min-w-[900px]'">
                                         <thead>
                                             <tr class="border-b bg-teal-50/80 text-left text-xs text-teal-900">
                                                 <th class="p-2 font-semibold min-w-[140px]">Nama *</th>
                                                 <th class="p-2 font-semibold w-[100px]">SKU</th>
                                                 <th class="p-2 font-semibold w-[100px]">Barcode</th>
                                                 <th class="p-2 font-semibold w-[120px]">Harga</th>
-                                                <th class="p-2 font-semibold w-[120px]">Grosir</th>
+                                                <th v-if="props.wholesaleEnabled" class="p-2 font-semibold w-[120px]">Grosir</th>
+                                                <template v-if="props.onlinePricesEnabled">
+                                                    <th v-for="channel in ONLINE_PRICE_CHANNELS" :key="channel.value" class="p-2 font-semibold w-[110px]">
+                                                        {{ channel.label }}
+                                                    </th>
+                                                </template>
                                                 <th v-if="canViewCost" class="p-2 font-semibold w-[110px]">HPP</th>
                                                 <th class="p-2 font-semibold w-[80px]">Stok</th>
                                                 <th class="p-2 font-semibold w-[80px]">Min</th>
@@ -1967,6 +2000,19 @@ const submit = () => {
                                                 <td v-if="props.wholesaleEnabled" class="p-2">
                                                     <Input v-model.number="row.wholesale_price" type="number" min="0" step="100" class="h-9" />
                                                 </td>
+                                                <template v-if="props.onlinePricesEnabled">
+                                                    <td v-for="channel in ONLINE_PRICE_CHANNELS" :key="channel.value" class="p-2">
+                                                        <Input
+                                                            v-model.number="row.online_prices[channel.value]"
+                                                            type="number"
+                                                            min="0"
+                                                            step="100"
+                                                            class="h-9"
+                                                            placeholder="Harga toko"
+                                                            :aria-label="`Harga ${channel.label} varian`"
+                                                        />
+                                                    </td>
+                                                </template>
                                                 <td v-if="canViewCost" class="p-2">
                                                     <Input v-model.number="row.cost_price" type="number" min="0" step="100" class="h-9" />
                                                 </td>

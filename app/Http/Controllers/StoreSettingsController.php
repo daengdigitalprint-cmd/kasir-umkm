@@ -73,6 +73,7 @@ class StoreSettingsController extends Controller
             'is_allow_local_purchase' => 'sometimes|boolean',
             'blind_transfer_receiving' => 'sometimes|boolean',
             'online_sales_enabled' => 'sometimes|boolean',
+            'online_price_enabled' => 'sometimes|boolean',
             'online_commission_gofood' => 'sometimes|numeric|min:0|max:100',
             'online_commission_grabfood' => 'sometimes|numeric|min:0|max:100',
             'online_commission_shopeefood' => 'sometimes|numeric|min:0|max:100',
@@ -169,7 +170,7 @@ class StoreSettingsController extends Controller
             $turnOff = ! $validated['delivery_enabled'] && ($settings['delivery_enabled'] ?? false);
             $inProgress = $turnOff && \App\Models\DeliveryOrder::query()
                 ->where('store_id', $store->id)
-                ->whereIn('status', [\App\Models\DeliveryOrder::STATUS_PREPARING, \App\Models\DeliveryOrder::STATUS_ON_THE_WAY])
+                ->whereIn('status', [\App\Models\DeliveryOrder::STATUS_PENDING, \App\Models\DeliveryOrder::STATUS_PREPARING, \App\Models\DeliveryOrder::STATUS_ON_THE_WAY])
                 ->exists();
             if ($inProgress) {
                 // Pesanan yang sedang diantar tidak boleh "hilang" dari menu.
@@ -255,6 +256,13 @@ class StoreSettingsController extends Controller
         if (array_key_exists('online_sales_enabled', $validated)) {
             $settings['online_sales_enabled'] = (bool) $validated['online_sales_enabled'];
             unset($validated['online_sales_enabled']);
+        }
+
+        // Harga khusus pesanan online: isian harga GoFood/GrabFood/ShopeeFood di form produk,
+        // dipakai POS saat kasir memilih sumber pesanan itu.
+        if (array_key_exists('online_price_enabled', $validated)) {
+            $settings['online_price_enabled'] = (bool) $validated['online_price_enabled'];
+            unset($validated['online_price_enabled']);
         }
 
         // Persentase komisi default per aggregator (dapat diatur di halaman pengaturan).

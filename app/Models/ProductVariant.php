@@ -17,6 +17,7 @@ class ProductVariant extends Model
         'barcode',
         'price',
         'wholesale_price',
+        'online_prices',
         'cost_price',
         'stock_quantity',
         'min_stock_level',
@@ -30,6 +31,7 @@ class ProductVariant extends Model
         return [
             'price' => 'decimal:2',
             'wholesale_price' => 'decimal:2',
+            'online_prices' => 'array',
             'cost_price' => 'decimal:2',
             'stock_quantity' => 'decimal:4',
             'min_stock_level' => 'decimal:4',
