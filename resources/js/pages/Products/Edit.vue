@@ -1324,11 +1324,12 @@ const submit = () => {
                     </div>
                 </section>
 
-                <Card v-if="!isMaterial" class="rounded-2xl shadow-none">
+                <Card class="rounded-2xl shadow-none">
                     <CardHeader>
-                        <CardTitle>Foto produk</CardTitle>
+                        <CardTitle>{{ isMaterial ? 'Foto bahan' : 'Foto produk' }}</CardTitle>
                         <CardDescription>
-                            Tampil di kasir dan menu digital. Maksimal 5 foto, 2MB per foto.
+                            {{ isMaterial ? 'Memudahkan mengenali bahan di daftar produk dan stok.' : 'Tampil di kasir dan menu digital.' }}
+                            Maksimal 5 foto, 2MB per foto.
                         </CardDescription>
                     </CardHeader>
                     <CardContent class="space-y-6">
