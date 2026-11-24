@@ -132,8 +132,10 @@ const isMobileOrTablet = ref(false);
 
 const checkOrientation = () => {
     isLandscape.value = window.matchMedia('(orientation: landscape)').matches;
-    // Consider mobile/tablet as screens < 1024px (lg breakpoint)
-    isMobileOrTablet.value = window.innerWidth < 1024;
+    // Tampilan lebar (menu samping) untuk layar >= 1024px, dan untuk tablet mendatar >= 768px (tinggi >= 480px, bukan HP mendatar)
+    // (tablet 10 inci umumnya 850–960px). Tablet tegak & HP tetap memakai menu laci.
+    const w = window.innerWidth;
+    isMobileOrTablet.value = !(w >= 1024 || (w >= 768 && isLandscape.value && window.innerHeight >= 480));
 };
 
 // Desktop sidebar hanya tampil di desktop (lg breakpoint >= 1024px)
@@ -444,7 +446,7 @@ const isCurrentRoute = (href: string) => {
                 v-if="showDesktopSidebar && !props.fullscreen"
                 :class="[
                     'bg-white border-r border-slate-200 sticky top-0 h-screen overflow-y-auto overflow-x-hidden transition-[width] duration-200 ease-linear shrink-0 sidebar-scroll',
-                    isDesktopSidebarOpen ? 'w-60' : 'w-0 overflow-hidden border-r-0',
+                    isDesktopSidebarOpen ? 'w-52 lg:w-60' : 'w-0 overflow-hidden border-r-0',
                 ]"
             >
                 <div class="px-3 py-5">
@@ -544,19 +546,19 @@ const isCurrentRoute = (href: string) => {
                     v-if="showDesktopSidebar && !props.fullscreen"
                     class="bg-white/80 backdrop-blur-md border-b border-slate-200/60 sticky top-0 z-10"
                 >
-                    <div class="max-w-7xl mx-auto px-6 lg:px-8">
-                        <div class="flex items-center justify-between h-20">
-                            <div class="flex items-center gap-4 flex-wrap min-w-0">
+                    <div class="max-w-7xl mx-auto px-4 lg:px-8">
+                        <div class="flex items-center justify-between gap-3 h-16 lg:h-20">
+                            <div class="flex items-center gap-3 lg:gap-4 min-w-0">
                                 <!-- Tombol toggle sidebar desktop -->
                                 <button
                                     @click="toggleDesktopSidebar"
-                                    class="hidden lg:flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50 hover:text-slate-900 transition-colors shrink-0"
+                                    class="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50 hover:text-slate-900 transition-colors shrink-0"
                                 >
                                     <PanelLeft class="h-4 w-4" />
                                 </button>
-                                <h1 class="text-2xl font-black text-slate-900 tracking-tight">{{ title }}</h1>
+                                <h1 class="truncate text-xl lg:text-2xl font-black text-slate-900 tracking-tight">{{ title }}</h1>
                             </div>
-                            <div class="flex items-center gap-6">
+                            <div class="flex shrink-0 items-center gap-3 lg:gap-6">
                                 <ConnectionStatus :store-id="activeStoreId" :cashier-id="activeUserId" />
                                 <DropdownMenu v-if="aiChatEnabled">
                                     <DropdownMenuTrigger as-child>
@@ -606,8 +608,8 @@ const isCurrentRoute = (href: string) => {
                                 </Button>
                                 <slot name="header-actions" />
                                 
-                                <div v-if="authUser" class="flex items-center gap-3 border-l border-slate-200 pl-6">
-                                    <div class="hidden text-right sm:block">
+                                <div v-if="authUser" class="flex items-center gap-3 border-l border-slate-200 pl-3 lg:pl-6">
+                                    <div class="hidden text-right lg:block">
                                         <p class="text-sm font-bold text-slate-800">{{ authUser.name }}</p>
                                     </div>
                                     <DropdownMenu>
@@ -663,7 +665,7 @@ const isCurrentRoute = (href: string) => {
             class="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 z-30 shadow-[0_-10px_20px_rgba(0,0,0,0.03)] selection:bg-transparent transition-opacity duration-200"
             :class="{
                 'opacity-0 pointer-events-none': (isLandscape && isMobileOrTablet) || props.fullscreen,
-                hidden: props.hideBottomNav,
+                hidden: props.hideBottomNav || showDesktopSidebar,
             }"
         >
             <!-- Owner Mobile Nav -->

@@ -665,7 +665,17 @@ function resolveInputEl(candidate: unknown): HTMLInputElement | null {
     return null;
 }
 
-function focusSearchInput(selectAll = false) {
+/** Layar sentuh (tablet/HP): fokus ke kolom isian memunculkan keyboard layar. */
+function isTouchScreen(): boolean {
+    return typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches === true;
+}
+
+/**
+ * `force` dipakai pintasan keyboard fisik (F2/Esc). Tanpa itu, fokus otomatis dilewati di
+ * layar sentuh supaya keyboard layar tidak muncul sendiri saat POS dibuka atau transaksi selesai.
+ */
+function focusSearchInput(selectAll = false, force = false) {
+    if (!force && isTouchScreen()) return;
     nextTick(() => {
         const el = resolveInputEl(searchInputRef.value);
         if (!el) return;
@@ -712,7 +722,7 @@ function onPosKeydown(event: KeyboardEvent) {
         case 'F2':
             event.preventDefault();
             if (checkoutOpen.value) closeCheckout();
-            focusSearchInput(true);
+            focusSearchInput(true, true);
             return;
 
         case 'F4':
@@ -731,7 +741,7 @@ function onPosKeydown(event: KeyboardEvent) {
             if (checkoutOpen.value) {
                 event.preventDefault();
                 closeCheckout();
-                focusSearchInput();
+                focusSearchInput(false, true);
             }
             return;
     }
@@ -3920,7 +3930,7 @@ const sendWhatsAppInvoice = () => {
                 <div class="flex min-w-0 items-center gap-3">
                     <button
                         type="button"
-                        class="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-900 lg:flex"
+                        class="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-900 tab:flex"
                         title="Kembali ke Dashboard"
                         @click="router.visit(dashboard().url)"
                     >
@@ -3933,7 +3943,7 @@ const sendWhatsAppInvoice = () => {
                     <!-- Ringkasan shift + tombol Tutup (tablet/desktop landscape) -->
                     <div
                         v-if="allowsAdvancedRetail && cashShiftOpen"
-                        class="relative mr-1 hidden items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 lg:flex"
+                        class="relative mr-1 hidden items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 tab:flex"
                     >
                         <span class="relative flex h-2.5 w-2.5 shrink-0">
                             <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
@@ -3985,7 +3995,7 @@ const sendWhatsAppInvoice = () => {
                     </Link>
                     <Link
                         href="/pos/transactions"
-                        class="hidden h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-900 lg:flex"
+                        class="hidden h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-900 tab:flex"
                         title="Riwayat transaksi"
                     >
                         <ReceiptText class="h-5 w-5" />
@@ -4002,7 +4012,7 @@ const sendWhatsAppInvoice = () => {
             <Link
                 v-if="scanMejaEnabled && pendingTableOrderCount > 0"
                 href="/table-orders"
-                class="-mx-4 flex items-center justify-between gap-2 border-t border-violet-100 bg-violet-50 px-4 py-2 transition-colors hover:bg-violet-100 sm:-mx-6 sm:px-6 lg:hidden"
+                class="-mx-4 flex items-center justify-between gap-2 border-t border-violet-100 bg-violet-50 px-4 py-2 transition-colors hover:bg-violet-100 sm:-mx-6 sm:px-6 tab:hidden"
             >
                 <div class="flex min-w-0 items-center gap-2">
                     <span class="relative flex h-2 w-2 shrink-0">
@@ -4063,7 +4073,7 @@ const sendWhatsAppInvoice = () => {
             </div>
             <div
                 v-if="scanMejaEnabled && pendingTableOrderCount > 0"
-                class="mb-4 rounded-lg border border-violet-200 bg-violet-50/80 px-4 py-3 shadow-none lg:hidden"
+                class="mb-4 rounded-lg border border-violet-200 bg-violet-50/80 px-4 py-3 shadow-none tab:hidden"
             >
                 <div class="flex items-center justify-between gap-3">
                     <div class="flex min-w-0 items-center gap-3">
@@ -4108,7 +4118,7 @@ const sendWhatsAppInvoice = () => {
             </div>
             <div
                 v-else-if="allowsAdvancedRetail && cashShiftOpen"
-                class="mx-4 mb-4 rounded-2xl border border-emerald-300 bg-gradient-to-r from-emerald-50 to-teal-50 shadow-sm sm:mx-6 lg:hidden"
+                class="mx-4 mb-4 rounded-2xl border border-emerald-300 bg-gradient-to-r from-emerald-50 to-teal-50 shadow-sm sm:mx-6 tab:hidden"
             >
                 <div class="flex items-center justify-between px-4 py-3">
                     <div class="flex min-w-0 items-center gap-3">
@@ -4145,11 +4155,11 @@ const sendWhatsAppInvoice = () => {
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 gap-4 px-2 pb-16 sm:px-4 lg:h-[calc(100vh-4.5rem)] lg:grid-cols-10 lg:gap-5 lg:pb-4">
+            <div class="grid grid-cols-1 gap-4 px-2 pb-16 sm:px-4 tab:h-[calc(100vh-4.5rem)] tab:grid-cols-10 tab:gap-5 tab:pb-4">
                 <!-- Product Grid -->
-                <div class="lg:col-span-7 lg:h-full lg:min-h-0">
-                    <Card class="mb-4 border-0 shadow-lg lg:mb-0 lg:flex lg:h-full lg:flex-col">
-                        <CardContent class="pt-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+                <div class="tab:h-full tab:min-h-0 tab:max-lg:col-span-6 lg:col-span-7">
+                    <Card class="mb-4 border-0 shadow-lg tab:mb-0 tab:flex tab:h-full tab:flex-col">
+                        <CardContent class="pt-4 tab:min-h-0 tab:flex-1 tab:overflow-y-auto">
                             <!-- Barcode Scanner POS -->
                             <div v-if="store.pos_show_barcode === true" class="mb-4 space-y-2 rounded-xl border border-teal-100 bg-teal-50/30 p-3">
                                 <div class="flex items-center gap-2">
@@ -4285,7 +4295,7 @@ const sendWhatsAppInvoice = () => {
 
                             <!-- Product Grid/List (6 per halaman) -->
                             <div v-if="filteredProducts.length > 0" class="space-y-4">
-                                <div class="grid grid-cols-1 gap-2 md:grid-cols-3 md:gap-3 lg:grid-cols-4 2xl:grid-cols-5">
+                                <div class="grid grid-cols-1 gap-2 md:grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] md:gap-3 lg:grid-cols-4 2xl:grid-cols-5">
                                     <Card
                                         v-for="product in visibleProducts"
                                         :key="product.id"
@@ -4465,17 +4475,17 @@ const sendWhatsAppInvoice = () => {
                 </div>
 
                 <!-- Cart Sidebar -->
-                <div class="mb-4 lg:col-span-3 lg:mb-0 lg:h-full lg:min-h-0">
+                <div class="mb-4 tab:mb-0 tab:h-full tab:min-h-0 tab:max-lg:col-span-4 lg:col-span-3">
                     <Card
                         :class="
                             [
                                 'border-0 shadow-lg',
                                 /* desktop: full height sidebar */
-                                'lg:flex lg:h-full lg:flex-col',
+                                'tab:flex tab:h-full tab:flex-col',
                                 /* mobile: hidden unless sheet open */
                                 cartSheetOpen
-                                    ? 'fixed top-1/2 left-1/2 z-50 max-h-[80vh] w-[calc(100%-1.5rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-gray-200 shadow-2xl lg:relative lg:inset-auto lg:top-auto lg:left-auto lg:z-auto lg:max-h-none lg:w-auto lg:translate-x-0 lg:translate-y-0 lg:rounded-none lg:border-t lg:border-gray-200 lg:shadow-lg'
-                                    : 'hidden lg:flex lg:flex-col',
+                                    ? 'fixed top-1/2 left-1/2 z-50 max-h-[80vh] w-[calc(100%-1.5rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-gray-200 shadow-2xl tab:relative tab:inset-auto tab:top-auto tab:left-auto tab:z-auto tab:max-h-none tab:w-auto tab:translate-x-0 tab:translate-y-0 tab:rounded-none tab:border-t tab:border-gray-200 tab:shadow-lg'
+                                    : 'hidden tab:flex tab:flex-col',
                             ].join(' ')
                         "
                     >
@@ -4494,7 +4504,7 @@ const sendWhatsAppInvoice = () => {
                                     <!-- Tombol tutup: hanya tampil di mobile (sheet mode) -->
                                     <button
                                         type="button"
-                                        class="rounded-full p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 lg:hidden"
+                                        class="rounded-full p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 tab:hidden"
                                         @click="cartSheetOpen = false"
                                     >
                                         <X class="h-5 w-5" />
@@ -4503,7 +4513,7 @@ const sendWhatsAppInvoice = () => {
                             </div>
                         </CardHeader>
 
-                        <CardContent class="flex-1 space-y-4 lg:flex lg:flex-col lg:overflow-hidden">
+                        <CardContent class="flex-1 space-y-4 tab:flex tab:flex-col tab:overflow-hidden">
                             <!-- F8: saran tambahan menu -->
                             <div
                                 v-if="upsellSuggestions.length > 0"
@@ -4531,7 +4541,7 @@ const sendWhatsAppInvoice = () => {
                             </div>
 
                             <!-- Cart Items -->
-                            <div class="max-h-[28rem] space-y-3 lg:max-h-none lg:flex-1 lg:overflow-y-auto">
+                            <div class="max-h-[28rem] space-y-3 tab:max-h-none tab:flex-1 tab:overflow-y-auto">
                                 <div v-if="cart.length === 0" class="py-8 text-center text-gray-500">
                                     <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 p-4">
                                         <ShoppingCart class="h-8 w-8 text-gray-400" />
@@ -5679,7 +5689,7 @@ const sendWhatsAppInvoice = () => {
             <!-- ═══ Mobile: Floating Cart Popup ═══ -->
             <div
                 v-if="cart.length > 0"
-                class="fixed inset-x-0 bottom-24 z-40 px-3 lg:hidden"
+                class="fixed inset-x-0 bottom-24 z-40 px-3 tab:hidden"
                 :style="{ paddingBottom: 'env(safe-area-inset-bottom)' }"
             >
                 <button
@@ -5709,7 +5719,7 @@ const sendWhatsAppInvoice = () => {
 
             <!-- ═══ Mobile: Cart Sheet Overlay ═══ -->
             <Teleport to="body">
-                <div v-if="cartSheetOpen" class="fixed inset-0 z-40 bg-slate-900/25 backdrop-blur-md lg:hidden" @click="cartSheetOpen = false" />
+                <div v-if="cartSheetOpen" class="fixed inset-0 z-40 bg-slate-900/25 backdrop-blur-md tab:hidden" @click="cartSheetOpen = false" />
             </Teleport>
 
             <!-- Pilih varian produk -->

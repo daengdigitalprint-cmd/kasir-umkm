@@ -7,6 +7,14 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Tata letak lebar untuk tablet: layar >= 1024px, atau >= 768px yang cukup tinggi (tablet 10 inci
+   mendatar/tegak). HP mendatar (tinggi < 480px) tetap memakai tata letak HP. */
+@custom-variant tab {
+    @media (min-width: 64rem), (min-width: 48rem) and (min-height: 30rem) {
+        @slot;
+    }
+}
+
 @theme inline {
     /* Fonts - Guideline compliant */
     --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
