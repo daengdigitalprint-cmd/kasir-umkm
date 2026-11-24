@@ -302,67 +302,37 @@ const tabs = computed<DashboardTab[]>(() => [
                                     </ul>
                                 </div>
                                 <div class="fs-tag-list">
-                                    <div class="xb-item--list_box ul_li">
-                                        <ul class="xb-item--list ul_li">
+                                    <div class="xb-item--warning_img">
+                                        <img
+                                            width="144"
+                                            height="160"
+                                            :src="`${base}/img/shape/checklist-badge.webp`"
+                                            :srcset="`${base}/img/shape/checklist-badge.webp 1x, ${base}/img/shape/checklist-badge@2x.webp 2x`"
+                                            alt=""
+                                            loading="lazy"
+                                            decoding="async"
+                                        />
+                                    </div>
+                                    <div class="xb-item--list_box">
+                                        <ul class="xb-item--list ul_li_between">
                                             <li>
-                                                <span
-                                                    ><img
-                                                        width="24"
-                                                        height="24"
-                                                        :src="`${base}/img/icon/sol-icon01.svg`"
-                                                        alt=""
-                                                        loading="lazy"
-                                                        decoding="async" /></span
-                                                >Satu Aplikasi
+                                                <span><img width="24" height="24" :src="`${base}/img/icon/sol-icon01.svg`" alt="" loading="lazy" decoding="async" /></span>Satu Aplikasi
                                             </li>
                                             <li>
-                                                <span
-                                                    ><img
-                                                        width="24"
-                                                        height="24"
-                                                        :src="`${base}/img/icon/sol-icon02.svg`"
-                                                        alt=""
-                                                        loading="lazy"
-                                                        decoding="async" /></span
-                                                >Harga Transparan
-                                            </li>
-                                            <li>
-                                                <span
-                                                    ><img
-                                                        width="24"
-                                                        height="24"
-                                                        :src="`${base}/img/icon/sol-icon03.svg`"
-                                                        alt=""
-                                                        loading="lazy"
-                                                        decoding="async" /></span
-                                                >Stok Real-time
-                                            </li>
-                                            <li>
-                                                <span
-                                                    ><img
-                                                        width="24"
-                                                        height="24"
-                                                        :src="`${base}/img/icon/sol-icon04.svg`"
-                                                        alt=""
-                                                        loading="lazy"
-                                                        decoding="async" /></span
-                                                >Mudah Dipakai
+                                                <span><img width="24" height="24" :src="`${base}/img/icon/sol-icon02.svg`" alt="" loading="lazy" decoding="async" /></span>Harga Transparan
                                             </li>
                                         </ul>
-                                        <ul class="xb-item--list ul_li">
+                                        <ul class="xb-item--list ul_li_between justify-content-center">
                                             <li>
-                                                <span
-                                                    ><img
-                                                        width="24"
-                                                        height="24"
-                                                        :src="`${base}/img/icon/sol-icon05.svg`"
-                                                        alt=""
-                                                        loading="lazy"
-                                                        decoding="async" /></span
-                                                >Laporan Otomatis
+                                                <span><img width="24" height="24" :src="`${base}/img/icon/sol-icon05.svg`" alt="" loading="lazy" decoding="async" /></span>Laporan Otomatis
                                             </li>
-                                            <li class="logo-img">
-                                                <img width="1024" height="1024" src="/cecklist-sm.webp" alt="" loading="lazy" decoding="async" />
+                                        </ul>
+                                        <ul class="xb-item--list ul_li_between">
+                                            <li>
+                                                <span><img width="24" height="24" :src="`${base}/img/icon/sol-icon03.svg`" alt="" loading="lazy" decoding="async" /></span>Stok Real-Time
+                                            </li>
+                                            <li>
+                                                <span><img width="24" height="24" :src="`${base}/img/icon/sol-icon04.svg`" alt="" loading="lazy" decoding="async" /></span>Mudah Dipakai
                                             </li>
                                         </ul>
                                     </div>
@@ -536,11 +506,164 @@ const tabs = computed<DashboardTab[]>(() => [
     display: flex;
 }
 .solution .fs-solution-item {
+    width: 100%;
     height: 100%;
     display: flex;
     flex-direction: column;
 }
 .solution .fs-solution-chart_box {
     flex: 1;
+}
+
+/*
+ * Desktop (dua kolom): judul, deskripsi, dan kotak gauge kedua kartu berbagi
+ * baris grid (subgrid), sehingga kotak gauge mulai di ketinggian yang sama dan
+ * tingginya setara walau deskripsi kanan lebih panjang.
+ */
+@media (min-width: 992px) {
+    @supports (grid-template-rows: subgrid) {
+        .solution .row.mt-none-30 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: auto auto 1fr;
+            row-gap: 0;
+        }
+        .solution .row.mt-none-30 > .col-lg-6.mt-30 {
+            display: grid;
+            grid-row: span 3;
+            grid-template-rows: subgrid;
+            width: auto;
+            max-width: none;
+        }
+        .solution .fs-solution-item {
+            display: grid;
+            grid-row: span 3;
+            grid-template-rows: subgrid;
+            row-gap: 0;
+            height: auto;
+        }
+    }
+}
+
+/*
+ * Kartu hijau dibuat simetris dengan kartu merah: ikon checklist kecil di
+ * tengah dan lima pil tersebar 2-1-2. Aturan bawaan template untuk
+ * .fa-chart-two (daftar dua kolom 47%, transform: none !important) ditimpa
+ * di sini supaya pil memakai pola & ukuran responsif yang sama dengan kartu merah.
+ */
+.solution .fa-chart-two .xb-item--holder {
+    margin-bottom: 42px;
+}
+.solution .fa-chart-two .xb-item--meta li::before {
+    background: #1fbf1f;
+}
+.solution .fa-chart-two .fs-tag-list .xb-item--list_box {
+    display: block;
+    gap: 0;
+    margin-top: -60px;
+}
+.solution .fa-chart-two .fs-tag-list .xb-item--list {
+    gap: 0;
+    width: auto;
+    flex-direction: row;
+    align-items: center;
+}
+.solution .fa-chart-two .fs-tag-list .xb-item--list:not(:first-child) {
+    transform: translateY(-10px) !important;
+}
+.solution .fa-chart-two .fs-tag-list .xb-item--list:nth-child(even) {
+    z-index: 1;
+    position: relative;
+    transform: translate(5px, -10px) !important;
+}
+.solution .fa-chart-two .fs-tag-list .xb-item--list li {
+    gap: 10px;
+    width: auto;
+    line-height: normal;
+    padding: 9px 27px 9px 8px;
+    border-radius: 100px;
+    /* Lapisan pertama bawaan (#f6fff6, pekat) menutupi teks pil di bawahnya. */
+    box-shadow:
+        0 44px 18px -4px rgba(35, 82, 35, 0.04),
+        0 26px 10px -4px rgba(35, 82, 35, 0.06),
+        0 16px 6px -3px rgba(35, 82, 35, 0.07),
+        0 10px 4px -3px rgba(35, 82, 35, 0.08),
+        0 6px 2px -2px rgba(35, 82, 35, 0.08),
+        0 3px 1px -1px rgba(35, 82, 35, 0.09),
+        0 1px 1px -1px rgba(35, 82, 35, 0.09),
+        0 0 0 1px #d8ead8,
+        inset 0 1px 1px 1px rgba(255, 255, 255, 0.3);
+}
+.solution .fa-chart-two .fs-tag-list .xb-item--list li span {
+    width: 34px;
+    height: 34px;
+    border-radius: 100px;
+    background: var(--color-white, #fff);
+}
+@media only screen and (min-width: 1200px) and (max-width: 1500px) {
+    .solution .fa-chart-two .fs-tag-list .xb-item--list li {
+        font-size: 17px;
+    }
+}
+@media only screen and (min-width: 1200px) and (max-width: 1300px) {
+    .solution .fa-chart-two .fs-tag-list .xb-item--list li {
+        font-size: 14px;
+        padding: 9px 15px 9px 8px;
+    }
+}
+@media (max-width: 1199px) {
+    .solution .fa-chart-two .fs-tag-list .xb-item--list_box {
+        margin-top: -44px;
+    }
+    .solution .fa-chart-two .fs-tag-list .xb-item--list li {
+        gap: 5px;
+        font-size: 13px;
+        padding: 9px 9px 9px 8px;
+    }
+    .solution .fa-chart-two .fs-tag-list .xb-item--list li span {
+        width: 30px;
+        height: 30px;
+    }
+}
+@media (max-width: 991px) {
+    .solution .fa-chart-two .fs-tag-list .xb-item--list li {
+        gap: 10px;
+        font-size: 18px;
+        padding: 9px 27px 9px 8px;
+    }
+}
+@media (max-width: 767px) {
+    .solution .fa-chart-two .fs-tag-list .xb-item--list_box {
+        margin-top: -20px;
+    }
+    .solution .fa-chart-two .fs-tag-list .xb-item--list {
+        gap: 10px;
+        justify-content: center;
+    }
+    .solution .fa-chart-two .fs-tag-list .xb-item--list:not(:first-child),
+    .solution .fa-chart-two .fs-tag-list .xb-item--list:nth-child(even) {
+        transform: none !important;
+    }
+    .solution .fa-chart-two .fs-tag-list .xb-item--list:nth-child(even) {
+        margin: 10px 0;
+    }
+    .solution .fa-chart-two .fs-tag-list .xb-item--list li {
+        gap: 5px;
+        font-size: 16px;
+        padding: 9px 20px 9px 8px;
+    }
+}
+@media only screen and (min-width: 576px) and (max-width: 767px) {
+    .solution .fa-chart-two .fs-tag-list .xb-item--list {
+        gap: 15px;
+        justify-content: space-between;
+    }
+    .solution .fa-chart-two .fs-tag-list .xb-item--list:nth-child(even) {
+        margin: 0;
+        transform: translate(5px, -10px) !important;
+    }
+    .solution .fa-chart-two .fs-tag-list .xb-item--list:not(:first-child):not(:nth-child(even)) {
+        transform: translateY(-10px) !important;
+    }
 }
 </style>
