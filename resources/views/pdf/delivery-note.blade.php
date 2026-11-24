@@ -95,6 +95,7 @@
                                 <div class="flag">{{ \App\Models\StockTransferLine::DISCREPANCY_LABELS[$line->discrepancy_type] ?? 'Selisih' }} {{ $fmtQty($line->discrepancyQuantity()) }}</div>
                             @endif
                             @if($line->discrepancy_reason)<div class="muted" style="font-size: 10px;">{{ $line->discrepancy_reason }}</div>@endif
+                            @if($line->discrepancy_photo)<div class="muted" style="font-size: 10px;">Ada foto bukti</div>@endif
                             @if($line->discrepancy_type)
                                 <div class="muted" style="font-size: 10px;">{{ $line->resolution ? (\App\Models\StockTransferLine::RESOLUTION_LABELS[$line->resolution] ?? $line->resolution) : 'Menunggu keputusan pengirim' }}</div>
                             @endif
@@ -138,6 +139,7 @@
         Dicetak {{ now($tz)->format('d M Y H:i') }}.
         @if($received && $transfer->receiver_signature)
             Ditandatangani di layar oleh penerima saat barang diterima.
+            @if($transfer->received_blind) Barang dihitung tanpa melihat jumlah kirim (penerimaan buta). @endif
         @else
             Periksa jumlah barang saat diterima dan catat bila ada selisih.
         @endif

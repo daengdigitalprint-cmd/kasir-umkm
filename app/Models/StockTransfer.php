@@ -33,6 +33,7 @@ class StockTransfer extends Model
         'cancellation_reason',
         'receiver_name',
         'receiver_signature',
+        'received_blind',
         'followup_of_id',
     ];
 
@@ -45,6 +46,7 @@ class StockTransfer extends Model
             'sent_at' => 'datetime',
             'received_at' => 'datetime',
             'cancelled_at' => 'datetime',
+            'received_blind' => 'boolean',
         ];
     }
 
@@ -101,6 +103,12 @@ class StockTransfer extends Model
     public function followupOf(): BelongsTo
     {
         return $this->belongsTo(self::class, 'followup_of_id');
+    }
+
+    /** F9: pengajuan koreksi jumlah diterima (terbaru dulu). */
+    public function corrections(): HasMany
+    {
+        return $this->hasMany(StockTransferCorrection::class)->latest('id');
     }
 
     /** Kiriman susulan yang dibuat dari penyelesaian selisih transfer ini. */

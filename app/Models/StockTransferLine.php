@@ -51,6 +51,7 @@ class StockTransferLine extends Model
         'discrepancy_type',
         'quantity_over',
         'discrepancy_reason',
+        'discrepancy_photo',
         'resolution',
         'resolution_note',
         'resolved_by',
@@ -101,6 +102,26 @@ class StockTransferLine extends Model
     public function needsResolution(): bool
     {
         return $this->discrepancy_type !== null && $this->resolution === null;
+    }
+
+    /** Jumlah yang benar-benar tiba menurut catatan: yang masuk stok ditambah kelebihan (bila ada). */
+    public function arrivedQuantity(): string
+    {
+        $in = (string) ($this->quantity_received ?? $this->quantity);
+        if ($this->discrepancy_type === self::DISCREPANCY_OVER) {
+            return bcadd($in, (string) ($this->quantity_over ?? '0'), 4);
+        }
+
+        return bcadd($in, '0', 4);
+    }
+
+    /**
+     * F9: selisih yang sudah diselesaikan dengan perpindahan stok tidak bisa dikoreksi lagi
+     * lewat pengajuan koreksi (stok pengirim sudah ikut berubah).
+     */
+    public function isLockedForCorrection(): bool
+    {
+        return in_array($this->resolution, [self::RESOLUTION_RETURNED, self::RESOLUTION_ACCEPTED], true);
     }
 
     /** Jumlah yang diselisihkan: kekurangan untuk kurang/rusak, kelebihan untuk lebih. */

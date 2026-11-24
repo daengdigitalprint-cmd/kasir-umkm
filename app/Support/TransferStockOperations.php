@@ -111,6 +111,47 @@ final class TransferStockOperations
             && $line->batchAllocations()->exists();
     }
 
+    /**
+     * F9 — Koreksi penerimaan ke bawah: keluarkan lagi stok yang terlanjur dicatat masuk di lokasi penerima.
+     * Dicatat sebagai mutasi Transfer masuk bernilai negatif. Tidak dipakai untuk baris beralokasi batch apotek.
+     */
+    public static function removeAtDestination(Store $store, User $user, Product $product, string $qty, StockTransferLine $line, ?string $notes = null): void
+    {
+        if ((int) $product->store_id !== (int) $store->id) {
+            throw new \InvalidArgumentException('Produk tujuan tidak termasuk toko penerima.');
+        }
+
+        if (BatchTracking::enabled($store)) {
+            self::ensureBatchAligned($product);
+            $remaining = $qty;
+            // Ambil dari batch terbaru dulu: batch hasil transfer ini dibuat paling akhir.
+            $batches = ProductBatch::query()->where('product_id', $product->id)->where('quantity_remaining', '>', 0)
+                ->where('status', ProductBatch::STATUS_AVAILABLE)->orderByDesc('id')->lockForUpdate()->get();
+            foreach ($batches as $batch) {
+                if (ProductQuantity::cmp($remaining, '0.0000') <= 0) {
+                    break;
+                }
+                $take = ProductQuantity::min($remaining, ProductQuantity::normalizeStorageAmount($product, $batch->quantity_remaining));
+                if (ProductQuantity::cmp($take, '0.0000') <= 0) {
+                    continue;
+                }
+                $batch->decrement('quantity_remaining', $take);
+                $remaining = ProductQuantity::sub($remaining, $take);
+            }
+            if (ProductQuantity::cmp($remaining, '0.0000') > 0) {
+                throw new \RuntimeException("Stok «{$product->name}» di lokasi penerima tidak cukup untuk dikoreksi (sebagian sudah terpakai).");
+            }
+            $product->update(['stock_quantity' => ProductQuantity::normalizeStorageAmount($product, (string) ProductBatch::where('product_id', $product->id)->sum('quantity_remaining'))]);
+        } else {
+            if (ProductQuantity::lt((string) $product->stock_quantity, $qty)) {
+                throw new \RuntimeException("Stok «{$product->name}» di lokasi penerima tidak cukup untuk dikoreksi (sebagian sudah terpakai).");
+            }
+            $product->decrement('stock_quantity', $qty);
+        }
+
+        StockMovement::create(['store_id' => $store->id, 'product_id' => $product->id, 'product_variant_id' => null, 'user_id' => $user->id, 'quantity_change' => bcsub('0.0000', $qty, ProductQuantity::SCALE), 'type' => StockMovement::TYPE_TRANSFER_IN, 'reference_type' => StockTransferLine::class, 'reference_id' => $line->id, 'balance_after' => (string) $product->fresh()->stock_quantity, 'notes' => $notes ?? $line->transfer->transfer_number]);
+    }
+
     public static function addAtDestination(Store $store, User $user, Product $product, string $qty, StockTransferLine $line, ?string $notes = null): void
     {
         if (! $product->track_stock) {

@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Actions\ResolveTransferDiscrepancies;
 use App\Actions\StockRequestWorkflow;
+use App\Actions\TransferReceiptCorrections;
 use App\Models\Product;
 use App\Models\StockTransfer;
+use App\Models\StockTransferCorrection;
 use App\Models\StockTransferLine;
 use App\Models\Store;
 use App\Models\User;
@@ -13,12 +15,14 @@ use App\Support\CostVisibility;
 use App\Support\InventoryCosting;
 use App\Support\ProductQuantity;
 use App\Support\StorePlanLimits;
+use App\Support\TransferReceiving;
 use App\Support\TransferStockOperations;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
@@ -43,7 +47,9 @@ class StockTransferController extends Controller
             // F5/F8: jumlah barang yang diterima kurang, rusak, atau lebih dari yang dikirim.
             ->withCount(['lines as discrepancy_lines_count' => fn ($q) => $this->scopeDiscrepancyLines($q)])
             // F8: selisih yang masih menunggu keputusan lokasi pengirim.
-            ->withCount(['lines as open_discrepancy_lines_count' => fn ($q) => $q->whereNotNull('discrepancy_type')->whereNull('resolution')]);
+            ->withCount(['lines as open_discrepancy_lines_count' => fn ($q) => $q->whereNotNull('discrepancy_type')->whereNull('resolution')])
+            // F9: pengajuan koreksi penerimaan yang menunggu keputusan pengirim.
+            ->withCount(['corrections as pending_corrections_count' => fn ($q) => $q->where('status', StockTransferCorrection::STATUS_PENDING)]);
 
         if ($request->boolean('discrepancy')) {
             $query->whereHas('lines', fn ($q) => $this->scopeDiscrepancyLines($q));
@@ -51,9 +57,7 @@ class StockTransferController extends Controller
 
         // F8: hanya transfer keluar dari toko ini yang selisihnya belum diselesaikan.
         if ($request->boolean('needs_resolution')) {
-            $query->where('from_store_id', $store->id)
-                ->where('status', StockTransfer::STATUS_RECEIVED)
-                ->whereHas('lines', fn ($q) => $q->whereNotNull('discrepancy_type')->whereNull('resolution'));
+            $this->scopeNeedsDecision($query, (int) $store->id);
         }
 
         if ($request->filled('status') && in_array($request->input('status'), ['draft', 'sent', 'received', 'cancelled'], true)) {
@@ -90,12 +94,19 @@ class StockTransferController extends Controller
             'discrepancyFilter' => $request->boolean('discrepancy'),
             'needsResolutionFilter' => $request->boolean('needs_resolution'),
             'incomingCount' => $incomingCount,
-            'needsResolutionCount' => StockTransfer::query()
-                ->where('from_store_id', $store->id)
-                ->where('status', StockTransfer::STATUS_RECEIVED)
-                ->whereHas('lines', fn ($q) => $q->whereNotNull('discrepancy_type')->whereNull('resolution'))
-                ->count(),
+            'needsResolutionCount' => $this->scopeNeedsDecision(StockTransfer::query(), (int) $store->id)->count(),
         ]);
+    }
+
+    /** Transfer keluar dari toko ini yang menunggu keputusannya: selisih terbuka atau pengajuan koreksi. */
+    private function scopeNeedsDecision($query, int $storeId)
+    {
+        return $query->where('from_store_id', $storeId)
+            ->where('status', StockTransfer::STATUS_RECEIVED)
+            ->where(function ($q) {
+                $q->whereHas('lines', fn ($l) => $l->whereNotNull('discrepancy_type')->whereNull('resolution'))
+                    ->orWhereHas('corrections', fn ($c) => $c->where('status', StockTransferCorrection::STATUS_PENDING));
+            });
     }
 
     /** Baris yang diterima tidak sesuai jumlah kirim (termasuk selisih lama tanpa jenis). */
@@ -377,6 +388,9 @@ class StockTransferController extends Controller
             'lines.resolvedBy:id,name',
             'followupOf:id,transfer_number',
             'followups:id,transfer_number,status,followup_of_id',
+            'corrections.requester:id,name',
+            'corrections.decider:id,name',
+            'corrections.lines',
         ]);
         // Tanda tangan penerima hanya dikirim ke halaman detail.
         $stockTransfer->makeVisible('receiver_signature');
@@ -387,6 +401,17 @@ class StockTransferController extends Controller
             && ($this->canOperateAt($user, (int) $stockTransfer->from_store_id)
                 || $this->canOperateAt($user, (int) $stockTransfer->to_store_id));
 
+        $hasPendingCorrection = $stockTransfer->corrections->contains(fn (StockTransferCorrection $c) => $c->isPending());
+        // Relasi toStore di atas hanya memuat id & nama; aturan penerimaan butuh pengaturan tokonya.
+        $receivingStore = Store::query()->find($stockTransfer->to_store_id);
+        // Baris yang jumlah diterimanya masih boleh dikoreksi lewat pengajuan (F9).
+        $correctableLineIds = $stockTransfer->isReceived()
+            ? $stockTransfer->lines
+                ->filter(fn (StockTransferLine $line) => ! $line->isLockedForCorrection()
+                    && ! ($receivingStore && TransferStockOperations::hasBatchAllocations($receivingStore, $line)))
+                ->pluck('id')->values()->all()
+            : [];
+
         return CostVisibility::render('StockTransfers/Show', [
             'transfer' => $stockTransfer,
             'canSend' => $canSend,
@@ -394,8 +419,21 @@ class StockTransferController extends Controller
             'canCancel' => $canCancel,
             // F8: selisih diputuskan oleh lokasi pengirim.
             'canResolve' => $stockTransfer->isReceived()
+                && ! $hasPendingCorrection
                 && $stockTransfer->lines->contains(fn (StockTransferLine $line) => $line->needsResolution())
                 && $this->canOperateAt($user, (int) $stockTransfer->from_store_id),
+            // F9: penerimaan buta — penerima menghitung dulu tanpa melihat jumlah kirim.
+            'blindReceiving' => $canReceive && TransferReceiving::blindEnabled($receivingStore),
+            // F9: koreksi setelah diterima. Diajukan penerima, diputuskan pengirim.
+            'canRequestCorrection' => TransferReceiving::withinCorrectionWindow($stockTransfer)
+                && ! $hasPendingCorrection
+                && $correctableLineIds !== []
+                && $this->canOperateAt($user, (int) $stockTransfer->to_store_id),
+            'canDecideCorrection' => $hasPendingCorrection && $this->canOperateAt($user, (int) $stockTransfer->from_store_id),
+            'canCancelCorrection' => $hasPendingCorrection && $this->canOperateAt($user, (int) $stockTransfer->to_store_id),
+            'correctableLineIds' => $correctableLineIds,
+            'correctionDeadline' => TransferReceiving::correctionDeadline($stockTransfer)?->toIso8601String(),
+            'correctionWindowHours' => TransferReceiving::CORRECTION_WINDOW_HOURS,
         ]);
     }
 
@@ -460,6 +498,12 @@ class StockTransferController extends Controller
             'lines.required' => 'Pilih penyelesaian untuk minimal satu barang.',
             'lines.*.resolution.required' => 'Pilih penyelesaian untuk tiap barang yang dicentang.',
         ]);
+
+        if ($stockTransfer->corrections()->where('status', StockTransferCorrection::STATUS_PENDING)->exists()) {
+            throw ValidationException::withMessages([
+                'lines' => 'Ada pengajuan koreksi penerimaan yang menunggu. Putuskan pengajuan itu dulu, baru selesaikan selisihnya.',
+            ]);
+        }
 
         $decisions = [];
         foreach ($validated['lines'] as $row) {
@@ -592,7 +636,12 @@ class StockTransferController extends Controller
             'lines.*.quantity_received' => ['required', 'numeric', 'min:0'],
             'lines.*.discrepancy_type' => ['nullable', 'string', 'in:'.StockTransferLine::DISCREPANCY_SHORT.','.StockTransferLine::DISCREPANCY_DAMAGED],
             'lines.*.discrepancy_reason' => ['nullable', 'string', 'max:255'],
+            // F9: foto bukti selisih (opsional), hanya disimpan untuk baris yang berselisih.
+            'lines.*.photo' => ['nullable', 'image', 'mimes:jpeg,jpg,png,webp', 'max:5120'],
         ], [
+            'lines.*.photo.image' => 'Foto bukti harus berupa gambar.',
+            'lines.*.photo.mimes' => 'Foto bukti harus berformat JPG, PNG, atau WebP.',
+            'lines.*.photo.max' => 'Foto bukti maksimal 5 MB per barang.',
             'receiver_name.required' => 'Isi nama penerima barang.',
             'receiver_signature.required' => 'Tanda tangan penerima wajib diisi.',
             'receiver_signature.starts_with' => 'Tanda tangan tidak terbaca. Ulangi tanda tangan.',
@@ -606,11 +655,15 @@ class StockTransferController extends Controller
         }
         $receiverName = trim($validated['receiver_name']);
         $receivedInput = collect($validated['lines'] ?? [])->keyBy(fn ($row) => (int) $row['id']);
+        $photoInput = collect($validated['lines'] ?? [])
+            ->filter(fn ($row) => ($row['photo'] ?? null) instanceof \Illuminate\Http\UploadedFile)
+            ->mapWithKeys(fn ($row) => [(int) $row['id'] => $row['photo']]);
 
         $discrepancyCount = 0;
+        $storedPhotos = [];
 
         try {
-            DB::transaction(function () use ($user, $stockTransfer, $receivedInput, $receiverName, $signature, &$discrepancyCount) {
+            DB::transaction(function () use ($user, $stockTransfer, $receivedInput, $photoInput, $receiverName, $signature, &$discrepancyCount, &$storedPhotos) {
                 // Kunci baris transfer sungguhan supaya tidak bisa diterima dua kali bersamaan.
                 $stockTransfer = StockTransfer::query()->whereKey($stockTransfer->id)->lockForUpdate()->firstOrFail();
                 $stockTransfer->assertCanTransitionTo(StockTransfer::STATUS_RECEIVED);
@@ -674,6 +727,7 @@ class StockTransferController extends Controller
                                 255,
                             );
                         } else {
+                            // (foto bukti disimpan di bawah, setelah jenis selisih baris ditetapkan)
                             $qty = $arrived;
                             $type = $isShort
                                 ? (($input['discrepancy_type'] ?? null) ?: StockTransferLine::DISCREPANCY_SHORT)
@@ -696,6 +750,13 @@ class StockTransferController extends Controller
                                 );
                             }
                         }
+                    }
+
+                    // F9: foto bukti hanya untuk baris yang berselisih.
+                    if ($line->discrepancy_type !== null && $photoInput->has($line->id)) {
+                        $path = $photoInput->get($line->id)->store('transfer-discrepancies', 'public');
+                        $storedPhotos[] = $path;
+                        $line->update(['discrepancy_photo' => $path]);
                     }
 
                     // Seluruh barang hilang/rusak: tidak ada stok yang masuk.
@@ -728,14 +789,18 @@ class StockTransferController extends Controller
                     'received_by' => $user->id,
                     'receiver_name' => mb_substr($receiverName, 0, 120),
                     'receiver_signature' => $signature,
+                    // F9: ditentukan dari pengaturan lokasi penerima, bukan dari kiriman browser.
+                    'received_blind' => TransferReceiving::blindEnabled($toStore),
                 ]);
 
                 // F6: permintaan stok asal transfer ini menjadi Selesai.
                 StockRequestWorkflow::syncFromTransfer($stockTransfer);
             });
         } catch (ValidationException $e) {
+            Storage::disk('public')->delete($storedPhotos);
             throw $e;
         } catch (\Throwable $e) {
+            Storage::disk('public')->delete($storedPhotos);
             report($e);
 
             return back()->with('error', $e->getMessage());
@@ -745,6 +810,85 @@ class StockTransferController extends Controller
             ->with('success', $discrepancyCount > 0
                 ? "Transfer diterima dengan selisih pada {$discrepancyCount} barang. Stok bertambah sesuai jumlah yang benar-benar tiba; selisihnya menunggu ditindaklanjuti lokasi pengirim."
                 : 'Transfer berhasil diterima. Stok outlet telah bertambah.');
+    }
+
+    /**
+     * F9 — Penerima mengajukan koreksi jumlah diterima setelah penerimaan ditandatangani.
+     */
+    public function requestCorrection(Request $request, StockTransfer $stockTransfer, TransferReceiptCorrections $corrections): RedirectResponse
+    {
+        $user = $request->user();
+        if (! $this->canAccessTransfer($user, $stockTransfer, 'to')
+            || ! $this->canOperateAt($user, (int) $stockTransfer->to_store_id)) {
+            abort(403, 'Hanya owner, admin, manajer, atau admin gudang lokasi penerima yang dapat mengajukan koreksi.');
+        }
+
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'min:5', 'max:500'],
+            'lines' => ['required', 'array', 'min:1'],
+            'lines.*.id' => ['required', 'integer', 'distinct'],
+            'lines.*.quantity_received' => ['required', 'numeric', 'min:0'],
+            'lines.*.discrepancy_type' => ['nullable', 'string', 'in:'.StockTransferLine::DISCREPANCY_SHORT.','.StockTransferLine::DISCREPANCY_DAMAGED],
+            'lines.*.note' => ['nullable', 'string', 'max:255'],
+        ], [
+            'reason.required' => 'Tulis alasan koreksi.',
+            'reason.min' => 'Alasan koreksi minimal 5 karakter.',
+            'lines.required' => 'Ubah jumlah diterima minimal satu barang.',
+        ]);
+
+        try {
+            $correction = $corrections->request($stockTransfer, $user, $validated['reason'], $validated['lines']);
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->route('stock-transfers.show', $stockTransfer)
+            ->with('success', 'Koreksi untuk '.$correction->lines()->count().' barang diajukan. Menunggu keputusan '.($stockTransfer->fromStore?->name ?? 'pengirim').'.');
+    }
+
+    /**
+     * F9 — Putusan atas pengajuan koreksi: pengirim menyetujui/menolak, penerima boleh membatalkan.
+     */
+    public function decideCorrection(Request $request, StockTransfer $stockTransfer, StockTransferCorrection $correction, string $decision, TransferReceiptCorrections $corrections): RedirectResponse
+    {
+        $user = $request->user();
+        abort_unless((int) $correction->stock_transfer_id === (int) $stockTransfer->id, 404);
+
+        $side = $decision === 'cancel' ? 'to' : 'from';
+        $storeId = (int) ($side === 'to' ? $stockTransfer->to_store_id : $stockTransfer->from_store_id);
+        if (! $this->canAccessTransfer($user, $stockTransfer, $side) || ! $this->canOperateAt($user, $storeId)) {
+            abort(403, $side === 'to'
+                ? 'Hanya lokasi penerima yang dapat membatalkan pengajuan koreksi.'
+                : 'Hanya owner, admin, manajer, atau admin gudang lokasi pengirim yang dapat memutuskan koreksi.');
+        }
+
+        $validated = $request->validate([
+            'note' => [$decision === 'reject' ? 'required' : 'nullable', 'string', 'max:255'],
+        ], ['note.required' => 'Tulis alasan penolakan.']);
+
+        try {
+            match ($decision) {
+                'approve' => $corrections->approve($correction, $user, $validated['note'] ?? null),
+                'reject' => $corrections->reject($correction, $user, (string) $validated['note']),
+                'cancel' => $corrections->cancel($correction, $user),
+            };
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->route('stock-transfers.show', $stockTransfer)->with('success', match ($decision) {
+            'approve' => 'Koreksi disetujui. Stok penerima sudah disesuaikan; selisih baru (bila ada) menunggu diputuskan.',
+            'reject' => 'Pengajuan koreksi ditolak. Catatan penerimaan tidak berubah.',
+            'cancel' => 'Pengajuan koreksi dibatalkan.',
+        });
     }
 
     /**

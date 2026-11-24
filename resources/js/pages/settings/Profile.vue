@@ -18,6 +18,7 @@ import {
     Bot,
     Building,
     CalendarClock,
+    EyeOff,
     ChevronRight,
     History,
     KeyRound,
@@ -86,6 +87,7 @@ interface StoreProps {
     direct_stock_edit?: boolean;
     warehouse_enabled?: boolean;
     is_allow_local_purchase?: boolean;
+    blind_transfer_receiving?: boolean;
     online_sales_enabled?: boolean;
     online_commission_gofood?: number;
     online_commission_grabfood?: number;
@@ -238,6 +240,7 @@ const storeForm = useForm({
     direct_stock_edit: s.value?.direct_stock_edit === true,
     warehouse_enabled: s.value?.warehouse_enabled === true,
     is_allow_local_purchase: s.value?.is_allow_local_purchase === true,
+    blind_transfer_receiving: s.value?.blind_transfer_receiving === true,
 });
 
 /** Kolom yang dikirim tiap bagian — bagian lain tidak ikut tersimpan/tertimpa. */
@@ -292,6 +295,7 @@ const SECTION_FIELDS: Partial<Record<Section, string[]>> = {
         'direct_stock_edit',
         'warehouse_enabled',
         'is_allow_local_purchase',
+        'blind_transfer_receiving',
     ],
 };
 
@@ -1188,6 +1192,15 @@ const inputClass =
                     </label>
                 </SettingSwitch>
                 <p v-if="storeForm.errors.warehouse_enabled" class="text-sm text-red-600">{{ storeForm.errors.warehouse_enabled }}</p>
+            </SettingsCard>
+
+            <SettingsCard v-if="allowsAdvancedRetail" title="Terima kiriman">
+                <SettingSwitch
+                    v-model="storeForm.blind_transfer_receiving"
+                    :icon="EyeOff"
+                    title="Penerimaan buta"
+                    description="Saat menerima transfer stok, penerima menghitung barang dulu tanpa melihat jumlah yang dikirim, baru dicocokkan. Mencegah asal menyetujui jumlah di surat jalan."
+                />
             </SettingsCard>
         </template>
 

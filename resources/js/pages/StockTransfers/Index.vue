@@ -20,6 +20,7 @@ interface TransferRow {
     lines_count: number;
     discrepancy_lines_count?: number;
     open_discrepancy_lines_count?: number;
+    pending_corrections_count?: number;
     from_store: StoreTiny;
     to_store: StoreTiny;
     user: { id: number; name: string } | null;
@@ -147,8 +148,8 @@ const FILTERS = computed(() => [
             >
                 <PackageCheck class="h-5 w-5 shrink-0 text-red-600" />
                 <span class="flex-1 text-sm text-red-900">
-                    <strong>{{ needsResolutionCount }} kiriman punya selisih yang belum diputuskan.</strong>
-                    Tentukan: dikembalikan ke stok, dicatat rugi, atau dikirim susulan.
+                    <strong>{{ needsResolutionCount }} kiriman menunggu keputusan Anda.</strong>
+                    Ada selisih penerimaan atau pengajuan koreksi yang belum diputuskan.
                 </span>
                 <ChevronRight class="h-4 w-4 text-red-500" />
             </button>
@@ -215,6 +216,12 @@ const FILTERS = computed(() => [
                             </span>
                             <span class="flex shrink-0 flex-col items-end gap-1">
                                 <span class="rounded-full px-2 py-0.5 text-xs font-semibold" :class="statusOf(t).class">{{ statusOf(t).label }}</span>
+                                <span
+                                    v-if="t.pending_corrections_count"
+                                    class="rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-semibold text-white"
+                                >
+                                    Koreksi menunggu
+                                </span>
                                 <span
                                     v-if="t.open_discrepancy_lines_count"
                                     class="rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-semibold text-white"

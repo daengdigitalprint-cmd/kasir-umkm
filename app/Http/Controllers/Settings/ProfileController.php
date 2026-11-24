@@ -140,6 +140,7 @@ class ProfileController extends Controller
                 'direct_stock_edit' => StockAdjustmentApproval::directStockEdit($store),
                 'warehouse_enabled' => (bool) ($store->settings['warehouse_enabled'] ?? false),
                 'is_allow_local_purchase' => (bool) ($store->settings['is_allow_local_purchase'] ?? false),
+                'blind_transfer_receiving' => \App\Support\TransferReceiving::blindEnabled($store),
                 'online_sales_enabled' => (bool) ($store->settings['online_sales_enabled'] ?? false),
                 'online_commission_gofood' => (float) ($store->settings['online_commission_gofood'] ?? 20),
                 'online_commission_grabfood' => (float) ($store->settings['online_commission_grabfood'] ?? 20),

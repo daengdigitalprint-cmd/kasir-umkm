@@ -71,6 +71,7 @@ class StoreSettingsController extends Controller
             'direct_stock_edit' => 'sometimes|boolean',
             'warehouse_enabled' => 'sometimes|boolean',
             'is_allow_local_purchase' => 'sometimes|boolean',
+            'blind_transfer_receiving' => 'sometimes|boolean',
             'online_sales_enabled' => 'sometimes|boolean',
             'online_commission_gofood' => 'sometimes|numeric|min:0|max:100',
             'online_commission_grabfood' => 'sometimes|numeric|min:0|max:100',
@@ -241,6 +242,12 @@ class StoreSettingsController extends Controller
         if (array_key_exists('is_allow_local_purchase', $validated)) {
             $settings['is_allow_local_purchase'] = (bool) $validated['is_allow_local_purchase'];
             unset($validated['is_allow_local_purchase']);
+        }
+
+        // F9 Penerimaan buta: penerima kiriman menghitung dulu tanpa melihat jumlah kirim.
+        if (array_key_exists('blind_transfer_receiving', $validated)) {
+            $settings['blind_transfer_receiving'] = (bool) $validated['blind_transfer_receiving'];
+            unset($validated['blind_transfer_receiving']);
         }
 
         // Penjualan online (aggregator F&B): GoFood, GrabFood, ShopeeFood.
