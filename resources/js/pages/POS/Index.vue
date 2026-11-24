@@ -4300,7 +4300,7 @@ const sendWhatsAppInvoice = () => {
 
                             <!-- Product Grid/List (6 per halaman) -->
                             <div v-if="filteredProducts.length > 0" class="space-y-4">
-                                <div class="grid grid-cols-1 gap-2 md:grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] md:gap-3 lg:grid-cols-4 2xl:grid-cols-5">
+                                <div class="grid grid-cols-1 gap-2 md:grid-cols-3 md:gap-3 tab:max-lg:grid-cols-[repeat(auto-fill,minmax(8rem,1fr))]! lg:grid-cols-4 2xl:grid-cols-5">
                                     <Card
                                         v-for="product in visibleProducts"
                                         :key="product.id"

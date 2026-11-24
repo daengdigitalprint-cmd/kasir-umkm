@@ -7,10 +7,11 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Tata letak lebar untuk tablet: layar >= 1024px, atau >= 768px yang cukup tinggi (tablet 10 inci
-   mendatar/tegak). HP mendatar (tinggi < 480px) tetap memakai tata letak HP. */
+/* Tata letak lebar untuk tablet: layar >= 1024px, atau tablet MENDATAR >= 768px yang cukup tinggi
+   (tablet 10 inci). Tablet tegak (iPad Air/mini potret) dan HP mendatar (tinggi < 480px) tetap
+   memakai tata letak HP: keranjang sebagai lembar bawah, bukan kolom samping. */
 @custom-variant tab {
-    @media (min-width: 64rem), (min-width: 48rem) and (min-height: 30rem) {
+    @media (min-width: 64rem), (min-width: 48rem) and (min-height: 30rem) and (orientation: landscape) {
         @slot;
     }
 }
