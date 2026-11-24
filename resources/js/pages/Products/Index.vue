@@ -106,7 +106,6 @@ const SORT_OPTIONS = [
 ];
 
 const TYPE_TABS = [
-    { key: '', label: 'Semua jenis', icon: Layers },
     { key: 'sellable', label: 'Produk jual', icon: ShoppingCart },
     { key: 'raw_material', label: 'Bahan baku', icon: Box },
     { key: 'packaging', label: 'Kemasan', icon: Package },
@@ -617,7 +616,8 @@ const selectClass =
                     type="button"
                     class="flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold whitespace-nowrap transition"
                     :class="activeType === t.key ? 'bg-primary text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'"
-                    @click="activeType = t.key"
+                    :aria-pressed="activeType === t.key"
+                    @click="activeType = activeType === t.key ? '' : t.key"
                 >
                     <component :is="t.icon" class="h-3.5 w-3.5" />
                     {{ t.label }}
