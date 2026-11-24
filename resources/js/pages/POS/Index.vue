@@ -684,7 +684,12 @@ function focusSearchInput(selectAll = false, force = false) {
     });
 }
 
+/**
+ * Di layar sentuh kolom nominal tidak difokuskan: nominal diisi lewat numpad di layar,
+ * jadi keyboard tablet/HP tidak perlu muncul dan menutupi numpad.
+ */
 function focusCashInput() {
+    if (isTouchScreen()) return;
     nextTick(() => {
         const el = resolveInputEl(cashInputRef.value);
         if (!el) return;
@@ -5520,7 +5525,7 @@ const sendWhatsAppInvoice = () => {
                                                         id="pos-cash-input"
                                                         ref="cashInputRef"
                                                         type="text"
-                                                        inputmode="numeric"
+                                                        :inputmode="isTouchScreen() ? 'none' : 'numeric'"
                                                         autocomplete="off"
                                                         :value="cashInputDisplay"
                                                         @input="onCashInput(($event.target as HTMLInputElement).value)"
