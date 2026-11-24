@@ -91,7 +91,7 @@ test('owner outlet tujuan bisa menerima transfer', function () {
     $this->actingAs($owner)->get("/stock-transfers/{$transfer->id}")
         ->assertInertia(fn ($page) => $page->where('canReceive', true));
 
-    $this->actingAs($owner)->post("/stock-transfers/{$transfer->id}/receive")->assertSessionHasNoErrors();
+    $this->actingAs($owner)->post("/stock-transfers/{$transfer->id}/receive", receiptSignature())->assertSessionHasNoErrors();
 
     expect($transfer->fresh()->status)->toBe(StockTransfer::STATUS_RECEIVED)
         ->and((float) $target->fresh()->stock_quantity)->toBe(5.0);
@@ -104,7 +104,7 @@ test('peran dicek di toko tujuan, bukan toko yang sedang aktif', function () {
 
     $this->actingAs($user)->get("/stock-transfers/{$transfer->id}")
         ->assertInertia(fn ($page) => $page->where('canReceive', false));
-    $this->actingAs($user)->post("/stock-transfers/{$transfer->id}/receive")->assertForbidden();
+    $this->actingAs($user)->post("/stock-transfers/{$transfer->id}/receive", receiptSignature())->assertForbidden();
 });
 
 test('kirim sekarang langsung mengirim transfer baru', function () {

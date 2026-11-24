@@ -45,3 +45,17 @@ function something()
 {
     // ..
 }
+
+/**
+ * Nama + tanda tangan penerima (PNG 1x1) untuk POST terima transfer stok,
+ * yang sejak F8 wajib menyertakan bukti serah terima.
+ *
+ * @return array{receiver_name: string, receiver_signature: string}
+ */
+function receiptSignature(string $name = 'Budi Penerima'): array
+{
+    return [
+        'receiver_name' => $name,
+        'receiver_signature' => 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    ];
+}

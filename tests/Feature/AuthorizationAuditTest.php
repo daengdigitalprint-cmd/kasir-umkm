@@ -269,7 +269,7 @@ test('warehouse tidak dapat menerima transfer', function () {
     ]);
 
     $this->actingAs($warehouse);
-    $response = $this->post("/stock-transfers/{$transfer->id}/receive");
+    $response = $this->post("/stock-transfers/{$transfer->id}/receive", receiptSignature());
     expect($response->status())->not->toBe(200);
 });
 
@@ -378,6 +378,6 @@ test('admin dapat menerima transfer', function () {
     ]);
 
     $this->actingAs($admin);
-    $response = $this->post("/stock-transfers/{$transfer->id}/receive");
+    $response = $this->post("/stock-transfers/{$transfer->id}/receive", receiptSignature());
     $response->assertDontSee('403');
 });

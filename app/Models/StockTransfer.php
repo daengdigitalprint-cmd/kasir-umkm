@@ -31,7 +31,13 @@ class StockTransfer extends Model
         'received_by',
         'cancelled_by',
         'cancellation_reason',
+        'receiver_name',
+        'receiver_signature',
+        'followup_of_id',
     ];
+
+    /** Tanda tangan berupa gambar base64; hanya dikirim ke halaman yang memang menampilkannya. */
+    protected $hidden = ['receiver_signature'];
 
     protected function casts(): array
     {
@@ -89,6 +95,18 @@ class StockTransfer extends Model
     public function lines(): HasMany
     {
         return $this->hasMany(StockTransferLine::class);
+    }
+
+    /** Transfer asal, bila ini kiriman susulan atas barang yang kurang. */
+    public function followupOf(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'followup_of_id');
+    }
+
+    /** Kiriman susulan yang dibuat dari penyelesaian selisih transfer ini. */
+    public function followups(): HasMany
+    {
+        return $this->hasMany(self::class, 'followup_of_id');
     }
 
     // ── Status helpers ──

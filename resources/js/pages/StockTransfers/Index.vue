@@ -19,6 +19,7 @@ interface TransferRow {
     notes: string | null;
     lines_count: number;
     discrepancy_lines_count?: number;
+    open_discrepancy_lines_count?: number;
     from_store: StoreTiny;
     to_store: StoreTiny;
     user: { id: number; name: string } | null;
@@ -32,9 +33,19 @@ const props = withDefaults(
         statusFilter?: string | null;
         directionFilter?: string | null;
         discrepancyFilter?: boolean;
+        needsResolutionFilter?: boolean;
+        needsResolutionCount?: number;
         incomingCount?: number;
     }>(),
-    { canCreateTransfer: true, statusFilter: null, directionFilter: null, discrepancyFilter: false, incomingCount: 0 },
+    {
+        canCreateTransfer: true,
+        statusFilter: null,
+        directionFilter: null,
+        discrepancyFilter: false,
+        needsResolutionFilter: false,
+        incomingCount: 0,
+        needsResolutionCount: 0,
+    },
 );
 
 const formatWhen = (iso: string) =>
@@ -60,8 +71,9 @@ function statusOf(t: TransferRow): { label: string; class: string } {
     );
 }
 
-type FilterKey = 'all' | 'incoming' | 'in' | 'out' | 'draft' | 'discrepancy';
+type FilterKey = 'all' | 'incoming' | 'in' | 'out' | 'draft' | 'discrepancy' | 'resolve';
 const activeFilter = computed<FilterKey>(() => {
+    if (props.needsResolutionFilter) return 'resolve';
     if (props.discrepancyFilter) return 'discrepancy';
     if (props.directionFilter === 'incoming') return 'incoming';
     if (props.directionFilter === 'in') return 'in';
@@ -75,6 +87,7 @@ function setFilter(key: FilterKey) {
     if (key === 'incoming' || key === 'in' || key === 'out') params.direction = key;
     if (key === 'draft') params.status = 'draft';
     if (key === 'discrepancy') params.discrepancy = '1';
+    if (key === 'resolve') params.needs_resolution = '1';
     router.get('/stock-transfers', params, { preserveState: true, preserveScroll: true, replace: true });
 }
 
@@ -85,6 +98,7 @@ const FILTERS = computed(() => [
     { key: 'out' as const, label: 'Keluar' },
     { key: 'draft' as const, label: 'Draft' },
     { key: 'discrepancy' as const, label: 'Ada selisih' },
+    { key: 'resolve' as const, label: 'Perlu diputuskan', count: props.needsResolutionCount },
 ]);
 </script>
 
@@ -122,6 +136,21 @@ const FILTERS = computed(() => [
                     <strong>{{ incomingCount }} kiriman menunggu diterima</strong> di {{ currentStore.name }}. Terima agar stoknya bertambah.
                 </span>
                 <ChevronRight class="h-4 w-4 text-amber-500" />
+            </button>
+
+            <!-- F8: selisih penerimaan yang menunggu keputusan toko ini sebagai pengirim -->
+            <button
+                v-if="needsResolutionCount > 0 && activeFilter !== 'resolve'"
+                type="button"
+                class="flex w-full items-center gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-left hover:bg-red-100/60"
+                @click="setFilter('resolve')"
+            >
+                <PackageCheck class="h-5 w-5 shrink-0 text-red-600" />
+                <span class="flex-1 text-sm text-red-900">
+                    <strong>{{ needsResolutionCount }} kiriman punya selisih yang belum diputuskan.</strong>
+                    Tentukan: dikembalikan ke stok, dicatat rugi, atau dikirim susulan.
+                </span>
+                <ChevronRight class="h-4 w-4 text-red-500" />
             </button>
 
             <section class="rounded-2xl border border-slate-200 bg-white">
@@ -187,7 +216,13 @@ const FILTERS = computed(() => [
                             <span class="flex shrink-0 flex-col items-end gap-1">
                                 <span class="rounded-full px-2 py-0.5 text-xs font-semibold" :class="statusOf(t).class">{{ statusOf(t).label }}</span>
                                 <span
-                                    v-if="t.discrepancy_lines_count"
+                                    v-if="t.open_discrepancy_lines_count"
+                                    class="rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-semibold text-white"
+                                >
+                                    {{ t.open_discrepancy_lines_count }} selisih belum diputuskan
+                                </span>
+                                <span
+                                    v-else-if="t.discrepancy_lines_count"
                                     class="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700"
                                 >
                                     {{ t.discrepancy_lines_count }} selisih

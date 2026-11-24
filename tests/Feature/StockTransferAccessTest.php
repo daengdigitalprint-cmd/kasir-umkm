@@ -130,7 +130,7 @@ it('menolak admin grup lain menerima transfer dan stok tujuan tidak bertambah', 
     [, $stranger] = accessStore(accessOrg('Grup Lain'), 'Toko Asing');
     [$transfer, , $target] = accessTransfer($gudang, $outlet, $gudangAdmin, StockTransfer::STATUS_SENT);
 
-    $this->actingAs($stranger)->post("/stock-transfers/{$transfer->id}/receive")->assertForbidden();
+    $this->actingAs($stranger)->post("/stock-transfers/{$transfer->id}/receive", receiptSignature())->assertForbidden();
 
     expect($transfer->fresh()->status)->toBe(StockTransfer::STATUS_SENT)
         ->and((float) $target->fresh()->stock_quantity)->toBe(0.0);
@@ -160,7 +160,7 @@ it('tetap mengizinkan admin toko tujuan menerima transfer', function () {
     [, $gudang, $gudangAdmin, $outlet, $outletAdmin] = accessGroup();
     [$transfer] = accessTransfer($gudang, $outlet, $gudangAdmin, StockTransfer::STATUS_SENT);
 
-    $this->actingAs($outletAdmin)->post("/stock-transfers/{$transfer->id}/receive")->assertRedirect();
+    $this->actingAs($outletAdmin)->post("/stock-transfers/{$transfer->id}/receive", receiptSignature())->assertRedirect();
 
     expect($transfer->fresh()->status)->toBe(StockTransfer::STATUS_RECEIVED);
 });

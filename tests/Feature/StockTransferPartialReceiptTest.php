@@ -91,7 +91,7 @@ function partialSetup(): array
 it('tanpa isian menerima penuh seperti sebelumnya', function () {
     ['transfer' => $transfer, 'line' => $line, 'target' => $target, 'outletAdmin' => $admin] = partialSetup();
 
-    $this->actingAs($admin)->post("/stock-transfers/{$transfer->id}/receive")->assertSessionHasNoErrors();
+    $this->actingAs($admin)->post("/stock-transfers/{$transfer->id}/receive", receiptSignature())->assertSessionHasNoErrors();
 
     expect($transfer->fresh()->status)->toBe(StockTransfer::STATUS_RECEIVED)
         ->and((float) $target->fresh()->stock_quantity)->toBe(10.0)
@@ -103,6 +103,7 @@ it('menerima 8 dari 10 dan mencatat selisih dengan alasan', function () {
     ['transfer' => $transfer, 'line' => $line, 'target' => $target, 'outletAdmin' => $admin] = partialSetup();
 
     $this->actingAs($admin)->post("/stock-transfers/{$transfer->id}/receive", [
+        ...receiptSignature(),
         'lines' => [['id' => $line->id, 'quantity_received' => 8, 'discrepancy_reason' => '2 penyok di jalan']],
     ])->assertSessionHasNoErrors()->assertSessionHas('success');
 
@@ -118,7 +119,9 @@ it('menerima 8 dari 10 dan mencatat selisih dengan alasan', function () {
         ->and((float) $line->quantity_received)->toBe(8.0)
         ->and($line->discrepancy_reason)->toBe('2 penyok di jalan')
         ->and((float) $movement->quantity_change)->toBe(8.0)
-        ->and($movement->notes)->toContain('selisih')
+        // F8: catatan mutasi menyebut jenis selisihnya (tanpa jenis = kurang).
+        ->and($line->discrepancy_type)->toBe('short')
+        ->and($movement->notes)->toContain('kurang')
         ->and($movement->notes)->toContain('2 penyok di jalan');
 });
 
@@ -126,6 +129,7 @@ it('isian sama dengan jumlah kirim dianggap sesuai tanpa alasan', function () {
     ['transfer' => $transfer, 'line' => $line, 'target' => $target, 'outletAdmin' => $admin] = partialSetup();
 
     $this->actingAs($admin)->post("/stock-transfers/{$transfer->id}/receive", [
+        ...receiptSignature(),
         'lines' => [['id' => $line->id, 'quantity_received' => 10]],
     ])->assertSessionHasNoErrors();
 
@@ -137,6 +141,7 @@ it('menerima 0 bila semua barang rusak, tanpa stok masuk', function () {
     ['transfer' => $transfer, 'line' => $line, 'target' => $target, 'outletAdmin' => $admin] = partialSetup();
 
     $this->actingAs($admin)->post("/stock-transfers/{$transfer->id}/receive", [
+        ...receiptSignature(),
         'lines' => [['id' => $line->id, 'quantity_received' => 0, 'discrepancy_reason' => 'Basi semua']],
     ])->assertSessionHasNoErrors();
 
@@ -149,6 +154,7 @@ it('menolak penerimaan yang tidak valid dan tidak mengubah stok', function (arra
     ['transfer' => $transfer, 'line' => $line, 'target' => $target, 'outletAdmin' => $admin] = partialSetup();
 
     $this->actingAs($admin)->post("/stock-transfers/{$transfer->id}/receive", [
+        ...receiptSignature(),
         'lines' => [array_merge(['id' => $line->id], $row)],
     ])->assertSessionHasErrors();
 
@@ -156,7 +162,6 @@ it('menolak penerimaan yang tidak valid dan tidak mengubah stok', function (arra
         ->and((float) $target->fresh()->stock_quantity)->toBe(0.0)
         ->and($line->fresh()->quantity_received)->toBeNull();
 })->with([
-    'lebih dari jumlah kirim' => [['quantity_received' => 11]],
     'kurang tanpa alasan' => [['quantity_received' => 8]],
     'negatif' => [['quantity_received' => -1]],
 ]);
@@ -165,6 +170,7 @@ it('menolak baris milik transfer lain', function () {
     ['transfer' => $transfer, 'target' => $target, 'outletAdmin' => $admin] = partialSetup();
 
     $this->actingAs($admin)->post("/stock-transfers/{$transfer->id}/receive", [
+        ...receiptSignature(),
         'lines' => [['id' => 999999, 'quantity_received' => 1, 'discrepancy_reason' => 'x']],
     ])->assertSessionHasErrors('lines');
 
@@ -174,8 +180,8 @@ it('menolak baris milik transfer lain', function () {
 it('tidak bisa diterima dua kali', function () {
     ['transfer' => $transfer, 'target' => $target, 'outletAdmin' => $admin] = partialSetup();
 
-    $this->actingAs($admin)->post("/stock-transfers/{$transfer->id}/receive");
-    $this->actingAs($admin)->post("/stock-transfers/{$transfer->id}/receive");
+    $this->actingAs($admin)->post("/stock-transfers/{$transfer->id}/receive", receiptSignature());
+    $this->actingAs($admin)->post("/stock-transfers/{$transfer->id}/receive", receiptSignature());
 
     expect((float) $target->fresh()->stock_quantity)->toBe(10.0);
 });
@@ -184,6 +190,7 @@ it('menyaring daftar transfer yang punya selisih', function () {
     ['transfer' => $transfer, 'line' => $line, 'outletAdmin' => $admin] = partialSetup();
 
     $this->actingAs($admin)->post("/stock-transfers/{$transfer->id}/receive", [
+        ...receiptSignature(),
         'lines' => [['id' => $line->id, 'quantity_received' => 7, 'discrepancy_reason' => 'Kurang dari gudang']],
     ]);
 
@@ -198,7 +205,7 @@ it('menyaring daftar transfer yang punya selisih', function () {
 it('daftar dengan filter selisih kosong bila semua diterima penuh', function () {
     ['transfer' => $transfer, 'outletAdmin' => $admin] = partialSetup();
 
-    $this->actingAs($admin)->post("/stock-transfers/{$transfer->id}/receive");
+    $this->actingAs($admin)->post("/stock-transfers/{$transfer->id}/receive", receiptSignature());
 
     $this->actingAs($admin)->get('/stock-transfers?discrepancy=1')->assertOk()->assertInertia(
         fn ($page) => $page->has('transfers.data', 0)

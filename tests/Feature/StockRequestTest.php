@@ -157,7 +157,7 @@ it('outlet menerima transfer, stok outlet +8 dan permintaan Selesai', function (
     ]);
 
     $transfer = $request->fresh()->transfer;
-    $this->actingAs($g['outletAdmin'])->post("/stock-transfers/{$transfer->id}/receive")->assertSessionHasNoErrors();
+    $this->actingAs($g['outletAdmin'])->post("/stock-transfers/{$transfer->id}/receive", receiptSignature())->assertSessionHasNoErrors();
 
     expect((float) $g['outletProduct']->fresh()->stock_quantity)->toBe(10.0)
         ->and($request->fresh()->status)->toBe(StockRequest::STATUS_COMPLETED)

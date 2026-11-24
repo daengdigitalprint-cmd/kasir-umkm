@@ -523,6 +523,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('stock-transfers/{stock_transfer}/send', [App\Http\Controllers\StockTransferController::class, 'send'])
         ->name('stock-transfers.send')
         ->middleware(['store.active', 'role.inventory']);
+    Route::post('stock-transfers/{stock_transfer}/resolve-discrepancies', [App\Http\Controllers\StockTransferController::class, 'resolveDiscrepancies'])
+        ->name('stock-transfers.resolve-discrepancies')
+        ->middleware(['store.active', 'role.inventory']);
     Route::post('stock-transfers/{stock_transfer}/receive', [App\Http\Controllers\StockTransferController::class, 'receive'])
         ->name('stock-transfers.receive')
         ->middleware(['store.active', 'role.inventory']);

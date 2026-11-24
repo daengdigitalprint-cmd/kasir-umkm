@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\ResolveTransferDiscrepancies;
 use App\Actions\StockRequestWorkflow;
 use App\Models\Product;
 use App\Models\StockTransfer;
@@ -39,13 +40,20 @@ class StockTransferController extends Controller
             })
             ->with(['fromStore:id,name', 'toStore:id,name', 'user:id,name'])
             ->withCount('lines')
-            // F5: jumlah barang yang diterima kurang dari yang dikirim.
-            ->withCount(['lines as discrepancy_lines_count' => fn ($q) => $q->whereNotNull('quantity_received')
-                ->whereColumn('quantity_received', '<', 'quantity')]);
+            // F5/F8: jumlah barang yang diterima kurang, rusak, atau lebih dari yang dikirim.
+            ->withCount(['lines as discrepancy_lines_count' => fn ($q) => $this->scopeDiscrepancyLines($q)])
+            // F8: selisih yang masih menunggu keputusan lokasi pengirim.
+            ->withCount(['lines as open_discrepancy_lines_count' => fn ($q) => $q->whereNotNull('discrepancy_type')->whereNull('resolution')]);
 
         if ($request->boolean('discrepancy')) {
-            $query->whereHas('lines', fn ($q) => $q->whereNotNull('quantity_received')
-                ->whereColumn('quantity_received', '<', 'quantity'));
+            $query->whereHas('lines', fn ($q) => $this->scopeDiscrepancyLines($q));
+        }
+
+        // F8: hanya transfer keluar dari toko ini yang selisihnya belum diselesaikan.
+        if ($request->boolean('needs_resolution')) {
+            $query->where('from_store_id', $store->id)
+                ->where('status', StockTransfer::STATUS_RECEIVED)
+                ->whereHas('lines', fn ($q) => $q->whereNotNull('discrepancy_type')->whereNull('resolution'));
         }
 
         if ($request->filled('status') && in_array($request->input('status'), ['draft', 'sent', 'received', 'cancelled'], true)) {
@@ -80,8 +88,23 @@ class StockTransferController extends Controller
             'statusFilter' => $request->input('status'),
             'directionFilter' => $direction,
             'discrepancyFilter' => $request->boolean('discrepancy'),
+            'needsResolutionFilter' => $request->boolean('needs_resolution'),
             'incomingCount' => $incomingCount,
+            'needsResolutionCount' => StockTransfer::query()
+                ->where('from_store_id', $store->id)
+                ->where('status', StockTransfer::STATUS_RECEIVED)
+                ->whereHas('lines', fn ($q) => $q->whereNotNull('discrepancy_type')->whereNull('resolution'))
+                ->count(),
         ]);
+    }
+
+    /** Baris yang diterima tidak sesuai jumlah kirim (termasuk selisih lama tanpa jenis). */
+    private function scopeDiscrepancyLines($query)
+    {
+        return $query->where(function ($q) {
+            $q->whereNotNull('discrepancy_type')
+                ->orWhere(fn ($short) => $short->whereNotNull('quantity_received')->whereColumn('quantity_received', '<', 'quantity'));
+        });
     }
 
     public function create(Request $request): Response|RedirectResponse
@@ -351,7 +374,12 @@ class StockTransferController extends Controller
             'cancelledBy:id,name',
             'lines.fromProduct:id,name,sku,unit,base_unit',
             'lines.toProduct:id,name,sku,unit,base_unit',
+            'lines.resolvedBy:id,name',
+            'followupOf:id,transfer_number',
+            'followups:id,transfer_number,status,followup_of_id',
         ]);
+        // Tanda tangan penerima hanya dikirim ke halaman detail.
+        $stockTransfer->makeVisible('receiver_signature');
 
         $canSend = $stockTransfer->isDraft() && $this->canOperateAt($user, (int) $stockTransfer->from_store_id);
         $canReceive = $stockTransfer->isSent() && $this->canOperateAt($user, (int) $stockTransfer->to_store_id);
@@ -364,6 +392,10 @@ class StockTransferController extends Controller
             'canSend' => $canSend,
             'canReceive' => $canReceive,
             'canCancel' => $canCancel,
+            // F8: selisih diputuskan oleh lokasi pengirim.
+            'canResolve' => $stockTransfer->isReceived()
+                && $stockTransfer->lines->contains(fn (StockTransferLine $line) => $line->needsResolution())
+                && $this->canOperateAt($user, (int) $stockTransfer->from_store_id),
         ]);
     }
 
@@ -392,6 +424,7 @@ class StockTransferController extends Controller
             'lines.fromProduct:id,name,sku,base_unit',
             'lines.toProduct:id,name,sku,base_unit',
         ]);
+        $stockTransfer->makeVisible('receiver_signature');
 
         $pdf = Pdf::loadView('pdf.delivery-note', [
             'transfer' => $stockTransfer,
@@ -399,7 +432,60 @@ class StockTransferController extends Controller
             'timezone' => $stockTransfer->fromStore?->timezone ?: config('app.timezone'),
         ])->setPaper('a4');
 
-        return $pdf->download('surat-jalan-'.$stockTransfer->transfer_number.'.pdf');
+        // Setelah diterima, dokumen yang sama menjadi Bukti Terima (memuat tanda tangan penerima).
+        $prefix = $stockTransfer->isReceived() ? 'bukti-terima-' : 'surat-jalan-';
+
+        return $pdf->download($prefix.$stockTransfer->transfer_number.'.pdf');
+    }
+
+    /**
+     * F8 — Lokasi pengirim memutuskan selisih penerimaan (kurang/rusak/lebih).
+     */
+    public function resolveDiscrepancies(Request $request, StockTransfer $stockTransfer, ResolveTransferDiscrepancies $resolver): RedirectResponse
+    {
+        $user = $request->user();
+
+        if (! $this->canAccessTransfer($user, $stockTransfer, 'from')
+            || ! $this->canOperateAt($user, (int) $stockTransfer->from_store_id)) {
+            abort(403, 'Hanya owner, admin, manajer, atau admin gudang lokasi pengirim yang dapat menyelesaikan selisih.');
+        }
+
+        $validated = $request->validate([
+            'lines' => ['required', 'array', 'min:1'],
+            'lines.*.id' => ['required', 'integer', 'distinct'],
+            'lines.*.resolution' => ['required', 'string', 'in:'.implode(',', array_keys(StockTransferLine::RESOLUTION_LABELS))],
+            'lines.*.note' => ['nullable', 'string', 'max:255'],
+            'lines.*.resend' => ['nullable', 'boolean'],
+        ], [
+            'lines.required' => 'Pilih penyelesaian untuk minimal satu barang.',
+            'lines.*.resolution.required' => 'Pilih penyelesaian untuk tiap barang yang dicentang.',
+        ]);
+
+        $decisions = [];
+        foreach ($validated['lines'] as $row) {
+            $decisions[(int) $row['id']] = [
+                'resolution' => $row['resolution'],
+                'note' => $row['note'] ?? null,
+                'resend' => (bool) ($row['resend'] ?? false),
+            ];
+        }
+
+        try {
+            $result = $resolver->handle($stockTransfer, $user, $decisions);
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->with('error', $e->getMessage());
+        }
+
+        $message = "Selisih {$result['resolved']} barang sudah diselesaikan.";
+        if ($result['followup']) {
+            $message .= " Draft kiriman susulan {$result['followup']->transfer_number} dibuat, kirim saat barangnya siap.";
+        }
+
+        return redirect()->route('stock-transfers.show', $stockTransfer)->with('success', $message);
     }
 
     /**
@@ -497,20 +583,34 @@ class StockTransferController extends Controller
         }
 
         // F5: jumlah diterima per baris (opsional). Tanpa isian = diterima penuh (perilaku lama).
+        // F8: nama + tanda tangan penerima wajib, sebagai bukti serah terima.
         $validated = $request->validate([
+            'receiver_name' => ['required', 'string', 'max:120'],
+            'receiver_signature' => ['required', 'string', 'max:400000', 'starts_with:data:image/png;base64,'],
             'lines' => ['sometimes', 'array'],
             'lines.*.id' => ['required', 'integer'],
             'lines.*.quantity_received' => ['required', 'numeric', 'min:0'],
+            'lines.*.discrepancy_type' => ['nullable', 'string', 'in:'.StockTransferLine::DISCREPANCY_SHORT.','.StockTransferLine::DISCREPANCY_DAMAGED],
             'lines.*.discrepancy_reason' => ['nullable', 'string', 'max:255'],
         ], [
+            'receiver_name.required' => 'Isi nama penerima barang.',
+            'receiver_signature.required' => 'Tanda tangan penerima wajib diisi.',
+            'receiver_signature.starts_with' => 'Tanda tangan tidak terbaca. Ulangi tanda tangan.',
+            'receiver_signature.max' => 'Tanda tangan terlalu besar. Hapus lalu ulangi tanda tangan.',
             'lines.*.quantity_received.min' => 'Jumlah diterima tidak boleh negatif.',
         ]);
+        $signature = $validated['receiver_signature'];
+        $signatureBytes = base64_decode(substr($signature, strlen('data:image/png;base64,')), true);
+        if ($signatureBytes === false || ! str_starts_with($signatureBytes, "\x89PNG")) {
+            throw ValidationException::withMessages(['receiver_signature' => 'Tanda tangan tidak terbaca. Ulangi tanda tangan.']);
+        }
+        $receiverName = trim($validated['receiver_name']);
         $receivedInput = collect($validated['lines'] ?? [])->keyBy(fn ($row) => (int) $row['id']);
 
         $discrepancyCount = 0;
 
         try {
-            DB::transaction(function () use ($user, $stockTransfer, $receivedInput, &$discrepancyCount) {
+            DB::transaction(function () use ($user, $stockTransfer, $receivedInput, $receiverName, $signature, &$discrepancyCount) {
                 // Kunci baris transfer sungguhan supaya tidak bisa diterima dua kali bersamaan.
                 $stockTransfer = StockTransfer::query()->whereKey($stockTransfer->id)->lockForUpdate()->firstOrFail();
                 $stockTransfer->assertCanTransitionTo(StockTransfer::STATUS_RECEIVED);
@@ -536,15 +636,12 @@ class StockTransferController extends Controller
 
                     $input = $receivedInput->get($line->id);
                     if ($input !== null) {
-                        $qty = ProductQuantity::normalizeStorageAmount($product, $input['quantity_received']);
-                        if (ProductQuantity::cmp($qty, $sentQty) > 0) {
-                            throw ValidationException::withMessages([
-                                'lines' => "Jumlah diterima «{$product->name}» melebihi jumlah yang dikirim.",
-                            ]);
-                        }
-
+                        // Jumlah yang benar-benar tiba dalam kondisi baik.
+                        $arrived = ProductQuantity::normalizeStorageAmount($product, $input['quantity_received']);
                         $reason = trim((string) ($input['discrepancy_reason'] ?? ''));
-                        $isShort = ProductQuantity::cmp($qty, $sentQty) < 0;
+                        $isShort = ProductQuantity::cmp($arrived, $sentQty) < 0;
+                        $isOver = ProductQuantity::cmp($arrived, $sentQty) > 0;
+
                         if ($isShort && $reason === '') {
                             throw ValidationException::withMessages([
                                 'lines' => "Tulis alasan selisih untuk «{$product->name}» (mis. rusak, tumpah, kurang dari gudang).",
@@ -555,20 +652,49 @@ class StockTransferController extends Controller
                                 'lines' => "«{$product->name}» memakai batch/ED, jadi harus diterima penuh. Catat kerusakan lewat Penyesuaian Stok.",
                             ]);
                         }
+                        if ($isOver && TransferStockOperations::hasBatchAllocations($toStore, $line)) {
+                            throw ValidationException::withMessages([
+                                'lines' => "«{$product->name}» memakai batch/ED, jadi jumlah diterima tidak boleh melebihi yang dikirim. Minta pengirim membuat transfer baru untuk kelebihannya.",
+                            ]);
+                        }
 
-                        $line->update([
-                            'quantity_received' => $qty,
-                            'discrepancy_reason' => $isShort ? mb_substr($reason, 0, 255) : null,
-                        ]);
-
-                        if ($isShort) {
+                        if ($isOver) {
+                            // Kelebihan belum masuk stok: menunggu pengirim mengakui atau menariknya kembali.
+                            $over = ProductQuantity::sub($arrived, $sentQty);
+                            $line->update([
+                                'quantity_received' => $sentQty,
+                                'discrepancy_type' => StockTransferLine::DISCREPANCY_OVER,
+                                'quantity_over' => $over,
+                                'discrepancy_reason' => $reason !== '' ? mb_substr($reason, 0, 255) : null,
+                            ]);
                             $discrepancyCount++;
-                            $short = ProductQuantity::sub($sentQty, $qty);
                             $notes = mb_substr(
-                                "{$stockTransfer->transfer_number} · diterima {$qty} dari {$sentQty}, selisih {$short}: {$reason}",
+                                "{$stockTransfer->transfer_number} · datang {$arrived} dari {$sentQty}, lebih {$over} menunggu konfirmasi pengirim",
                                 0,
                                 255,
                             );
+                        } else {
+                            $qty = $arrived;
+                            $type = $isShort
+                                ? (($input['discrepancy_type'] ?? null) ?: StockTransferLine::DISCREPANCY_SHORT)
+                                : null;
+                            $line->update([
+                                'quantity_received' => $qty,
+                                'discrepancy_type' => $type,
+                                'quantity_over' => null,
+                                'discrepancy_reason' => $isShort ? mb_substr($reason, 0, 255) : null,
+                            ]);
+
+                            if ($isShort) {
+                                $discrepancyCount++;
+                                $short = ProductQuantity::sub($sentQty, $qty);
+                                $label = mb_strtolower(StockTransferLine::DISCREPANCY_LABELS[$type]);
+                                $notes = mb_substr(
+                                    "{$stockTransfer->transfer_number} · diterima {$qty} dari {$sentQty}, {$label} {$short}: {$reason}",
+                                    0,
+                                    255,
+                                );
+                            }
                         }
                     }
 
@@ -600,6 +726,8 @@ class StockTransferController extends Controller
                     'status' => StockTransfer::STATUS_RECEIVED,
                     'received_at' => now(),
                     'received_by' => $user->id,
+                    'receiver_name' => mb_substr($receiverName, 0, 120),
+                    'receiver_signature' => $signature,
                 ]);
 
                 // F6: permintaan stok asal transfer ini menjadi Selesai.
@@ -615,7 +743,7 @@ class StockTransferController extends Controller
 
         return redirect()->route('stock-transfers.show', $stockTransfer)
             ->with('success', $discrepancyCount > 0
-                ? "Transfer diterima dengan selisih pada {$discrepancyCount} barang. Stok bertambah sesuai jumlah yang benar-benar tiba."
+                ? "Transfer diterima dengan selisih pada {$discrepancyCount} barang. Stok bertambah sesuai jumlah yang benar-benar tiba; selisihnya menunggu ditindaklanjuti lokasi pengirim."
                 : 'Transfer berhasil diterima. Stok outlet telah bertambah.');
     }
 

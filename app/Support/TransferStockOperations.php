@@ -28,7 +28,7 @@ final class TransferStockOperations
         }
     }
 
-    public static function deductAtSource(Store $store, User $user, Product $product, string $qty, StockTransferLine $line): void
+    public static function deductAtSource(Store $store, User $user, Product $product, string $qty, StockTransferLine $line, ?string $notes = null): void
     {
         if (! $product->track_stock) {
             throw new \InvalidArgumentException('Produk asal tidak men-track stok.');
@@ -74,10 +74,10 @@ final class TransferStockOperations
             $product->decrement('stock_quantity', $qty);
         }
 
-        StockMovement::create(['store_id' => $store->id, 'product_id' => $product->id, 'product_variant_id' => null, 'user_id' => $user->id, 'quantity_change' => bcsub('0.0000', $qty, ProductQuantity::SCALE), 'type' => StockMovement::TYPE_TRANSFER_OUT, 'reference_type' => StockTransferLine::class, 'reference_id' => $line->id, 'balance_after' => (string) $product->fresh()->stock_quantity, 'notes' => $line->transfer->transfer_number]);
+        StockMovement::create(['store_id' => $store->id, 'product_id' => $product->id, 'product_variant_id' => null, 'user_id' => $user->id, 'quantity_change' => bcsub('0.0000', $qty, ProductQuantity::SCALE), 'type' => StockMovement::TYPE_TRANSFER_OUT, 'reference_type' => StockTransferLine::class, 'reference_id' => $line->id, 'balance_after' => (string) $product->fresh()->stock_quantity, 'notes' => $notes ?? $line->transfer->transfer_number]);
     }
 
-    public static function restoreAtSource(Store $store, User $user, Product $product, string $qty, StockTransferLine $line): void
+    public static function restoreAtSource(Store $store, User $user, Product $product, string $qty, StockTransferLine $line, ?string $notes = null): void
     {
         if ((int) $product->store_id !== (int) $store->id) {
             throw new \InvalidArgumentException('Produk asal tidak termasuk toko pengirim.');
@@ -97,7 +97,7 @@ final class TransferStockOperations
             $product->increment('stock_quantity', $qty);
         }
 
-        StockMovement::create(['store_id' => $store->id, 'product_id' => $product->id, 'product_variant_id' => null, 'user_id' => $user->id, 'quantity_change' => $qty, 'type' => StockMovement::TYPE_TRANSFER_REVERSAL, 'reference_type' => StockTransferLine::class, 'reference_id' => $line->id, 'balance_after' => (string) $product->fresh()->stock_quantity, 'notes' => $line->transfer->transfer_number]);
+        StockMovement::create(['store_id' => $store->id, 'product_id' => $product->id, 'product_variant_id' => null, 'user_id' => $user->id, 'quantity_change' => $qty, 'type' => StockMovement::TYPE_TRANSFER_REVERSAL, 'reference_type' => StockTransferLine::class, 'reference_id' => $line->id, 'balance_after' => (string) $product->fresh()->stock_quantity, 'notes' => $notes ?? $line->transfer->transfer_number]);
     }
 
     /**
