@@ -1348,16 +1348,19 @@ const deliveryEnabled = computed(() => props.delivery?.enabled === true && activ
 const deliveryOn = ref(false);
 const deliveryForm = ref({ recipient_name: '', phone: '', address: '', fee: 0, courier_name: '', notes: '' });
 const deliveryFee = computed(() => (deliveryEnabled.value && deliveryOn.value ? Math.max(0, Number(deliveryForm.value.fee) || 0) : 0));
-function toggleDelivery(on: boolean) {
+/** Form antar sedang disembunyikan karena ojol dipilih — isiannya (termasuk ongkir) disimpan. */
+const deliveryParkedByOjol = ref(false);
+function toggleDelivery(on: boolean, keepFee = false) {
     deliveryOn.value = on;
     if (on) {
-        deliveryForm.value.fee = Number(props.delivery?.default_fee) || 0;
+        if (!keepFee) deliveryForm.value.fee = Number(props.delivery?.default_fee) || 0;
         if (!deliveryForm.value.recipient_name && customerName.value) deliveryForm.value.recipient_name = customerName.value;
         if (props.store?.fnb_enabled) orderType.value = 'delivery';
     }
 }
 function resetDelivery() {
     deliveryOn.value = false;
+    deliveryParkedByOjol.value = false;
     deliveryForm.value = { recipient_name: '', phone: '', address: '', fee: 0, courier_name: '', notes: '' };
 }
 /** Data antar untuk server (null bila tidak diantar). */
@@ -1424,9 +1427,24 @@ function orderChipClass(active: boolean): string {
 /** Form alamat mengikuti tipe "Antar" — kecuali pesanan ojol, yang diantar kurir aplikasinya. */
 function syncDeliveryWithOrder() {
     if (!orderTypeChoicesEnabled.value || !deliveryEnabled.value) return;
-    const want = orderType.value === 'delivery' && orderSource.value === 'direct';
-    if (want !== deliveryOn.value) toggleDelivery(want);
+    const isDelivery = orderType.value === 'delivery';
+    const want = isDelivery && orderSource.value === 'direct';
+    if (want && !deliveryOn.value) {
+        toggleDelivery(true, deliveryParkedByOjol.value);
+        deliveryParkedByOjol.value = false;
+    } else if (!want && deliveryOn.value) {
+        toggleDelivery(false);
+        // Antar + ojol: form hanya "diparkir", kembali utuh saat ojol dibatalkan.
+        deliveryParkedByOjol.value = isDelivery;
+    } else if (!isDelivery) {
+        deliveryParkedByOjol.value = false;
+    }
 }
+/** Nama ojol bila pesanan bertipe Antar tapi masuk lewat ojol; kosong bila tidak. */
+const ojolDeliveryNote = computed(() => {
+    if (!orderTypeChoicesEnabled.value || orderType.value !== 'delivery' || orderSource.value === 'direct') return '';
+    return orderSourceOptions.find((o) => o.value === orderSource.value)?.label ?? '';
+});
 function setOrderType(type: 'dine_in' | 'takeaway' | 'delivery') {
     orderType.value = type;
     syncDeliveryWithOrder();
@@ -2595,6 +2613,20 @@ const cartHasLimitedLine = computed(
     () => props.store?.pharmacy_enabled === true && cart.value.some((i) => i.product.pharmacy_sale_class === 'limited'),
 );
 
+/** Jumlah orang yang sudah dirapikan ke rentang 1–20. */
+const splitBillN = computed(() => Math.max(1, Math.min(20, Math.round(Number(splitBillCount.value) || 1))));
+/** Ringkasan satu baris, mis. "2 × 8.067 + 1 × 8.066" (pembulatan rupiah bisa membuat bagian tak sama). */
+const splitBillSummary = computed(() => {
+    const preview = splitBillPreview.value;
+    if (!preview) return '';
+    // Dikelompokkan menurut nominal yang tampil, supaya selisih di bawah satu rupiah tidak memecah baris.
+    const groups = new Map<string, number>();
+    for (const a of preview.shares) {
+        const shown = formatCurrency(a);
+        groups.set(shown, (groups.get(shown) ?? 0) + 1);
+    }
+    return [...groups.entries()].map(([shown, count]) => `${count} × ${shown}`).join(' + ');
+});
 const splitBillPreview = computed(() => {
     if (!props.store?.fnb_enabled) {
         return null;
@@ -5204,6 +5236,25 @@ const sendWhatsAppInvoice = () => {
                                                     @change="toggleDelivery(($event.target as HTMLInputElement).checked)"
                                                 />
                                             </label>
+                                            <!-- Antar + ojol: jelaskan kenapa form penerima tidak tampil dan cara mengembalikannya. -->
+                                            <div
+                                                v-if="ojolDeliveryNote"
+                                                class="flex items-start justify-between gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-xs text-orange-900"
+                                                data-testid="ojol-delivery-note"
+                                            >
+                                                <p>
+                                                    Diantar kurir <strong>{{ ojolDeliveryNote }}</strong> — penerima, alamat, dan ongkir tidak perlu
+                                                    diisi.
+                                                </p>
+                                                <button
+                                                    v-if="deliveryEnabled"
+                                                    type="button"
+                                                    class="shrink-0 font-semibold text-orange-900 underline"
+                                                    @click="toggleOrderSource(orderSource)"
+                                                >
+                                                    Pakai kurir toko
+                                                </button>
+                                            </div>
                                             <!-- F10: Pesanan Antar mandiri -->
                                             <div
                                                 v-if="deliveryEnabled && deliveryOn"
@@ -5243,32 +5294,44 @@ const sendWhatsAppInvoice = () => {
                                                 <Input v-model="deliveryForm.notes" class="h-9 text-sm" placeholder="Catatan untuk kurir (opsional)" aria-label="Catatan kurir" />
                                                 <p v-if="!deliveryForm.address.trim()" class="text-xs text-blue-900/80">Isi alamat sebelum membayar.</p>
                                             </div>
-                                            <div v-if="store.fnb_split_bill_enabled" class="space-y-2 border-t border-gray-200 pt-2.5">
-                                                <Label for="split_n" class="text-xs">Bagi tagihan (opsional)</Label>
-                                                <Input
-                                                    id="split_n"
-                                                    v-model.number="splitBillCount"
-                                                    type="number"
-                                                    min="1"
-                                                    max="20"
-                                                    step="1"
-                                                    class="h-9 max-w-[7rem] text-sm"
-                                                />
-                                                <p class="text-[11px] leading-snug text-emerald-900/85">
-                                                    <strong>1</strong> = tidak dibagi. <strong>2–20</strong> = total dibagi rata (rupiah); pembayaran
-                                                    di kasir tetap <strong>satu kali</strong> penuh — untuk patungan tamu di meja.
-                                                </p>
-                                                <div
-                                                    v-if="splitBillPreview"
-                                                    class="space-y-1 rounded-lg border border-emerald-100 bg-white/90 px-2.5 py-2 text-[11px]"
-                                                >
-                                                    <p class="font-bold text-emerald-950">Nominal per bagian</p>
-                                                    <ul class="space-y-0.5 text-emerald-900 tabular-nums">
-                                                        <li v-for="(a, i) in splitBillPreview.shares" :key="i">
-                                                            Bagian {{ i + 1 }}: {{ formatCurrency(a) }}
-                                                        </li>
-                                                    </ul>
+                                            <div v-if="store.fnb_split_bill_enabled" class="space-y-1 border-t border-gray-200 pt-2.5">
+                                                <div class="flex items-center justify-between gap-3">
+                                                    <Label for="split_n" class="text-xs font-medium whitespace-nowrap text-gray-500">Bagi tagihan</Label>
+                                                    <div class="flex items-center gap-1">
+                                                        <button
+                                                            type="button"
+                                                            class="h-8 w-8 rounded-lg border border-gray-300 bg-white text-base leading-none text-gray-700 disabled:opacity-40"
+                                                            aria-label="Kurangi jumlah orang"
+                                                            :disabled="splitBillN <= 1"
+                                                            @click="splitBillCount = splitBillN - 1"
+                                                        >
+                                                            −
+                                                        </button>
+                                                        <Input
+                                                            id="split_n"
+                                                            v-model.number="splitBillCount"
+                                                            type="number"
+                                                            inputmode="numeric"
+                                                            min="1"
+                                                            max="20"
+                                                            step="1"
+                                                            class="h-8 w-12 px-1 text-center text-sm"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            class="h-8 w-8 rounded-lg border border-gray-300 bg-white text-base leading-none text-gray-700 disabled:opacity-40"
+                                                            aria-label="Tambah jumlah orang"
+                                                            :disabled="splitBillN >= 20"
+                                                            @click="splitBillCount = splitBillN + 1"
+                                                        >
+                                                            +
+                                                        </button>
+                                                        <span class="ml-1 text-xs text-gray-500">orang</span>
+                                                    </div>
                                                 </div>
+                                                <p v-if="splitBillSummary" class="text-[11px] leading-snug text-emerald-900 tabular-nums" data-testid="split-bill-summary">
+                                                    Patungan <strong>{{ splitBillSummary }}</strong> · tetap dibayar sekali di kasir.
+                                                </p>
                                             </div>
                                         </div>
 
