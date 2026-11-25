@@ -1377,44 +1377,68 @@ const orderType = ref<'dine_in' | 'takeaway' | 'delivery'>('dine_in');
 const tableReference = ref('');
 /** Teknisi (barbershop) yang melayani transaksi ini. */
 const selectedBarberId = ref<number | null>(null);
-/** Sumber pesanan: dari mana order datang (walk_in, gofood, dll). */
-const salesChannel = ref<'walk_in' | 'dine_in' | 'takeaway' | 'delivery' | 'gofood' | 'grabfood' | 'shopeefood'>('walk_in');
-/** Komisi pesanan online (otomatis terisi saat pilih gofood/grabfood/shopeefood, bisa edit). */
+/** Lewat mana pesanan datang: langsung di toko, atau aplikasi ojol. */
+type OrderSource = 'direct' | 'gofood' | 'grabfood' | 'shopeefood';
+const orderSource = ref<OrderSource>('direct');
+/** Komisi pesanan online (otomatis terisi saat pilih gofood/grabfood/shopeefood). */
 const commissionPercent = ref(0);
-/** Daftar sumber pesanan untuk dropdown, dikelompokkan Penjualan Langsung / Pesanan Online.
- *  Pesanan Online (aggregator) hanya tampil jika modul online aktif di pengaturan toko.
- *  Take Away / Delivery mengikuti saklar "Tampilkan pilihan tipe pesanan" toko F&B. */
+/** Pilihan tipe pesanan mengikuti saklar "Tampilkan pilihan tipe pesanan" toko F&B. */
 const orderTypeChoicesEnabled = computed(() => props.store?.fnb_enabled === true && props.store?.fnb_order_types_enabled !== false);
-const channelOptions = computed(() => {
-    const onlineEnabled = props.store?.online_sales_enabled === true;
-    const langsung = [
-        { value: 'walk_in', label: 'Walk In' },
-        ...(orderTypeChoicesEnabled.value
-            ? [
-                  { value: 'takeaway', label: 'Take Away' },
-                  { value: 'delivery', label: 'Delivery' },
-              ]
-            : []),
-    ];
-    const online = [
-        { value: 'gofood', label: 'GoFood' },
-        { value: 'grabfood', label: 'GrabFood' },
-        { value: 'shopeefood', label: 'ShopeeFood' },
-    ];
-    return [{ group: 'Direct', items: langsung }, ...(onlineEnabled ? [{ group: 'Online', items: online }] : [])];
+/** Sumber pesanan untuk server & laporan — diturunkan, bukan dipilih terpisah:
+ *  ojol → nama aplikasinya; langsung → mengikuti tipe pesanan (walk_in / takeaway / delivery). */
+const salesChannel = computed<'walk_in' | 'takeaway' | 'delivery' | 'gofood' | 'grabfood' | 'shopeefood'>(() => {
+    if (orderSource.value !== 'direct') return orderSource.value;
+    if (!orderTypeChoicesEnabled.value || orderType.value === 'dine_in') return 'walk_in';
+    return orderType.value;
 });
+const orderTypeOptions: { value: 'dine_in' | 'takeaway' | 'delivery'; label: string }[] = [
+    { value: 'dine_in', label: 'Makan di tempat' },
+    { value: 'takeaway', label: 'Bungkus' },
+    { value: 'delivery', label: 'Antar' },
+];
+/** Hanya aplikasi ojol — tidak ada yang dipilih berarti pesanan langsung. */
+const orderSourceOptions: { value: OrderSource; label: string }[] = [
+    { value: 'gofood', label: 'GoFood' },
+    { value: 'grabfood', label: 'GrabFood' },
+    { value: 'shopeefood', label: 'ShopeeFood' },
+];
+/** Pilihan ojol hanya tampil jika modul penjualan online aktif di pengaturan toko. */
+const showOrderSourcePicker = computed(() => props.store?.online_sales_enabled === true);
+/** Meja hanya relevan untuk makan di tempat (atau toko F&B tanpa pilihan tipe pesanan). */
+const showTableField = computed(
+    () => props.store?.fnb_enabled === true && (!orderTypeChoicesEnabled.value || orderType.value === 'dine_in'),
+);
+const showOrderPanel = computed(() => props.store?.fnb_enabled === true || showOrderSourcePicker.value || deliveryEnabled.value);
 /** Komisi default per aggregator — diambil dari pengaturan toko, fallback ke nilai bawaan. */
-/** Blok Sumber Pesanan hanya berguna bila ada lebih dari satu pilihan (bukan hanya Walk In). */
-const showSalesChannelPicker = computed(() => channelOptions.value.reduce((n, g) => n + g.items.length, 0) > 1);
 const defaultCommissionByChannel = computed<Record<string, number>>(() => ({
     gofood: props.store?.online_commission_gofood ?? 20,
     grabfood: props.store?.online_commission_grabfood ?? 20,
     shopeefood: props.store?.online_commission_shopeefood ?? 15,
 }));
-/** Update komisi otomatis saat channel diganti. */
-function onSalesChannelChange() {
-    const ch = salesChannel.value;
-    commissionPercent.value = ch in defaultCommissionByChannel.value ? defaultCommissionByChannel.value[ch] : 0;
+function orderChipClass(active: boolean): string {
+    return (
+        'h-9 rounded-lg border px-2 text-xs font-medium whitespace-nowrap transition-colors ' +
+        (active ? 'border-primary bg-primary text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400 hover:bg-gray-50')
+    );
+}
+/** Form alamat mengikuti tipe "Antar" — kecuali pesanan ojol, yang diantar kurir aplikasinya. */
+function syncDeliveryWithOrder() {
+    if (!orderTypeChoicesEnabled.value || !deliveryEnabled.value) return;
+    const want = orderType.value === 'delivery' && orderSource.value === 'direct';
+    if (want !== deliveryOn.value) toggleDelivery(want);
+}
+function setOrderType(type: 'dine_in' | 'takeaway' | 'delivery') {
+    orderType.value = type;
+    syncDeliveryWithOrder();
+}
+/** Ketuk ojol yang sedang aktif = batal, kembali ke pesanan langsung. */
+function toggleOrderSource(picked: OrderSource) {
+    const source: OrderSource = orderSource.value === picked ? 'direct' : picked;
+    orderSource.value = source;
+    commissionPercent.value = source in defaultCommissionByChannel.value ? defaultCommissionByChannel.value[source] : 0;
+    // Pesanan ojol tidak makan di tempat → langsung "Bungkus" supaya kasir tidak perlu ketuk dua kali.
+    if (source !== 'direct' && orderTypeChoicesEnabled.value && orderType.value === 'dine_in') orderType.value = 'takeaway';
+    syncDeliveryWithOrder();
 }
 /** Bagi total ke N bagian (merata, rupiah) — F&B. 1 = tidak dibagi. */
 const splitBillCount = ref(1);
@@ -2375,7 +2399,7 @@ watch(
             tipAmount.value = 0;
             tableReference.value = '';
             orderType.value = 'dine_in';
-            salesChannel.value = 'walk_in';
+            orderSource.value = 'direct';
             commissionPercent.value = 0;
         }
     },
@@ -2720,7 +2744,7 @@ function resetCartState() {
     resetDelivery();
     tableReference.value = '';
     orderType.value = 'dine_in';
-    salesChannel.value = 'walk_in';
+    orderSource.value = 'direct';
     commissionPercent.value = 0;
     splitBillCount.value = 1;
     if (props.store?.fnb_enabled) {
@@ -3151,7 +3175,9 @@ const processPayment = async () => {
         return;
     }
     if (deliveryEnabled.value && deliveryOn.value && !deliveryForm.value.address.trim()) {
-        await modalError('Alamat antar kosong', 'Isi alamat pengantaran, atau matikan pilihan "Antar ke alamat".');
+        await modalError('Alamat antar kosong', orderTypeChoicesEnabled.value
+                ? 'Isi alamat pengantaran, atau ganti tipe pesanan selain "Antar".'
+                : 'Isi alamat pengantaran, atau matikan pilihan "Antar ke alamat".');
         return;
     }
     if (isCredit.value && !creditCustomerId.value) {
@@ -3226,7 +3252,7 @@ const processPayment = async () => {
     };
     if (props.store?.fnb_enabled) {
         paymentData.order_type = orderType.value;
-        paymentData.table_reference = tableReference.value.trim() || null;
+        paymentData.table_reference = showTableField.value ? tableReference.value.trim() || null : null;
         paymentData.service_charge_percent = serviceChargePercent.value;
         paymentData.tip_amount = tipAmount.value;
         const sb = Math.max(1, Math.min(20, Math.round(Number(splitBillCount.value) || 1)));
@@ -5116,10 +5142,61 @@ const sendWhatsAppInvoice = () => {
 
                                         <Separator />
 
-                                        <!-- F10: Pesanan Antar mandiri -->
-                                        <div v-if="deliveryEnabled" class="space-y-3 rounded-xl border border-blue-200 bg-blue-50/50 p-4" data-testid="delivery-panel">
-                                            <label class="flex items-center justify-between gap-3">
-                                                <span class="text-xs font-bold tracking-wide text-blue-900 uppercase">Antar ke alamat</span>
+                                        <!-- Pesanan: tipe, sumber, dan antar dalam satu blok ringkas -->
+                                        <div v-if="showOrderPanel" class="space-y-2.5" data-testid="order-panel">
+                                            <div v-if="orderTypeChoicesEnabled" class="space-y-1">
+                                                <p class="text-xs font-medium text-gray-500">Tipe pesanan</p>
+                                                <div class="flex gap-1.5">
+                                                    <button
+                                                        v-for="opt in orderTypeOptions"
+                                                        :key="opt.value"
+                                                        type="button"
+                                                        :aria-pressed="orderType === opt.value"
+                                                        :class="[orderChipClass(orderType === opt.value), 'flex-auto']"
+                                                        @click="setOrderType(opt.value)"
+                                                    >
+                                                        {{ opt.label }}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <Input
+                                                v-if="showTableField"
+                                                id="table_ref"
+                                                v-model="tableReference"
+                                                class="h-9 text-sm"
+                                                placeholder="Meja / nomor (opsional)"
+                                                aria-label="Meja atau nomor"
+                                            />
+                                            <div v-if="showOrderSourcePicker" class="space-y-1">
+                                                <p class="text-xs font-medium text-gray-500">Pesanan ojol <span class="font-normal text-gray-400">(opsional)</span></p>
+                                                <div class="grid grid-cols-3 gap-1.5">
+                                                    <button
+                                                        v-for="opt in orderSourceOptions"
+                                                        :key="opt.value"
+                                                        type="button"
+                                                        :aria-pressed="orderSource === opt.value"
+                                                        :class="orderChipClass(orderSource === opt.value)"
+                                                        @click="toggleOrderSource(opt.value)"
+                                                    >
+                                                        {{ opt.label }}
+                                                    </button>
+                                                </div>
+                                                <p
+                                                    v-if="salesChannel in defaultCommissionByChannel"
+                                                    class="rounded-md bg-orange-50 px-3 py-1.5 text-xs text-orange-800"
+                                                >
+                                                    Komisi {{ commissionPercent }}%
+                                                    <span class="text-orange-600"
+                                                        >≈ Rp {{ formatCurrency((totalAmount * (commissionPercent || 0)) / 100) }}</span
+                                                    >
+                                                </p>
+                                            </div>
+                                            <!-- Toko tanpa pilihan tipe pesanan: antar dinyalakan lewat centang. -->
+                                            <label
+                                                v-if="deliveryEnabled && !orderTypeChoicesEnabled"
+                                                class="flex items-center justify-between gap-3 rounded-lg border border-gray-200 px-3 py-2"
+                                            >
+                                                <span class="text-sm font-medium text-gray-700">Antar ke alamat</span>
                                                 <input
                                                     type="checkbox"
                                                     class="h-5 w-5 rounded"
@@ -5127,7 +5204,12 @@ const sendWhatsAppInvoice = () => {
                                                     @change="toggleDelivery(($event.target as HTMLInputElement).checked)"
                                                 />
                                             </label>
-                                            <template v-if="deliveryOn">
+                                            <!-- F10: Pesanan Antar mandiri -->
+                                            <div
+                                                v-if="deliveryEnabled && deliveryOn"
+                                                class="space-y-2 rounded-lg border border-blue-200 bg-blue-50/50 p-3"
+                                                data-testid="delivery-panel"
+                                            >
                                                 <div class="grid grid-cols-2 gap-2">
                                                     <Input v-model="deliveryForm.recipient_name" class="h-9 text-sm" placeholder="Nama penerima" aria-label="Nama penerima" />
                                                     <Input v-model="deliveryForm.phone" class="h-9 text-sm" inputmode="tel" placeholder="No. HP" aria-label="Nomor HP penerima" />
@@ -5160,52 +5242,8 @@ const sendWhatsAppInvoice = () => {
                                                 </div>
                                                 <Input v-model="deliveryForm.notes" class="h-9 text-sm" placeholder="Catatan untuk kurir (opsional)" aria-label="Catatan kurir" />
                                                 <p v-if="!deliveryForm.address.trim()" class="text-xs text-blue-900/80">Isi alamat sebelum membayar.</p>
-                                            </template>
-                                        </div>
-
-                                        <!-- F&B -->
-                                        <div
-                                            v-if="store && store.fnb_enabled"
-                                            class="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/50 p-4"
-                                        >
-                                            <p class="text-xs font-bold tracking-wide text-emerald-900 uppercase">F&amp;B</p>
-                                            <div v-if="store.fnb_order_types_enabled" class="space-y-2">
-                                                <Label class="text-xs text-gray-700">Tipe pesanan</Label>
-                                                <div class="flex flex-wrap gap-1.5">
-                                                    <Button
-                                                        type="button"
-                                                        size="sm"
-                                                        :variant="orderType === 'dine_in' ? 'default' : 'outline'"
-                                                        class="h-8 text-xs"
-                                                        @click="orderType = 'dine_in'"
-                                                    >
-                                                        Makan di tempat
-                                                    </Button>
-                                                    <Button
-                                                        type="button"
-                                                        size="sm"
-                                                        :variant="orderType === 'takeaway' ? 'default' : 'outline'"
-                                                        class="h-8 text-xs"
-                                                        @click="orderType = 'takeaway'"
-                                                    >
-                                                        Bungkus
-                                                    </Button>
-                                                    <Button
-                                                        type="button"
-                                                        size="sm"
-                                                        :variant="orderType === 'delivery' ? 'default' : 'outline'"
-                                                        class="h-8 text-xs"
-                                                        @click="orderType = 'delivery'"
-                                                    >
-                                                        Antar
-                                                    </Button>
-                                                </div>
                                             </div>
-                                            <div class="space-y-1">
-                                                <Label for="table_ref" class="text-xs">Meja / nomor (opsional)</Label>
-                                                <Input id="table_ref" v-model="tableReference" class="h-9 text-sm" placeholder="Contoh: A12" />
-                                            </div>
-                                            <div v-if="store.fnb_split_bill_enabled" class="mt-1 space-y-2 border-t border-emerald-200/60 pt-3">
+                                            <div v-if="store.fnb_split_bill_enabled" class="space-y-2 border-t border-gray-200 pt-2.5">
                                                 <Label for="split_n" class="text-xs">Bagi tagihan (opsional)</Label>
                                                 <Input
                                                     id="split_n"
@@ -5281,44 +5319,6 @@ const sendWhatsAppInvoice = () => {
                                                     <span>Sisa bayar</span>
                                                     <span class="text-primary tabular-nums">{{ formatCurrency(balanceDue) }}</span>
                                                 </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Sumber Pesanan -->
-                                        <div v-if="showSalesChannelPicker" class="space-y-2">
-                                            <Label class="text-sm font-medium text-gray-700">Sumber Pesanan</Label>
-                                            <div class="space-y-2">
-                                                <div v-for="grp in channelOptions" :key="grp.group" class="space-y-1.5">
-                                                    <p class="text-xs font-medium text-gray-500">{{ grp.group }}</p>
-                                                    <div class="flex flex-wrap gap-2">
-                                                        <button
-                                                            v-for="opt in grp.items"
-                                                            :key="opt.value"
-                                                            type="button"
-                                                            :class="[
-                                                                'rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors',
-                                                                salesChannel === opt.value
-                                                                    ? 'border-primary bg-primary text-white'
-                                                                    : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400 hover:bg-gray-50',
-                                                            ]"
-                                                            @click="
-                                                                salesChannel = opt.value;
-                                                                onSalesChannelChange();
-                                                            "
-                                                        >
-                                                            {{ opt.label }}
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div
-                                                v-if="salesChannel in defaultCommissionByChannel"
-                                                class="flex items-center gap-2 rounded-md bg-orange-50 px-3 py-2 text-xs text-orange-800"
-                                            >
-                                                <span>Komisi {{ commissionPercent }}%</span>
-                                                <span class="text-orange-600"
-                                                    >≈ Rp {{ formatCurrency((totalAmount * (commissionPercent || 0)) / 100) }}</span
-                                                >
                                             </div>
                                         </div>
 
