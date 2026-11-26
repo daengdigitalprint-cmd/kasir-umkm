@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { GEMINI_GRADIENT, askAiLinks } from './askAi';
 
 const props = defineProps<{
     assetsBase?: string;
@@ -45,22 +46,6 @@ const faqItems: { id: string; question: string; answer: string; active?: boolean
         question: 'Bagaimana pindah dari pencatatan manual atau aplikasi lama?',
         answer: 'Produk dan stok bisa diimpor sekaligus dari file Excel. Tim kami juga siap membantu memindahkan data awal dari spreadsheet atau aplikasi lama.',
     },
-];
-
-/**
- * Tombol "Tanya AI": tautan biasa yang membuka asisten AI pihak ketiga di tab baru dengan
- * pertanyaan yang sudah diisi. Tidak ada data pengunjung yang dikirim; jawabannya ditulis
- * layanan itu, bukan oleh kami. Alamat situs ditulis tetap (bukan dari URL halaman) supaya
- * AI membaca situs publik, juga saat halaman ini dibuka di lingkungan uji.
- */
-const ASK_AI_PROMPT =
-    'Saya pemilik usaha kecil dan sedang mencari aplikasi kasir. Tolong baca situs https://kasirumkm.web.id lalu jelaskan secara singkat: apa itu Kasir UMKM by MaccaPOS, fitur utamanya, harganya, dan cocok untuk usaha seperti apa.';
-const askAiQuery = encodeURIComponent(ASK_AI_PROMPT);
-const askAiLinks: { id: string; label: string; url: string }[] = [
-    { id: 'chatgpt', label: 'ChatGPT', url: `https://chatgpt.com/?q=${askAiQuery}` },
-    // udm=50 membuka Mode AI di Google Penelusuran.
-    { id: 'google', label: 'Google AI', url: `https://www.google.com/search?udm=50&q=${askAiQuery}` },
-    { id: 'perplexity', label: 'Perplexity', url: `https://www.perplexity.ai/search/new?q=${askAiQuery}` },
 ];
 
 /** Dimensi asli avatar (mencegah layout shift). */
@@ -146,22 +131,18 @@ const rightMarquee: { name: string; desig: string; avatar: string; avatarClass: 
                                         rel="noopener noreferrer nofollow"
                                         :aria-label="`Tanya ${ai.label} tentang Kasir UMKM (membuka tab baru)`"
                                     >
-                                        <svg
-                                            viewBox="0 0 24 24"
-                                            width="18"
-                                            height="18"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            stroke-width="2"
-                                            stroke-linecap="round"
-                                            stroke-linejoin="round"
-                                            aria-hidden="true"
-                                        >
-                                            <path
-                                                d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
-                                            />
-                                            <path d="M20 3v4" />
-                                            <path d="M22 5h-4" />
+                                        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                                            <defs v-if="ai.iconColor === null">
+                                                <linearGradient id="lp-ask-ai-gemini" x1="0" y1="24" x2="24" y2="0" gradientUnits="userSpaceOnUse">
+                                                    <stop
+                                                        v-for="(color, i) in GEMINI_GRADIENT"
+                                                        :key="color"
+                                                        :offset="i / (GEMINI_GRADIENT.length - 1)"
+                                                        :stop-color="color"
+                                                    />
+                                                </linearGradient>
+                                            </defs>
+                                            <path :d="ai.iconPath" :fill="ai.iconColor ?? 'url(#lp-ask-ai-gemini)'" />
                                         </svg>
                                         {{ ai.label }}
                                     </a>
@@ -288,8 +269,9 @@ const rightMarquee: { name: string; desig: string; avatar: string; avatarClass: 
 }
 .lp-ask-ai__link svg {
     flex-shrink: 0;
-    color: var(--color-primary, #6840ff);
-    transition: color 0.2s ease;
+}
+.lp-ask-ai__link svg path {
+    transition: fill 0.2s ease;
 }
 .lp-ask-ai__link:hover,
 .lp-ask-ai__link:focus-visible {
@@ -297,9 +279,10 @@ const rightMarquee: { name: string; desig: string; avatar: string; avatarClass: 
     border-color: var(--color-primary, #6840ff);
     color: #fff;
 }
-.lp-ask-ai__link:hover svg,
-.lp-ask-ai__link:focus-visible svg {
-    color: #fff;
+/* Di atas latar ungu, ikon merek dibuat putih supaya tetap terbaca. */
+.lp-ask-ai__link:hover svg path,
+.lp-ask-ai__link:focus-visible svg path {
+    fill: #fff;
 }
 .lp-ask-ai__link:focus-visible {
     outline: 2px solid var(--color-primary, #6840ff);

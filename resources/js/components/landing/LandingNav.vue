@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import { GEMINI_GRADIENT, GEMINI_ICON_PATH, askAiGoogleUrl } from './askAi';
 
 const props = defineProps<{
     maskotUrl?: string;
@@ -129,8 +130,27 @@ const waPanelOpen = ref(false);
     </header>
     <!-- header end -->
 
-    <!-- Widget WhatsApp (toggle) -->
+    <!-- Tombol mengambang: Tanya AI (di atas) dan widget WhatsApp (toggle) -->
     <div class="wa-landing-wrapper">
+        <!-- Satu klik langsung membuka Mode AI Google dengan pertanyaan tentang Kasir UMKM. Disembunyikan saat panel WhatsApp terbuka. -->
+        <a
+            v-show="!waPanelOpen"
+            :href="askAiGoogleUrl"
+            class="ai-landing-toggle"
+            target="_blank"
+            rel="noopener noreferrer nofollow"
+            aria-label="Tanya Google AI tentang Kasir UMKM (membuka tab baru)"
+        >
+            <span class="ai-landing-tip" aria-hidden="true">Tanya AI tentang Kasir UMKM</span>
+            <svg class="ai-landing-toggle-svg" viewBox="0 0 24 24" aria-hidden="true">
+                <defs>
+                    <linearGradient id="ai-landing-gemini" x1="0" y1="24" x2="24" y2="0" gradientUnits="userSpaceOnUse">
+                        <stop v-for="(color, i) in GEMINI_GRADIENT" :key="color" :offset="i / (GEMINI_GRADIENT.length - 1)" :stop-color="color" />
+                    </linearGradient>
+                </defs>
+                <path :d="GEMINI_ICON_PATH" fill="url(#ai-landing-gemini)" />
+            </svg>
+        </a>
         <Transition
             enter-active-class="transition duration-200 ease-out"
             enter-from-class="translate-y-2 scale-95 opacity-0"
@@ -263,6 +283,78 @@ const waPanelOpen = ref(false);
 .wa-landing-toggle-svg {
     height: 2rem;
     width: 2rem;
+}
+
+/* ===== Tombol Tanya AI (di atas tombol WhatsApp) ===== */
+.ai-landing-toggle {
+    pointer-events: auto;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 3rem;
+    height: 3rem;
+    /* Lebih kecil dari tombol WhatsApp (3.5rem): geser supaya sumbu tengahnya sama. */
+    margin-right: 0.25rem;
+    border-radius: 9999px;
+    border: 1px solid #dfd8ff;
+    background: #ffffff;
+    color: #6840ff;
+    text-decoration: none;
+    box-shadow: 0 10px 25px -5px rgba(104, 64, 255, 0.35);
+    transition:
+        transform 0.15s ease,
+        background-color 0.15s ease,
+        color 0.15s ease;
+}
+.ai-landing-toggle:hover,
+.ai-landing-toggle:focus-visible {
+    background: #6840ff;
+    color: #ffffff;
+    transform: translateY(-2px);
+}
+.ai-landing-toggle:focus-visible {
+    outline: 2px solid #6840ff;
+    outline-offset: 3px;
+}
+.ai-landing-toggle-svg {
+    height: 1.625rem;
+    width: 1.625rem;
+}
+.ai-landing-toggle-svg path {
+    transition: fill 0.15s ease;
+}
+/* Di atas latar ungu, ikon dibuat putih supaya tetap terbaca. */
+.ai-landing-toggle:hover .ai-landing-toggle-svg path,
+.ai-landing-toggle:focus-visible .ai-landing-toggle-svg path {
+    fill: #ffffff;
+}
+.ai-landing-tip {
+    position: absolute;
+    top: 50%;
+    right: calc(100% + 0.6rem);
+    transform: translateY(-50%);
+    padding: 0.4rem 0.65rem;
+    border-radius: 0.5rem;
+    background: #140f26;
+    color: #ffffff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+}
+.ai-landing-toggle:hover .ai-landing-tip,
+.ai-landing-toggle:focus-visible .ai-landing-tip {
+    opacity: 1;
+}
+/* Layar sentuh tidak punya hover: keterangan disembunyikan, label untuk pembaca layar tetap ada. */
+@media (hover: none) {
+    .ai-landing-tip {
+        display: none;
+    }
 }
 .sr-only {
     position: absolute;
