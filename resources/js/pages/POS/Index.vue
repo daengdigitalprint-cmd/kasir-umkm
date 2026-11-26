@@ -1003,14 +1003,14 @@ const splitPaymentError = computed<string | null>(() => {
     return null;
 });
 
-/** Metode di popup bayar versi tablet/desktop (HP memakai kisi 2×2 di template). */
+/** Metode di popup bayar: HP kisi 2×2, tablet/desktop satu baris. */
 const checkoutPayMethods = [
     { value: 'cash', label: 'Tunai', icon: Banknote },
     { value: 'ewallet', label: 'E-Wallet', icon: Wallet },
     { value: 'other', label: 'Lainnya', icon: Coins },
     { value: 'split', label: 'Bagi Pembayaran', icon: Split },
 ] as const;
-/** Sama persis dengan tombol versi HP: tunai langsung lanjut ke input uang, bagi membuka rincian. */
+/** Tunai langsung lanjut ke input uang; bagi membuka rincian metode non-tunai. */
 function pickCheckoutPayMethod(value: (typeof checkoutPayMethods)[number]['value']) {
     if (value === 'split') return startSplitPayment();
     paymentMethod.value = value;
@@ -4802,7 +4802,7 @@ const sendWhatsAppInvoice = () => {
                                     }
                                 "
                             >
-                                <DialogContent class="pos-checkout-dialog flex max-h-[90vh] flex-col gap-0 p-0 sm:max-w-2xl">
+                                <DialogContent class="pos-checkout-dialog flex max-h-[96dvh] max-w-[calc(100%-1rem)] flex-col gap-0 p-0 sm:max-h-[90vh] sm:max-w-2xl">
                                     <!-- Tombol X ditangani oleh DialogContent bawaan -->
                                     <DialogTitle class="sr-only">Pembayaran</DialogTitle>
                                     <DialogDescription class="sr-only">
@@ -4810,17 +4810,28 @@ const sendWhatsAppInvoice = () => {
                                     </DialogDescription>
 
                                     <!-- ═══ Step 2: Pilih metode pembayaran ═══ -->
-                                    <div v-if="paymentStep === 'method'" class="flex-1 space-y-4 overflow-y-auto px-5 pt-12 pb-4">
+                                    <div
+                                        v-if="paymentStep === 'method'"
+                                        class="flex-1 space-y-3 overflow-y-auto px-4 pt-3 pb-3 sm:space-y-4 sm:px-5 sm:pt-12 sm:pb-4"
+                                    >
+                                        <!-- HP: judul mengisi baris tombol tutup, menggantikan ruang kosong di atas. -->
+                                        <div class="flex h-8 items-baseline gap-2 pr-10 sm:hidden" aria-hidden="true">
+                                            <p class="text-base leading-8 font-bold text-gray-900">Pembayaran</p>
+                                            <span class="text-xs text-gray-500">{{ cart.length }} item</span>
+                                        </div>
                                         <!-- Kartu stempel (modul opsional) -->
                                         <StampCardPicker v-if="stampCardEnabled && !isCredit" v-model="stampCustomer" :store-name="store?.name ?? ''" />
 
                                         <!-- Nama Pelanggan -->
-                                        <div class="space-y-3">
-                                            <Label for="customer" class="text-sm font-medium text-gray-700">Nama Pelanggan (Opsional)</Label>
+                                        <div class="sm:space-y-3">
+                                            <Label for="customer" class="hidden text-sm font-medium text-gray-700 sm:block"
+                                                >Nama Pelanggan (Opsional)</Label
+                                            >
                                             <Input
                                                 id="customer"
                                                 v-model="customerName"
-                                                placeholder="Masukkan nama pelanggan"
+                                                aria-label="Nama pelanggan (opsional)"
+                                                placeholder="Nama pelanggan (opsional)"
                                                 class="h-10 border-gray-300 focus:border-primary/70 focus:ring-primary/70"
                                             />
                                         </div>
@@ -4829,7 +4840,7 @@ const sendWhatsAppInvoice = () => {
                                         <div v-if="receivablesEnabled" class="overflow-hidden rounded-xl border border-gray-200">
                                             <button
                                                 type="button"
-                                                class="flex w-full items-center justify-between px-3 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                                                class="flex w-full items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 sm:py-2.5"
                                                 @click="isCredit = !isCredit"
                                             >
                                                 <span class="flex items-center gap-2">
@@ -5023,7 +5034,7 @@ const sendWhatsAppInvoice = () => {
                                         <div class="overflow-hidden rounded-xl border border-gray-200">
                                             <button
                                                 type="button"
-                                                class="flex w-full items-center justify-between px-3 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                                                class="flex w-full items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 sm:py-2.5"
                                                 @click="showWhatsAppField = !showWhatsAppField"
                                             >
                                                 <span>No. WhatsApp <span class="font-normal text-gray-400">(Opsional)</span></span>
@@ -5352,7 +5363,7 @@ const sendWhatsAppInvoice = () => {
                                         </div>
 
                                         <!-- Ringkasan Harga -->
-                                        <div class="space-y-3">
+                                        <div class="space-y-1.5 sm:space-y-3">
                                             <div class="flex justify-between text-sm">
                                                 <span class="text-gray-600">Subtotal:</span>
                                                 <span class="font-medium">{{ formatCurrency(subtotal) }}</span>
@@ -5423,82 +5434,41 @@ const sendWhatsAppInvoice = () => {
                                         </div>
 
                                         <!-- Metode Pembayaran -->
-                                        <div v-if="!isCredit" class="space-y-3">
-                                            <Label class="text-sm font-medium text-gray-700">Metode Pembayaran</Label>
-                                            <!-- Tablet/desktop: satu baris, ikon hitam dalam kotak abu supaya selaras dengan tombol lain. -->
-                                            <div class="hidden grid-cols-4 gap-2 sm:grid" data-testid="payment-methods-wide">
-                                                <button
-                                                    v-for="m in checkoutPayMethods"
-                                                    :key="m.value"
-                                                    type="button"
-                                                    :aria-pressed="paymentMethod === m.value"
-                                                    :class="[
-                                                        'flex h-14 items-center gap-2.5 rounded-xl border px-2.5 text-left transition-colors',
-                                                        paymentMethod === m.value
-                                                            ? 'border-primary bg-primary/10 ring-1 ring-primary'
-                                                            : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50',
-                                                    ]"
-                                                    @click="pickCheckoutPayMethod(m.value)"
-                                                >
-                                                    <span
+                                        <div v-if="!isCredit" class="space-y-2 sm:space-y-3">
+                                                <Label class="text-sm font-medium text-gray-700">Metode Pembayaran</Label>
+                                                <!-- HP: kisi 2×2; tablet/desktop: satu baris. Ikon hitam dalam kotak abu di semua ukuran. -->
+                                                <div class="grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2" data-testid="payment-methods">
+                                                    <button
+                                                        v-for="m in checkoutPayMethods"
+                                                        :key="m.value"
+                                                        type="button"
+                                                        :aria-pressed="paymentMethod === m.value"
                                                         :class="[
-                                                            'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
-                                                            paymentMethod === m.value ? 'bg-primary text-white' : 'bg-gray-100 text-gray-900',
+                                                            'flex h-11 items-center gap-2 rounded-xl border px-2 text-left transition-colors sm:h-14 sm:gap-2.5 sm:px-2.5',
+                                                            paymentMethod === m.value
+                                                                ? 'border-primary bg-primary/10 ring-1 ring-primary'
+                                                                : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50',
                                                         ]"
+                                                        @click="pickCheckoutPayMethod(m.value)"
                                                     >
-                                                        <component :is="m.icon" class="h-5 w-5" />
-                                                    </span>
-                                                    <span
-                                                        :class="[
-                                                            'min-w-0 text-sm leading-tight font-semibold',
-                                                            paymentMethod === m.value ? 'text-primary' : 'text-gray-800',
-                                                        ]"
-                                                    >
-                                                        {{ m.label }}
-                                                    </span>
-                                                </button>
-                                            </div>
-                                            <div class="grid grid-cols-2 gap-2 sm:hidden">
-                                                <Button
-                                                    :variant="paymentMethod === 'cash' ? 'default' : 'outline'"
-                                                    size="sm"
-                                                    @click="
-                                                        paymentMethod = 'cash';
-                                                        confirmPaymentMethod();
-                                                    "
-                                                    class="h-10"
-                                                >
-                                                    <Banknote class="mr-2 h-4 w-4" />
-                                                    Tunai
-                                                </Button>
-                                                <Button
-                                                    :variant="paymentMethod === 'ewallet' ? 'default' : 'outline'"
-                                                    size="sm"
-                                                    @click="paymentMethod = 'ewallet'"
-                                                    class="h-10"
-                                                >
-                                                    <Smartphone class="mr-2 h-4 w-4" />
-                                                    E-Wallet
-                                                </Button>
-                                                <Button
-                                                    :variant="paymentMethod === 'other' ? 'default' : 'outline'"
-                                                    size="sm"
-                                                    class="h-10"
-                                                    @click="paymentMethod = 'other'"
-                                                >
-                                                    <CircleDollarSign class="mr-2 h-4 w-4" />
-                                                    Lainnya
-                                                </Button>
-                                                <Button
-                                                    :variant="paymentMethod === 'split' ? 'default' : 'outline'"
-                                                    size="sm"
-                                                    class="h-10"
-                                                    @click="startSplitPayment()"
-                                                >
-                                                    <Plus class="mr-2 h-4 w-4" />
-                                                    Bagi Pembayaran
-                                                </Button>
-                                            </div>
+                                                        <span
+                                                            :class="[
+                                                                'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg sm:h-9 sm:w-9',
+                                                                paymentMethod === m.value ? 'bg-primary text-white' : 'bg-gray-100 text-gray-900',
+                                                            ]"
+                                                        >
+                                                            <component :is="m.icon" class="h-[18px] w-[18px] sm:h-5 sm:w-5" />
+                                                        </span>
+                                                        <span
+                                                            :class="[
+                                                                'min-w-0 text-[13px] leading-tight font-semibold sm:text-sm',
+                                                                paymentMethod === m.value ? 'text-primary' : 'text-gray-800',
+                                                            ]"
+                                                        >
+                                                            {{ m.label }}
+                                                        </span>
+                                                    </button>
+                                                </div>
 
                                             <!-- Rincian split tender -->
                                             <div v-if="isSplitPayment" class="space-y-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
