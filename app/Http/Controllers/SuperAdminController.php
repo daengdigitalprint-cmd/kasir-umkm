@@ -15,6 +15,7 @@ use App\Services\AttendancePayrollAddOnService;
 use App\Services\CentralKitchenAddOnService;
 use App\Services\OutletAddOnService;
 use App\Services\TrialService;
+use App\Support\StoreSubscriptionCategory;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -22,10 +23,20 @@ use Inertia\Inertia;
 
 class SuperAdminController extends Controller
 {
-    public function dashboard()
+    public function dashboard(Request $request)
     {
         $totalStores = Store::count();
         $activeStores = Store::where('is_active', true)->count();
+
+        // Kategori langganan (saling lepas, jumlahnya = total toko); aturan di StoreSubscriptionCategory.
+        $categoryCounts = StoreSubscriptionCategory::counts();
+        $freeLapsedStores = StoreSubscriptionCategory::applyFreeLapsed(Store::query())->count();
+
+        // Saringan daftar toko dari kartu ringkasan: premium | trial | free | aktif.
+        $storeFilter = $request->query('filter');
+        if (! is_string($storeFilter) || ! in_array($storeFilter, [...StoreSubscriptionCategory::ALL, 'aktif'], true)) {
+            $storeFilter = null;
+        }
 
         $timeBoundSubscribedStores = Store::where('is_subscription_active', true)
             ->whereNotNull('subscription_end')
@@ -55,8 +66,14 @@ class SuperAdminController extends Controller
                 ->orderBy('store_user.created_at')
                 ->orderBy('users.id'),
         ])
+            ->when($storeFilter === 'aktif', fn ($q) => $q->where('is_active', true))
+            ->when(
+                in_array($storeFilter, StoreSubscriptionCategory::ALL, true),
+                fn ($q) => StoreSubscriptionCategory::apply($q, $storeFilter),
+            )
             ->orderBy('created_at', 'desc')
             ->paginate(10)
+            ->withQueryString()
             ->through(fn (Store $s) => array_merge($s->toArray(), [
                 'pro_trial_used' => $s->pro_trial_used,
                 'pro_trial_active' => $s->pro_trial_active,
@@ -84,12 +101,17 @@ class SuperAdminController extends Controller
             'stats' => [
                 'total_stores' => $totalStores,
                 'active_stores' => $activeStores,
+                'premium_stores' => $categoryCounts[StoreSubscriptionCategory::PREMIUM],
+                'trial_stores' => $categoryCounts[StoreSubscriptionCategory::TRIAL],
+                'free_stores' => $categoryCounts[StoreSubscriptionCategory::FREE],
+                'free_lapsed_stores' => $freeLapsedStores,
                 'expired_stores' => $expiredStores,
                 'expiring_soon' => $expiringSoon,
                 'pending_payments' => $pendingPayments,
                 'total_revenue' => $totalRevenue,
             ],
             'stores' => $stores,
+            'storeFilter' => $storeFilter,
             'vouchers' => $vouchers,
             'plans' => $plans,
             'recentPayments' => $recentPayments,

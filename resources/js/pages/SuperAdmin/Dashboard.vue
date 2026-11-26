@@ -7,8 +7,38 @@
                 <p class="text-sm text-slate-500">Pantau status langganan seluruh toko dan kelola masa aktifnya.</p>
             </header>
 
+            <!-- Toko per kategori langganan (klik kartu untuk menyaring daftar toko) -->
+            <div>
+                <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                    <Link
+                        v-for="card in categoryCards"
+                        :key="card.filter"
+                        :href="storeFilter === card.filter ? '/superadmin' : `/superadmin?filter=${card.filter}`"
+                        preserve-scroll
+                        @success="scrollToStoreList"
+                        :aria-current="storeFilter === card.filter ? 'true' : undefined"
+                        :aria-label="`${card.label}: ${formatCurrency(card.count)} toko. Klik untuk melihat daftarnya.`"
+                        :class="[
+                            'rounded-xl border bg-white p-4 transition hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
+                            storeFilter === card.filter ? 'border-slate-900 ring-1 ring-slate-900' : 'border-slate-200 hover:border-slate-300',
+                        ]"
+                    >
+                        <div class="flex items-center justify-between gap-2">
+                            <p class="text-xs font-medium text-slate-500">{{ card.label }}</p>
+                            <component :is="card.icon" :class="['h-4 w-4 shrink-0', card.iconClass]" />
+                        </div>
+                        <p class="mt-2 text-2xl font-bold text-slate-900 tabular-nums">{{ formatCurrency(card.count) }}</p>
+                        <p class="mt-0.5 text-xs text-slate-400">{{ card.note }}</p>
+                    </Link>
+                </div>
+                <p class="mt-2 text-xs text-slate-500">
+                    Premium + Trial Premium + Free = {{ formatCurrency(safeStats.total_stores) }} toko terdaftar. Klik kartu untuk melihat daftar
+                    tokonya.
+                </p>
+            </div>
+
             <!-- KPI -->
-            <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
                 <div class="rounded-xl border border-slate-200 bg-white p-4">
                     <div class="flex items-center justify-between">
                         <p class="text-xs font-medium text-slate-500">Total toko</p>
@@ -16,14 +46,6 @@
                     </div>
                     <p class="mt-2 text-2xl font-bold text-slate-900 tabular-nums">{{ formatCurrency(safeStats.total_stores) }}</p>
                     <p class="mt-0.5 text-xs text-slate-400">terdaftar</p>
-                </div>
-                <div class="rounded-xl border border-slate-200 bg-white p-4">
-                    <div class="flex items-center justify-between">
-                        <p class="text-xs font-medium text-slate-500">Toko aktif</p>
-                        <CheckCircle class="h-4 w-4 text-emerald-500" />
-                    </div>
-                    <p class="mt-2 text-2xl font-bold text-slate-900 tabular-nums">{{ formatCurrency(safeStats.active_stores) }}</p>
-                    <p class="mt-0.5 text-xs text-slate-400">{{ activeRatio }}% dari total</p>
                 </div>
                 <div :class="['rounded-xl border bg-white p-4', safeStats.expired_stores > 0 ? 'border-red-200' : 'border-slate-200']">
                     <div class="flex items-center justify-between">
@@ -55,7 +77,7 @@
                     <p class="mt-2 text-2xl font-bold text-slate-900 tabular-nums">{{ formatCurrency(safeStats.pending_payments) }}</p>
                     <p class="mt-0.5 text-xs font-medium text-primary">Lihat pembayaran →</p>
                 </Link>
-                <div class="rounded-xl border border-slate-200 bg-white p-4">
+                <div class="col-span-2 rounded-xl border border-slate-200 bg-white p-4 sm:col-span-1">
                     <div class="flex items-center justify-between">
                         <p class="text-xs font-medium text-slate-500">Total pendapatan</p>
                         <DollarSign class="h-4 w-4 text-emerald-500" />
@@ -68,7 +90,7 @@
             </div>
 
             <!-- Daftar toko -->
-            <div class="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div id="daftar-toko" class="scroll-mt-20 overflow-hidden rounded-xl border border-slate-200 bg-white lg:scroll-mt-6">
                 <div class="flex flex-col gap-1 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h2 class="text-base font-semibold text-slate-900">Daftar toko</h2>
@@ -77,9 +99,19 @@
                     <p v-if="storesRange" class="text-xs text-slate-500">{{ storesRange }}</p>
                 </div>
 
+                <div v-if="activeFilterCard" class="flex flex-wrap items-center gap-2 border-b border-slate-100 bg-slate-50 px-5 py-2.5">
+                    <span class="text-xs text-slate-500">Disaring:</span>
+                    <span class="inline-flex items-center rounded-full bg-slate-900 px-2.5 py-0.5 text-xs font-semibold text-white">
+                        {{ activeFilterCard.label }}
+                    </span>
+                    <Link href="/superadmin" preserve-scroll class="text-xs font-medium text-primary hover:underline">Tampilkan semua toko</Link>
+                </div>
+
                 <div v-if="safeStores.data.length === 0" class="px-5 py-16 text-center">
                     <Building2 class="mx-auto h-8 w-8 text-slate-300" />
-                    <p class="mt-3 text-sm text-slate-500">Belum ada toko terdaftar.</p>
+                    <p class="mt-3 text-sm text-slate-500">
+                        {{ activeFilterCard ? `Tidak ada toko di kategori ${activeFilterCard.label}.` : 'Belum ada toko terdaftar.' }}
+                    </p>
                 </div>
 
                 <!-- Tabel (desktop) -->
@@ -1283,6 +1315,7 @@ import {
     Edit,
     ExternalLink,
     FlaskConical,
+    Gift,
     History,
     Landmark,
     Minus,
@@ -1297,7 +1330,7 @@ import {
     XCircle,
     MessageCircle,
 } from 'lucide-vue-next';
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 
 interface Store {
     id: number;
@@ -1369,16 +1402,24 @@ interface TransferSettings {
     qris_url: string | null;
 }
 
+/** Saringan daftar toko dari kartu ringkasan (query ?filter=). */
+type StoreFilter = 'premium' | 'trial' | 'free' | 'aktif';
+
 interface Props {
     stats: {
         total_stores: number;
         active_stores: number;
+        premium_stores: number;
+        trial_stores: number;
+        free_stores: number;
+        free_lapsed_stores: number;
         expired_stores: number;
         expiring_soon: number;
         pending_payments: number;
         total_revenue: number;
     };
     stores: { data: Store[]; links: any[]; from?: number | null; to?: number | null; total?: number };
+    storeFilter?: StoreFilter | null;
     vouchers: Voucher[];
     plans: Plan[];
     recentPayments: Payment[];
@@ -1400,7 +1441,19 @@ const activeTab = computed(() => {
 
 // Safe computed props
 const safeStats = computed(
-    () => props.stats || { total_stores: 0, active_stores: 0, expired_stores: 0, expiring_soon: 0, pending_payments: 0, total_revenue: 0 },
+    () =>
+        props.stats || {
+            total_stores: 0,
+            active_stores: 0,
+            premium_stores: 0,
+            trial_stores: 0,
+            free_stores: 0,
+            free_lapsed_stores: 0,
+            expired_stores: 0,
+            expiring_soon: 0,
+            pending_payments: 0,
+            total_revenue: 0,
+        },
 );
 const safeStores = computed(() => props.stores || { data: [], links: [] });
 
@@ -1436,6 +1489,48 @@ const activeRatio = computed(() => {
     const total = safeStats.value.total_stores;
     return total > 0 ? Math.round((safeStats.value.active_stores / total) * 100) : 0;
 });
+
+// Kartu kategori langganan + toko aktif. Aturan pengelompokan ada di App\Support\StoreSubscriptionCategory.
+const storeFilter = computed<StoreFilter | null>(() => props.storeFilter ?? null);
+const categoryCards = computed(() => {
+    const s = safeStats.value;
+    const lapsed = Number(s.free_lapsed_stores) || 0;
+    return [
+        { filter: 'premium' as const, label: 'Premium', count: s.premium_stores, note: 'paket berbayar aktif', icon: Crown, iconClass: 'text-amber-500' },
+        {
+            filter: 'trial' as const,
+            label: 'Trial Premium',
+            count: s.trial_stores,
+            note: 'trial sedang berjalan',
+            icon: FlaskConical,
+            iconClass: 'text-violet-500',
+        },
+        {
+            filter: 'free' as const,
+            label: 'Free',
+            count: s.free_stores,
+            note: lapsed > 0 ? `termasuk ${formatCurrency(lapsed)} langganan habis` : 'paket Starter gratis',
+            icon: Gift,
+            iconClass: 'text-sky-500',
+        },
+        {
+            filter: 'aktif' as const,
+            label: 'Toko aktif',
+            count: s.active_stores,
+            note: `${activeRatio.value}% dari total`,
+            icon: CheckCircle,
+            iconClass: 'text-emerald-500',
+        },
+    ];
+});
+const activeFilterCard = computed(() => categoryCards.value.find((c) => c.filter === storeFilter.value) ?? null);
+
+// Setelah kartu diklik, bawa daftar toko ke layar (di HP daftarnya ada di bawah kartu).
+// Dipanggil dari @success supaya berjalan sesudah Inertia memulihkan posisi gulir.
+const scrollToStoreList = async () => {
+    await nextTick();
+    requestAnimationFrame(() => document.getElementById('daftar-toko')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+};
 
 const storesRange = computed(() => {
     const s = safeStores.value;
