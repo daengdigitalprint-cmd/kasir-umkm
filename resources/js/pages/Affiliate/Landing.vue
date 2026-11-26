@@ -101,7 +101,22 @@ const steps = [
                     </div>
                 </div>
 
-                <div class="relative z-10 max-w-2xl">
+                <div class="relative z-10 grid gap-6 lg:grid-cols-[minmax(0,1fr)_17rem] lg:items-center lg:gap-10">
+                    <!-- Poster program: versi lebar di atas teks (ponsel/tablet), versi potret di kanan (desktop) -->
+                    <picture class="block overflow-hidden rounded-2xl shadow-xl ring-1 shadow-slate-900/15 ring-white/60 lg:order-last lg:rotate-2">
+                        <source media="(min-width: 1024px)" srcset="/afiliasi-poster-potret.webp" width="720" height="1280" />
+                        <img
+                            src="/afiliasi-poster-lebar.webp"
+                            width="1280"
+                            height="720"
+                            alt="Pedagang tersenyum menyodorkan ponsel bertuliskan komisi masuk. Tulisan besar: Ajak teman, dapat komisi."
+                            fetchpriority="high"
+                            decoding="async"
+                            class="aspect-video w-full object-cover lg:aspect-[9/16]"
+                        />
+                    </picture>
+
+                    <div class="max-w-2xl">
                     <span class="inline-flex items-center gap-1.5 rounded-full bg-white/70 px-3 py-1 text-xs font-bold tracking-wide text-primary">
                         <Link2 class="h-3.5 w-3.5" /> Program Afiliasi Kasir UMKM
                     </span>
@@ -148,6 +163,7 @@ const steps = [
                             {{ joinForm.processing ? 'Memproses…' : 'Gabung sekarang' }} <ArrowRight v-if="!joinForm.processing" class="h-5 w-5" />
                         </button>
                     </form>
+                    </div>
                 </div>
             </section>
 
