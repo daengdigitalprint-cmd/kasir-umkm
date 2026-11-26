@@ -19,7 +19,10 @@ test('dashboard superadmin menampilkan pemilik toko beserta nomor WhatsApp', fun
     $response = $this->actingAs($superAdmin)->get(route('superadmin.dashboard'));
 
     $response->assertOk();
-    $row = collect($response->viewData('page')['props']['stores']['data'])->firstWhere('id', $store->id);
+    // Daftar toko dikelompokkan per grup usaha; baris toko ada di dalam grupnya.
+    $row = collect($response->viewData('page')['props']['storeGroups']['data'])
+        ->flatMap(fn (array $group) => $group['stores'])
+        ->firstWhere('id', $store->id);
 
     expect($row['owner'])->toMatchArray([
         'name' => 'Pemilik Toko',

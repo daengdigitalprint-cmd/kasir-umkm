@@ -33,7 +33,7 @@ class SuperAdminController extends Controller
 
         // Saringan daftar toko dari kartu ringkasan: premium | trial | free | aktif.
         $storeFilter = $request->query('filter');
-        if (! is_string($storeFilter) || ! in_array($storeFilter, [...StoreSubscriptionCategory::ALL, 'aktif'], true)) {
+        if (! is_string($storeFilter) || ! in_array($storeFilter, [...StoreSubscriptionCategory::ALL, StoreSubscriptionCategory::FILTER_ACTIVE], true)) {
             $storeFilter = null;
         }
 
@@ -55,36 +55,62 @@ class SuperAdminController extends Controller
         $pendingPayments = SubscriptionPayment::where('status', 'pending')->count();
         $totalRevenue = SubscriptionPayment::where('status', 'confirmed')->sum('amount');
 
-        $stores = Store::with([
-            'users',
-            'voucherUsages',
-            'subscriptionPlan:id,slug,price',
-            'organization' => fn ($q) => $q->select('id', 'name')->withCount('stores'),
-            // Pemilik = anggota admin/owner pertama (pendaftar yang membuat toko).
-            'members' => fn ($q) => $q->select('users.id', 'users.name', 'users.email', 'users.phone')
-                ->wherePivotIn('role', ['owner', 'admin'])
-                ->orderBy('store_user.created_at')
-                ->orderBy('users.id'),
-        ])
-            ->when($storeFilter === 'aktif', fn ($q) => $q->where('is_active', true))
-            ->when(
-                in_array($storeFilter, StoreSubscriptionCategory::ALL, true),
-                fn ($q) => StoreSubscriptionCategory::apply($q, $storeFilter),
-            )
-            ->orderBy('created_at', 'desc')
+        // Daftar toko dikelompokkan per grup usaha: satu baris per grup, 10 grup per halaman,
+        // diurutkan dari grup yang tokonya paling baru didaftarkan.
+        $storeGroups = StoreSubscriptionCategory::groups($storeFilter)
+            ->orderByDesc('latest_created_at')
+            ->orderByDesc('group_key')
             ->paginate(10)
-            ->withQueryString()
-            ->through(fn (Store $s) => array_merge($s->toArray(), [
-                'pro_trial_used' => $s->pro_trial_used,
-                'pro_trial_active' => $s->pro_trial_active,
-                'pro_trial_start' => $s->pro_trial_start?->toISOString(),
-                'pro_trial_end' => $s->pro_trial_end?->toISOString(),
-                'owner' => ($owner = $s->members->first()) ? [
-                    'name' => $owner->name,
-                    'email' => $owner->email,
-                    'phone' => $owner->phone,
-                ] : null,
-            ]));
+            ->withQueryString();
+
+        $storesByGroup = StoreSubscriptionCategory::whereInGroups(
+            Store::with([
+                'users',
+                'voucherUsages',
+                'subscriptionPlan:id,slug,price',
+                'organization:id,name',
+                // Pemilik = anggota admin/owner pertama (pendaftar yang membuat toko).
+                'members' => fn ($q) => $q->select('users.id', 'users.name', 'users.email', 'users.phone')
+                    ->wherePivotIn('role', ['owner', 'admin'])
+                    ->orderBy('store_user.created_at')
+                    ->orderBy('users.id'),
+            ]),
+            collect($storeGroups->items())->pluck('group_key'),
+        )
+            ->orderByDesc('is_primary')
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get()
+            ->groupBy(fn (Store $s) => StoreSubscriptionCategory::groupKey($s));
+
+        $storeGroups->through(function ($group) use ($storesByGroup) {
+            $stores = $storesByGroup->get((int) $group->group_key, collect());
+
+            return [
+                'key' => (int) $group->group_key,
+                // Nama grup usaha; null untuk toko yang tidak tergabung di grup mana pun.
+                'name' => $stores->first()?->organization?->name,
+                'category' => StoreSubscriptionCategory::fromRank((int) $group->category_rank),
+                'stores_count' => (int) $group->stores_count,
+                'active_count' => (int) $group->active_count,
+                'stores' => $stores->map(fn (Store $s) => array_merge($s->toArray(), [
+                    'pro_trial_used' => $s->pro_trial_used,
+                    'pro_trial_active' => $s->pro_trial_active,
+                    'pro_trial_start' => $s->pro_trial_start?->toISOString(),
+                    'pro_trial_end' => $s->pro_trial_end?->toISOString(),
+                    'owner' => ($owner = $s->members->first()) ? [
+                        'name' => $owner->name,
+                        'email' => $owner->email,
+                        'phone' => $owner->phone,
+                    ] : null,
+                ]))->values()->all(),
+            ];
+        });
+
+        // Jumlah toko di daftar (setelah saringan), untuk keterangan "N usaha · M toko".
+        $listedStores = $storeFilter === null
+            ? $totalStores
+            : (int) StoreSubscriptionCategory::groups($storeFilter)->sum('stores_count');
 
         $vouchers = Voucher::orderBy('created_at', 'desc')->get();
         $plans = SubscriptionPlan::ordered()->get();
@@ -112,7 +138,8 @@ class SuperAdminController extends Controller
                 'pending_payments' => $pendingPayments,
                 'total_revenue' => $totalRevenue,
             ],
-            'stores' => $stores,
+            'storeGroups' => $storeGroups,
+            'listedStores' => $listedStores,
             'storeFilter' => $storeFilter,
             'vouchers' => $vouchers,
             'plans' => $plans,

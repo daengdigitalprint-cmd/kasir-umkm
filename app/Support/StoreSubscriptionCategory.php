@@ -3,7 +3,8 @@
 namespace App\Support;
 
 use App\Models\Store;
-use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -36,6 +37,9 @@ final class StoreSubscriptionCategory
 
     public const ALL = [self::PREMIUM, self::TRIAL, self::FREE];
 
+    /** Saringan daftar: grup yang punya minimal satu toko yang tidak dinonaktifkan. */
+    public const FILTER_ACTIVE = 'aktif';
+
     /** Peringkat kategori; grup memakai peringkat tertinggi di antara tokonya. */
     private const RANK = [self::FREE => 1, self::TRIAL => 2, self::PREMIUM => 3];
 
@@ -48,32 +52,16 @@ final class StoreSubscriptionCategory
     /**
      * Ringkasan per grup usaha.
      *
+     * free_lapsed: grup Free yang punya toko berpaket selain Starter (langganan/trial habis).
+     * active: grup dengan minimal satu toko yang tidak dinonaktifkan.
+     *
      * @return array{premium: int, trial: int, free: int, free_lapsed: int, total: int, active: int}
-     *                                                                                               free_lapsed: grup Free yang punya toko berpaket selain Starter (langganan/trial habis).
-     *                                                                                               active: grup dengan minimal satu toko yang tidak dinonaktifkan.
      */
     public static function summary(): array
     {
-        [$rankSql, $rankBindings] = self::rankExpression();
-        $starter = self::placeholders(self::STARTER_SLUGS);
-
-        $perGroup = Store::query()
-            ->toBase()
-            ->selectRaw("max({$rankSql}) as category_rank", $rankBindings)
-            ->selectRaw(
-                "max(case when exists (
-                    select 1 from subscription_plans
-                    where subscription_plans.id = stores.subscription_plan_id
-                        and subscription_plans.slug not in ({$starter})
-                ) then 1 else 0 end) as has_paid_plan",
-                self::STARTER_SLUGS,
-            )
-            ->selectRaw('max(case when stores.is_active = 1 then 1 else 0 end) as has_active')
-            ->groupByRaw(self::GROUP_KEY);
-
-        $rows = DB::query()
-            ->fromSub($perGroup, 'store_groups')
-            ->selectRaw('category_rank, count(*) as total, sum(has_paid_plan) as paid_plan, sum(has_active) as active')
+        $rows = self::groups()
+            ->selectRaw('category_rank, count(*) as total, sum(has_paid_plan) as paid_plan')
+            ->selectRaw('sum(case when active_count > 0 then 1 else 0 end) as active')
             ->groupBy('category_rank')
             ->get()
             ->keyBy(fn ($row) => (int) $row->category_rank);
@@ -90,24 +78,61 @@ final class StoreSubscriptionCategory
         ];
     }
 
-    /** Saring query toko ke toko-toko milik grup usaha berkategori tertentu. */
-    public static function apply(Builder $query, string $category): Builder
+    /**
+     * Satu baris per grup usaha: group_key, category_rank, has_paid_plan, stores_count,
+     * active_count, latest_created_at. Saringan opsional: salah satu kategori, atau FILTER_ACTIVE.
+     *
+     * Disajikan sebagai tabel turunan, bukan HAVING: MySQL (only_full_group_by) menolak
+     * HAVING berisi subquery berkorelasi.
+     */
+    public static function groups(?string $filter = null): Builder
     {
         [$rankSql, $rankBindings] = self::rankExpression();
+        $starter = self::placeholders(self::STARTER_SLUGS);
 
-        // Lewat tabel turunan, bukan HAVING: MySQL (only_full_group_by) menolak HAVING berisi subquery berkorelasi.
         $perGroup = Store::query()
             ->toBase()
             ->selectRaw(self::GROUP_KEY.' as group_key')
             ->selectRaw("max({$rankSql}) as category_rank", $rankBindings)
+            ->selectRaw(
+                "max(case when exists (
+                    select 1 from subscription_plans
+                    where subscription_plans.id = stores.subscription_plan_id
+                        and subscription_plans.slug not in ({$starter})
+                ) then 1 else 0 end) as has_paid_plan",
+                self::STARTER_SLUGS,
+            )
+            ->selectRaw('count(*) as stores_count')
+            ->selectRaw('sum(case when stores.is_active = 1 then 1 else 0 end) as active_count')
+            ->selectRaw('max(stores.created_at) as latest_created_at')
             ->groupByRaw(self::GROUP_KEY);
 
-        $groups = DB::query()
+        return DB::query()
             ->fromSub($perGroup, 'store_groups')
-            ->select('group_key')
-            ->where('category_rank', self::RANK[$category]);
+            ->when(isset(self::RANK[$filter ?? '']), fn (Builder $q) => $q->where('category_rank', self::RANK[$filter]))
+            ->when($filter === self::FILTER_ACTIVE, fn (Builder $q) => $q->where('active_count', '>', 0));
+    }
 
-        return $query->whereIn(DB::raw(self::GROUP_KEY), $groups);
+    /**
+     * Saring query toko ke anggota grup-grup tertentu.
+     *
+     * @param  iterable<int>  $groupKeys  nilai group_key dari groups()
+     */
+    public static function whereInGroups(EloquentBuilder $query, iterable $groupKeys): EloquentBuilder
+    {
+        return $query->whereIn(DB::raw(self::GROUP_KEY), collect($groupKeys)->all());
+    }
+
+    /** group_key milik sebuah toko (padanan GROUP_KEY di sisi PHP). */
+    public static function groupKey(Store $store): int
+    {
+        return (int) ($store->organization_id ?? -$store->id);
+    }
+
+    /** Nama kategori dari kolom category_rank. */
+    public static function fromRank(int $rank): string
+    {
+        return array_search($rank, self::RANK, true) ?: self::FREE;
     }
 
     /**
