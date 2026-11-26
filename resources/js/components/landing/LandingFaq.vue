@@ -47,6 +47,22 @@ const faqItems: { id: string; question: string; answer: string; active?: boolean
     },
 ];
 
+/**
+ * Tombol "Tanya AI": tautan biasa yang membuka asisten AI pihak ketiga di tab baru dengan
+ * pertanyaan yang sudah diisi. Tidak ada data pengunjung yang dikirim; jawabannya ditulis
+ * layanan itu, bukan oleh kami. Alamat situs ditulis tetap (bukan dari URL halaman) supaya
+ * AI membaca situs publik, juga saat halaman ini dibuka di lingkungan uji.
+ */
+const ASK_AI_PROMPT =
+    'Saya pemilik usaha kecil dan sedang mencari aplikasi kasir. Tolong baca situs https://kasirumkm.web.id lalu jelaskan secara singkat: apa itu Kasir UMKM by MaccaPOS, fitur utamanya, harganya, dan cocok untuk usaha seperti apa.';
+const askAiQuery = encodeURIComponent(ASK_AI_PROMPT);
+const askAiLinks: { id: string; label: string; url: string }[] = [
+    { id: 'chatgpt', label: 'ChatGPT', url: `https://chatgpt.com/?q=${askAiQuery}` },
+    // udm=50 membuka Mode AI di Google Penelusuran.
+    { id: 'google', label: 'Google AI', url: `https://www.google.com/search?udm=50&q=${askAiQuery}` },
+    { id: 'perplexity', label: 'Perplexity', url: `https://www.perplexity.ai/search/new?q=${askAiQuery}` },
+];
+
 /** Dimensi asli avatar (mencegah layout shift). */
 const avatarSize: Record<string, [number, number]> = {
     'transaction_avatar01.png': [42, 42],
@@ -114,6 +130,43 @@ const rightMarquee: { name: string; desig: string; avatar: string; avatarClass: 
                                     </div>
                                 </li>
                             </ul>
+                            <div class="lp-ask-ai">
+                                <p class="lp-ask-ai__title">Masih ragu? Tanyakan ke AI</p>
+                                <p class="lp-ask-ai__desc">
+                                    Buka asisten AI pilihan Anda dengan pertanyaan tentang Kasir UMKM yang sudah kami siapkan. Jawabannya ditulis
+                                    layanan tersebut, bukan oleh kami.
+                                </p>
+                                <div class="lp-ask-ai__links">
+                                    <a
+                                        v-for="ai in askAiLinks"
+                                        :key="ai.id"
+                                        :href="ai.url"
+                                        class="lp-ask-ai__link"
+                                        target="_blank"
+                                        rel="noopener noreferrer nofollow"
+                                        :aria-label="`Tanya ${ai.label} tentang Kasir UMKM (membuka tab baru)`"
+                                    >
+                                        <svg
+                                            viewBox="0 0 24 24"
+                                            width="18"
+                                            height="18"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            stroke-width="2"
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            aria-hidden="true"
+                                        >
+                                            <path
+                                                d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
+                                            />
+                                            <path d="M20 3v4" />
+                                            <path d="M22 5h-4" />
+                                        </svg>
+                                        {{ ai.label }}
+                                    </a>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -184,3 +237,84 @@ const rightMarquee: { name: string; desig: string; avatar: string; avatarClass: 
     </section>
     <!-- transaction-feed end -->
 </template>
+
+<!-- Tidak scoped: kelasnya unik (lp-ask-ai), dan tanpa atribut data-v HTML prerender tetap sederhana. -->
+<style>
+.lp-ask-ai {
+    margin-top: 20px;
+    padding: 22px 30px 24px;
+    background: var(--color-white, #fff);
+    border: 1px solid var(--color-border, #e7e3f5);
+    border-radius: 10px;
+}
+.lp-ask-ai__title {
+    margin: 0 0 6px;
+    font-family: var(--font-heading, inherit);
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1.3;
+    color: var(--color-heading, #140f26);
+}
+.lp-ask-ai__desc {
+    margin: 0 0 16px;
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--color-default, #403a56);
+}
+.lp-ask-ai__links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.lp-ask-ai__link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 9px 18px;
+    border: 1px solid #dfd8ff;
+    border-radius: 999px;
+    background: #f6f3ff;
+    font-family: var(--font-heading, inherit);
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--color-heading, #140f26);
+    text-decoration: none;
+    transition:
+        background-color 0.2s ease,
+        border-color 0.2s ease,
+        color 0.2s ease;
+}
+.lp-ask-ai__link svg {
+    flex-shrink: 0;
+    color: var(--color-primary, #6840ff);
+    transition: color 0.2s ease;
+}
+.lp-ask-ai__link:hover,
+.lp-ask-ai__link:focus-visible {
+    background: var(--color-primary, #6840ff);
+    border-color: var(--color-primary, #6840ff);
+    color: #fff;
+}
+.lp-ask-ai__link:hover svg,
+.lp-ask-ai__link:focus-visible svg {
+    color: #fff;
+}
+.lp-ask-ai__link:focus-visible {
+    outline: 2px solid var(--color-primary, #6840ff);
+    outline-offset: 2px;
+}
+@media (max-width: 767px) {
+    .lp-ask-ai {
+        padding: 18px 15px 20px;
+    }
+    .lp-ask-ai__title {
+        font-size: 18px;
+    }
+    .lp-ask-ai__link {
+        flex: 1 1 auto;
+        justify-content: center;
+    }
+}
+</style>

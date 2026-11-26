@@ -474,7 +474,7 @@
 
             <div class="shots">
                 <figure class="shot">
-                    <img src="{{ asset('Pencatatan-800.webp') }}" width="800" height="408" alt="Layar kasir: daftar produk dan keranjang belanja" loading="lazy" decoding="async">
+                    <img src="{{ asset('Pencatatan-800.webp') }}" width="800" height="577" alt="Layar kasir: daftar produk dan keranjang belanja" loading="lazy" decoding="async">
                     <figcaption><b>Kasir</b><span>Ketuk produk atau scan barcode, pilih cara bayar, cetak struk.</span></figcaption>
                 </figure>
                 <figure class="shot">

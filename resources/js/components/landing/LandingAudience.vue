@@ -60,10 +60,10 @@ const paySecond: PayMethod[] = [
                             <div class="xb-item--img">
                                 <div class="img-1">
                                     <img
-                                        width="1682"
-                                        height="858"
+                                        width="1678"
+                                        height="1210"
                                         src="/Pencatatan.webp"
-                                        srcset="/Pencatatan-800.webp 800w, /Pencatatan.webp 1682w"
+                                        srcset="/Pencatatan-800.webp 800w, /Pencatatan.webp 1678w"
                                         sizes="(max-width: 767px) 100vw, 791px"
                                         alt="Tampilan pencatatan transaksi otomatis di Kasir UMKM by MaccaPOS"
                                         loading="lazy"
@@ -103,16 +103,6 @@ const paySecond: PayMethod[] = [
                                             <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" v-html="pay.icon"></svg>
                                             <span>{{ pay.label }}</span>
                                         </div>
-                                    </div>
-                                    <div class="xb-item--card">
-                                        <img
-                                            width="1617"
-                                            height="973"
-                                            src="/card-produk-sm.webp"
-                                            alt="Kartu ringkasan manajemen stok produk"
-                                            loading="lazy"
-                                            decoding="async"
-                                        />
                                     </div>
                                     <div class="xb-item--marquee marquee-2">
                                         <!-- Diulang dua kali agar marquee tersambung tanpa celah. -->
