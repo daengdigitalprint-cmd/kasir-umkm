@@ -55,13 +55,18 @@ class SuperAdminController extends Controller
         $pendingPayments = SubscriptionPayment::where('status', 'pending')->count();
         $totalRevenue = SubscriptionPayment::where('status', 'confirmed')->sum('amount');
 
-        // Daftar toko dikelompokkan per grup usaha: satu baris per grup, 10 grup per halaman,
-        // diurutkan dari grup yang tokonya paling baru didaftarkan.
-        $storeGroups = StoreSubscriptionCategory::groups($storeFilter)
+        // Daftar toko dipisah dua: grup usaha yang punya lebih dari satu toko (satu baris per grup,
+        // bisa dibuka) dan toko tunggal. Masing-masing 10 per halaman dengan nomor halaman sendiri,
+        // diurutkan dari yang tokonya paling baru didaftarkan.
+        $groupList = fn (string $operator, string $pageName) => StoreSubscriptionCategory::groups($storeFilter)
+            ->where('stores_count', $operator, 1)
             ->orderByDesc('latest_created_at')
             ->orderByDesc('group_key')
-            ->paginate(10)
+            ->paginate(10, ['*'], $pageName)
             ->withQueryString();
+
+        $multiStoreGroups = $groupList('>', 'grup_page');
+        $singleStoreGroups = $groupList('=', 'page');
 
         $storesByGroup = StoreSubscriptionCategory::whereInGroups(
             Store::with([
@@ -75,7 +80,7 @@ class SuperAdminController extends Controller
                     ->orderBy('store_user.created_at')
                     ->orderBy('users.id'),
             ]),
-            collect($storeGroups->items())->pluck('group_key'),
+            collect($multiStoreGroups->items())->merge($singleStoreGroups->items())->pluck('group_key'),
         )
             ->orderByDesc('is_primary')
             ->orderBy('created_at')
@@ -83,7 +88,7 @@ class SuperAdminController extends Controller
             ->get()
             ->groupBy(fn (Store $s) => StoreSubscriptionCategory::groupKey($s));
 
-        $storeGroups->through(function ($group) use ($storesByGroup) {
+        $presentGroup = function ($group) use ($storesByGroup) {
             $stores = $storesByGroup->get((int) $group->group_key, collect());
 
             return [
@@ -105,12 +110,14 @@ class SuperAdminController extends Controller
                     ] : null,
                 ]))->values()->all(),
             ];
-        });
+        };
+        $multiStoreGroups->through($presentGroup);
+        $singleStoreGroups->through($presentGroup);
 
-        // Jumlah toko di daftar (setelah saringan), untuk keterangan "N usaha · M toko".
-        $listedStores = $storeFilter === null
-            ? $totalStores
-            : (int) StoreSubscriptionCategory::groups($storeFilter)->sum('stores_count');
+        // Jumlah toko di dalam grup multi-toko (setelah saringan), untuk keterangan "N grup · M toko".
+        $multiStoreCount = (int) StoreSubscriptionCategory::groups($storeFilter)
+            ->where('stores_count', '>', 1)
+            ->sum('stores_count');
 
         $vouchers = Voucher::orderBy('created_at', 'desc')->get();
         $plans = SubscriptionPlan::ordered()->get();
@@ -138,8 +145,11 @@ class SuperAdminController extends Controller
                 'pending_payments' => $pendingPayments,
                 'total_revenue' => $totalRevenue,
             ],
-            'storeGroups' => $storeGroups,
-            'listedStores' => $listedStores,
+            'multiStoreGroups' => $multiStoreGroups,
+            'singleStoreGroups' => $singleStoreGroups,
+            'multiStoreCount' => $multiStoreCount,
+            // Toko di daftar setelah saringan: isi grup multi-toko + toko tunggal.
+            'listedStores' => $multiStoreCount + $singleStoreGroups->total(),
             'storeFilter' => $storeFilter,
             'vouchers' => $vouchers,
             'plans' => $plans,

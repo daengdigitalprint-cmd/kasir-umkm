@@ -123,10 +123,12 @@ function propsDashboardSuperAdmin($test, string $query = ''): array
     return $response->viewData('page')['props'];
 }
 
-/** Id semua toko di halaman daftar (daftar dikelompokkan per grup usaha), terurut. */
+/** Id semua toko di halaman daftar (bagian grup multi-toko + bagian toko tunggal), terurut. */
 function idTokoDiDaftar(array $props): array
 {
-    return collect($props['storeGroups']['data'])->flatMap(fn (array $group) => $group['stores'])
+    return collect($props['multiStoreGroups']['data'])
+        ->merge($props['singleStoreGroups']['data'])
+        ->flatMap(fn (array $group) => $group['stores'])
         ->pluck('id')->sort()->values()->all();
 }
 
@@ -194,13 +196,15 @@ test('kartu ringkasan menyaring daftar toko sesuai kategorinya', function () {
     }
 
     $aktif = propsDashboardSuperAdmin($this, '?filter=aktif');
-    expect($aktif['storeGroups']['total'])->toBe(11)
-        ->and(collect($aktif['storeGroups']['data'])->every(fn (array $group) => $group['active_count'] > 0))->toBeTrue()
-        ->and($aktif['storeGroups']['next_page_url'])->toContain('filter=aktif');
+    expect($aktif['singleStoreGroups']['total'])->toBe(11)
+        ->and(collect($aktif['singleStoreGroups']['data'])->every(fn (array $group) => $group['active_count'] > 0))->toBeTrue()
+        ->and($aktif['singleStoreGroups']['next_page_url'])->toContain('filter=aktif');
 
+    // Semua toko di sini berdiri sendiri: bagian grup multi-toko kosong.
     $tanpaSaringan = propsDashboardSuperAdmin($this, '?filter=ngawur');
     expect($tanpaSaringan['storeFilter'])->toBeNull()
-        ->and($tanpaSaringan['storeGroups']['total'])->toBe(12)
+        ->and($tanpaSaringan['singleStoreGroups']['total'])->toBe(12)
+        ->and($tanpaSaringan['multiStoreGroups']['total'])->toBe(0)
         ->and($tanpaSaringan['listedStores'])->toBe(12);
 });
 
@@ -257,54 +261,65 @@ test('toko dalam satu grup usaha dihitung satu dan grup memakai kategori terting
     $toko($nonaktif, array_merge($gratis, ['is_active' => false]));
     $toko($nonaktif, array_merge($gratis, ['is_active' => false]));
 
-    // Toko tanpa grup usaha dihitung sendiri.
+    // Toko tanpa grup usaha dihitung sendiri; begitu juga grup usaha yang hanya punya satu toko.
     $toko(null, $gratis);
+    $toko($grup('Grup Satu Toko'), $gratis);
 
     $props = propsDashboardSuperAdmin($this);
     $stats = $props['stats'];
 
-    expect($stats['total_stores'])->toBe(17)
-        ->and($stats['total_groups'])->toBe(6)
+    expect($stats['total_stores'])->toBe(18)
+        ->and($stats['total_groups'])->toBe(7)
         ->and($stats['premium_groups'])->toBe(1)
         ->and($stats['trial_groups'])->toBe(1)
-        ->and($stats['free_groups'])->toBe(4)
+        ->and($stats['free_groups'])->toBe(5)
         ->and($stats['free_lapsed_groups'])->toBe(1)
-        ->and($stats['active_groups'])->toBe(5);
+        ->and($stats['active_groups'])->toBe(6);
 
-    // Daftar tanpa saringan: satu baris per grup usaha, bukan per toko.
-    expect($props['storeGroups']['total'])->toBe(6)
-        ->and($props['listedStores'])->toBe(17);
+    // Daftar dipisah dua: grup yang punya lebih dari satu toko, dan toko tunggal.
+    expect($props['multiStoreGroups']['total'])->toBe(5)
+        ->and($props['multiStoreCount'])->toBe(16)
+        ->and($props['singleStoreGroups']['total'])->toBe(2)
+        ->and($props['listedStores'])->toBe(18)
+        ->and(collect($props['multiStoreGroups']['data'])->every(fn (array $group) => count($group['stores']) > 1))->toBeTrue()
+        ->and(collect($props['singleStoreGroups']['data'])->every(fn (array $group) => count($group['stores']) === 1))->toBeTrue()
+        // Grup usaha berisi satu toko masuk bagian toko tunggal, bukan bagian grup.
+        ->and(collect($props['singleStoreGroups']['data'])->pluck('name')->all())->toEqualCanonicalizing(['Grup Satu Toko', null])
+        ->and(collect($props['multiStoreGroups']['data'])->pluck('name'))->not->toContain('Grup Satu Toko');
 
     // Grup 7 toko tampil sebagai SATU baris yang memuat ketujuh tokonya.
     $premium = propsDashboardSuperAdmin($this, '?filter=premium');
-    expect($premium['storeGroups']['data'])->toHaveCount(1)
-        ->and($premium['storeGroups']['data'][0])->toMatchArray([
+    expect($premium['multiStoreGroups']['data'])->toHaveCount(1)
+        ->and($premium['multiStoreGroups']['data'][0])->toMatchArray([
             'name' => 'Grup Tujuh Toko',
             'category' => 'premium',
             'stores_count' => 7,
             'active_count' => 7,
         ])
+        ->and($premium['singleStoreGroups']['total'])->toBe(0)
         ->and(idTokoDiDaftar($premium))->toBe($premiumIds)
         ->and($premium['listedStores'])->toBe(7);
 
     $trial = propsDashboardSuperAdmin($this, '?filter=trial');
-    expect($trial['storeGroups']['data'])->toHaveCount(1)
+    expect($trial['multiStoreGroups']['data'])->toHaveCount(1)
         ->and(idTokoDiDaftar($trial))->toBe($trialIds);
 
     $free = propsDashboardSuperAdmin($this, '?filter=free');
-    expect($free['storeGroups']['total'])->toBe(4)
-        ->and($free['listedStores'])->toBe(7);
-
-    // Toko tanpa grup usaha tampil sebagai baris sendiri tanpa nama grup.
-    $tanpaGrup = collect($free['storeGroups']['data'])->firstWhere('name', null);
-    expect($tanpaGrup['stores'])->toHaveCount(1)
-        ->and($tanpaGrup['stores_count'])->toBe(1);
+    expect($free['multiStoreGroups']['total'])->toBe(3)
+        ->and($free['singleStoreGroups']['total'])->toBe(2)
+        ->and($free['listedStores'])->toBe(8);
 
     // Saringan "aktif" menampilkan grup yang punya toko aktif, lengkap dengan toko nonaktifnya.
     $aktif = propsDashboardSuperAdmin($this, '?filter=aktif');
-    $separuh = collect($aktif['storeGroups']['data'])->firstWhere('name', 'Grup Separuh Aktif');
-    expect($aktif['storeGroups']['total'])->toBe(5)
+    $separuh = collect($aktif['multiStoreGroups']['data'])->firstWhere('name', 'Grup Separuh Aktif');
+    expect($aktif['multiStoreGroups']['total'])->toBe(4)
+        ->and($aktif['singleStoreGroups']['total'])->toBe(2)
         ->and($separuh)->toMatchArray(['stores_count' => 2, 'active_count' => 1])
         ->and($separuh['stores'])->toHaveCount(2)
-        ->and(collect($aktif['storeGroups']['data'])->pluck('name'))->not->toContain('Grup Nonaktif');
+        ->and(collect($aktif['multiStoreGroups']['data'])->pluck('name'))->not->toContain('Grup Nonaktif');
+
+    // Dua bagian punya nomor halaman sendiri-sendiri.
+    $halaman = propsDashboardSuperAdmin($this, '?grup_page=2');
+    expect($halaman['multiStoreGroups']['current_page'])->toBe(2)
+        ->and($halaman['singleStoreGroups']['current_page'])->toBe(1);
 });

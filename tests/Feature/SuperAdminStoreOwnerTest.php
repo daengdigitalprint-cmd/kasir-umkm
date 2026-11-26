@@ -19,8 +19,8 @@ test('dashboard superadmin menampilkan pemilik toko beserta nomor WhatsApp', fun
     $response = $this->actingAs($superAdmin)->get(route('superadmin.dashboard'));
 
     $response->assertOk();
-    // Daftar toko dikelompokkan per grup usaha; baris toko ada di dalam grupnya.
-    $row = collect($response->viewData('page')['props']['storeGroups']['data'])
+    // Toko ini berdiri sendiri, jadi ada di bagian toko tunggal; baris toko ada di dalam grupnya.
+    $row = collect($response->viewData('page')['props']['singleStoreGroups']['data'])
         ->flatMap(fn (array $group) => $group['stores'])
         ->firstWhere('id', $store->id);
 

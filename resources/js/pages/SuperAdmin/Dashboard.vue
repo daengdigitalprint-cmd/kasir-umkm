@@ -90,17 +90,9 @@
                 </div>
             </div>
 
-            <!-- Daftar toko -->
-            <div id="daftar-toko" class="scroll-mt-20 overflow-hidden rounded-xl border border-slate-200 bg-white lg:scroll-mt-6">
-                <div class="flex flex-col gap-1 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <h2 class="text-base font-semibold text-slate-900">Daftar toko</h2>
-                        <p class="text-xs text-slate-500">Dikelompokkan per grup usaha, diurutkan dari yang terbaru</p>
-                    </div>
-                    <p v-if="storesRange" class="text-xs text-slate-500">{{ storesRange }}</p>
-                </div>
-
-                <div v-if="activeFilterCard" class="flex flex-wrap items-center gap-2 border-b border-slate-100 bg-slate-50 px-5 py-2.5">
+            <!-- Daftar toko: grup usaha multi-toko dan toko tunggal ditampilkan terpisah -->
+            <div id="daftar-toko" class="scroll-mt-20 space-y-4 lg:scroll-mt-6">
+                <div v-if="activeFilterCard" class="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5">
                     <span class="text-xs text-slate-500">Disaring:</span>
                     <span class="inline-flex items-center rounded-full bg-slate-900 px-2.5 py-0.5 text-xs font-semibold text-white">
                         {{ activeFilterCard.label }}
@@ -111,65 +103,214 @@
                     <Link href="/superadmin" preserve-scroll class="text-xs font-medium text-primary hover:underline">Tampilkan semua toko</Link>
                 </div>
 
-                <div v-if="safeGroups.data.length === 0" class="px-5 py-16 text-center">
+                <div v-if="listSections.length === 0" class="rounded-xl border border-slate-200 bg-white px-5 py-16 text-center">
                     <Building2 class="mx-auto h-8 w-8 text-slate-300" />
                     <p class="mt-3 text-sm text-slate-500">
                         {{ activeFilterCard ? `Tidak ada toko di kategori ${activeFilterCard.label}.` : 'Belum ada toko terdaftar.' }}
                     </p>
                 </div>
 
-                <!-- Tabel (desktop) -->
-                <div v-else class="hidden md:block">
-                    <table class="w-full text-left text-sm">
-                        <thead class="bg-slate-50 text-xs font-medium tracking-wide text-slate-500 uppercase">
-                            <tr>
-                                <th scope="col" class="px-5 py-3">Toko</th>
-                                <th scope="col" class="px-3 py-3">Paket</th>
-                                <th scope="col" class="px-3 py-3">Status</th>
-                                <th scope="col" class="px-3 py-3">Masa aktif</th>
-                                <th scope="col" class="px-3 py-3">Terdaftar</th>
-                                <th scope="col" class="px-5 py-3 text-right"><span class="sr-only">Aksi</span></th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100">
-                            <template v-for="group in safeGroups.data" :key="group.key">
-                                <!-- Baris grup usaha (lebih dari satu toko): klik untuk membuka daftar tokonya -->
-                                <tr
-                                    v-if="isMultiStore(group)"
-                                    class="cursor-pointer bg-slate-50/80 align-middle hover:bg-slate-100/80"
+                <div v-for="section in listSections" :key="section.id" class="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    <div class="flex flex-col gap-1 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <h2 class="text-base font-semibold text-slate-900">{{ section.title }}</h2>
+                            <p class="text-xs text-slate-500">{{ section.hint }}</p>
+                        </div>
+                        <p v-if="section.range" class="text-xs text-slate-500">{{ section.range }}</p>
+                    </div>
+
+                    <!-- Tabel (desktop) -->
+                    <div class="hidden md:block">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-slate-50 text-xs font-medium tracking-wide text-slate-500 uppercase">
+                                <tr>
+                                    <th scope="col" class="px-5 py-3">Toko</th>
+                                    <th scope="col" class="px-3 py-3">Paket</th>
+                                    <th scope="col" class="px-3 py-3">Status</th>
+                                    <th scope="col" class="px-3 py-3">Masa aktif</th>
+                                    <th scope="col" class="px-3 py-3">Terdaftar</th>
+                                    <th scope="col" class="px-5 py-3 text-right"><span class="sr-only">Aksi</span></th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                <template v-for="group in section.groups.data" :key="group.key">
+                                    <!-- Baris grup usaha (lebih dari satu toko): klik untuk membuka daftar tokonya -->
+                                    <tr
+                                        v-if="isMultiStore(group)"
+                                        class="cursor-pointer bg-slate-50/80 align-middle hover:bg-slate-100/80"
+                                        @click="toggleGroup(group.key)"
+                                    >
+                                        <td class="max-w-[260px] px-5 py-3">
+                                            <button
+                                                type="button"
+                                                class="flex w-full min-w-0 items-center gap-2 rounded-md text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                                                :aria-expanded="isExpanded(group.key)"
+                                                @click.stop="toggleGroup(group.key)"
+                                            >
+                                                <ChevronRight
+                                                    :class="[
+                                                        'h-4 w-4 shrink-0 text-slate-500 transition-transform',
+                                                        isExpanded(group.key) ? 'rotate-90' : '',
+                                                    ]"
+                                                />
+                                                <span class="min-w-0">
+                                                    <span class="block truncate font-semibold text-slate-900">{{ groupTitle(group) }}</span>
+                                                    <span class="block text-xs text-slate-500">{{ group.stores_count }} toko</span>
+                                                </span>
+                                            </button>
+                                        </td>
+                                        <td class="px-3 py-3">
+                                            <span :class="categoryPillClass(group.category)">{{ categoryLabel(group.category) }}</span>
+                                        </td>
+                                        <td class="px-3 py-3 text-xs whitespace-nowrap text-slate-600">
+                                            {{ group.active_count }} dari {{ group.stores_count }} toko aktif
+                                        </td>
+                                        <td colspan="3" class="px-5 py-3 text-right text-xs font-medium whitespace-nowrap text-primary">
+                                            {{ isExpanded(group.key) ? 'Sembunyikan toko' : `Lihat ${group.stores_count} toko` }}
+                                        </td>
+                                    </tr>
+                                    <tr v-for="store in visibleStores(group)" :key="store.id" class="align-middle hover:bg-slate-50/60">
+                                        <td :class="['max-w-[260px] py-3.5 pr-5', isMultiStore(group) ? 'pl-11' : 'pl-5']">
+                                            <p class="truncate font-semibold text-slate-900">{{ store.name }}</p>
+                                            <p class="truncate text-xs text-slate-500">{{ store.address || 'Alamat belum diatur' }}</p>
+                                            <div v-if="store.owner" class="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-slate-500">
+                                                <span class="truncate" :title="store.owner.email">{{ store.owner.name }}</span>
+                                                <a
+                                                    v-if="waLink(store.owner.phone)"
+                                                    :href="waLink(store.owner.phone)!"
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    class="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 ring-1 ring-emerald-200 ring-inset hover:bg-emerald-100"
+                                                    :aria-label="`Chat WhatsApp ${store.owner.name}`"
+                                                >
+                                                    <MessageCircle class="h-3 w-3" />
+                                                    {{ waDisplay(store.owner.phone) }}
+                                                </a>
+                                                <span v-else class="shrink-0 text-slate-400">· WA belum ada</span>
+                                            </div>
+                                        </td>
+                                        <td class="px-3 py-3.5">
+                                            <span class="text-sm whitespace-nowrap text-slate-700">{{ planLabel(store) }}</span>
+                                        </td>
+                                        <td class="px-3 py-3.5">
+                                            <div class="flex flex-wrap items-center gap-1.5">
+                                                <span :class="statusPillClass(store)">
+                                                    <span class="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
+                                                    {{ getStoreStatus(store) }}
+                                                </span>
+                                                <span
+                                                    v-if="store.pro_trial_active"
+                                                    class="inline-flex items-center rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700 ring-1 ring-violet-200 ring-inset"
+                                                    :title="store.pro_trial_end ? `Trial berakhir ${formatDate(store.pro_trial_end)}` : undefined"
+                                                >
+                                                    Trial Pro
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td class="px-3 py-3.5">
+                                            <template v-if="store.subscription_end && !isStarterFreeStore(store)">
+                                                <p class="text-sm whitespace-nowrap text-slate-700">{{ formatDate(store.subscription_end) }}</p>
+                                                <p :class="['text-xs', getDaysRemainingClass(store.subscription_end)]">
+                                                    {{ remainingLabel(store.subscription_end) }}
+                                                </p>
+                                            </template>
+                                            <span v-else class="text-sm text-slate-400">Tanpa batas</span>
+                                        </td>
+                                        <td class="px-3 py-3.5 text-sm whitespace-nowrap text-slate-500">{{ formatDate(store.created_at) }}</td>
+                                        <td class="px-5 py-3.5">
+                                            <div class="flex items-center justify-end gap-1.5">
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    class="h-8 rounded-lg border-slate-200 text-xs font-semibold"
+                                                    @click="openExtendModal(store)"
+                                                >
+                                                    <Plus class="mr-1 h-3.5 w-3.5" />
+                                                    Perpanjang
+                                                </Button>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger as-child>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            class="h-8 w-8 rounded-lg p-0 text-slate-500"
+                                                            :aria-label="`Aksi lain untuk ${store.name}`"
+                                                        >
+                                                            <MoreHorizontal class="h-4 w-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end" class="w-56 rounded-xl">
+                                                        <DropdownMenuLabel class="truncate text-xs font-normal text-slate-500">{{
+                                                            store.name
+                                                        }}</DropdownMenuLabel>
+                                                        <DropdownMenuItem class="cursor-pointer" @select="openReduceModal(store)">
+                                                            <Minus class="mr-2 h-4 w-4" /> Kurangi masa aktif
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem
+                                                            v-if="isStarterFreeStore(store) && !store.pro_trial_used && store.is_active"
+                                                            class="cursor-pointer"
+                                                            @select="openTrialModal(store)"
+                                                        >
+                                                            <FlaskConical class="mr-2 h-4 w-4" /> Aktifkan Trial Pro
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem
+                                                            v-if="store.pro_trial_active"
+                                                            class="cursor-pointer"
+                                                            @select="stopTrial(store)"
+                                                        >
+                                                            <Square class="mr-2 h-4 w-4" /> Hentikan trial
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuSeparator />
+                                                        <DropdownMenuItem class="cursor-pointer" @select="toggleStoreStatus(store)">
+                                                            <Power class="mr-2 h-4 w-4" />
+                                                            {{ store.is_active ? 'Nonaktifkan toko' : 'Aktifkan toko' }}
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem
+                                                            class="cursor-pointer text-red-600 focus:bg-red-50 focus:text-red-700"
+                                                            @select="deleteStore(store)"
+                                                        >
+                                                            <Trash2 class="mr-2 h-4 w-4" /> Hapus toko permanen
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Kartu (mobile) -->
+                    <ul class="divide-y divide-slate-100 md:hidden">
+                        <template v-for="group in section.groups.data" :key="group.key">
+                            <li v-if="isMultiStore(group)" class="bg-slate-50/80">
+                                <button
+                                    type="button"
+                                    class="flex w-full items-center gap-3 px-4 py-3.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-inset"
+                                    :aria-expanded="isExpanded(group.key)"
                                     @click="toggleGroup(group.key)"
                                 >
-                                    <td class="max-w-[260px] px-5 py-3">
-                                        <button
-                                            type="button"
-                                            class="flex w-full min-w-0 items-center gap-2 rounded-md text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                                            :aria-expanded="isExpanded(group.key)"
-                                            @click.stop="toggleGroup(group.key)"
-                                        >
-                                            <ChevronRight
-                                                :class="[
-                                                    'h-4 w-4 shrink-0 text-slate-500 transition-transform',
-                                                    isExpanded(group.key) ? 'rotate-90' : '',
-                                                ]"
-                                            />
-                                            <span class="min-w-0">
-                                                <span class="block truncate font-semibold text-slate-900">{{ groupTitle(group) }}</span>
-                                                <span class="block text-xs text-slate-500">{{ group.stores_count }} toko</span>
-                                            </span>
-                                        </button>
-                                    </td>
-                                    <td class="px-3 py-3">
-                                        <span :class="categoryPillClass(group.category)">{{ categoryLabel(group.category) }}</span>
-                                    </td>
-                                    <td class="px-3 py-3 text-xs whitespace-nowrap text-slate-600">
-                                        {{ group.active_count }} dari {{ group.stores_count }} toko aktif
-                                    </td>
-                                    <td colspan="3" class="px-5 py-3 text-right text-xs font-medium whitespace-nowrap text-primary">
-                                        {{ isExpanded(group.key) ? 'Sembunyikan toko' : `Lihat ${group.stores_count} toko` }}
-                                    </td>
-                                </tr>
-                                <tr v-for="store in visibleStores(group)" :key="store.id" class="align-middle hover:bg-slate-50/60">
-                                    <td :class="['max-w-[260px] py-3.5 pr-5', isMultiStore(group) ? 'pl-11' : 'pl-5']">
+                                    <ChevronRight
+                                        :class="['h-4 w-4 shrink-0 text-slate-500 transition-transform', isExpanded(group.key) ? 'rotate-90' : '']"
+                                    />
+                                    <span class="min-w-0 flex-1">
+                                        <span class="block truncate font-semibold text-slate-900">{{ groupTitle(group) }}</span>
+                                        <span class="block text-xs text-slate-500">
+                                            {{ group.stores_count }} toko · {{ group.active_count }} aktif ·
+                                            {{ isExpanded(group.key) ? 'ketuk untuk menutup' : 'ketuk untuk melihat' }}
+                                        </span>
+                                    </span>
+                                    <span :class="categoryPillClass(group.category)">{{ categoryLabel(group.category) }}</span>
+                                </button>
+                            </li>
+                            <li
+                                v-for="store in visibleStores(group)"
+                                :key="store.id"
+                                :class="['py-4 pr-4', isMultiStore(group) ? 'border-l-4 border-l-slate-200 pl-5' : 'pl-4']"
+                            >
+                                <div class="flex items-start justify-between gap-3">
+                                    <div class="min-w-0">
                                         <p class="truncate font-semibold text-slate-900">{{ store.name }}</p>
                                         <p class="truncate text-xs text-slate-500">{{ store.address || 'Alamat belum diatur' }}</p>
                                         <div v-if="store.owner" class="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-slate-500">
@@ -187,238 +328,104 @@
                                             </a>
                                             <span v-else class="shrink-0 text-slate-400">· WA belum ada</span>
                                         </div>
-                                    </td>
-                                    <td class="px-3 py-3.5">
-                                        <span class="text-sm whitespace-nowrap text-slate-700">{{ planLabel(store) }}</span>
-                                    </td>
-                                    <td class="px-3 py-3.5">
-                                        <div class="flex flex-wrap items-center gap-1.5">
-                                            <span :class="statusPillClass(store)">
-                                                <span class="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
-                                                {{ getStoreStatus(store) }}
-                                            </span>
-                                            <span
-                                                v-if="store.pro_trial_active"
-                                                class="inline-flex items-center rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700 ring-1 ring-violet-200 ring-inset"
-                                                :title="store.pro_trial_end ? `Trial berakhir ${formatDate(store.pro_trial_end)}` : undefined"
-                                            >
-                                                Trial Pro
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td class="px-3 py-3.5">
-                                        <template v-if="store.subscription_end && !isStarterFreeStore(store)">
-                                            <p class="text-sm whitespace-nowrap text-slate-700">{{ formatDate(store.subscription_end) }}</p>
-                                            <p :class="['text-xs', getDaysRemainingClass(store.subscription_end)]">
-                                                {{ remainingLabel(store.subscription_end) }}
-                                            </p>
-                                        </template>
-                                        <span v-else class="text-sm text-slate-400">Tanpa batas</span>
-                                    </td>
-                                    <td class="px-3 py-3.5 text-sm whitespace-nowrap text-slate-500">{{ formatDate(store.created_at) }}</td>
-                                    <td class="px-5 py-3.5">
-                                        <div class="flex items-center justify-end gap-1.5">
+                                    </div>
+                                    <span :class="statusPillClass(store)">
+                                        <span class="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
+                                        {{ getStoreStatus(store) }}
+                                    </span>
+                                </div>
+                                <dl class="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                                    <div>
+                                        <dt class="text-slate-400">Paket</dt>
+                                        <dd class="font-medium text-slate-700">
+                                            {{ planLabel(store) }}<span v-if="store.pro_trial_active" class="ml-1 text-violet-700">· Trial Pro</span>
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-slate-400">Masa aktif</dt>
+                                        <dd v-if="store.subscription_end && !isStarterFreeStore(store)" class="font-medium text-slate-700">
+                                            {{ formatDate(store.subscription_end) }}
+                                            <span :class="['block', getDaysRemainingClass(store.subscription_end)]">{{
+                                                remainingLabel(store.subscription_end)
+                                            }}</span>
+                                        </dd>
+                                        <dd v-else class="font-medium text-slate-400">Tanpa batas</dd>
+                                    </div>
+                                </dl>
+                                <div class="mt-3 flex items-center gap-2">
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        class="h-9 flex-1 rounded-lg text-xs font-semibold"
+                                        @click="openExtendModal(store)"
+                                    >
+                                        <Plus class="mr-1 h-3.5 w-3.5" /> Perpanjang
+                                    </Button>
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger as-child>
                                             <Button
                                                 size="sm"
                                                 variant="outline"
-                                                class="h-8 rounded-lg border-slate-200 text-xs font-semibold"
-                                                @click="openExtendModal(store)"
+                                                class="h-9 rounded-lg px-3 text-xs font-semibold"
+                                                :aria-label="`Aksi lain untuk ${store.name}`"
                                             >
-                                                <Plus class="mr-1 h-3.5 w-3.5" />
-                                                Perpanjang
+                                                Lainnya
+                                                <ChevronDown class="ml-1 h-3.5 w-3.5" />
                                             </Button>
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger as-child>
-                                                    <Button
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        class="h-8 w-8 rounded-lg p-0 text-slate-500"
-                                                        :aria-label="`Aksi lain untuk ${store.name}`"
-                                                    >
-                                                        <MoreHorizontal class="h-4 w-4" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end" class="w-56 rounded-xl">
-                                                    <DropdownMenuLabel class="truncate text-xs font-normal text-slate-500">{{
-                                                        store.name
-                                                    }}</DropdownMenuLabel>
-                                                    <DropdownMenuItem class="cursor-pointer" @select="openReduceModal(store)">
-                                                        <Minus class="mr-2 h-4 w-4" /> Kurangi masa aktif
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem
-                                                        v-if="isStarterFreeStore(store) && !store.pro_trial_used && store.is_active"
-                                                        class="cursor-pointer"
-                                                        @select="openTrialModal(store)"
-                                                    >
-                                                        <FlaskConical class="mr-2 h-4 w-4" /> Aktifkan Trial Pro
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem v-if="store.pro_trial_active" class="cursor-pointer" @select="stopTrial(store)">
-                                                        <Square class="mr-2 h-4 w-4" /> Hentikan trial
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuSeparator />
-                                                    <DropdownMenuItem class="cursor-pointer" @select="toggleStoreStatus(store)">
-                                                        <Power class="mr-2 h-4 w-4" /> {{ store.is_active ? 'Nonaktifkan toko' : 'Aktifkan toko' }}
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem
-                                                        class="cursor-pointer text-red-600 focus:bg-red-50 focus:text-red-700"
-                                                        @select="deleteStore(store)"
-                                                    >
-                                                        <Trash2 class="mr-2 h-4 w-4" /> Hapus toko permanen
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </template>
-                        </tbody>
-                    </table>
-                </div>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" class="w-56 rounded-xl">
+                                            <DropdownMenuItem class="cursor-pointer" @select="openReduceModal(store)">
+                                                <Minus class="mr-2 h-4 w-4" /> Kurangi masa aktif
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem
+                                                v-if="isStarterFreeStore(store) && !store.pro_trial_used && store.is_active"
+                                                class="cursor-pointer"
+                                                @select="openTrialModal(store)"
+                                            >
+                                                <FlaskConical class="mr-2 h-4 w-4" /> Aktifkan Trial Pro
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem v-if="store.pro_trial_active" class="cursor-pointer" @select="stopTrial(store)">
+                                                <Square class="mr-2 h-4 w-4" /> Hentikan trial
+                                            </DropdownMenuItem>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem class="cursor-pointer" @select="toggleStoreStatus(store)">
+                                                <Power class="mr-2 h-4 w-4" /> {{ store.is_active ? 'Nonaktifkan toko' : 'Aktifkan toko' }}
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem
+                                                class="cursor-pointer text-red-600 focus:bg-red-50 focus:text-red-700"
+                                                @select="deleteStore(store)"
+                                            >
+                                                <Trash2 class="mr-2 h-4 w-4" /> Hapus toko permanen
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </div>
+                            </li>
+                        </template>
+                    </ul>
 
-                <!-- Kartu (mobile) -->
-                <ul v-if="safeGroups.data.length" class="divide-y divide-slate-100 md:hidden">
-                    <template v-for="group in safeGroups.data" :key="group.key">
-                        <li v-if="isMultiStore(group)" class="bg-slate-50/80">
-                            <button
-                                type="button"
-                                class="flex w-full items-center gap-3 px-4 py-3.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-inset"
-                                :aria-expanded="isExpanded(group.key)"
-                                @click="toggleGroup(group.key)"
+                    <!-- Pagination -->
+                    <div
+                        v-if="section.groups.links && section.groups.links.length > 3"
+                        class="flex flex-col items-center gap-3 border-t border-slate-100 px-5 py-4 sm:flex-row sm:justify-between"
+                    >
+                        <p v-if="section.range" class="text-xs text-slate-500">{{ section.range }}</p>
+                        <nav class="flex flex-wrap items-center justify-center gap-1" :aria-label="section.navLabel">
+                            <Link
+                                v-for="link in section.groups.links"
+                                :key="link.label"
+                                :href="link.url || '#'"
+                                :aria-current="link.active ? 'page' : undefined"
+                                :class="[
+                                    'min-w-8 rounded-lg px-2.5 py-1.5 text-center text-sm font-medium transition-colors',
+                                    link.active ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100',
+                                    !link.url ? 'pointer-events-none opacity-40' : '',
+                                ]"
                             >
-                                <ChevronRight
-                                    :class="['h-4 w-4 shrink-0 text-slate-500 transition-transform', isExpanded(group.key) ? 'rotate-90' : '']"
-                                />
-                                <span class="min-w-0 flex-1">
-                                    <span class="block truncate font-semibold text-slate-900">{{ groupTitle(group) }}</span>
-                                    <span class="block text-xs text-slate-500">
-                                        {{ group.stores_count }} toko · {{ group.active_count }} aktif ·
-                                        {{ isExpanded(group.key) ? 'ketuk untuk menutup' : 'ketuk untuk melihat' }}
-                                    </span>
-                                </span>
-                                <span :class="categoryPillClass(group.category)">{{ categoryLabel(group.category) }}</span>
-                            </button>
-                        </li>
-                        <li
-                            v-for="store in visibleStores(group)"
-                            :key="store.id"
-                            :class="['py-4 pr-4', isMultiStore(group) ? 'border-l-4 border-l-slate-200 pl-5' : 'pl-4']"
-                        >
-                            <div class="flex items-start justify-between gap-3">
-                                <div class="min-w-0">
-                                    <p class="truncate font-semibold text-slate-900">{{ store.name }}</p>
-                                    <p class="truncate text-xs text-slate-500">{{ store.address || 'Alamat belum diatur' }}</p>
-                                    <div v-if="store.owner" class="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-slate-500">
-                                        <span class="truncate" :title="store.owner.email">{{ store.owner.name }}</span>
-                                        <a
-                                            v-if="waLink(store.owner.phone)"
-                                            :href="waLink(store.owner.phone)!"
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            class="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 ring-1 ring-emerald-200 ring-inset hover:bg-emerald-100"
-                                            :aria-label="`Chat WhatsApp ${store.owner.name}`"
-                                        >
-                                            <MessageCircle class="h-3 w-3" />
-                                            {{ waDisplay(store.owner.phone) }}
-                                        </a>
-                                        <span v-else class="shrink-0 text-slate-400">· WA belum ada</span>
-                                    </div>
-                                </div>
-                                <span :class="statusPillClass(store)">
-                                    <span class="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
-                                    {{ getStoreStatus(store) }}
-                                </span>
-                            </div>
-                            <dl class="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-                                <div>
-                                    <dt class="text-slate-400">Paket</dt>
-                                    <dd class="font-medium text-slate-700">
-                                        {{ planLabel(store) }}<span v-if="store.pro_trial_active" class="ml-1 text-violet-700">· Trial Pro</span>
-                                    </dd>
-                                </div>
-                                <div>
-                                    <dt class="text-slate-400">Masa aktif</dt>
-                                    <dd v-if="store.subscription_end && !isStarterFreeStore(store)" class="font-medium text-slate-700">
-                                        {{ formatDate(store.subscription_end) }}
-                                        <span :class="['block', getDaysRemainingClass(store.subscription_end)]">{{
-                                            remainingLabel(store.subscription_end)
-                                        }}</span>
-                                    </dd>
-                                    <dd v-else class="font-medium text-slate-400">Tanpa batas</dd>
-                                </div>
-                            </dl>
-                            <div class="mt-3 flex items-center gap-2">
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    class="h-9 flex-1 rounded-lg text-xs font-semibold"
-                                    @click="openExtendModal(store)"
-                                >
-                                    <Plus class="mr-1 h-3.5 w-3.5" /> Perpanjang
-                                </Button>
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger as-child>
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            class="h-9 rounded-lg px-3 text-xs font-semibold"
-                                            :aria-label="`Aksi lain untuk ${store.name}`"
-                                        >
-                                            Lainnya
-                                            <ChevronDown class="ml-1 h-3.5 w-3.5" />
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end" class="w-56 rounded-xl">
-                                        <DropdownMenuItem class="cursor-pointer" @select="openReduceModal(store)">
-                                            <Minus class="mr-2 h-4 w-4" /> Kurangi masa aktif
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem
-                                            v-if="isStarterFreeStore(store) && !store.pro_trial_used && store.is_active"
-                                            class="cursor-pointer"
-                                            @select="openTrialModal(store)"
-                                        >
-                                            <FlaskConical class="mr-2 h-4 w-4" /> Aktifkan Trial Pro
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem v-if="store.pro_trial_active" class="cursor-pointer" @select="stopTrial(store)">
-                                            <Square class="mr-2 h-4 w-4" /> Hentikan trial
-                                        </DropdownMenuItem>
-                                        <DropdownMenuSeparator />
-                                        <DropdownMenuItem class="cursor-pointer" @select="toggleStoreStatus(store)">
-                                            <Power class="mr-2 h-4 w-4" /> {{ store.is_active ? 'Nonaktifkan toko' : 'Aktifkan toko' }}
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem
-                                            class="cursor-pointer text-red-600 focus:bg-red-50 focus:text-red-700"
-                                            @select="deleteStore(store)"
-                                        >
-                                            <Trash2 class="mr-2 h-4 w-4" /> Hapus toko permanen
-                                        </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
-                            </div>
-                        </li>
-                    </template>
-                </ul>
-
-                <!-- Pagination -->
-                <div
-                    v-if="safeGroups.links && safeGroups.links.length > 3"
-                    class="flex flex-col items-center gap-3 border-t border-slate-100 px-5 py-4 sm:flex-row sm:justify-between"
-                >
-                    <p v-if="storesRange" class="text-xs text-slate-500">{{ storesRange }}</p>
-                    <nav class="flex flex-wrap items-center justify-center gap-1" aria-label="Navigasi halaman toko">
-                        <Link
-                            v-for="link in safeGroups.links"
-                            :key="link.label"
-                            :href="link.url || '#'"
-                            :aria-current="link.active ? 'page' : undefined"
-                            :class="[
-                                'min-w-8 rounded-lg px-2.5 py-1.5 text-center text-sm font-medium transition-colors',
-                                link.active ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100',
-                                !link.url ? 'pointer-events-none opacity-40' : '',
-                            ]"
-                        >
-                            <span v-html="paginationLabel(link.label)" />
-                        </Link>
-                    </nav>
+                                <span v-html="paginationLabel(link.label)" />
+                            </Link>
+                        </nav>
+                    </div>
                 </div>
             </div>
         </section>
@@ -1486,6 +1493,14 @@ interface StoreGroup {
     stores: Store[];
 }
 
+interface GroupPage {
+    data: StoreGroup[];
+    links: any[];
+    from?: number | null;
+    to?: number | null;
+    total?: number;
+}
+
 /** Saringan daftar toko dari kartu ringkasan (query ?filter=). */
 type StoreFilter = 'premium' | 'trial' | 'free' | 'aktif';
 
@@ -1505,8 +1520,13 @@ interface Props {
         pending_payments: number;
         total_revenue: number;
     };
-    storeGroups: { data: StoreGroup[]; links: any[]; from?: number | null; to?: number | null; total?: number };
-    /** Jumlah toko di daftar setelah saringan (paginasi menghitung grup, bukan toko). */
+    /** Grup usaha yang punya lebih dari satu toko (nomor halaman: ?grup_page=). */
+    multiStoreGroups: GroupPage;
+    /** Usaha dengan satu toko (nomor halaman: ?page=). */
+    singleStoreGroups: GroupPage;
+    /** Jumlah toko di dalam grup multi-toko setelah saringan. */
+    multiStoreCount?: number;
+    /** Jumlah seluruh toko di daftar setelah saringan. */
     listedStores?: number;
     storeFilter?: StoreFilter | null;
     vouchers: Voucher[];
@@ -1546,7 +1566,6 @@ const safeStats = computed(
             total_revenue: 0,
         },
 );
-const safeGroups = computed(() => props.storeGroups || { data: [], links: [] });
 const listedStores = computed(() => props.listedStores ?? 0);
 
 /** Link wa.me dari nomor pemilik (format 62… / 08…). */
@@ -1670,10 +1689,32 @@ const scrollToStoreList = async () => {
     requestAnimationFrame(() => document.getElementById('daftar-toko')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
 };
 
-const storesRange = computed(() => {
-    const g = safeGroups.value;
-    if (!g.total) return '';
-    return `Menampilkan ${g.from ?? 0}–${g.to ?? 0} dari ${formatCurrency(g.total)} usaha (${formatCurrency(listedStores.value)} toko)`;
+// Daftar toko dipisah dua bagian: grup usaha multi-toko dan toko tunggal. Bagian yang kosong disembunyikan.
+const listSections = computed(() => {
+    const empty: GroupPage = { data: [], links: [] };
+    const multi = props.multiStoreGroups ?? empty;
+    const single = props.singleStoreGroups ?? empty;
+    const range = (g: GroupPage, unit: string, extra = '') =>
+        g.total ? `Menampilkan ${g.from ?? 0}–${g.to ?? 0} dari ${formatCurrency(g.total)} ${unit}${extra}` : '';
+
+    return [
+        {
+            id: 'grup',
+            title: 'Grup usaha (lebih dari 1 toko)',
+            hint: 'Klik baris grup untuk melihat toko-tokonya',
+            groups: multi,
+            range: range(multi, 'grup', ` (${formatCurrency(props.multiStoreCount ?? 0)} toko)`),
+            navLabel: 'Navigasi halaman grup usaha',
+        },
+        {
+            id: 'tunggal',
+            title: 'Toko tunggal',
+            hint: 'Usaha dengan satu toko, diurutkan dari yang terbaru',
+            groups: single,
+            range: range(single, 'toko'),
+            navLabel: 'Navigasi halaman toko tunggal',
+        },
+    ].filter((section) => (section.groups.total ?? 0) > 0);
 });
 
 // Filter status pembayaran (hanya menyaring daftar yang sudah dimuat).
