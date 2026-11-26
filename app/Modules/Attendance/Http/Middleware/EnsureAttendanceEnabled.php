@@ -28,6 +28,11 @@ class EnsureAttendanceEnabled
                 ->with('error', 'Anda perlu membuat toko terlebih dahulu.');
         }
 
+        // Karyawan tidak bisa membuka langganan/pengaturan: dashboard menampilkan pesan untuknya.
+        if ($user->isStaff() && ! AttendanceSettings::enabled($store)) {
+            return redirect()->route('dashboard');
+        }
+
         if (! AttendanceSettings::purchased($store)) {
             return redirect()->route('subscription.index')
                 ->with('error', 'Paket Absensi + Payroll belum aktif. Beli di halaman Langganan terlebih dahulu.');

@@ -10,6 +10,8 @@ class ProductCatalogController extends Controller
     public function index(Request $request)
     {
         $user = auth()->user();
+        // Katalog untuk kasir offline (harga & stok): bukan untuk akun Karyawan yang hanya absen.
+        abort_if($user->isStaff(), 403, 'Akun Karyawan hanya untuk absensi.');
         $store = $user->store;
 
         if (! $store) {

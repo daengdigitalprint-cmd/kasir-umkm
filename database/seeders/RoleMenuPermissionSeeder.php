@@ -52,6 +52,10 @@ class RoleMenuPermissionSeeder extends Seeder
             'barber' => [
                 'dashboard', 'queues', 'pos_transactions', 'attendance', 'settings',
             ],
+            // Karyawan biasa: hanya Absensi (absen, riwayat, pengajuan, slip gaji sendiri).
+            'staff' => [
+                'attendance',
+            ],
             'owner' => [
                 'dashboard', 'products', 'product_categories',
                 'recipes', 'productions', 'stock_transfers', 'stock_requests',

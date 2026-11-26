@@ -74,7 +74,10 @@ class User extends Authenticatable
     public const PIN_ONLY_EMAIL_DOMAIN = 'pin.kasirumkm.invalid';
 
     /** Peran yang boleh dibuat sebagai akun PIN (tanpa email). */
-    public const PIN_ONLY_ROLES = ['cashier', 'kitchen', 'warehouse', 'barber'];
+    public const PIN_ONLY_ROLES = ['cashier', 'kitchen', 'warehouse', 'barber', 'staff'];
+
+    /** Peran Karyawan: karyawan biasa yang hanya memakai Absensi. */
+    public const STAFF_ROLE = 'staff';
 
     public static function pinOnlyEmailFor(int $storeId): string
     {
@@ -141,6 +144,12 @@ class User extends Authenticatable
     public function isKitchenStaff(): bool
     {
         return $this->getRoleForActiveStore() === 'kitchen';
+    }
+
+    /** Karyawan biasa: hanya Absensi (absen, riwayat, pengajuan, slip gaji sendiri). */
+    public function isStaff(): bool
+    {
+        return $this->getRoleForActiveStore() === self::STAFF_ROLE;
     }
 
     /** Teknisi barbershop / salon. */

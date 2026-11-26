@@ -60,15 +60,21 @@ class CashierPinService
      *
      * @return Collection<int, User>
      */
-    public function getCashiersForStore(int $storeId): Collection
+    /**
+     * Akun yang bisa dipilih di layar PIN. Untuk layar kasir (POS) peran Karyawan tidak ikut:
+     * akun itu hanya untuk absen di perangkat bersama (halaman Absensi).
+     */
+    public function getCashiersForStore(int $storeId, bool $forPos = false): Collection
     {
         $store = Store::query()->findOrFail($storeId);
+
+        $excludedRoles = $forPos ? ['admin', 'owner', User::STAFF_ROLE] : ['admin', 'owner'];
 
         return $store->members()
             ->where('users.is_active', true)
             ->where('users.can_login_pos', true)
             ->whereNotNull('users.cashier_pin_hash')
-            ->whereNotIn('store_user.role', ['admin', 'owner'])
+            ->whereNotIn('store_user.role', $excludedRoles)
             ->orderBy('users.name')
             ->get(['users.id', 'users.name', 'users.cashier_pin_hash', 'users.cashier_pin_set_at', 'users.can_login_pos']);
     }
@@ -83,6 +89,7 @@ class CashierPinService
             'kitchen' => 'Dapur',
             'owner' => 'Pemilik (Owner)',
             'barber' => 'Barber',
+            'staff' => 'Karyawan',
             default => $role ?? 'Anggota tim',
         };
     }

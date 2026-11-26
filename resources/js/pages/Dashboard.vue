@@ -130,6 +130,8 @@ interface Props {
     }>;
     batch_expiry_warn_days?: number | null;
     storeInactive?: boolean;
+    /** Peran Karyawan saat modul Absensi belum aktif (tidak ada data toko yang dikirim). */
+    staffAttendanceUnavailable?: boolean;
     storeName?: string;
     /** Pembayaran langganan yang masih pending (dari backend SubscriptionPayment). */
     pendingPayment?: {
@@ -165,6 +167,7 @@ const {
     expiringBatches,
     batch_expiry_warn_days,
     storeInactive,
+    staffAttendanceUnavailable,
     storeName,
     pendingPayment,
     weeklyTrend,
@@ -608,6 +611,18 @@ const daysUntilExpiry = (dateString: string) => {
             </div>
 
             <!-- Welcome Section -->
+            <div v-else-if="staffAttendanceUnavailable" class="py-16 text-center">
+                <div class="mx-auto max-w-md">
+                    <div class="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 p-4">
+                        <AlertTriangle class="h-8 w-8 text-amber-600" />
+                    </div>
+                    <h2 class="mb-3 text-2xl font-bold text-gray-900">Absensi belum aktif</h2>
+                    <p class="text-base text-gray-600">
+                        Akun Karyawan Anda di {{ storeName }} hanya untuk absen. Minta pemilik atau admin toko mengaktifkan modul Absensi.
+                    </p>
+                </div>
+            </div>
+
             <div v-else-if="!store" class="py-10 text-center md:py-16">
                 <div class="mx-auto max-w-md">
                     <div class="mb-4 flex justify-center">

@@ -13,6 +13,15 @@ class EnsureAiChatEnabled
     {
         $store = $request->user()?->store()->first();
 
+        // Karyawan hanya memakai Absensi; Asisten AI bisa membaca data penjualan toko.
+        if ($request->user()?->isStaff()) {
+            if ($request->routeIs('ai.chat.page')) {
+                return redirect()->route('dashboard');
+            }
+
+            abort(403, 'Asisten AI tidak tersedia untuk akun Karyawan.');
+        }
+
         // Asisten AI memakai API berbayar: tidak termasuk paket Gratis.
         if ($store && PlanModules::locked($store, 'ai_chat')) {
             $message = PlanModules::lockedMessage('ai_chat');

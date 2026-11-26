@@ -56,7 +56,7 @@ class StoreAccessController extends Controller
     {
         $validated = $request->validate([
             'email' => ['required', 'email', 'max:255'],
-            'role' => ['required', 'string', 'in:admin,manager,cashier,kitchen,warehouse,owner,barber'],
+            'role' => ['required', 'string', 'in:admin,manager,cashier,kitchen,warehouse,owner,barber,staff'],
         ]);
 
         $actor = $request->user();
@@ -136,10 +136,10 @@ class StoreAccessController extends Controller
                 'required', 'string',
                 $loginMethod === 'pin'
                     ? Rule::in(User::PIN_ONLY_ROLES)
-                    : 'in:admin,manager,cashier,kitchen,warehouse,owner,barber',
+                    : 'in:admin,manager,cashier,kitchen,warehouse,owner,barber,staff',
             ],
         ], [
-            'role.in' => 'Akun PIN hanya untuk peran Kasir, Dapur, Admin gudang, atau Barber.',
+            'role.in' => 'Akun PIN hanya untuk peran Kasir, Dapur, Admin gudang, Barber, atau Karyawan.',
             'pin.digits_between' => 'PIN harus 4–6 angka.',
             'phone.regex' => 'Nomor HP hanya boleh berisi angka.',
         ]);
@@ -176,7 +176,13 @@ class StoreAccessController extends Controller
                 'phone' => $validated['phone'] ?? null,
                 'business_type' => $store->business_type ?? 'general',
                 'store_id' => $store->id,
-                'role' => $validated['role'] === 'admin' ? 'admin' : 'cashier',
+                // Peran global hanya dipakai bila keanggotaan toko tidak ditemukan: Karyawan tetap
+                // 'staff' supaya tidak jatuh ke 'cashier' (yang membuka POS).
+                'role' => match ($validated['role']) {
+                    'admin' => 'admin',
+                    User::STAFF_ROLE => User::STAFF_ROLE,
+                    default => 'cashier',
+                },
                 'is_active' => true,
                 'email_verified_at' => now(),
             ]);
@@ -224,7 +230,7 @@ class StoreAccessController extends Controller
             'password' => ['nullable', 'confirmed', Password::defaults()],
             'phone' => ['sometimes', 'nullable', 'string', 'max:30', 'regex:/^[0-9+\s\-()]{6,30}$/'],
             'pin' => ['nullable', 'digits_between:4,6'],
-            'role' => ['required', 'string', 'in:admin,manager,cashier,kitchen,warehouse,owner,barber'],
+            'role' => ['required', 'string', 'in:admin,manager,cashier,kitchen,warehouse,owner,barber,staff'],
         ], [
             'pin.digits_between' => 'PIN harus 4–6 angka.',
             'phone.regex' => 'Nomor HP hanya boleh berisi angka.',
@@ -241,7 +247,7 @@ class StoreAccessController extends Controller
 
         // Akun PIN tidak punya email untuk masuk: tidak bisa dijadikan admin/manajer/pemilik.
         if ($user->isPinOnly() && ! in_array($validated['role'], User::PIN_ONLY_ROLES, true)) {
-            return back()->withErrors(['role' => 'Akun PIN hanya untuk peran Kasir, Dapur, Admin gudang, atau Barber. Buat akun email untuk peran ini.']);
+            return back()->withErrors(['role' => 'Akun PIN hanya untuk peran Kasir, Dapur, Admin gudang, Barber, atau Karyawan. Buat akun email untuk peran ini.']);
         }
 
         if (! $store->members()->whereKey($user->id)->exists()) {
@@ -374,7 +380,7 @@ class StoreAccessController extends Controller
         return back()->with('success', 'Anggota dihapus: '.$user->email);
     }
 
-    private const PERMISSION_ROLES = ['admin', 'manager', 'cashier', 'kitchen', 'warehouse', 'owner', 'barber'];
+    private const PERMISSION_ROLES = ['admin', 'manager', 'cashier', 'kitchen', 'warehouse', 'owner', 'barber', 'staff'];
 
     /** Daftar menu dan hak akses per role untuk toko aktif. */
     public function menuPermissions()

@@ -6,6 +6,7 @@ use App\Models\StockMovement;
 use App\Models\StockTransfer;
 use App\Models\Store;
 use App\Models\TransactionItem;
+use App\Modules\Attendance\Support\AttendanceSettings;
 use App\Support\BatchTracking;
 use App\Support\ExpiringProductBatches;
 use App\Support\FnBFeatures;
@@ -31,6 +32,21 @@ class DashboardController extends Controller
             return Inertia::render('Dashboard', [
                 'store' => null,
                 'storeInactive' => true,
+                'storeName' => $store->name,
+            ]);
+        }
+
+        // Karyawan hanya memakai Absensi: langsung ke sana, tanpa data penjualan toko.
+        // Bila modul Absensi belum aktif, tampilkan pesan saja (tidak dialihkan ke halaman
+        // langganan/pengaturan yang memang tertutup untuk peran ini).
+        if ($user->isStaff()) {
+            if (AttendanceSettings::enabled($store)) {
+                return redirect()->route('attendance.index');
+            }
+
+            return Inertia::render('Dashboard', [
+                'store' => null,
+                'staffAttendanceUnavailable' => true,
                 'storeName' => $store->name,
             ]);
         }

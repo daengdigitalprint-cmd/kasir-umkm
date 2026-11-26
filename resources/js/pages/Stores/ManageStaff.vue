@@ -9,7 +9,7 @@ import { ref, watch, computed } from 'vue';
 import { confirmDialog, toastSuccess, toastError } from '@/lib/swal';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 
-type StoreRole = 'admin' | 'manager' | 'cashier' | 'kitchen' | 'warehouse' | 'owner' | 'barber';
+type StoreRole = 'admin' | 'manager' | 'cashier' | 'kitchen' | 'warehouse' | 'owner' | 'barber' | 'staff';
 
 interface TeamMember {
     id: number;
@@ -48,7 +48,7 @@ const canShowOwnerOption = computed(() => canAssignOwner.value || isSuperAdmin.v
 const activeTab = ref<'karyawan' | 'izin'>('karyawan');
 
 // --- Form buat akun baru ---
-const PIN_ROLES: StoreRole[] = ['cashier', 'kitchen', 'warehouse', 'barber'];
+const PIN_ROLES: StoreRole[] = ['cashier', 'kitchen', 'warehouse', 'barber', 'staff'];
 const pinModeOn = computed(() => String((page.props as { cashier_login_mode?: string }).cashier_login_mode ?? 'email') === 'pin');
 
 const showCreateForm = ref(false);
@@ -161,7 +161,16 @@ async function copyShareMessage() {
 
 // --- Peran ---
 function roleLabel(role: string): string {
-    const map: Record<string, string> = { admin: 'Admin', manager: 'Manajer', cashier: 'Kasir', kitchen: 'Dapur', warehouse: 'Admin gudang', owner: 'Pemilik (Owner)', barber: 'Barber' };
+    const map: Record<string, string> = {
+        admin: 'Admin',
+        manager: 'Manajer',
+        cashier: 'Kasir',
+        kitchen: 'Dapur',
+        warehouse: 'Admin gudang',
+        owner: 'Pemilik (Owner)',
+        barber: 'Barber',
+        staff: 'Karyawan',
+    };
     return map[role] ?? role;
 }
 
@@ -173,22 +182,25 @@ const ROLE_DESCRIPTIONS: Record<string, string> = {
     kitchen: 'Melihat dan menyelesaikan antrean pesanan dapur.',
     warehouse: 'Stok, transfer, stok opname, dan pembelian. Tidak melihat HPP dan laporan keuangan.',
     barber: 'Melayani antrean dan transaksi layanan.',
+    staff: 'Hanya absen, riwayat kehadiran, pengajuan cuti/lembur, dan slip gaji sendiri.',
     owner: 'Pemilik usaha: semua outlet di grup, laporan, dan langganan.',
 };
 function roleDescription(role: string): string {
     return ROLE_DESCRIPTIONS[role] ?? '';
 }
 
-/** Peran Dapur/Barber hanya relevan bila modulnya aktif di toko ini. */
+/** Peran Dapur/Barber/Karyawan hanya relevan bila modulnya aktif di toko ini. */
 const sharedFlag = (key: string) => Boolean((page.props as Record<string, unknown>)[key]);
 const kitchenRelevant = computed(() => sharedFlag('fnb_enabled') || sharedFlag('kitchen_queue_enabled'));
 const barberRelevant = computed(() => sharedFlag('barbershop_enabled'));
+const staffRelevant = computed(() => sharedFlag('attendance_enabled'));
 
 const baseRoles = computed<StoreRole[]>(() => {
     const roles: StoreRole[] = ['admin', 'manager', 'cashier'];
     if (kitchenRelevant.value) roles.push('kitchen');
     roles.push('warehouse');
     if (barberRelevant.value) roles.push('barber');
+    if (staffRelevant.value) roles.push('staff');
     return roles;
 });
 

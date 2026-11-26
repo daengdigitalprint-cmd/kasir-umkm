@@ -16,6 +16,7 @@ class ProductSyncController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
+        abort_if($user->isStaff(), 403, 'Akun Karyawan hanya untuk absensi.');
         $storeId = $user->store_id;
 
         $query = Product::query()

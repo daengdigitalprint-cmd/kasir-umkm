@@ -20,6 +20,8 @@ class TransactionSyncController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        abort_if($request->user()->isStaff(), 403, 'Akun Karyawan hanya untuk absensi.');
+
         $validated = $request->validate([
             'client_uuid' => ['required', 'string', 'uuid'],
             'transaction_number' => ['nullable', 'string', 'max:50'],

@@ -13,7 +13,7 @@ class RoleMenuPermission extends Model
     ];
 
     /** Daftar role yang menu-nya di-cache (untuk invalidasi massal). */
-    private const CACHED_ROLES = ['admin', 'manager', 'cashier', 'warehouse', 'owner', 'kitchen', 'barber', '*all*'];
+    private const CACHED_ROLES = ['admin', 'manager', 'cashier', 'warehouse', 'owner', 'kitchen', 'barber', 'staff', '*all*'];
 
     protected static function booted(): void
     {

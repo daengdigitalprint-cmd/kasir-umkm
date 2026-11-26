@@ -34,7 +34,7 @@ class CashierPinLoginController extends Controller
             abort(403, 'Mode PIN tidak aktif untuk toko ini.');
         }
 
-        $cashiers = $this->pinService->getCashiersForStore($store->id)
+        $cashiers = $this->pinService->getCashiersForStore($store->id, forPos: true)
             ->map(fn (User $member) => [
                 'id' => $member->id,
                 'name' => $member->name,
@@ -74,6 +74,14 @@ class CashierPinLoginController extends Controller
             ]);
         }
 
+        // Akun Karyawan hanya untuk absen: boleh masuk dari halaman Absensi, tidak dari kasir (POS).
+        $cashierRole = $cashier->stores()->where('stores.id', $store->id)->first()?->pivot?->role;
+        if ($cashierRole === User::STAFF_ROLE && ! $this->isAttendancePath($request)) {
+            return back()->withErrors([
+                'pin' => 'Akun Karyawan hanya untuk absen. Gunakan halaman Absensi.',
+            ]);
+        }
+
         $employee = $this->attendanceService->resolveEmployee($cashier, $store);
 
         $request->session()->put('active_cashier', [
@@ -101,8 +109,13 @@ class CashierPinLoginController extends Controller
      */
     private function returnPath(Request $request): string
     {
-        $target = (string) $request->input('redirect_to', '');
+        return $this->isAttendancePath($request)
+            ? (string) $request->input('redirect_to')
+            : route('pos.index', absolute: false);
+    }
 
-        return preg_match('#^/attendance(/|$|\?)#', $target) ? $target : route('pos.index', absolute: false);
+    private function isAttendancePath(Request $request): bool
+    {
+        return preg_match('#^/attendance(/|$|\?)#', (string) $request->input('redirect_to', '')) === 1;
     }
 }
