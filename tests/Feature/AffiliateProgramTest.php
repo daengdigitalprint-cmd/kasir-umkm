@@ -872,8 +872,35 @@ class AffiliateProgramTest extends TestCase
             ->assertRedirect(route('owner.dashboard'));
     }
 
+    public function test_program_page_shows_examples_for_3_6_and_12_month_subscriptions(): void
+    {
+        // Aturan usaha: minimal langganan 3 bulan, pilihan 3/6/12 bulan (bawaan config).
+        SubscriptionPlan::create(['name' => 'GrowUp (tahunan)', 'slug' => 'bisnis-tahunan', 'price' => 1188000, 'duration_days' => 365, 'is_active' => true, 'sort_order' => 5, 'billing_cycle' => 'yearly']);
+        config(['affiliate.commission_percent' => 30]);
+
+        $this->get('/afiliasi')->assertInertia(fn (Assert $page) => $page
+            ->where('rules.subscription_months', [3, 6, 12])
+            ->has('examples', 3)
+            // 3 bulan = 3 × harga bulanan Rp99.000
+            ->where('examples.0.label', 'Langganan 3 bulan')
+            ->where('examples.0.price', 297000)
+            ->where('examples.0.commission', 89100)
+            ->where('examples.1.label', 'Langganan 6 bulan')
+            ->where('examples.1.price', 594000)
+            ->where('examples.1.commission', 178200)
+            // 12 bulan memakai harga paket tahunan yang memang dijual
+            ->where('examples.2.label', 'Langganan 12 bulan')
+            ->where('examples.2.plan', 'GrowUp (tahunan)')
+            ->where('examples.2.price', 1188000)
+            ->where('examples.2.commission', 356400)
+        );
+    }
+
     public function test_program_page_shows_monthly_and_yearly_commission_examples(): void
     {
+        // Tanpa aturan lama langganan: contoh diambil dari paket yang dijual apa adanya.
+        config(['affiliate.subscription_months' => []]);
+
         SubscriptionPlan::create(['name' => 'GrowUp (tahunan)', 'slug' => 'bisnis-tahunan', 'price' => 1188000, 'duration_days' => 365, 'is_active' => true, 'sort_order' => 5, 'billing_cycle' => 'yearly']);
         // Paket promo dan paket nonaktif tidak dipakai sebagai contoh.
         SubscriptionPlan::create(['name' => 'Promo', 'slug' => 'promo-onboarding-tahunan', 'price' => 792000, 'duration_days' => 365, 'is_active' => true, 'sort_order' => 3, 'billing_cycle' => 'yearly']);

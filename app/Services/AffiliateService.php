@@ -758,9 +758,25 @@ final class AffiliateService
     }
 
     /**
+     * Lama langganan yang ditawarkan ke toko, urut naik (mis. [3, 6, 12]). Kosong = tidak diatur.
+     *
+     * @return list<int>
+     */
+    public static function subscriptionMonths(): array
+    {
+        $months = array_values(array_unique(array_filter(
+            array_map('intval', (array) config('affiliate.subscription_months', [])),
+            fn (int $m) => $m > 0,
+        )));
+        sort($months);
+
+        return $months;
+    }
+
+    /**
      * Aturan program untuk ditampilkan di halaman.
      *
-     * @return array{percent:float, months:int, once:bool, cookie_days:int, hold_days:int, min_payout:int, referred_trial_days:int, default_trial_days:int}
+     * @return array{percent:float, months:int, once:bool, cookie_days:int, hold_days:int, min_payout:int, referred_trial_days:int, default_trial_days:int, subscription_months:list<int>}
      */
     public static function rules(?Affiliate $affiliate = null): array
     {
@@ -775,6 +791,8 @@ final class AffiliateService
             // Keuntungan untuk yang diajak: trial Pro lebih panjang (0 = tidak ada).
             'referred_trial_days' => max(0, (int) AffiliateSetting::value('referred_trial_days')),
             'default_trial_days' => TrialService::TRIAL_DAYS,
+            // Lama langganan yang ditawarkan ke toko (mis. 3, 6, 12 bulan); yang terkecil = minimal langganan.
+            'subscription_months' => self::subscriptionMonths(),
         ];
     }
 }

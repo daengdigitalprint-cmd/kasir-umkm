@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import AffiliateLayout from '@/layouts/AffiliateLayout.vue';
 import { Link, useForm } from '@inertiajs/vue3';
-import { ArrowRight, Banknote, Eye, Link2, Minus, Plus, Share2, UserPlus } from 'lucide-vue-next';
+import { ArrowRight, Banknote, Eye, Info, Link2, Minus, Plus, Share2, UserPlus } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 interface Rules {
@@ -14,6 +14,8 @@ interface Rules {
     min_payout: number;
     referred_trial_days: number;
     default_trial_days: number;
+    /** Lama langganan yang ditawarkan ke toko (mis. 3, 6, 12 bulan); yang pertama = minimal. */
+    subscription_months: number[];
 }
 
 interface Example {
@@ -39,6 +41,15 @@ const percentLabel = computed(() => props.rules.percent.toLocaleString('id-ID'))
 /* Simulasi: jumlah toko yang diajak × komisi per paket. Paket terpanjang ditonjolkan karena komisinya paling besar. */
 const stores = ref(5);
 const featured = computed(() => (props.examples.length ? props.examples[props.examples.length - 1] : null));
+
+/* Keterangan lama langganan: "3, 6, atau 12 bulan" dan minimalnya. */
+const terms = computed(() => props.rules.subscription_months ?? []);
+const minTerm = computed(() => (terms.value.length ? terms.value[0] : null));
+const termsLabel = computed(() => {
+    const list = terms.value.map(String);
+    if (list.length <= 1) return list.join('');
+    return list.slice(0, -1).join(', ') + (list.length > 2 ? ',' : '') + ' atau ' + list[list.length - 1];
+});
 const others = computed(() => props.examples.slice(0, -1).reverse());
 const step = (delta: number) => {
     stores.value = Math.min(100, Math.max(1, stores.value + delta));
@@ -161,9 +172,19 @@ const steps = [
             <section v-if="featured" class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6" aria-labelledby="simulasi">
                 <h2 id="simulasi" class="text-lg font-bold text-slate-900">Berapa yang bisa Anda dapat?</h2>
                 <p class="mt-1 text-sm text-slate-600">
-                    <template v-if="rules.once">Komisi dihitung sekali dari harga paket yang dibeli toko. Makin panjang paketnya, makin besar komisinya.</template>
+                    <template v-if="rules.once">Komisi dihitung sekali dari harga langganan yang dibayar toko. Makin panjang langganannya, makin besar komisinya.</template>
                     <template v-else-if="others.length">Komisi terbesar datang dari toko yang mengambil paket terpanjang.</template>
                     Atur jumlah toko yang Anda ajak untuk melihat perkiraannya.
+                </p>
+
+                <p
+                    v-if="minTerm"
+                    class="mt-3 inline-flex items-start gap-2 rounded-xl bg-primary/5 px-3.5 py-2.5 text-sm font-medium text-slate-800 ring-1 ring-primary/15 ring-inset"
+                >
+                    <Info class="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                    <span
+                        >Minimal langganan {{ minTerm }} bulan<template v-if="terms.length > 1">. Toko bisa memilih langganan {{ termsLabel }} bulan</template>.</span
+                    >
                 </p>
 
                 <div class="mt-4">
@@ -270,8 +291,10 @@ const steps = [
                         <span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary"></span>
                         <span
                             ><template v-if="rules.once"
-                                >Komisi {{ percentLabel }}% dihitung dari harga paket pertama yang dibeli toko yang Anda ajak, setelah pembayarannya
-                                dikonfirmasi. Komisi diberikan sekali untuk setiap toko; perpanjangan berikutnya tidak menghasilkan komisi lagi.</template
+                                >Komisi {{ percentLabel }}% dihitung dari harga langganan pertama yang dibayar toko yang Anda ajak<template v-if="minTerm"
+                                    >&nbsp;(minimal langganan {{ minTerm }} bulan<template v-if="terms.length > 1">; pilihan {{ termsLabel }} bulan</template>)</template
+                                >, setelah pembayarannya dikonfirmasi. Komisi diberikan sekali untuk setiap toko; perpanjangan berikutnya tidak menghasilkan
+                                komisi lagi.</template
                             ><template v-else
                                 >Komisi {{ percentLabel }}% dihitung dari setiap pembayaran langganan (paket maupun fitur tambahan) yang sudah dikonfirmasi,
                                 selama {{ rules.months }} bulan sejak pembayaran pertama toko yang Anda ajak.</template

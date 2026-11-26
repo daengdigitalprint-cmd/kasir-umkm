@@ -29,5 +29,9 @@ return [
     // Isi 0 untuk mematikan keuntungan ini.
     'referred_trial_days' => (int) env('AFFILIATE_REFERRED_TRIAL_DAYS', 30),
 
+    // Lama langganan yang ditawarkan ke toko (aturan usaha: minimal 3 bulan). Dipakai untuk keterangan
+    // dan simulasi di halaman /afiliasi. Kosongkan ([]) untuk menampilkan paket yang dijual apa adanya.
+    'subscription_months' => [3, 6, 12],
+
     'cookie_name' => 'kumkm_ref',
 ];

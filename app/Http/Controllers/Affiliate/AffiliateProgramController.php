@@ -112,6 +112,11 @@ class AffiliateProgramController extends Controller
     {
         $percent = (float) \App\Models\AffiliateSetting::value('commission_percent');
 
+        $byTerm = $this->examplesBySubscriptionTerm($percent);
+        if ($byTerm !== []) {
+            return $byTerm;
+        }
+
         // Satu paket per lama langganan (1, 3, 6, 12 bulan, ...), dari terpendek ke terpanjang.
         // Paket terpanjang ditonjolkan di halaman karena komisinya paling besar.
         return SubscriptionPlan::active()
@@ -146,6 +151,47 @@ class AffiliateProgramController extends Controller
             })
             ->values()
             ->all();
+    }
+
+    /**
+     * Contoh per lama langganan yang ditawarkan (config affiliate.subscription_months, mis. 3/6/12 bulan).
+     * Harga N bulan = harga paket yang lamanya memang N bulan bila ada (mis. paket tahunan untuk 12 bulan),
+     * selain itu harga paket bulanan × N. Kosong bila lama langganan tidak diatur atau tidak ada paket bulanan.
+     *
+     * @return list<array{plan:string, price:float, commission:float, months:int, cycle:string, label:string}>
+     */
+    private function examplesBySubscriptionTerm(float $percent): array
+    {
+        $terms = AffiliateService::subscriptionMonths();
+        if ($terms === []) {
+            return [];
+        }
+
+        $plans = SubscriptionPlan::active()
+            ->where('price', '>', 0)
+            ->where('duration_days', '>', 0)
+            ->where('slug', 'not like', 'promo-%')
+            ->ordered()
+            ->get();
+
+        $monthly = $plans->first(fn (SubscriptionPlan $plan) => self::planMonths($plan) === 1);
+        if (! $monthly) {
+            return [];
+        }
+
+        return collect($terms)->map(function (int $months) use ($plans, $monthly, $percent) {
+            $exact = $plans->first(fn (SubscriptionPlan $plan) => self::planMonths($plan) === $months);
+            $price = $exact ? (float) $exact->price : (float) $monthly->price * $months;
+
+            return [
+                'plan' => $exact ? $exact->name : $monthly->name,
+                'price' => $price,
+                'commission' => round($price * $percent / 100),
+                'months' => $months,
+                'cycle' => $months.' bulan',
+                'label' => 'Langganan '.$months.' bulan',
+            ];
+        })->values()->all();
     }
 
     /** Lama paket dalam bulan (30 hari = 1, 365 hari = 12). */
