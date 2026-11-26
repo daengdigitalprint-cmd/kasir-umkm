@@ -8,10 +8,12 @@ use App\Models\ProductVariant;
 use App\Models\Purchase;
 use App\Models\Store;
 use App\Models\StockTransfer;
+use App\Models\SubscriptionPayment;
 use App\Models\SubscriptionPlan;
 use App\Models\TrialActivationLog;
 use App\Models\TrialNotification;
 use App\Models\User;
+use App\Models\VoucherUsage;
 use App\Support\PlanModules;
 use App\Support\StorePlanLimits;
 use Illuminate\Support\Carbon;
@@ -197,6 +199,69 @@ final class TrialService
     }
 
     /**
+     * Trial selesai karena toko sudah berlangganan: status trial dimatikan TANPA menurunkan paket
+     * dan tanpa mengubah masa aktif. Dipanggil saat masa aktif ditambah selagi trial (pembayaran
+     * langganan dikonfirmasi, perpanjangan super admin, voucher), dan oleh expire() sebagai pengaman.
+     *
+     * @return TrialActivationLog|null null bila toko tidak sedang trial
+     */
+    public static function convertToPaid(Store $store, ?User $admin = null, ?string $note = null): ?TrialActivationLog
+    {
+        if (! $store->pro_trial_active) {
+            return null;
+        }
+
+        $log = DB::transaction(function () use ($store, $admin, $note) {
+            $store->forceFill(['pro_trial_active' => false])->save();
+
+            $trialEnd = $store->pro_trial_end && $store->pro_trial_end->lt(now()) ? $store->pro_trial_end : now();
+
+            $log = TrialActivationLog::create([
+                'store_id' => $store->id,
+                'admin_id' => $admin?->id,
+                'action' => 'converted',
+                'old_plan_slug' => 'bisnis',
+                'new_plan_slug' => $store->subscriptionPlan()->value('slug'),
+                'trial_start' => $store->pro_trial_start,
+                'trial_end' => $trialEnd,
+                'notes' => $note ?? 'Trial Pro selesai: toko sudah berlangganan.',
+            ]);
+
+            // Pesan trial yang belum dibaca (sambutan, rekap, "berakhir besok") tidak relevan lagi.
+            TrialNotification::where('store_id', $store->id)
+                ->whereIn('type', ['trial_activated', 'trial_recap', 'trial_expiring_soon'])
+                ->whereNull('read_at')
+                ->update(['read_at' => now()]);
+
+            return $log;
+        });
+
+        PlanModules::forgetCache($store);
+
+        return $log;
+    }
+
+    /**
+     * Toko sudah membayar sejak trialnya dimulai: ada pembayaran langganan yang dikonfirmasi
+     * atau voucher yang dipakai. Toko seperti ini tidak boleh diturunkan ke paket Gratis.
+     */
+    public static function paidSinceTrialStart(Store $store): bool
+    {
+        $since = $store->pro_trial_start;
+
+        return SubscriptionPayment::query()
+            ->where('store_id', $store->id)
+            ->where('type', 'subscription')
+            ->where('status', 'confirmed')
+            ->when($since, fn ($q) => $q->where('confirmed_at', '>=', $since))
+            ->exists()
+            || VoucherUsage::query()
+                ->where('store_id', $store->id)
+                ->when($since, fn ($q) => $q->where('used_at', '>=', $since))
+                ->exists();
+    }
+
+    /**
      * Proses auto-expire untuk semua trial yang sudah lewat waktu.
      */
     public static function expireExpiredTrials(): int
@@ -234,6 +299,10 @@ final class TrialService
             ->get();
 
         foreach ($active as $store) {
+            if (self::paidSinceTrialStart($store)) {
+                continue; // sudah berbayar: toko tidak akan turun ke paket Gratis
+            }
+
             $hoursLeft = now()->diffInHours($store->pro_trial_end, false);
 
             if ($hoursLeft <= 24) {
@@ -441,6 +510,15 @@ final class TrialService
 
     private static function expire(Store $store, ?SubscriptionPlan $starterPlan = null): void
     {
+        // Pengaman: toko yang sudah membayar selagi trial tetapi status trialnya belum dimatikan
+        // (mis. pembayaran dikonfirmasi sebelum convertToPaid ada) tidak diturunkan. Cukup akhiri
+        // status trialnya; paket dan masa aktif hasil pembayaran dibiarkan.
+        if (self::paidSinceTrialStart($store)) {
+            self::convertToPaid($store, null, 'Trial Pro selesai: toko sudah membayar selagi trial, paket tidak diturunkan.');
+
+            return;
+        }
+
         $starterPlan ??= self::starterPlan();
 
         DB::transaction(function () use ($store, $starterPlan) {

@@ -41,14 +41,15 @@ const formatDate = (d: string | null) =>
     d ? new Date(d).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
 
 const actionLabel = (a: string) =>
-    ({ activated: 'Diaktifkan', stopped: 'Dihentikan', expired: 'Berakhir' })[a] ?? a;
+    ({ activated: 'Diaktifkan', stopped: 'Dihentikan', expired: 'Berakhir', converted: 'Berlangganan' })[a] ?? a;
 
 const actionIcon = (a: string) =>
-    ({ activated: CheckCircle, stopped: XCircle, expired: Clock })[a] ?? Clock;
+    ({ activated: CheckCircle, stopped: XCircle, expired: Clock, converted: CheckCircle })[a] ?? Clock;
 
 const actionClass = (a: string) =>
     ({
         activated: 'bg-green-100 text-green-800',
+        converted: 'bg-violet-100 text-violet-800',
         stopped: 'bg-amber-100 text-amber-800',
         expired: 'bg-slate-100 text-slate-600',
     })[a] ?? 'bg-slate-100 text-slate-600';

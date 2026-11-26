@@ -252,6 +252,9 @@ class SuperAdminController extends Controller
                 $store->subscription_notes = $validated['notes'];
                 $store->save();
             }
+
+            // Hari yang ditambahkan selagi trial Pro tidak boleh hangus saat trial:expire berjalan.
+            TrialService::convertToPaid($store, auth()->user(), "Trial Pro selesai: masa aktif diperpanjang {$validated['days']} hari oleh admin.");
         });
 
         return response()->json([
@@ -543,6 +546,10 @@ class SuperAdminController extends Controller
                 $store->subscription_plan_id = $payment->subscription_plan_id;
             }
             $store->save();
+
+            // Toko yang membayar selagi trial Pro bukan lagi toko trial: tanpa ini, trial:expire
+            // akan menurunkannya ke paket Gratis begitu tanggal trial lewat.
+            TrialService::convertToPaid($store, auth()->user(), "Trial Pro selesai: berlangganan via pembayaran #{$payment->invoice_number}.");
         });
 
         return response()->json([
@@ -662,6 +669,9 @@ class SuperAdminController extends Controller
             ]);
 
             $voucher->increment('used_count');
+
+            // Hari dari voucher yang dipakai selagi trial Pro tidak boleh hangus saat trial:expire berjalan.
+            TrialService::convertToPaid($store, auth()->user(), "Trial Pro selesai: voucher {$voucher->code} dipakai.");
         });
 
         return redirect()->back()->with('success', "Voucher berhasil digunakan. Masa aktif toko diperpanjang {$voucher->days} hari.");
