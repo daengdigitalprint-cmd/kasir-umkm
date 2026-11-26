@@ -763,6 +763,22 @@ class AffiliateProgramTest extends TestCase
             ->assertCookie(config('affiliate.cookie_name'), $affiliate->code);
     }
 
+    public function test_superadmin_can_preview_program_page_without_being_redirected(): void
+    {
+        $this->actingAs($this->superAdmin())->get('/afiliasi')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Affiliate/Landing')
+                ->where('adminPreview', true)
+                ->where('viewer', null) // tampilan pengunjung, tanpa form gabung
+                ->where('rules.percent', 20)
+            );
+
+        // Pengunjung biasa tidak melihat tanda pratinjau.
+        auth()->logout();
+        $this->get('/afiliasi')->assertInertia(fn (Assert $page) => $page->where('adminPreview', false));
+    }
+
     public function test_login_from_affiliate_button_lands_in_affiliate_area(): void
     {
         $affiliate = $this->affiliate();

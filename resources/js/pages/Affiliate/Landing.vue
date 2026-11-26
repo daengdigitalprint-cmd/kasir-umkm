@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import AffiliateLayout from '@/layouts/AffiliateLayout.vue';
 import { Link, useForm } from '@inertiajs/vue3';
-import { ArrowRight, Banknote, Link2, Minus, Plus, Share2, UserPlus } from 'lucide-vue-next';
+import { ArrowRight, Banknote, Eye, Link2, Minus, Plus, Share2, UserPlus } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 interface Rules {
@@ -25,6 +25,8 @@ const props = defineProps<{
     rules: Rules;
     examples: Example[];
     viewer: { name: string } | null;
+    /** Super admin membuka halaman ini dari panel admin untuk melihat tampilan pengunjung. */
+    adminPreview?: boolean;
 }>();
 
 const rupiah = (n: number) => 'Rp' + Math.round(n).toLocaleString('id-ID');
@@ -54,6 +56,17 @@ const steps = [
 <template>
     <AffiliateLayout title="Program Afiliasi">
         <div class="space-y-6">
+            <p
+                v-if="adminPreview"
+                role="status"
+                class="flex items-start gap-2.5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+            >
+                <Eye class="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                    <strong>Pratinjau admin.</strong> Beginilah halaman ini terlihat oleh pengunjung. Angka di sini mengikuti Aturan program di panel admin.
+                </span>
+            </p>
+
             <!-- Hero -->
             <section class="relative overflow-hidden rounded-2xl bg-[#d4ceff] p-6 text-slate-900 sm:p-10">
                 <!-- Latar sama dengan kartu fitur di beranda: sorot cahaya di atas, kotak-kotak di kiri-kanan bawah, pendar dari bawah -->

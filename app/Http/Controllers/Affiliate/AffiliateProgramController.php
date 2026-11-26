@@ -19,23 +19,25 @@ use Inertia\Response;
 /** Halaman publik program afiliasi + pendaftaran afiliator. */
 class AffiliateProgramController extends Controller
 {
-    /** Penjelasan program. Afiliator yang sudah masuk langsung ke dashboardnya. */
+    /**
+     * Penjelasan program. Afiliator yang sudah masuk langsung ke dashboardnya.
+     * Super admin melihat halaman ini sebagai pratinjau (persis seperti pengunjung), tanpa dialihkan.
+     */
     public function landing(Request $request): Response|RedirectResponse
     {
         $user = $request->user();
+        $adminPreview = (bool) $user?->isSuperAdmin();
 
-        if ($user?->isSuperAdmin()) {
-            return redirect()->route('superadmin.affiliates.index');
-        }
-
-        if ($user && $user->affiliate()->exists()) {
+        if ($user && ! $adminPreview && $user->affiliate()->exists()) {
             return redirect()->route('affiliate.dashboard');
         }
 
         return Inertia::render('Affiliate/Landing', [
             'rules' => AffiliateService::rules(),
             'examples' => $this->earningExamples(),
-            'viewer' => $user ? ['name' => $user->name] : null,
+            // Super admin tidak bisa bergabung: ia melihat tampilan pengunjung.
+            'viewer' => ($user && ! $adminPreview) ? ['name' => $user->name] : null,
+            'adminPreview' => $adminPreview,
         ]);
     }
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { LogIn, LogOut, Store } from 'lucide-vue-next';
+import { LogIn, LogOut, Shield, Store } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 /**
@@ -15,8 +15,9 @@ interface Props {
 const props = defineProps<Props>();
 
 const page = usePage();
-const user = computed(() => (page.props as any).auth?.user as { name?: string } | null);
-const hasStore = computed(() => ((page.props as any).accessible_stores ?? []).length > 0);
+const user = computed(() => (page.props as any).auth?.user as { name?: string; is_super_admin?: boolean } | null);
+const isSuperAdmin = computed(() => Boolean(user.value?.is_super_admin));
+const hasStore = computed(() => !isSuperAdmin.value && ((page.props as any).accessible_stores ?? []).length > 0);
 
 const firstName = computed(() => (user.value?.name ?? '').trim().split(/\s+/)[0] ?? '');
 
@@ -38,6 +39,14 @@ const handleLogout = () => {
 
                 <div v-if="user" class="flex items-center gap-1.5">
                     <span class="mr-1 hidden max-w-[10rem] truncate text-sm font-semibold text-slate-700 sm:inline">Halo, {{ firstName }}</span>
+                    <Link
+                        v-if="isSuperAdmin"
+                        href="/superadmin/affiliates"
+                        class="inline-flex h-10 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    >
+                        <Shield class="h-4 w-4" />
+                        <span>Panel admin</span>
+                    </Link>
                     <Link
                         v-if="hasStore"
                         href="/dashboard"
