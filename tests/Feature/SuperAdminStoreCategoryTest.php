@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Organization;
 use App\Models\Store;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
@@ -122,15 +123,16 @@ function propsDashboardSuperAdmin($test, string $query = ''): array
     return $response->viewData('page')['props'];
 }
 
-test('tiap toko masuk tepat satu kategori langganan dan jumlahnya sama dengan total toko', function () {
+test('toko tanpa grup usaha dihitung sendiri dan masuk tepat satu kategori', function () {
     $stores = tokoBerbagaiKeadaanLangganan();
 
     $stats = propsDashboardSuperAdmin($this)['stats'];
 
-    expect($stats['premium_stores'])->toBe(3)
-        ->and($stats['trial_stores'])->toBe(2)
-        ->and($stats['free_stores'])->toBe(7)
-        ->and($stats['premium_stores'] + $stats['trial_stores'] + $stats['free_stores'])->toBe($stats['total_stores'])
+    expect($stats['premium_groups'])->toBe(3)
+        ->and($stats['trial_groups'])->toBe(2)
+        ->and($stats['free_groups'])->toBe(7)
+        ->and($stats['premium_groups'] + $stats['trial_groups'] + $stats['free_groups'])->toBe($stats['total_groups'])
+        ->and($stats['total_groups'])->toBe(count($stores))
         ->and($stats['total_stores'])->toBe(count($stores));
 
     foreach ($stores as $label => ['store' => $store, 'category' => $expected]) {
@@ -166,9 +168,9 @@ test('toko aktif dihitung dari status toko dan keterangan kartu Free menghitung 
     $stats = propsDashboardSuperAdmin($this)['stats'];
 
     // 12 toko, satu dinonaktifkan super admin.
-    expect($stats['active_stores'])->toBe(11)
+    expect($stats['active_groups'])->toBe(11)
         // Paket berbayar habis, trial lewat, dan langganan dimatikan; bukan Starter gratis.
-        ->and($stats['free_lapsed_stores'])->toBe(3);
+        ->and($stats['free_lapsed_groups'])->toBe(3);
 });
 
 test('kartu ringkasan menyaring daftar toko sesuai kategorinya', function () {
@@ -191,4 +193,83 @@ test('kartu ringkasan menyaring daftar toko sesuai kategorinya', function () {
     $tanpaSaringan = propsDashboardSuperAdmin($this, '?filter=ngawur');
     expect($tanpaSaringan['storeFilter'])->toBeNull()
         ->and($tanpaSaringan['stores']['total'])->toBe(12);
+});
+
+test('toko dalam satu grup usaha dihitung satu dan grup memakai kategori tertingginya', function () {
+    $starter = SubscriptionPlan::create(['name' => 'Starter', 'slug' => 'starter', 'price' => 0, 'duration_days' => 0, 'is_active' => true]);
+    $growup = SubscriptionPlan::create(['name' => 'GrowUp', 'slug' => 'bisnis', 'price' => 99000, 'duration_days' => 30, 'is_active' => true]);
+
+    $no = 0;
+    $toko = function (?Organization $org, array $attributes) use (&$no) {
+        $no++;
+
+        return Store::create(array_merge([
+            'name' => "Outlet {$no}",
+            'slug' => "outlet-{$no}",
+            'organization_id' => $org?->id,
+            'is_active' => true,
+            'is_subscription_active' => true,
+        ], $attributes));
+    };
+    $grup = fn (string $name) => Organization::create(['name' => $name, 'slug' => str($name)->slug()->toString()]);
+
+    $gratis = ['subscription_plan_id' => $starter->id, 'subscription_end' => null];
+    $berbayar = ['subscription_plan_id' => $growup->id, 'subscription_end' => now()->addDays(20)];
+    $trial = [
+        'subscription_plan_id' => $growup->id,
+        'subscription_end' => now()->addDays(5),
+        'pro_trial_used' => true,
+        'pro_trial_active' => true,
+        'pro_trial_end' => now()->addDays(5),
+    ];
+    $habis = ['subscription_plan_id' => $growup->id, 'subscription_end' => now()->subDays(3)];
+
+    // Grup 7 toko: satu outlet berbayar, enam gratis -> 1 Premium.
+    $tujuhToko = $grup('Grup Tujuh Toko');
+    $premiumIds = [$toko($tujuhToko, $berbayar)->id];
+    foreach (range(1, 6) as $i) {
+        $premiumIds[] = $toko($tujuhToko, $gratis)->id;
+    }
+
+    // Grup 3 toko: satu trial, dua gratis -> 1 Trial Premium.
+    $tigaToko = $grup('Grup Tiga Toko');
+    $trialIds = [$toko($tigaToko, $trial)->id, $toko($tigaToko, $gratis)->id, $toko($tigaToko, $gratis)->id];
+
+    // Grup 2 toko: satu langganan habis, satu gratis -> 1 Free (terhitung langganan habis).
+    $duaToko = $grup('Grup Langganan Habis');
+    $toko($duaToko, $habis);
+    $toko($duaToko, $gratis);
+
+    // Grup dengan satu toko dinonaktifkan tetap aktif; grup yang semua tokonya nonaktif tidak.
+    $separuhAktif = $grup('Grup Separuh Aktif');
+    $toko($separuhAktif, $gratis);
+    $toko($separuhAktif, array_merge($gratis, ['is_active' => false]));
+    $nonaktif = $grup('Grup Nonaktif');
+    $toko($nonaktif, array_merge($gratis, ['is_active' => false]));
+    $toko($nonaktif, array_merge($gratis, ['is_active' => false]));
+
+    // Toko tanpa grup usaha dihitung sendiri.
+    $toko(null, $gratis);
+
+    $props = propsDashboardSuperAdmin($this);
+    $stats = $props['stats'];
+
+    expect($stats['total_stores'])->toBe(17)
+        ->and($stats['total_groups'])->toBe(6)
+        ->and($stats['premium_groups'])->toBe(1)
+        ->and($stats['trial_groups'])->toBe(1)
+        ->and($stats['free_groups'])->toBe(4)
+        ->and($stats['free_lapsed_groups'])->toBe(1)
+        ->and($stats['active_groups'])->toBe(5);
+
+    // Klik kartu menampilkan semua toko milik grup berkategori itu.
+    $idsDaftar = fn (string $filter) => collect(propsDashboardSuperAdmin($this, "?filter={$filter}")['stores']['data'])
+        ->pluck('id')->sort()->values()->all();
+
+    expect($idsDaftar('premium'))->toBe($premiumIds)
+        ->and($idsDaftar('trial'))->toBe($trialIds)
+        ->and(propsDashboardSuperAdmin($this, '?filter=free')['stores']['total'])->toBe(7);
+
+    $baris = collect(propsDashboardSuperAdmin($this, '?filter=premium')['stores']['data'])->first();
+    expect($baris['organization'])->toMatchArray(['name' => 'Grup Tujuh Toko', 'stores_count' => 7]);
 });

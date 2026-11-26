@@ -28,9 +28,8 @@ class SuperAdminController extends Controller
         $totalStores = Store::count();
         $activeStores = Store::where('is_active', true)->count();
 
-        // Kategori langganan (saling lepas, jumlahnya = total toko); aturan di StoreSubscriptionCategory.
-        $categoryCounts = StoreSubscriptionCategory::counts();
-        $freeLapsedStores = StoreSubscriptionCategory::applyFreeLapsed(Store::query())->count();
+        // Kategori langganan dihitung per grup usaha (toko se-grup dihitung satu); aturan di StoreSubscriptionCategory.
+        $groupSummary = StoreSubscriptionCategory::summary();
 
         // Saringan daftar toko dari kartu ringkasan: premium | trial | free | aktif.
         $storeFilter = $request->query('filter');
@@ -60,6 +59,7 @@ class SuperAdminController extends Controller
             'users',
             'voucherUsages',
             'subscriptionPlan:id,slug,price',
+            'organization' => fn ($q) => $q->select('id', 'name')->withCount('stores'),
             // Pemilik = anggota admin/owner pertama (pendaftar yang membuat toko).
             'members' => fn ($q) => $q->select('users.id', 'users.name', 'users.email', 'users.phone')
                 ->wherePivotIn('role', ['owner', 'admin'])
@@ -101,10 +101,12 @@ class SuperAdminController extends Controller
             'stats' => [
                 'total_stores' => $totalStores,
                 'active_stores' => $activeStores,
-                'premium_stores' => $categoryCounts[StoreSubscriptionCategory::PREMIUM],
-                'trial_stores' => $categoryCounts[StoreSubscriptionCategory::TRIAL],
-                'free_stores' => $categoryCounts[StoreSubscriptionCategory::FREE],
-                'free_lapsed_stores' => $freeLapsedStores,
+                'total_groups' => $groupSummary['total'],
+                'active_groups' => $groupSummary['active'],
+                'premium_groups' => $groupSummary[StoreSubscriptionCategory::PREMIUM],
+                'trial_groups' => $groupSummary[StoreSubscriptionCategory::TRIAL],
+                'free_groups' => $groupSummary[StoreSubscriptionCategory::FREE],
+                'free_lapsed_groups' => $groupSummary['free_lapsed'],
                 'expired_stores' => $expiredStores,
                 'expiring_soon' => $expiringSoon,
                 'pending_payments' => $pendingPayments,

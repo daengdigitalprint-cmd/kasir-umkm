@@ -17,7 +17,7 @@
                         preserve-scroll
                         @success="scrollToStoreList"
                         :aria-current="storeFilter === card.filter ? 'true' : undefined"
-                        :aria-label="`${card.label}: ${formatCurrency(card.count)} toko. Klik untuk melihat daftarnya.`"
+                        :aria-label="`${card.label}: ${formatCurrency(card.count)} usaha. Klik untuk melihat daftar tokonya.`"
                         :class="[
                             'rounded-xl border bg-white p-4 transition hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
                             storeFilter === card.filter ? 'border-slate-900 ring-1 ring-slate-900' : 'border-slate-200 hover:border-slate-300',
@@ -32,8 +32,9 @@
                     </Link>
                 </div>
                 <p class="mt-2 text-xs text-slate-500">
-                    Premium + Trial Premium + Free = {{ formatCurrency(safeStats.total_stores) }} toko terdaftar. Klik kartu untuk melihat daftar
-                    tokonya.
+                    Dihitung per grup usaha: beberapa toko dalam satu grup dihitung 1. Premium + Trial Premium + Free =
+                    {{ formatCurrency(safeStats.total_groups) }} usaha ({{ formatCurrency(safeStats.total_stores) }} toko). Klik kartu untuk melihat
+                    daftar tokonya.
                 </p>
             </div>
 
@@ -41,11 +42,11 @@
             <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
                 <div class="rounded-xl border border-slate-200 bg-white p-4">
                     <div class="flex items-center justify-between">
-                        <p class="text-xs font-medium text-slate-500">Total toko</p>
+                        <p class="text-xs font-medium text-slate-500">Total usaha</p>
                         <Building2 class="h-4 w-4 text-slate-400" />
                     </div>
-                    <p class="mt-2 text-2xl font-bold text-slate-900 tabular-nums">{{ formatCurrency(safeStats.total_stores) }}</p>
-                    <p class="mt-0.5 text-xs text-slate-400">terdaftar</p>
+                    <p class="mt-2 text-2xl font-bold text-slate-900 tabular-nums">{{ formatCurrency(safeStats.total_groups) }}</p>
+                    <p class="mt-0.5 text-xs text-slate-400">{{ formatCurrency(safeStats.total_stores) }} toko terdaftar</p>
                 </div>
                 <div :class="['rounded-xl border bg-white p-4', safeStats.expired_stores > 0 ? 'border-red-200' : 'border-slate-200']">
                     <div class="flex items-center justify-between">
@@ -104,6 +105,9 @@
                     <span class="inline-flex items-center rounded-full bg-slate-900 px-2.5 py-0.5 text-xs font-semibold text-white">
                         {{ activeFilterCard.label }}
                     </span>
+                    <span class="text-xs text-slate-500">
+                        {{ formatCurrency(activeFilterCard.count) }} usaha · {{ formatCurrency(safeStores.total ?? 0) }} toko
+                    </span>
                     <Link href="/superadmin" preserve-scroll class="text-xs font-medium text-primary hover:underline">Tampilkan semua toko</Link>
                 </div>
 
@@ -131,6 +135,7 @@
                             <tr v-for="store in safeStores.data" :key="store.id" class="align-middle hover:bg-slate-50/60">
                                 <td class="max-w-[260px] px-5 py-3.5">
                                     <p class="truncate font-semibold text-slate-900">{{ store.name }}</p>
+                                    <p v-if="groupLabel(store)" class="truncate text-xs font-medium text-indigo-700">{{ groupLabel(store) }}</p>
                                     <p class="truncate text-xs text-slate-500">{{ store.address || 'Alamat belum diatur' }}</p>
                                     <div v-if="store.owner" class="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-slate-500">
                                         <span class="truncate" :title="store.owner.email">{{ store.owner.name }}</span>
@@ -240,6 +245,7 @@
                         <div class="flex items-start justify-between gap-3">
                             <div class="min-w-0">
                                 <p class="truncate font-semibold text-slate-900">{{ store.name }}</p>
+                                <p v-if="groupLabel(store)" class="truncate text-xs font-medium text-indigo-700">{{ groupLabel(store) }}</p>
                                 <p class="truncate text-xs text-slate-500">{{ store.address || 'Alamat belum diatur' }}</p>
                                 <div v-if="store.owner" class="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-slate-500">
                                     <span class="truncate" :title="store.owner.email">{{ store.owner.name }}</span>
@@ -1345,6 +1351,7 @@ interface Store {
     pro_trial_start?: string | null;
     pro_trial_end?: string | null;
     owner?: { name: string; email: string; phone: string | null } | null;
+    organization?: { id: number; name: string; stores_count?: number } | null;
     subscription_plan?: {
         slug?: string | null;
         price?: number | null;
@@ -1409,10 +1416,13 @@ interface Props {
     stats: {
         total_stores: number;
         active_stores: number;
-        premium_stores: number;
-        trial_stores: number;
-        free_stores: number;
-        free_lapsed_stores: number;
+        /** Angka *_groups dihitung per grup usaha (toko se-grup dihitung satu). */
+        total_groups: number;
+        active_groups: number;
+        premium_groups: number;
+        trial_groups: number;
+        free_groups: number;
+        free_lapsed_groups: number;
         expired_stores: number;
         expiring_soon: number;
         pending_payments: number;
@@ -1445,10 +1455,12 @@ const safeStats = computed(
         props.stats || {
             total_stores: 0,
             active_stores: 0,
-            premium_stores: 0,
-            trial_stores: 0,
-            free_stores: 0,
-            free_lapsed_stores: 0,
+            total_groups: 0,
+            active_groups: 0,
+            premium_groups: 0,
+            trial_groups: 0,
+            free_groups: 0,
+            free_lapsed_groups: 0,
             expired_stores: 0,
             expiring_soon: 0,
             pending_payments: 0,
@@ -1486,21 +1498,22 @@ const safeAttendancePayrollPricing = computed(() => props.attendancePayrollPrici
 const pendingCount = computed(() => safeStats.value.pending_payments);
 
 const activeRatio = computed(() => {
-    const total = safeStats.value.total_stores;
-    return total > 0 ? Math.round((safeStats.value.active_stores / total) * 100) : 0;
+    const total = safeStats.value.total_groups;
+    return total > 0 ? Math.round((safeStats.value.active_groups / total) * 100) : 0;
 });
 
-// Kartu kategori langganan + toko aktif. Aturan pengelompokan ada di App\Support\StoreSubscriptionCategory.
+// Kartu kategori langganan + toko aktif, dihitung per grup usaha (toko se-grup dihitung satu).
+// Aturan pengelompokan ada di App\Support\StoreSubscriptionCategory.
 const storeFilter = computed<StoreFilter | null>(() => props.storeFilter ?? null);
 const categoryCards = computed(() => {
     const s = safeStats.value;
-    const lapsed = Number(s.free_lapsed_stores) || 0;
+    const lapsed = Number(s.free_lapsed_groups) || 0;
     return [
-        { filter: 'premium' as const, label: 'Premium', count: s.premium_stores, note: 'paket berbayar aktif', icon: Crown, iconClass: 'text-amber-500' },
+        { filter: 'premium' as const, label: 'Premium', count: s.premium_groups, note: 'paket berbayar aktif', icon: Crown, iconClass: 'text-amber-500' },
         {
             filter: 'trial' as const,
             label: 'Trial Premium',
-            count: s.trial_stores,
+            count: s.trial_groups,
             note: 'trial sedang berjalan',
             icon: FlaskConical,
             iconClass: 'text-violet-500',
@@ -1508,7 +1521,7 @@ const categoryCards = computed(() => {
         {
             filter: 'free' as const,
             label: 'Free',
-            count: s.free_stores,
+            count: s.free_groups,
             note: lapsed > 0 ? `termasuk ${formatCurrency(lapsed)} langganan habis` : 'paket Starter gratis',
             icon: Gift,
             iconClass: 'text-sky-500',
@@ -1516,14 +1529,20 @@ const categoryCards = computed(() => {
         {
             filter: 'aktif' as const,
             label: 'Toko aktif',
-            count: s.active_stores,
-            note: `${activeRatio.value}% dari total`,
+            count: s.active_groups,
+            note: `${activeRatio.value}% dari total usaha`,
             icon: CheckCircle,
             iconClass: 'text-emerald-500',
         },
     ];
 });
 const activeFilterCard = computed(() => categoryCards.value.find((c) => c.filter === storeFilter.value) ?? null);
+
+/** Keterangan grup usaha di baris toko; hanya untuk grup yang punya lebih dari satu toko. */
+const groupLabel = (store: Store): string => {
+    const org = store.organization;
+    return org && Number(org.stores_count) > 1 ? `Grup ${org.name} · ${org.stores_count} toko` : '';
+};
 
 // Setelah kartu diklik, bawa daftar toko ke layar (di HP daftarnya ada di bawah kartu).
 // Dipanggil dari @success supaya berjalan sesudah Inertia memulihkan posisi gulir.
