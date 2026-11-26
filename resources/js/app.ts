@@ -117,7 +117,11 @@ if (typeof window !== 'undefined') {
 
         // 3. Bersihkan style yang mungkin tertinggal oleh Swal/reka-ui di <body>
         const hasSwal = document.querySelectorAll('.swal2-container').length > 0;
-        const hasRekaDialog = document.querySelectorAll('[data-reka-portal] [role="dialog"]').length > 0;
+        // Reka-ui v2 men-teleport langsung ke <body> tanpa pembungkus [data-reka-portal], jadi
+        // popup yang terbuka dikenali dari lapisannya sendiri. Kalau salah dikira "tidak ada popup",
+        // kunci gulir dicabut saat popup masih terbuka: scrollbar muncul lagi dan popup + halaman
+        // di belakangnya bergeser beberapa piksel (terlihat di desktop yang scrollbar-nya makan tempat).
+        const hasRekaDialog = document.querySelector('[data-dismissable-layer], [role="dialog"], [role="alertdialog"]') !== null;
         if (!hasSwal && !hasRekaDialog) {
             if (document.body.style.overflow === 'hidden') {
                 document.body.style.removeProperty('overflow');

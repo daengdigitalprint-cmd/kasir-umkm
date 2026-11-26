@@ -33,6 +33,7 @@ import {
     ArrowLeft,
     ArrowRight,
     Banknote,
+    Coins,
     Bell,
     CheckCircle2,
     ChefHat,
@@ -42,6 +43,7 @@ import {
     ChevronUp,
     Circle,
     CircleDollarSign,
+    Wallet,
     Clock,
     Flame,
     Loader2,
@@ -57,6 +59,7 @@ import {
     ShoppingBag,
     ShoppingCart,
     Smartphone,
+    Split,
     Table2,
     Tag,
     Ticket,
@@ -1000,6 +1003,19 @@ const splitPaymentError = computed<string | null>(() => {
     return null;
 });
 
+/** Metode di popup bayar versi tablet/desktop (HP memakai kisi 2×2 di template). */
+const checkoutPayMethods = [
+    { value: 'cash', label: 'Tunai', icon: Banknote },
+    { value: 'ewallet', label: 'E-Wallet', icon: Wallet },
+    { value: 'other', label: 'Lainnya', icon: Coins },
+    { value: 'split', label: 'Bagi Pembayaran', icon: Split },
+] as const;
+/** Sama persis dengan tombol versi HP: tunai langsung lanjut ke input uang, bagi membuka rincian. */
+function pickCheckoutPayMethod(value: (typeof checkoutPayMethods)[number]['value']) {
+    if (value === 'split') return startSplitPayment();
+    paymentMethod.value = value;
+    if (value === 'cash') confirmPaymentMethod();
+}
 function startSplitPayment() {
     paymentMethod.value = 'split';
     if (splitNonCashLines.value.length === 0) {
@@ -5409,7 +5425,40 @@ const sendWhatsAppInvoice = () => {
                                         <!-- Metode Pembayaran -->
                                         <div v-if="!isCredit" class="space-y-3">
                                             <Label class="text-sm font-medium text-gray-700">Metode Pembayaran</Label>
-                                            <div class="grid grid-cols-2 gap-2">
+                                            <!-- Tablet/desktop: satu baris, ikon hitam dalam kotak abu supaya selaras dengan tombol lain. -->
+                                            <div class="hidden grid-cols-4 gap-2 sm:grid" data-testid="payment-methods-wide">
+                                                <button
+                                                    v-for="m in checkoutPayMethods"
+                                                    :key="m.value"
+                                                    type="button"
+                                                    :aria-pressed="paymentMethod === m.value"
+                                                    :class="[
+                                                        'flex h-14 items-center gap-2.5 rounded-xl border px-2.5 text-left transition-colors',
+                                                        paymentMethod === m.value
+                                                            ? 'border-primary bg-primary/10 ring-1 ring-primary'
+                                                            : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50',
+                                                    ]"
+                                                    @click="pickCheckoutPayMethod(m.value)"
+                                                >
+                                                    <span
+                                                        :class="[
+                                                            'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
+                                                            paymentMethod === m.value ? 'bg-primary text-white' : 'bg-gray-100 text-gray-900',
+                                                        ]"
+                                                    >
+                                                        <component :is="m.icon" class="h-5 w-5" />
+                                                    </span>
+                                                    <span
+                                                        :class="[
+                                                            'min-w-0 text-sm leading-tight font-semibold',
+                                                            paymentMethod === m.value ? 'text-primary' : 'text-gray-800',
+                                                        ]"
+                                                    >
+                                                        {{ m.label }}
+                                                    </span>
+                                                </button>
+                                            </div>
+                                            <div class="grid grid-cols-2 gap-2 sm:hidden">
                                                 <Button
                                                     :variant="paymentMethod === 'cash' ? 'default' : 'outline'"
                                                     size="sm"
