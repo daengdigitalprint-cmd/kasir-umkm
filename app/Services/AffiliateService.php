@@ -5,11 +5,14 @@ namespace App\Services;
 use App\Models\Affiliate;
 use App\Models\AffiliateClick;
 use App\Models\AffiliateCommission;
+use App\Models\AffiliateNotification;
 use App\Models\AffiliatePayout;
 use App\Models\AffiliateReferral;
+use App\Models\AffiliateSetting;
 use App\Models\Organization;
 use App\Models\Store;
 use App\Models\SubscriptionPayment;
+use App\Models\SubscriptionPlan;
 use App\Models\User;
 use App\Support\JenisUsaha;
 use Illuminate\Http\Request;
@@ -83,7 +86,7 @@ final class AffiliateService
         Cookie::queue(
             config('affiliate.cookie_name'),
             $affiliate->code,
-            max(1, (int) config('affiliate.cookie_days')) * 24 * 60,
+            max(1, (int) AffiliateSetting::value('cookie_days')) * 24 * 60,
         );
 
         self::recordClick($request, $affiliate);
@@ -163,6 +166,10 @@ final class AffiliateService
 
         Cookie::queue(Cookie::forget(config('affiliate.cookie_name')));
 
+        if ($referral->wasRecentlyCreated) {
+            self::notify($affiliate, 'signup', 'Ada pendaftar baru lewat link Anda', $referral->maskedName().' baru saja mendaftar. Komisi muncul setelah tokonya membayar langganan.');
+        }
+
         return $referral;
     }
 
@@ -200,7 +207,7 @@ final class AffiliateService
      */
     public static function trialDaysFor(User $user): ?int
     {
-        $days = (int) config('affiliate.referred_trial_days');
+        $days = (int) AffiliateSetting::value('referred_trial_days');
         if ($days <= 0) {
             return null;
         }
@@ -245,11 +252,11 @@ final class AffiliateService
             return null;
         }
 
-        return DB::transaction(function () use ($payment, $referral, $affiliate, $store, $now) {
+        $commission = DB::transaction(function () use ($payment, $referral, $affiliate, $store, $now) {
             if (! $referral->first_paid_at) {
                 $referral->forceFill([
                     'first_paid_at' => $now,
-                    'commission_until' => $now->copy()->addMonthsNoOverflow(max(1, (int) config('affiliate.commission_months'))),
+                    'commission_until' => $now->copy()->addMonthsNoOverflow(max(1, (int) AffiliateSetting::value('commission_months'))),
                     'organization_id' => $referral->organization_id ?? $store->organization_id,
                 ])->save();
             }
@@ -268,10 +275,21 @@ final class AffiliateService
                     'percent' => $percent,
                     'amount' => round($base * $percent / 100, 2),
                     'status' => AffiliateCommission::STATUS_EARNED,
-                    'available_at' => $now->copy()->addDays(max(0, (int) config('affiliate.hold_days'))),
+                    'available_at' => $now->copy()->addDays(max(0, (int) AffiliateSetting::value('hold_days'))),
                 ],
             );
         });
+
+        if ($commission->wasRecentlyCreated) {
+            self::notify(
+                $affiliate,
+                'commission',
+                'Komisi baru '.self::rupiah((float) $commission->amount),
+                $referral->maskedName().' membayar langganan. Komisi ini bisa ditarik mulai '.$commission->available_at->translatedFormat('j M Y').'.',
+            );
+        }
+
+        return $commission;
     }
 
     /** Rujukan milik grup usaha toko ini; cadangan: pemilik grup atau akun yang membayar. */
@@ -338,7 +356,7 @@ final class AffiliateService
         return DB::transaction(function () use ($affiliate, $fail) {
             $ready = $affiliate->commissions()->ready()->lockForUpdate()->get();
             $total = round((float) $ready->sum('amount'), 2);
-            $minimum = (int) config('affiliate.min_payout');
+            $minimum = (int) AffiliateSetting::value('min_payout');
 
             if ($total <= 0 || $total < $minimum) {
                 $fail('Komisi yang bisa ditarik belum mencapai minimal Rp'.number_format($minimum, 0, ',', '.').'.');
@@ -390,6 +408,8 @@ final class AffiliateService
                 'processed_by' => $admin->id,
             ]);
 
+            self::notify($payout->affiliate, 'payout_paid', 'Pencairan '.self::rupiah($amount).' sudah ditransfer', 'Cek rekening Anda. Rinciannya ada di Riwayat pencairan.');
+
             return true;
         });
     }
@@ -410,6 +430,8 @@ final class AffiliateService
                 'processed_at' => now(),
                 'processed_by' => $admin->id,
             ]);
+
+            self::notify($payout->affiliate, 'payout_rejected', 'Permintaan pencairan ditolak', 'Alasan: '.$reason.' Komisinya kembali bisa ditarik.');
 
             return true;
         });
@@ -451,8 +473,222 @@ final class AffiliateService
                 'updated_at' => $now,
             ]);
 
+            self::notify($affiliate, 'payout_paid', 'Komisi '.self::rupiah($total).' sudah ditransfer', 'Cek rekening Anda. Rinciannya ada di Riwayat pencairan.');
+
             return $payout;
         });
+    }
+
+    // ───────────────────────── Tukar komisi jadi langganan ─────────────────────────
+
+    /**
+     * Paket yang bisa dibayar dengan komisi oleh afiliator yang punya toko sendiri.
+     * null bila pengguna tidak mengelola toko (afiliator tanpa toko, atau hanya staf).
+     *
+     * @return array{store_name:string, has_pending_payment:bool, plans:list<array{id:int, name:string, price:float, duration_days:int, cycle:string}>}|null
+     */
+    public static function redeemContext(User $user): ?array
+    {
+        $store = $user->store;
+        if (! $store || ! $user->canManageStoreSettings()) {
+            return null;
+        }
+
+        return [
+            'store_name' => (string) $store->name,
+            'has_pending_payment' => SubscriptionPayment::where('store_id', $store->id)->where('status', 'pending')->exists(),
+            'plans' => self::redeemablePlans()->map(fn (SubscriptionPlan $plan) => [
+                'id' => $plan->id,
+                'name' => $plan->name,
+                'price' => (float) $plan->price,
+                'duration_days' => (int) $plan->duration_days,
+                'cycle' => ($plan->billing_cycle ?? 'monthly') === 'yearly' ? 'tahun' : 'bulan',
+            ])->values()->all(),
+        ];
+    }
+
+    /** Paket berbayar biasa (bukan promo) yang sedang dijual. */
+    private static function redeemablePlans(): \Illuminate\Support\Collection
+    {
+        return SubscriptionPlan::active()
+            ->where('price', '>', 0)
+            ->where('duration_days', '>', 0)
+            ->where('slug', 'not like', 'promo-%')
+            ->ordered()
+            ->get();
+    }
+
+    /**
+     * Bayar paket langganan toko afiliator sendiri dengan komisi yang bisa ditarik.
+     * Langganan langsung diperpanjang; tidak perlu konfirmasi super admin karena tidak ada uang yang ditransfer.
+     *
+     * @throws ValidationException bila syaratnya belum terpenuhi
+     */
+    public static function redeemForSubscription(Affiliate $affiliate, User $user, int $planId): AffiliatePayout
+    {
+        $fail = fn (string $message) => throw ValidationException::withMessages(['redeem' => $message]);
+
+        if (! $affiliate->isActive()) {
+            $fail('Akun afiliasi Anda sedang dibekukan.');
+        }
+
+        $store = $user->store;
+        if (! $store || ! $user->canManageStoreSettings()) {
+            $fail('Hanya pemilik atau admin toko yang bisa memakai komisi untuk langganan.');
+        }
+
+        $plan = self::redeemablePlans()->firstWhere('id', $planId);
+        if (! $plan) {
+            $fail('Paket ini tidak bisa dibayar dengan komisi.');
+        }
+
+        if (SubscriptionPayment::where('store_id', $store->id)->where('status', 'pending')->exists()) {
+            $fail('Toko Anda masih punya pembayaran yang menunggu konfirmasi. Tunggu sampai selesai dulu.');
+        }
+
+        return DB::transaction(function () use ($affiliate, $user, $store, $plan, $fail) {
+            $ready = $affiliate->commissions()->ready()->orderBy('available_at')->orderBy('id')->lockForUpdate()->get();
+            $price = round((float) $plan->price, 2);
+
+            if (round((float) $ready->sum('amount'), 2) < $price) {
+                $fail('Komisi yang bisa ditarik belum cukup untuk paket ini.');
+            }
+
+            $now = now();
+            $payment = SubscriptionPayment::create([
+                'store_id' => $store->id,
+                'user_id' => $user->id,
+                'subscription_plan_id' => $plan->id,
+                'amount' => $price,
+                'duration_days' => $plan->duration_days,
+                'payment_method' => 'affiliate_balance',
+                'status' => 'confirmed',
+                'confirmed_at' => $now,
+                'notes' => 'Dibayar dengan saldo komisi afiliasi.',
+            ]);
+
+            $payout = AffiliatePayout::create([
+                'affiliate_id' => $affiliate->id,
+                'amount' => $price,
+                'status' => AffiliatePayout::STATUS_PAID,
+                'type' => AffiliatePayout::TYPE_SUBSCRIPTION,
+                'subscription_payment_id' => $payment->id,
+                'note' => 'Langganan '.$plan->name.' untuk '.$store->name,
+                'processed_at' => $now,
+            ]);
+
+            // Pakai komisi dari yang paling lama; komisi terakhir dipecah bila melebihi sisa harga.
+            $remaining = $price;
+            $paid = [
+                'status' => AffiliateCommission::STATUS_PAID,
+                'affiliate_payout_id' => $payout->id,
+                'paid_at' => $now,
+                'paid_note' => 'Ditukar langganan '.$plan->name,
+            ];
+
+            foreach ($ready as $commission) {
+                if ($remaining <= 0) {
+                    break;
+                }
+
+                $amount = round((float) $commission->amount, 2);
+
+                if ($amount <= $remaining) {
+                    $commission->update($paid);
+                    $remaining = round($remaining - $amount, 2);
+
+                    continue;
+                }
+
+                $usedBase = round((float) $commission->base_amount * $remaining / $amount, 2);
+
+                $rest = $commission->replicate(['subscription_payment_id']);
+                $rest->amount = round($amount - $remaining, 2);
+                $rest->base_amount = round((float) $commission->base_amount - $usedBase, 2);
+                $rest->created_at = $commission->created_at;
+                $rest->save();
+
+                $commission->update([...$paid, 'amount' => $remaining, 'base_amount' => $usedBase]);
+                $remaining = 0;
+            }
+
+            // Sama seperti pembayaran yang dikonfirmasi super admin.
+            $store->extendSubscription((int) $plan->duration_days);
+            $store->is_active = true;
+            $store->subscription_notes = "Dibayar dengan komisi afiliasi #{$payment->invoice_number}";
+            $store->subscription_plan_id = $plan->id;
+            $store->save();
+            TrialService::convertToPaid($store, null, "Trial Pro selesai: berlangganan via komisi afiliasi #{$payment->invoice_number}.");
+
+            return $payout;
+        });
+    }
+
+    // ───────────────────────── Notifikasi ─────────────────────────
+
+    /** Kabar untuk afiliator di dashboardnya. Tidak pernah menggagalkan proses yang memanggilnya. */
+    public static function notify(?Affiliate $affiliate, string $type, string $title, ?string $body = null): void
+    {
+        if (! $affiliate) {
+            return;
+        }
+
+        rescue(fn () => AffiliateNotification::create([
+            'affiliate_id' => $affiliate->id,
+            'type' => $type,
+            'title' => Str::limit($title, 250, ''),
+            'body' => $body !== null ? Str::limit($body, 490, '…') : null,
+        ]));
+    }
+
+    private static function rupiah(float $amount): string
+    {
+        return 'Rp'.number_format($amount, 0, ',', '.');
+    }
+
+    // ───────────────────────── Papan peringkat ─────────────────────────
+
+    /**
+     * Peringkat afiliator bulan berjalan menurut komisi yang didapat bulan ini.
+     * Nama afiliator lain disamarkan kecuali $mask dimatikan (super admin).
+     *
+     * @return array{period:string, rows:list<array{rank:int, name:string, paying:int, earned:float, is_me:bool}>, me:array{rank:int|null, paying:int, earned:float}|null}
+     */
+    public static function leaderboard(?Affiliate $me = null, int $limit = 5, bool $mask = true): array
+    {
+        $start = now()->startOfMonth();
+
+        $ranked = Affiliate::query()
+            ->where('status', Affiliate::STATUS_ACTIVE)
+            ->with('user:id,name')
+            ->withSum(['commissions as earned_sum' => fn ($q) => $q
+                ->where('status', '!=', AffiliateCommission::STATUS_CANCELLED)
+                ->where('created_at', '>=', $start)], 'amount')
+            ->withCount(['referrals as paying_count' => fn ($q) => $q->where('first_paid_at', '>=', $start)])
+            ->get()
+            ->filter(fn (Affiliate $a) => (float) $a->earned_sum > 0)
+            ->sort(fn (Affiliate $a, Affiliate $b) => [(float) $b->earned_sum, (int) $b->paying_count, $a->id] <=> [(float) $a->earned_sum, (int) $a->paying_count, $b->id])
+            ->values();
+
+        $row = fn (Affiliate $a, int $index) => [
+            'rank' => $index + 1,
+            'name' => ($mask && $a->id !== $me?->id) ? AffiliateReferral::mask((string) $a->user?->name) : (string) ($a->user?->name ?? 'Afiliator'),
+            'paying' => (int) $a->paying_count,
+            'earned' => (float) $a->earned_sum,
+            'is_me' => $a->id === $me?->id,
+        ];
+
+        $myIndex = $me ? $ranked->search(fn (Affiliate $a) => $a->id === $me->id) : false;
+
+        return [
+            'period' => $start->translatedFormat('F Y'),
+            'rows' => $ranked->take($limit)->map($row)->values()->all(),
+            'me' => $me ? [
+                'rank' => $myIndex === false ? null : $myIndex + 1,
+                'paying' => $myIndex === false ? 0 : (int) $ranked[$myIndex]->paying_count,
+                'earned' => $myIndex === false ? 0.0 : (float) $ranked[$myIndex]->earned_sum,
+            ] : null,
+        ];
     }
 
     // ───────────────────────── Materi promosi ─────────────────────────
@@ -517,13 +753,13 @@ final class AffiliateService
     public static function rules(?Affiliate $affiliate = null): array
     {
         return [
-            'percent' => $affiliate ? $affiliate->effectivePercent() : (float) config('affiliate.commission_percent'),
-            'months' => (int) config('affiliate.commission_months'),
-            'cookie_days' => (int) config('affiliate.cookie_days'),
-            'hold_days' => (int) config('affiliate.hold_days'),
-            'min_payout' => (int) config('affiliate.min_payout'),
+            'percent' => $affiliate ? $affiliate->effectivePercent() : (float) AffiliateSetting::value('commission_percent'),
+            'months' => (int) AffiliateSetting::value('commission_months'),
+            'cookie_days' => (int) AffiliateSetting::value('cookie_days'),
+            'hold_days' => (int) AffiliateSetting::value('hold_days'),
+            'min_payout' => (int) AffiliateSetting::value('min_payout'),
             // Keuntungan untuk yang diajak: trial Pro lebih panjang (0 = tidak ada).
-            'referred_trial_days' => max(0, (int) config('affiliate.referred_trial_days')),
+            'referred_trial_days' => max(0, (int) AffiliateSetting::value('referred_trial_days')),
             'default_trial_days' => TrialService::TRIAL_DAYS,
         ];
     }

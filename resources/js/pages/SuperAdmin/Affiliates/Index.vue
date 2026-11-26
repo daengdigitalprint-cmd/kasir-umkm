@@ -1,7 +1,23 @@
 <script setup lang="ts">
 import SuperAdminLayout from '@/layouts/SuperAdminLayout.vue';
-import { Link, router } from '@inertiajs/vue3';
-import { Banknote, Clock, ExternalLink, Handshake, Hourglass, MessageCircle, Search, Store, UserPlus, Users, Wallet } from 'lucide-vue-next';
+import { Link, router, useForm } from '@inertiajs/vue3';
+import {
+    Banknote,
+    CheckCircle,
+    ChevronDown,
+    Clock,
+    ExternalLink,
+    Handshake,
+    Hourglass,
+    MessageCircle,
+    Search,
+    Settings2,
+    Store,
+    Trophy,
+    UserPlus,
+    Users,
+    Wallet,
+} from 'lucide-vue-next';
 import { ref } from 'vue';
 
 interface AffiliateRow {
@@ -13,6 +29,7 @@ interface AffiliateRow {
     link: string;
     is_active: boolean;
     percent: number;
+    custom_percent: number | null;
     clicks: number;
     signups: number;
     paying: number;
@@ -51,6 +68,7 @@ interface PayoutRow {
     whatsapp: string | null;
     amount: number;
     status: 'requested' | 'paid' | 'rejected';
+    type: 'transfer' | 'subscription';
     payout_provider: string | null;
     payout_account_number: string | null;
     payout_account_holder: string | null;
@@ -60,6 +78,8 @@ interface PayoutRow {
     note: string | null;
     reject_reason: string | null;
 }
+
+type SettingKey = 'commission_percent' | 'commission_months' | 'cookie_days' | 'hold_days' | 'min_payout' | 'referred_trial_days';
 
 interface Paginated<T> {
     data: T[];
@@ -82,11 +102,68 @@ const props = defineProps<{
         pending_payouts_amount: number;
     };
     rules: { percent: number; months: number; cookie_days: number; hold_days: number; min_payout: number };
+    settings: Record<SettingKey, { value: number; default: number; custom: boolean }>;
+    leaderboard: { period: string; rows: { rank: number; name: string; paying: number; earned: number }[] };
     filters: { q: string | null; state: string | null };
 }>();
 
 const rupiah = (n: number) => 'Rp' + Math.round(n).toLocaleString('id-ID');
 const formatDate = (d: string | null) => (d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
+
+/* ───────── Aturan program ───────── */
+const settingFields: { key: SettingKey; label: string; unit: string; help: string }[] = [
+    { key: 'commission_percent', label: 'Komisi', unit: '%', help: 'Dari setiap pembayaran yang dikonfirmasi.' },
+    { key: 'commission_months', label: 'Lama komisi', unit: 'bulan', help: 'Sejak pembayaran pertama toko yang diajak.' },
+    { key: 'cookie_days', label: 'Masa berlaku link', unit: 'hari', help: 'Link diingat sejak diklik.' },
+    { key: 'hold_days', label: 'Masa tahan', unit: 'hari', help: 'Sebelum komisi bisa ditarik.' },
+    { key: 'min_payout', label: 'Minimum pencairan', unit: 'Rp', help: 'Saldo minimal untuk menarik komisi.' },
+    { key: 'referred_trial_days', label: 'Trial yang diajak', unit: 'hari', help: 'Isi 0 untuk mematikan keuntungan ini.' },
+];
+
+// Kolom kosong = pakai nilai bawaan; yang terisi hanya aturan yang memang diubah.
+const settingsOpen = ref(false);
+const settingsSaved = ref(false);
+const initialSetting = (key: SettingKey) => (props.settings[key].custom ? String(props.settings[key].value) : '');
+const settingsForm = useForm({
+    commission_percent: initialSetting('commission_percent'),
+    commission_months: initialSetting('commission_months'),
+    cookie_days: initialSetting('cookie_days'),
+    hold_days: initialSetting('hold_days'),
+    min_payout: initialSetting('min_payout'),
+    referred_trial_days: initialSetting('referred_trial_days'),
+});
+
+const saveSettings = () => {
+    settingsSaved.value = false;
+    settingsForm.put('/superadmin/affiliates/settings', {
+        preserveScroll: true,
+        onSuccess: () => (settingsSaved.value = true),
+    });
+};
+
+/* ───────── Tarif khusus per afiliator ───────── */
+const rateId = ref<number | null>(null);
+const rateValue = ref('');
+const rateError = ref('');
+
+const openRate = (row: AffiliateRow) => {
+    rateId.value = rateId.value === row.id ? null : row.id;
+    rateValue.value = row.custom_percent !== null ? String(row.custom_percent) : '';
+    rateError.value = '';
+    payingId.value = null;
+};
+
+const submitRate = (row: AffiliateRow) => {
+    router.post(
+        `/superadmin/affiliates/${row.id}/rate`,
+        { percent: rateValue.value === '' ? null : rateValue.value },
+        {
+            preserveScroll: true,
+            onSuccess: () => (rateId.value = null),
+            onError: (errors) => (rateError.value = errors.percent ?? 'Tarif tidak valid.'),
+        },
+    );
+};
 
 /* ───────── Saring ───────── */
 const search = ref(props.filters.q ?? '');
@@ -175,12 +252,14 @@ const submitPayoutReject = (row: PayoutRow) => {
     );
 };
 
-const payoutBadge = (status: PayoutRow['status']) =>
-    ({
-        requested: { label: 'Menunggu transfer', cls: 'bg-amber-50 text-amber-700 ring-amber-200' },
-        paid: { label: 'Sudah ditransfer', cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
-        rejected: { label: 'Ditolak', cls: 'bg-slate-100 text-slate-500 ring-slate-200' },
-    })[status];
+const payoutBadge = (row: PayoutRow) =>
+    row.type === 'subscription'
+        ? { label: 'Ditukar langganan', cls: 'bg-violet-50 text-violet-700 ring-violet-200' }
+        : {
+              requested: { label: 'Menunggu transfer', cls: 'bg-amber-50 text-amber-700 ring-amber-200' },
+              paid: { label: 'Sudah ditransfer', cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
+              rejected: { label: 'Ditolak', cls: 'bg-slate-100 text-slate-500 ring-slate-200' },
+          }[row.status];
 
 const payoutWhatsapp = (row: PayoutRow) => {
     const firstName = row.affiliate_name.trim().split(/\s+/)[0];
@@ -312,6 +391,90 @@ const typeLabel = (type: string | null) =>
                 </div>
             </div>
 
+            <!-- Aturan program -->
+            <section class="rounded-xl border border-slate-200 bg-white">
+                <button
+                    type="button"
+                    class="flex w-full items-center justify-between gap-3 px-5 py-4 text-left"
+                    :aria-expanded="settingsOpen"
+                    aria-controls="aturan-program"
+                    @click="settingsOpen = !settingsOpen"
+                >
+                    <span class="flex items-center gap-2.5">
+                        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-100">
+                            <Settings2 class="h-4 w-4 text-violet-600" />
+                        </span>
+                        <span>
+                            <span class="block text-base font-semibold text-slate-900">Aturan program</span>
+                            <span class="block text-xs text-slate-500">
+                                Komisi {{ settings.commission_percent.value.toLocaleString('id-ID') }}% · {{ settings.commission_months.value }} bulan · tahan
+                                {{ settings.hold_days.value }} hari · minimum {{ rupiah(settings.min_payout.value) }} · trial {{ settings.referred_trial_days.value }} hari
+                            </span>
+                        </span>
+                    </span>
+                    <ChevronDown :class="['h-4 w-4 shrink-0 text-slate-400 transition-transform', settingsOpen ? 'rotate-180' : '']" />
+                </button>
+
+                <form v-show="settingsOpen" id="aturan-program" class="border-t border-slate-100 p-5" @submit.prevent="saveSettings">
+                    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        <div v-for="field in settingFields" :key="field.key">
+                            <label :for="`set-${field.key}`" class="mb-1 block text-xs font-semibold text-slate-600">{{ field.label }} ({{ field.unit }})</label>
+                            <input
+                                :id="`set-${field.key}`"
+                                v-model="settingsForm[field.key]"
+                                type="number"
+                                min="0"
+                                :step="field.key === 'commission_percent' ? '0.5' : '1'"
+                                :placeholder="`Bawaan: ${settings[field.key].default.toLocaleString('id-ID')}`"
+                                class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-400 focus:ring-2 focus:ring-violet-100 focus:outline-none"
+                                :aria-invalid="!!settingsForm.errors[field.key]"
+                            />
+                            <p v-if="settingsForm.errors[field.key]" class="mt-1 text-xs font-medium text-red-600" role="alert">{{ settingsForm.errors[field.key] }}</p>
+                            <p v-else class="mt-1 text-xs text-slate-500">{{ field.help }}</p>
+                        </div>
+                    </div>
+                    <p class="mt-4 text-xs text-slate-500">
+                        Kosongkan kolom untuk memakai nilai bawaan. Perubahan berlaku untuk komisi dan pendaftaran berikutnya; komisi yang sudah tercatat tidak
+                        berubah. Halaman /afiliasi otomatis menampilkan angka baru.
+                    </p>
+                    <div class="mt-4 flex items-center gap-3">
+                        <button
+                            type="submit"
+                            :disabled="settingsForm.processing"
+                            class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+                        >
+                            {{ settingsForm.processing ? 'Menyimpan…' : 'Simpan aturan' }}
+                        </button>
+                        <p v-if="settingsSaved" class="flex items-center gap-1.5 text-sm font-medium text-emerald-700" role="status">
+                            <CheckCircle class="h-4 w-4" /> Tersimpan.
+                        </p>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Peringkat bulan ini -->
+            <section v-if="leaderboard.rows.length > 0" class="rounded-xl border border-slate-200 bg-white">
+                <div class="border-b border-slate-100 px-5 py-4">
+                    <h2 class="flex items-center gap-2 text-base font-semibold text-slate-900">
+                        <Trophy class="h-4 w-4 text-amber-500" /> Peringkat {{ leaderboard.period }}
+                    </h2>
+                </div>
+                <ol class="divide-y divide-slate-100">
+                    <li v-for="row in leaderboard.rows" :key="row.rank" class="flex items-center gap-3 px-5 py-3 text-sm">
+                        <span
+                            :class="[
+                                'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums',
+                                row.rank === 1 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600',
+                            ]"
+                            >{{ row.rank }}</span
+                        >
+                        <span class="min-w-0 flex-1 truncate font-medium text-slate-900">{{ row.name }}</span>
+                        <span class="shrink-0 text-xs text-slate-500">{{ row.paying }} toko baru</span>
+                        <span class="w-28 shrink-0 text-right font-bold text-slate-900 tabular-nums">{{ rupiah(row.earned) }}</span>
+                    </li>
+                </ol>
+            </section>
+
             <!-- Permintaan pencairan -->
             <section class="rounded-xl border border-slate-200 bg-white">
                 <div class="flex flex-col gap-1 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
@@ -345,7 +508,7 @@ const typeLabel = (type: string | null) =>
                             <template v-for="row in payouts.data" :key="row.id">
                                 <tr :class="['align-top hover:bg-slate-50/60', row.status === 'requested' ? 'bg-amber-50/40' : '']">
                                     <td class="px-5 py-3.5 text-xs whitespace-nowrap text-slate-600">
-                                        {{ row.requested_at ? formatDate(row.requested_at) : 'Dicatat admin' }}
+                                        {{ row.requested_at ? formatDate(row.requested_at) : row.type === 'subscription' ? formatDate(row.processed_at) : 'Dicatat admin' }}
                                     </td>
                                     <td class="px-3 py-3.5">
                                         <p class="font-medium text-slate-900">{{ row.affiliate_name }}</p>
@@ -361,8 +524,8 @@ const typeLabel = (type: string | null) =>
                                         <span v-else class="text-slate-400">—</span>
                                     </td>
                                     <td class="px-3 py-3.5">
-                                        <span :class="['inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap ring-1 ring-inset', payoutBadge(row.status).cls]">
-                                            {{ payoutBadge(row.status).label }}
+                                        <span :class="['inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap ring-1 ring-inset', payoutBadge(row).cls]">
+                                            {{ payoutBadge(row).label }}
                                         </span>
                                         <p v-if="row.status !== 'requested'" class="mt-1 text-xs text-slate-400">{{ formatDate(row.processed_at) }}</p>
                                         <p v-if="row.status === 'paid' && row.note" class="mt-0.5 max-w-[220px] text-xs text-slate-400">{{ row.note }}</p>
@@ -553,7 +716,18 @@ const typeLabel = (type: string | null) =>
                                     </td>
                                     <td class="px-3 py-3.5">
                                         <code class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-700">{{ row.code }}</code>
-                                        <p class="mt-1 text-xs text-slate-400 tabular-nums">{{ row.percent.toLocaleString('id-ID') }}%</p>
+                                        <button
+                                            type="button"
+                                            :class="[
+                                                'mt-1 block rounded text-xs tabular-nums underline decoration-dotted underline-offset-2 hover:text-slate-700',
+                                                row.custom_percent !== null ? 'font-semibold text-violet-700' : 'text-slate-400',
+                                            ]"
+                                            :title="row.custom_percent !== null ? 'Tarif khusus. Klik untuk mengubah.' : 'Tarif program. Klik untuk memberi tarif khusus.'"
+                                            :aria-expanded="rateId === row.id"
+                                            @click="openRate(row)"
+                                        >
+                                            {{ row.percent.toLocaleString('id-ID') }}%<template v-if="row.custom_percent !== null"> khusus</template>
+                                        </button>
                                     </td>
                                     <td class="px-3 py-3.5 text-right text-slate-700 tabular-nums">{{ row.clicks }}</td>
                                     <td class="px-3 py-3.5 text-right text-slate-700 tabular-nums">{{ row.signups }}</td>
@@ -604,6 +778,34 @@ const typeLabel = (type: string | null) =>
                                                 {{ row.is_active ? 'Bekukan' : 'Aktifkan' }}
                                             </button>
                                         </div>
+                                    </td>
+                                </tr>
+                                <tr v-if="rateId === row.id" class="bg-slate-50/60">
+                                    <td colspan="8" class="px-5 py-3">
+                                        <label :for="`rate-${row.id}`" class="mb-1 block text-xs font-semibold text-slate-600">
+                                            Tarif komisi khusus untuk {{ row.name }} (%)
+                                        </label>
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <input
+                                                :id="`rate-${row.id}`"
+                                                v-model="rateValue"
+                                                type="number"
+                                                min="0"
+                                                max="100"
+                                                step="0.5"
+                                                :placeholder="`Kosong = tarif program ${rules.percent.toLocaleString('id-ID')}%`"
+                                                class="w-64 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                                                :aria-invalid="!!rateError"
+                                            />
+                                            <button type="button" class="rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800" @click="submitRate(row)">
+                                                Simpan tarif
+                                            </button>
+                                            <button type="button" class="rounded-lg px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100" @click="rateId = null">
+                                                Batal
+                                            </button>
+                                        </div>
+                                        <p v-if="rateError" class="mt-1 text-xs font-medium text-red-600" role="alert">{{ rateError }}</p>
+                                        <p class="mt-1 text-xs text-slate-500">Berlaku untuk komisi berikutnya. Komisi yang sudah tercatat tidak berubah.</p>
                                     </td>
                                 </tr>
                                 <tr v-if="payingId === row.id" class="bg-slate-50/60">

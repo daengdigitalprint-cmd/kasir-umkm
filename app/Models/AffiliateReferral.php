@@ -57,7 +57,13 @@ class AffiliateReferral extends Model
     /** Nama yang aman ditampilkan ke afiliator: "Bu*** S." */
     public function maskedName(): string
     {
-        $name = trim((string) ($this->referred_name ?? ''));
+        return self::mask((string) ($this->referred_name ?? ''));
+    }
+
+    /** Samarkan nama orang: dua huruf pertama + bintang + inisial nama belakang. */
+    public static function mask(string $name): string
+    {
+        $name = trim($name);
         if ($name === '') {
             return 'Pengguna';
         }

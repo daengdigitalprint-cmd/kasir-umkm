@@ -108,7 +108,7 @@ class AffiliateProgramController extends Controller
      */
     private function earningExamples(): array
     {
-        $percent = (float) config('affiliate.commission_percent');
+        $percent = (float) \App\Models\AffiliateSetting::value('commission_percent');
 
         return SubscriptionPlan::active()
             ->where('price', '>', 0)

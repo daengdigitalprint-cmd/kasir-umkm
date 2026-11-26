@@ -158,6 +158,10 @@ Route::prefix('afiliasi')->name('affiliate.')->group(function () {
             Route::post('/pencairan', [App\Http\Controllers\Affiliate\AffiliateDashboardController::class, 'requestPayout'])
                 ->middleware('throttle:6,1')
                 ->name('payout.request');
+            Route::post('/tukar-langganan', [App\Http\Controllers\Affiliate\AffiliateDashboardController::class, 'redeem'])
+                ->middleware('throttle:6,1')
+                ->name('redeem');
+            Route::post('/notifikasi/baca', [App\Http\Controllers\Affiliate\AffiliateDashboardController::class, 'readNotifications'])->name('notifications.read');
         });
     });
 });
@@ -957,6 +961,8 @@ Route::prefix('superadmin')->name('superadmin.')->middleware(['auth', 'superadmi
 
     // Program afiliasi: afiliator, komisi, pencatatan transfer komisi
     Route::get('/affiliates', [App\Http\Controllers\SuperAdmin\AffiliateController::class, 'index'])->name('affiliates.index');
+    Route::put('/affiliates/settings', [App\Http\Controllers\SuperAdmin\AffiliateController::class, 'updateSettings'])->name('affiliates.settings');
+    Route::post('/affiliates/{affiliate}/rate', [App\Http\Controllers\SuperAdmin\AffiliateController::class, 'updateRate'])->name('affiliates.rate');
     Route::post('/affiliates/{affiliate}/pay', [App\Http\Controllers\SuperAdmin\AffiliateController::class, 'pay'])->name('affiliates.pay');
     Route::post('/affiliates/{affiliate}/toggle', [App\Http\Controllers\SuperAdmin\AffiliateController::class, 'toggle'])->name('affiliates.toggle');
     Route::post('/affiliate-commissions/{commission}/cancel', [App\Http\Controllers\SuperAdmin\AffiliateController::class, 'cancelCommission'])->name('affiliate-commissions.cancel');

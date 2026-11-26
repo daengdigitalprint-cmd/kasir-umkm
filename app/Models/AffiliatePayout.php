@@ -16,10 +16,18 @@ class AffiliatePayout extends Model
 
     public const STATUS_REJECTED = 'rejected';
 
+    /** Ditransfer ke rekening afiliator. */
+    public const TYPE_TRANSFER = 'transfer';
+
+    /** Ditukar jadi perpanjangan langganan toko afiliator sendiri. */
+    public const TYPE_SUBSCRIPTION = 'subscription';
+
     protected $fillable = [
         'affiliate_id',
         'amount',
         'status',
+        'type',
+        'subscription_payment_id',
         'payout_provider',
         'payout_account_number',
         'payout_account_holder',

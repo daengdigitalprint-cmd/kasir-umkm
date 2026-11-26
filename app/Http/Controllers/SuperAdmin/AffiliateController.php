@@ -7,6 +7,7 @@ use App\Models\Affiliate;
 use App\Models\AffiliateCommission;
 use App\Models\AffiliatePayout;
 use App\Models\AffiliateReferral;
+use App\Models\AffiliateSetting;
 use App\Services\AffiliateService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,6 +20,14 @@ use Inertia\Response;
  */
 class AffiliateController extends Controller
 {
+    /** Pesan galat angka dalam Bahasa Indonesia (bawaan aplikasi berbahasa Inggris). */
+    private const NUMBER_MESSAGES = [
+        'numeric' => ':Attribute harus berupa angka.',
+        'integer' => ':Attribute harus berupa bilangan bulat.',
+        'min' => ':Attribute minimal :min.',
+        'max' => ':Attribute maksimal :max.',
+    ];
+
     public function index(Request $request): Response
     {
         $search = trim((string) $request->query('q', ''));
@@ -53,6 +62,7 @@ class AffiliateController extends Controller
                 'link' => $affiliate->shareUrl(),
                 'is_active' => $affiliate->isActive(),
                 'percent' => $affiliate->effectivePercent(),
+                'custom_percent' => $affiliate->commission_percent !== null ? (float) $affiliate->commission_percent : null,
                 'clicks' => (int) $affiliate->clicks_count,
                 'signups' => (int) $affiliate->referrals_count,
                 'paying' => (int) $affiliate->paying_count,
@@ -111,6 +121,7 @@ class AffiliateController extends Controller
                 'whatsapp' => $payout->affiliate?->user?->phone,
                 'amount' => (float) $payout->amount,
                 'status' => $payout->status,
+                'type' => $payout->type ?? AffiliatePayout::TYPE_TRANSFER,
                 'payout_provider' => $payout->payout_provider,
                 'payout_account_number' => $payout->payout_account_number,
                 'payout_account_holder' => $payout->payout_account_holder,
@@ -136,8 +147,54 @@ class AffiliateController extends Controller
                 'pending_payouts_amount' => (float) AffiliatePayout::requested()->sum('amount'),
             ],
             'rules' => AffiliateService::rules(),
+            'settings' => AffiliateSetting::overview(),
+            'leaderboard' => AffiliateService::leaderboard(null, 5, false),
             'filters' => ['q' => $search ?: null, 'state' => $state ?: null],
         ]);
+    }
+
+    /** Simpan aturan program. Kolom yang dikosongkan kembali memakai nilai bawaan. */
+    public function updateSettings(Request $request): RedirectResponse
+    {
+        $rules = [];
+        foreach (AffiliateSetting::RULES as $key => [$min, $max]) {
+            $rules[$key] = ['nullable', $key === 'commission_percent' ? 'numeric' : 'integer', 'min:'.$min, 'max:'.$max];
+        }
+
+        $validated = $request->validate($rules, self::NUMBER_MESSAGES, [
+            'commission_percent' => 'persen komisi',
+            'commission_months' => 'lama komisi',
+            'cookie_days' => 'masa berlaku link',
+            'hold_days' => 'masa tahan',
+            'min_payout' => 'minimum pencairan',
+            'referred_trial_days' => 'trial untuk yang diajak',
+        ]);
+
+        $values = [];
+        foreach (array_keys(AffiliateSetting::RULES) as $key) {
+            $value = $validated[$key] ?? null;
+            $values[$key] = ($value === null || $value === '') ? null : $value;
+        }
+
+        $setting = AffiliateSetting::query()->first() ?? new AffiliateSetting;
+        $setting->fill($values)->save();
+
+        return back()->with('success', 'Aturan program afiliasi disimpan. Komisi yang sudah tercatat tidak berubah.');
+    }
+
+    /** Tarif khusus untuk satu afiliator (kosong = ikut tarif program). */
+    public function updateRate(Request $request, Affiliate $affiliate): RedirectResponse
+    {
+        $validated = $request->validate([
+            'percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
+        ], self::NUMBER_MESSAGES, ['percent' => 'tarif']);
+
+        $percent = $validated['percent'] ?? null;
+        $affiliate->update(['commission_percent' => ($percent === null || $percent === '') ? null : $percent]);
+
+        return back()->with('success', $affiliate->commission_percent !== null
+            ? 'Tarif khusus '.rtrim(rtrim(number_format((float) $affiliate->commission_percent, 2, ',', '.'), '0'), ',').'% disimpan untuk komisi berikutnya.'
+            : 'Afiliator kembali memakai tarif program.');
     }
 
     /** Transfer tanpa menunggu permintaan: semua komisi yang bisa ditarik dicatat sudah dibayar. */
@@ -224,6 +281,13 @@ class AffiliateController extends Controller
             'cancel_reason' => $validated['reason'],
             'processed_by' => auth()->id(),
         ]);
+
+        AffiliateService::notify(
+            $commission->affiliate,
+            'commission_cancelled',
+            'Komisi Rp'.number_format((float) $commission->amount, 0, ',', '.').' dibatalkan',
+            'Alasan: '.$validated['reason'],
+        );
 
         return back()->with('success', 'Komisi dibatalkan.');
     }

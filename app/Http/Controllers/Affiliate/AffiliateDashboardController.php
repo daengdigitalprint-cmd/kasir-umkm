@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Affiliate;
 
 use App\Http\Controllers\Controller;
 use App\Models\AffiliateCommission;
+use App\Models\AffiliateNotification;
 use App\Models\AffiliatePayout;
 use App\Models\AffiliateReferral;
 use App\Services\AffiliateService;
@@ -58,6 +59,7 @@ class AffiliateDashboardController extends Controller
                 'id' => $payout->id,
                 'amount' => (float) $payout->amount,
                 'status' => $payout->status,
+                'type' => $payout->type ?? AffiliatePayout::TYPE_TRANSFER,
                 'account' => trim(($payout->payout_provider ?? '').' '.($payout->payout_account_number ?? '')),
                 'requested_at' => ($payout->requested_at ?? $payout->created_at)?->toISOString(),
                 'processed_at' => $payout->processed_at?->toISOString(),
@@ -88,7 +90,46 @@ class AffiliateDashboardController extends Controller
                 'requested_at' => $openPayout->requested_at?->toISOString(),
             ] : null,
             'promoTargets' => AffiliateService::promoTargets($affiliate),
+            // Kabar yang belum dibaca (pendaftar baru, komisi, pencairan).
+            'notifications' => $affiliate->notifications()
+                ->whereNull('read_at')
+                ->latest('id')
+                ->limit(10)
+                ->get()
+                ->map(fn (AffiliateNotification $notification) => [
+                    'id' => $notification->id,
+                    'type' => $notification->type,
+                    'title' => $notification->title,
+                    'body' => $notification->body,
+                    'created_at' => $notification->created_at?->toISOString(),
+                ]),
+            'leaderboard' => AffiliateService::leaderboard($affiliate),
+            // Afiliator yang mengelola toko bisa memakai komisinya untuk langganan toko itu.
+            'redeem' => AffiliateService::redeemContext($user),
         ]);
+    }
+
+    /** Pakai komisi untuk membayar paket langganan toko sendiri. */
+    public function redeem(Request $request): RedirectResponse
+    {
+        $validated = $request->validate(['plan_id' => 'required|integer']);
+
+        $payout = AffiliateService::redeemForSubscription(
+            $request->user()->affiliate()->firstOrFail(),
+            $request->user(),
+            (int) $validated['plan_id'],
+        );
+
+        return back()->with('success', 'Berhasil. '.$payout->note.' sudah aktif, dibayar dengan komisi Rp'.number_format((float) $payout->amount, 0, ',', '.').'.');
+    }
+
+    /** Tandai semua kabar sudah dibaca. */
+    public function readNotifications(Request $request): RedirectResponse
+    {
+        $request->user()->affiliate()->firstOrFail()
+            ->notifications()->whereNull('read_at')->update(['read_at' => now()]);
+
+        return back();
     }
 
     /** Ajukan pencairan seluruh komisi yang bisa ditarik. */

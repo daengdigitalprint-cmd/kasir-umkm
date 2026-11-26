@@ -762,4 +762,283 @@ class AffiliateProgramTest extends TestCase
             ->assertOk()
             ->assertCookie(config('affiliate.cookie_name'), $affiliate->code);
     }
+
+    // ───────────────────────── Tahap 3: aturan dari super admin ─────────────────────────
+
+    public function test_superadmin_changes_rules_for_new_commissions_only(): void
+    {
+        $affiliate = $this->affiliate();
+        [$owner, $store] = $this->referredStore($affiliate);
+        $this->confirm($this->pendingPayment($store, $owner)); // aturan bawaan: 20%, tahan 14 hari
+        $admin = $this->superAdmin();
+
+        $this->actingAs($affiliate->user)->put('/superadmin/affiliates/settings', ['commission_percent' => 50])->assertForbidden();
+
+        $this->actingAs($admin)->put('/superadmin/affiliates/settings', [
+            'commission_percent' => 30,
+            'commission_months' => 6,
+            'cookie_days' => 45,
+            'hold_days' => 7,
+            'min_payout' => 50000,
+            'referred_trial_days' => 21,
+        ])->assertSessionHas('success');
+        auth()->logout();
+
+        $rules = AffiliateService::rules();
+        $this->assertEquals(30, $rules['percent']);
+        $this->assertSame(7, $rules['hold_days']);
+        $this->assertSame(50000, $rules['min_payout']);
+        $this->assertSame(21, $rules['referred_trial_days']);
+
+        $second = $this->pendingPayment($store, $owner);
+        $this->confirm($second);
+
+        $old = AffiliateCommission::oldest('id')->first();
+        $new = AffiliateCommission::where('subscription_payment_id', $second->id)->firstOrFail();
+        $this->assertEquals(19800, (float) $old->amount); // tidak ikut berubah
+        $this->assertEquals(29700, (float) $new->amount);
+        $this->assertEqualsWithDelta(now()->addDays(7)->timestamp, $new->available_at->timestamp, 5);
+
+        // Halaman program menampilkan angka baru.
+        $this->get('/afiliasi')->assertInertia(fn (Assert $page) => $page->where('rules.percent', 30)->where('rules.months', 6));
+
+        // Dikosongkan: kembali ke nilai bawaan.
+        $this->actingAs($admin)->put('/superadmin/affiliates/settings', [])->assertSessionHas('success');
+        $this->assertEquals(20, AffiliateService::rules()['percent']);
+        $this->assertSame(14, AffiliateService::rules()['hold_days']);
+    }
+
+    public function test_rule_values_are_validated(): void
+    {
+        $this->actingAs($this->superAdmin())
+            ->put('/superadmin/affiliates/settings', ['commission_percent' => 150, 'commission_months' => 0])
+            ->assertSessionHasErrors(['commission_percent' => 'Persen komisi maksimal 100.', 'commission_months' => 'Lama komisi minimal 1.']);
+
+        $this->assertEquals(20, AffiliateService::rules()['percent']);
+    }
+
+    public function test_superadmin_sets_special_rate_for_one_affiliate(): void
+    {
+        $affiliate = $this->affiliate();
+        [$owner, $store] = $this->referredStore($affiliate);
+        $admin = $this->superAdmin();
+
+        $this->actingAs($admin)->post("/superadmin/affiliates/{$affiliate->id}/rate", ['percent' => 35])->assertSessionHas('success');
+        auth()->logout();
+        $this->confirm($this->pendingPayment($store, $owner));
+        $this->assertEquals(34650, (float) AffiliateCommission::latest('id')->first()->amount);
+
+        $this->actingAs($admin)->post("/superadmin/affiliates/{$affiliate->id}/rate", ['percent' => null]);
+        auth()->logout();
+        $this->assertNull($affiliate->refresh()->commission_percent);
+        $this->confirm($this->pendingPayment($store, $owner));
+        $this->assertEquals(19800, (float) AffiliateCommission::latest('id')->first()->amount);
+
+        $this->actingAs($admin)->post("/superadmin/affiliates/{$affiliate->id}/rate", ['percent' => 101])->assertSessionHasErrors('percent');
+    }
+
+    // ───────────────────────── Tahap 3: notifikasi ─────────────────────────
+
+    public function test_affiliate_is_notified_about_signup_commission_and_payout(): void
+    {
+        $affiliate = $this->affiliate();
+        $affiliate->update(['payout_provider' => 'BCA', 'payout_account_number' => '1234567890', 'payout_account_holder' => 'Budi Santoso']);
+
+        // Pendaftar baru lewat link.
+        $this->withCookie(config('affiliate.cookie_name'), $affiliate->code)->post('/register', $this->registrationPayload());
+        $referred = User::where('email', 'siti@example.com')->firstOrFail();
+        $this->actingAs($referred)->post('/stores', ['name' => 'Warung Siti', 'business_type' => 'general']);
+        auth()->logout();
+        $this->assertDatabaseHas('affiliate_notifications', ['affiliate_id' => $affiliate->id, 'type' => 'signup']);
+
+        // Komisi baru.
+        $store = Store::where('name', 'Warung Siti')->firstOrFail();
+        $this->confirm($this->pendingPayment($store, $referred, ['amount' => 990000, 'duration_days' => 365]));
+        $this->assertDatabaseHas('affiliate_notifications', ['affiliate_id' => $affiliate->id, 'type' => 'commission', 'title' => 'Komisi baru Rp198.000']);
+
+        // Pencairan ditolak lalu dibayar.
+        $this->travel(15)->days();
+        $admin = $this->superAdmin();
+        $this->actingAs($affiliate->user)->post('/afiliasi/pencairan');
+        $this->actingAs($admin)->post('/superadmin/affiliate-payouts/'.AffiliatePayout::latest('id')->first()->id.'/reject', ['reason' => 'Rekening salah']);
+        $this->actingAs($affiliate->user)->post('/afiliasi/pencairan');
+        $this->actingAs($admin)->post('/superadmin/affiliate-payouts/'.AffiliatePayout::latest('id')->first()->id.'/paid');
+        $this->assertDatabaseHas('affiliate_notifications', ['affiliate_id' => $affiliate->id, 'type' => 'payout_rejected']);
+        $this->assertDatabaseHas('affiliate_notifications', ['affiliate_id' => $affiliate->id, 'type' => 'payout_paid', 'title' => 'Pencairan Rp198.000 sudah ditransfer']);
+
+        // Tampil di dashboard (terbaru dulu), lalu hilang setelah ditandai dibaca.
+        $this->actingAs($affiliate->user)->get('/afiliasi/dashboard')
+            ->assertInertia(fn (Assert $page) => $page->has('notifications', 4)->where('notifications.0.type', 'payout_paid'));
+
+        $this->actingAs($affiliate->user)->post('/afiliasi/notifikasi/baca')->assertRedirect();
+        $this->actingAs($affiliate->user)->get('/afiliasi/dashboard')->assertInertia(fn (Assert $page) => $page->has('notifications', 0));
+    }
+
+    public function test_cancelled_commission_notifies_affiliate(): void
+    {
+        $affiliate = $this->affiliate();
+        [$owner, $store] = $this->referredStore($affiliate);
+        $this->confirm($this->pendingPayment($store, $owner));
+
+        $this->actingAs($this->superAdmin())
+            ->post('/superadmin/affiliate-commissions/'.AffiliateCommission::firstOrFail()->id.'/cancel', ['reason' => 'Pembayaran di-refund']);
+
+        $this->assertDatabaseHas('affiliate_notifications', [
+            'affiliate_id' => $affiliate->id,
+            'type' => 'commission_cancelled',
+            'title' => 'Komisi Rp19.800 dibatalkan',
+        ]);
+    }
+
+    public function test_superadmin_sees_pending_payout_badge_count(): void
+    {
+        [$affiliate] = $this->affiliateWithReadyCommission();
+        $this->actingAs($affiliate->user)->post('/afiliasi/pencairan');
+
+        $this->actingAs($this->superAdmin())->get('/superadmin/affiliates')
+            ->assertInertia(fn (Assert $page) => $page->where('pending_affiliate_payouts', 1));
+
+        $this->actingAs($affiliate->user)->get('/afiliasi/dashboard')
+            ->assertInertia(fn (Assert $page) => $page->where('pending_affiliate_payouts', 0));
+    }
+
+    // ───────────────────────── Tahap 3: tukar komisi jadi langganan ─────────────────────────
+
+    /** Beri afiliator toko sendiri (sebagai admin toko) supaya bisa menukar komisi. */
+    private function giveOwnStore(Affiliate $affiliate): Store
+    {
+        $store = Store::create(['name' => 'Toko Budi', 'slug' => 'toko-budi-'.uniqid(), 'is_active' => true, 'currency' => 'IDR', 'timezone' => 'Asia/Jakarta']);
+        $affiliate->user->update(['store_id' => $store->id, 'role' => 'admin']);
+        $affiliate->user->stores()->attach($store->id, ['role' => 'admin']);
+
+        return $store;
+    }
+
+    public function test_store_owner_redeems_commission_for_own_subscription(): void
+    {
+        [$affiliate] = $this->affiliateWithReadyCommission(); // Rp198.000 bisa ditarik
+        $ownStore = $this->giveOwnStore($affiliate);
+        $before = AffiliateCommission::count();
+
+        $this->actingAs($affiliate->user)->get('/afiliasi/dashboard')
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('redeem.store_name', 'Toko Budi')
+                ->where('redeem.plans.0.id', $this->growup->id)
+                ->where('redeem.plans.0.price', 99000)
+            );
+
+        $this->actingAs($affiliate->user)->post('/afiliasi/tukar-langganan', ['plan_id' => $this->growup->id])
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('success');
+
+        // Langganan toko langsung aktif 30 hari dengan paket GrowUp.
+        $ownStore->refresh();
+        $this->assertSame($this->growup->id, $ownStore->subscription_plan_id);
+        $this->assertEqualsWithDelta(now()->addDays(30)->timestamp, $ownStore->subscription_end->timestamp, 5);
+        $this->assertTrue($ownStore->isSubscriptionActive());
+
+        // Tercatat sebagai pembayaran terkonfirmasi tanpa uang masuk.
+        $payment = SubscriptionPayment::where('store_id', $ownStore->id)->firstOrFail();
+        $this->assertSame('confirmed', $payment->status);
+        $this->assertSame('affiliate_balance', $payment->payment_method);
+        $this->assertEquals(99000, (float) $payment->amount);
+
+        // Komisi Rp198.000 dipecah: Rp99.000 terpakai, Rp99.000 masih bisa ditarik.
+        $summary = AffiliateService::summary($affiliate);
+        $this->assertEquals(99000, $summary['ready']);
+        $this->assertEquals(99000, $summary['paid']);
+        $this->assertSame($before + 1, AffiliateCommission::count());
+        $this->assertEquals(990000, (float) AffiliateCommission::sum('base_amount')); // dasar komisi tetap utuh
+
+        $payout = AffiliatePayout::firstOrFail();
+        $this->assertSame('subscription', $payout->type);
+        $this->assertSame('paid', $payout->status);
+        $this->assertSame($payment->id, $payout->subscription_payment_id);
+
+        // Pembayaran dengan komisi tidak melahirkan komisi baru dan tidak dihitung sebagai pendapatan.
+        $this->assertSame(0, AffiliateCommission::where('subscription_payment_id', $payment->id)->count());
+        $this->actingAs($this->superAdmin())->get('/superadmin')
+            ->assertInertia(fn (Assert $page) => $page->where('stats.total_revenue', fn ($value) => (float) $value === 990000.0));
+
+        // Sisa komisi bisa dipakai sekali lagi, pas habis (tanpa pecahan baru).
+        $this->actingAs($affiliate->user)->post('/afiliasi/tukar-langganan', ['plan_id' => $this->growup->id])->assertSessionHasNoErrors();
+        $this->assertEquals(0, AffiliateService::summary($affiliate)['ready']);
+        $this->assertSame($before + 1, AffiliateCommission::count());
+        $this->assertEqualsWithDelta(now()->addDays(60)->timestamp, $ownStore->refresh()->subscription_end->timestamp, 5);
+
+        // Saldo habis: ditolak.
+        $this->actingAs($affiliate->user)->post('/afiliasi/tukar-langganan', ['plan_id' => $this->growup->id])->assertSessionHasErrors('redeem');
+    }
+
+    public function test_redeem_is_refused_without_store_with_pending_payment_or_for_promo_plan(): void
+    {
+        [$affiliate] = $this->affiliateWithReadyCommission();
+
+        // Afiliator tanpa toko: tidak ada pilihan tukar, dan permintaan ditolak.
+        $this->actingAs($affiliate->user)->get('/afiliasi/dashboard')->assertInertia(fn (Assert $page) => $page->where('redeem', null));
+        $this->actingAs($affiliate->user)->post('/afiliasi/tukar-langganan', ['plan_id' => $this->growup->id])->assertSessionHasErrors('redeem');
+
+        $ownStore = $this->giveOwnStore($affiliate);
+
+        // Paket promo dan paket gratis tidak bisa ditukar.
+        $promo = SubscriptionPlan::create(['name' => 'Promo', 'slug' => 'promo-onboarding-tahunan', 'price' => 50000, 'duration_days' => 365, 'is_active' => true, 'sort_order' => 9, 'billing_cycle' => 'yearly']);
+        $this->actingAs($affiliate->user)->post('/afiliasi/tukar-langganan', ['plan_id' => $promo->id])->assertSessionHasErrors('redeem');
+        $this->actingAs($affiliate->user)->post('/afiliasi/tukar-langganan', ['plan_id' => SubscriptionPlan::where('slug', 'starter')->value('id')])->assertSessionHasErrors('redeem');
+
+        // Masih ada pembayaran yang menunggu konfirmasi.
+        $pending = $this->pendingPayment($ownStore, $affiliate->user);
+        $this->actingAs($affiliate->user)->post('/afiliasi/tukar-langganan', ['plan_id' => $this->growup->id])->assertSessionHasErrors('redeem');
+        $pending->delete();
+
+        // Dibekukan.
+        $affiliate->update(['status' => Affiliate::STATUS_SUSPENDED]);
+        $this->actingAs($affiliate->user)->post('/afiliasi/tukar-langganan', ['plan_id' => $this->growup->id])->assertSessionHasErrors('redeem');
+
+        $this->assertSame(0, AffiliatePayout::count());
+        $this->assertEquals(198000, AffiliateService::summary($affiliate)['ready']);
+    }
+
+    // ───────────────────────── Tahap 3: papan peringkat ─────────────────────────
+
+    public function test_leaderboard_ranks_this_month_and_masks_other_names(): void
+    {
+        $budi = $this->affiliate();
+        [$owner, $store] = $this->referredStore($budi);
+
+        // Bulan lalu tidak dihitung.
+        $this->travelTo(now()->startOfMonth()->subDays(3));
+        $this->confirm($this->pendingPayment($store, $owner, ['amount' => 990000]));
+        $this->travelBack();
+
+        $this->assertSame([], AffiliateService::leaderboard($budi)['rows']);
+        $this->assertNull(AffiliateService::leaderboard($budi)['me']['rank']);
+
+        // Bulan ini: Rina (Rp198.000) di atas Budi (Rp19.800).
+        $rina = $this->affiliate(['name' => 'Rina Wati', 'email' => 'rina@example.com', 'phone' => '6281200000002']);
+        $rinaOwner = User::factory()->create(['name' => 'Joko', 'role' => 'admin', 'phone' => '6281377770000']);
+        $rinaOrg = Organization::create(['name' => 'Usaha Joko', 'slug' => 'usaha-joko', 'owner_user_id' => $rinaOwner->id]);
+        $rinaStore = Store::create(['name' => 'Toko Joko', 'slug' => 'toko-joko', 'is_active' => true, 'currency' => 'IDR', 'timezone' => 'Asia/Jakarta', 'organization_id' => $rinaOrg->id]);
+        AffiliateReferral::create(['affiliate_id' => $rina->id, 'user_id' => $rinaOwner->id, 'organization_id' => $rinaOrg->id, 'referred_name' => 'Joko', 'source' => 'link']);
+
+        $this->confirm($this->pendingPayment($rinaStore, $rinaOwner, ['amount' => 990000]));
+        $this->confirm($this->pendingPayment($store, $owner));
+
+        $board = AffiliateService::leaderboard($budi);
+        $this->assertCount(2, $board['rows']);
+        $this->assertSame('Ri** W.', $board['rows'][0]['name']);
+        $this->assertEquals(198000, $board['rows'][0]['earned']);
+        $this->assertSame(1, $board['rows'][0]['paying']);
+        $this->assertFalse($board['rows'][0]['is_me']);
+        $this->assertSame('Budi Santoso', $board['rows'][1]['name']);
+        $this->assertTrue($board['rows'][1]['is_me']);
+        $this->assertSame(2, $board['me']['rank']);
+
+        // Super admin melihat nama asli.
+        $this->actingAs($this->superAdmin())->get('/superadmin/affiliates')
+            ->assertInertia(fn (Assert $page) => $page->where('leaderboard.rows.0.name', 'Rina Wati'));
+
+        // Afiliator yang dibekukan keluar dari papan.
+        $rina->update(['status' => Affiliate::STATUS_SUSPENDED]);
+        $this->assertCount(1, AffiliateService::leaderboard($budi)['rows']);
+    }
 }

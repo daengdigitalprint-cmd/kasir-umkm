@@ -4,10 +4,12 @@ import { router, useForm } from '@inertiajs/vue3';
 import {
     ArrowDownToLine,
     Banknote,
+    Bell,
     Check,
     CircleAlert,
     Clock,
     Copy,
+    Crown,
     ExternalLink,
     Hourglass,
     Landmark,
@@ -16,6 +18,7 @@ import {
     Pencil,
     Share2,
     Store,
+    Trophy,
     UserPlus,
     Wallet,
 } from 'lucide-vue-next';
@@ -45,12 +48,37 @@ interface Payout {
     id: number;
     amount: number;
     status: 'requested' | 'paid' | 'rejected';
+    type: 'transfer' | 'subscription';
     account: string;
     requested_at: string | null;
     processed_at: string | null;
     proof_url: string | null;
     note: string | null;
     reject_reason: string | null;
+}
+
+interface Notice {
+    id: number;
+    type: string;
+    title: string;
+    body: string | null;
+    created_at: string | null;
+}
+
+interface RedeemPlan {
+    id: number;
+    name: string;
+    price: number;
+    duration_days: number;
+    cycle: string;
+}
+
+interface LeaderRow {
+    rank: number;
+    name: string;
+    paying: number;
+    earned: number;
+    is_me: boolean;
 }
 
 interface PromoTarget {
@@ -85,6 +113,9 @@ const props = defineProps<{
     payouts: Payout[];
     openPayout: { amount: number; requested_at: string | null } | null;
     promoTargets: PromoTarget[];
+    notifications: Notice[];
+    leaderboard: { period: string; rows: LeaderRow[]; me: { rank: number | null; paying: number; earned: number } | null };
+    redeem: { store_name: string; has_pending_payment: boolean; plans: RedeemPlan[] } | null;
 }>();
 
 const rupiah = (n: number) => 'Rp' + Math.round(n).toLocaleString('id-ID');
@@ -163,12 +194,45 @@ const requestPayout = () => {
     );
 };
 
-const payoutStatus = (status: Payout['status']) =>
-    ({
-        requested: { label: 'Sedang diproses', cls: 'bg-amber-50 text-amber-700 ring-amber-200' },
-        paid: { label: 'Sudah ditransfer', cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
-        rejected: { label: 'Ditolak', cls: 'bg-red-50 text-red-700 ring-red-200' },
-    })[status];
+const payoutStatus = (p: Payout) =>
+    p.type === 'subscription'
+        ? { label: 'Dipakai untuk langganan', cls: 'bg-violet-50 text-violet-700 ring-violet-200' }
+        : {
+              requested: { label: 'Sedang diproses', cls: 'bg-amber-50 text-amber-700 ring-amber-200' },
+              paid: { label: 'Sudah ditransfer', cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
+              rejected: { label: 'Ditolak', cls: 'bg-red-50 text-red-700 ring-red-200' },
+          }[p.status];
+
+/* ───────── Pakai komisi untuk langganan toko sendiri ───────── */
+const redeemingId = ref<number | null>(null);
+const redeemError = ref('');
+
+const redeemPlan = (plan: RedeemPlan) => {
+    if (!props.redeem) return;
+    const ok = window.confirm(
+        `Pakai komisi ${rupiah(plan.price)} untuk paket ${plan.name} toko ${props.redeem.store_name}? Langganan langsung diperpanjang ${plan.duration_days} hari dan komisi yang dipakai tidak bisa ditarik lagi.`,
+    );
+    if (!ok) return;
+
+    redeemError.value = '';
+    redeemingId.value = plan.id;
+    router.post(
+        '/afiliasi/tukar-langganan',
+        { plan_id: plan.id },
+        {
+            preserveScroll: true,
+            onError: (errors) => (redeemError.value = errors.redeem ?? errors.plan_id ?? 'Belum bisa diproses. Coba lagi.'),
+            onFinish: () => (redeemingId.value = null),
+        },
+    );
+};
+
+/* ───────── Kabar ───────── */
+const markingRead = ref(false);
+const markNotificationsRead = () => {
+    markingRead.value = true;
+    router.post('/afiliasi/notifikasi/baca', {}, { preserveScroll: true, onFinish: () => (markingRead.value = false) });
+};
 
 /* ───────── Rekening pencairan ───────── */
 const editingPayout = ref(!props.affiliate.has_payout_account);
@@ -217,6 +281,31 @@ const inputClass =
                 <CircleAlert class="mt-0.5 h-5 w-5 shrink-0" />
                 <p><strong>Akun afiliasi Anda sedang dibekukan.</strong> Link Anda tidak aktif untuk sementara. Hubungi tim Kasir UMKM untuk informasi lebih lanjut.</p>
             </div>
+
+            <!-- Kabar yang belum dibaca -->
+            <section v-if="notifications.length > 0" class="rounded-2xl border border-amber-200 bg-amber-50/70" aria-labelledby="judul-kabar">
+                <div class="flex items-center justify-between gap-3 px-5 pt-4">
+                    <h2 id="judul-kabar" class="flex items-center gap-2 text-base font-bold text-slate-900">
+                        <Bell class="h-4 w-4 text-amber-600" /> Kabar terbaru
+                        <span class="rounded-full bg-amber-500 px-2 py-0.5 text-[11px] leading-none font-bold text-white">{{ notifications.length }}</span>
+                    </h2>
+                    <button
+                        type="button"
+                        :disabled="markingRead"
+                        class="inline-flex h-10 shrink-0 items-center rounded-xl px-3 text-sm font-semibold text-slate-700 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:opacity-60"
+                        @click="markNotificationsRead"
+                    >
+                        Tandai dibaca
+                    </button>
+                </div>
+                <ul class="divide-y divide-amber-200/70 px-5 pb-2">
+                    <li v-for="n in notifications" :key="n.id" class="py-3">
+                        <p class="text-sm font-semibold text-slate-900">{{ n.title }}</p>
+                        <p v-if="n.body" class="mt-0.5 text-sm text-slate-700">{{ n.body }}</p>
+                        <p class="mt-0.5 text-xs text-slate-500">{{ formatDate(n.created_at) }}</p>
+                    </li>
+                </ul>
+            </section>
 
             <!-- Link + bagikan -->
             <section class="relative overflow-hidden rounded-2xl bg-[#d4ceff] p-5 text-slate-900 sm:p-7" aria-labelledby="judul-link">
@@ -392,6 +481,50 @@ const inputClass =
                 </div>
             </section>
 
+            <!-- Pakai komisi untuk langganan toko sendiri -->
+            <section v-if="redeem && redeem.plans.length > 0" class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6" aria-labelledby="judul-tukar">
+                <div class="flex items-start gap-3">
+                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Crown class="h-5 w-5" /></span>
+                    <div>
+                        <h2 id="judul-tukar" class="text-base font-bold text-slate-900">Pakai komisi untuk langganan</h2>
+                        <p class="text-sm text-slate-600">
+                            Bayar langganan toko <strong class="text-slate-900">{{ redeem.store_name }}</strong> dengan komisi yang bisa ditarik. Langsung aktif,
+                            tanpa transfer.
+                        </p>
+                    </div>
+                </div>
+
+                <p v-if="redeem.has_pending_payment" class="mt-4 flex items-start gap-2 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-amber-200 ring-inset">
+                    <CircleAlert class="mt-0.5 h-4 w-4 shrink-0" /> Toko ini masih punya pembayaran yang menunggu konfirmasi. Tunggu sampai selesai dulu.
+                </p>
+
+                <ul class="mt-4 space-y-2">
+                    <li
+                        v-for="plan in redeem.plans"
+                        :key="plan.id"
+                        class="flex flex-col gap-3 rounded-xl border border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                        <div>
+                            <p class="text-sm font-bold text-slate-900">{{ plan.name }}</p>
+                            <p class="text-sm text-slate-600">{{ rupiah(plan.price) }} / {{ plan.cycle }} · tambah {{ plan.duration_days }} hari</p>
+                        </div>
+                        <button
+                            v-if="summary.ready >= plan.price && !redeem.has_pending_payment && affiliate.is_active"
+                            type="button"
+                            :disabled="redeemingId !== null"
+                            class="inline-flex h-12 shrink-0 items-center justify-center rounded-xl bg-primary px-5 text-sm font-bold text-white transition-colors hover:bg-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 disabled:opacity-60"
+                            @click="redeemPlan(plan)"
+                        >
+                            {{ redeemingId === plan.id ? 'Memproses…' : 'Pakai komisi' }}
+                        </button>
+                        <p v-else-if="summary.ready < plan.price" class="shrink-0 text-sm font-medium text-slate-500">
+                            Kurang {{ rupiah(plan.price - summary.ready) }}
+                        </p>
+                    </li>
+                </ul>
+                <p v-if="redeemError" class="mt-3 text-sm font-semibold text-red-700" role="alert">{{ redeemError }}</p>
+            </section>
+
             <!-- Rekening pencairan -->
             <section class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6" aria-labelledby="judul-rekening">
                 <div class="flex items-start justify-between gap-3">
@@ -500,16 +633,16 @@ const inputClass =
                         <div class="min-w-0">
                             <p class="text-sm font-black text-slate-900 tabular-nums">{{ rupiah(p.amount) }}</p>
                             <p class="text-xs text-slate-500">
-                                {{ formatDate(p.requested_at) }}<template v-if="p.account"> · ke {{ p.account }}</template>
+                                {{ formatDate(p.requested_at) }}<template v-if="p.type === 'transfer' && p.account"> · ke {{ p.account }}</template>
                             </p>
                             <p v-if="p.status === 'rejected' && p.reject_reason" class="mt-1 text-xs text-red-700">Alasan: {{ p.reject_reason }}</p>
                             <p v-if="p.status === 'paid' && p.note" class="mt-1 text-xs text-slate-500">{{ p.note }}</p>
                         </div>
                         <div class="shrink-0 text-right">
-                            <span :class="['inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset', payoutStatus(p.status).cls]">
-                                {{ payoutStatus(p.status).label }}
+                            <span :class="['inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset', payoutStatus(p).cls]">
+                                {{ payoutStatus(p).label }}
                             </span>
-                            <p v-if="p.status === 'paid'" class="mt-1 text-xs text-slate-500">{{ formatDate(p.processed_at) }}</p>
+                            <p v-if="p.status === 'paid' && p.type === 'transfer'" class="mt-1 text-xs text-slate-500">{{ formatDate(p.processed_at) }}</p>
                             <a
                                 v-if="p.proof_url"
                                 :href="p.proof_url"
@@ -576,6 +709,48 @@ const inputClass =
                         </div>
                     </li>
                 </ul>
+            </section>
+
+            <!-- Papan peringkat -->
+            <section v-if="leaderboard.rows.length > 0" class="rounded-2xl border border-slate-200 bg-white" aria-labelledby="judul-peringkat">
+                <div class="border-b border-slate-100 px-5 py-4">
+                    <h2 id="judul-peringkat" class="flex items-center gap-2 text-base font-bold text-slate-900">
+                        <Trophy class="h-4 w-4 text-amber-500" /> Papan peringkat {{ leaderboard.period }}
+                    </h2>
+                    <p class="mt-0.5 text-sm text-slate-600">Afiliator dengan komisi terbanyak bulan ini. Nama afiliator lain disamarkan.</p>
+                </div>
+                <ol class="divide-y divide-slate-100">
+                    <li
+                        v-for="row in leaderboard.rows"
+                        :key="row.rank"
+                        :class="['flex items-center gap-3 px-5 py-3.5', row.is_me ? 'bg-primary/5' : '']"
+                    >
+                        <span
+                            :class="[
+                                'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-black tabular-nums',
+                                row.rank === 1 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600',
+                            ]"
+                            >{{ row.rank }}</span
+                        >
+                        <div class="min-w-0 flex-1">
+                            <p class="truncate text-sm font-semibold text-slate-900">
+                                {{ row.name }}
+                                <span v-if="row.is_me" class="ml-1 rounded-full bg-primary px-2 py-0.5 text-[11px] font-bold text-white">Anda</span>
+                            </p>
+                            <p class="text-xs text-slate-500">{{ row.paying }} toko baru berlangganan</p>
+                        </div>
+                        <p class="shrink-0 text-sm font-black text-slate-900 tabular-nums">{{ rupiah(row.earned) }}</p>
+                    </li>
+                </ol>
+                <p v-if="leaderboard.me && leaderboard.me.rank === null" class="border-t border-slate-100 px-5 py-3 text-sm text-slate-600">
+                    Anda belum masuk peringkat bulan ini. Komisi pertama bulan ini langsung menempatkan Anda di papan.
+                </p>
+                <p
+                    v-else-if="leaderboard.me && leaderboard.me.rank !== null && leaderboard.me.rank > leaderboard.rows.length"
+                    class="border-t border-slate-100 px-5 py-3 text-sm text-slate-600"
+                >
+                    Posisi Anda: <strong class="text-slate-900">#{{ leaderboard.me.rank }}</strong> dengan komisi {{ rupiah(leaderboard.me.earned) }} bulan ini.
+                </p>
             </section>
         </div>
     </AffiliateLayout>

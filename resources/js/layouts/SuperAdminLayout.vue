@@ -21,6 +21,8 @@ const initials = computed(() => {
     return ((parts[0]?.[0] ?? 'S') + (parts[1]?.[0] ?? parts[0]?.[1] ?? 'A')).toUpperCase();
 });
 
+const pendingAffiliatePayouts = computed(() => Number((page.props as any).pending_affiliate_payouts ?? 0));
+
 const mobileNavOpen = ref(false);
 
 const handleLogout = () => {
@@ -63,7 +65,14 @@ const navGroups = computed<{ label: string; items: NavItem[] }[]>(() => [
         items: [
             { id: 'leads', label: 'Lead Iklan', icon: Megaphone, url: '/superadmin/leads' },
             { id: 'prospects', label: 'Cari Prospek', icon: MapPinned, url: '/superadmin/prospects' },
-            { id: 'affiliates', label: 'Afiliasi', icon: Handshake, url: '/superadmin/affiliates' },
+            {
+                id: 'affiliates',
+                label: 'Afiliasi',
+                icon: Handshake,
+                url: '/superadmin/affiliates',
+                // Permintaan pencairan komisi yang menunggu ditransfer.
+                badge: pendingAffiliatePayouts.value > 0 ? pendingAffiliatePayouts.value : null,
+            },
             { id: 'articles', label: 'Artikel SEO', icon: Newspaper, url: '/superadmin/articles' },
         ],
     },
@@ -128,7 +137,7 @@ const activeLabel = computed(() => {
                                 <span
                                     v-if="item.badge"
                                     class="min-w-5 rounded-full bg-amber-500 px-1.5 py-0.5 text-center text-[11px] leading-none font-bold text-white"
-                                    :aria-label="`${item.badge} menunggu konfirmasi`"
+                                    :aria-label="`${item.badge} menunggu diproses`"
                                     >{{ item.badge }}</span
                                 >
                             </Link>

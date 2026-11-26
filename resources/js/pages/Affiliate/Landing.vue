@@ -212,7 +212,8 @@ const steps = [
                         <span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary"></span>
                         <span
                             >Komisi ditahan {{ rules.hold_days }} hari. Setelah terkumpul minimal {{ rupiah(rules.min_payout) }}, Anda bisa menekan tombol
-                            Tarik komisi, lalu kami transfer ke rekening atau e-wallet Anda.</span
+                            Tarik komisi, lalu kami transfer ke rekening atau e-wallet Anda. Pemilik toko juga bisa memakai komisinya untuk membayar
+                            langganan tokonya sendiri.</span
                         >
                     </li>
                     <li class="flex gap-2.5">

@@ -53,7 +53,8 @@ class SuperAdminController extends Controller
             ->count();
 
         $pendingPayments = SubscriptionPayment::where('status', 'pending')->count();
-        $totalRevenue = SubscriptionPayment::where('status', 'confirmed')->sum('amount');
+        // Pembayaran dengan saldo komisi afiliasi tidak dihitung: tidak ada uang yang masuk.
+        $totalRevenue = SubscriptionPayment::where('status', 'confirmed')->where('payment_method', '!=', 'affiliate_balance')->sum('amount');
 
         // Daftar toko dipisah dua: grup usaha yang punya lebih dari satu toko (satu baris per grup,
         // bisa dibuka) dan toko tunggal. Masing-masing 10 per halaman dengan nomor halaman sendiri,

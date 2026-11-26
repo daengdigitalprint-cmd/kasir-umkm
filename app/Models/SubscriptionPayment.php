@@ -105,6 +105,7 @@ class SubscriptionPayment extends Model
             'e_wallet' => 'E-Wallet',
             'qris' => 'QRIS',
             'cash' => 'Tunai',
+            'affiliate_balance' => 'Saldo komisi afiliasi',
             default => $this->payment_method,
         };
     }

@@ -288,6 +288,10 @@ class HandleInertiaRequests extends Middleware
                     ->all()
                 : [],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
+            // Lencana menu Afiliasi di panel super admin: permintaan pencairan yang menunggu transfer.
+            'pending_affiliate_payouts' => fn () => $user?->isSuperAdmin()
+                ? (int) rescue(fn () => \App\Models\AffiliatePayout::requested()->count(), 0, false)
+                : 0,
             'csrf_token' => csrf_token(),
             'app_url' => config('app.url'),
         ];

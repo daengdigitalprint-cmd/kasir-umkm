@@ -57,6 +57,11 @@ class Affiliate extends Model
         return $this->hasMany(AffiliatePayout::class);
     }
 
+    public function notifications(): HasMany
+    {
+        return $this->hasMany(AffiliateNotification::class);
+    }
+
     public function isActive(): bool
     {
         return $this->status === self::STATUS_ACTIVE;
@@ -67,7 +72,7 @@ class Affiliate extends Model
     {
         return $this->commission_percent !== null
             ? (float) $this->commission_percent
-            : (float) config('affiliate.commission_percent');
+            : (float) AffiliateSetting::value('commission_percent');
     }
 
     public function hasPayoutAccount(): bool
