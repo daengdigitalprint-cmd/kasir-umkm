@@ -1113,6 +1113,16 @@ function openCheckout() {
 }
 
 /**
+ * Popup bayar dibuka tanpa memfokuskan kolom nama pelanggan: fokus otomatis ke kolom isian
+ * memunculkan keyboard HP/tablet dan menutupi separuh popup. Fokus ditaruh di popupnya sendiri
+ * supaya pintasan keyboard dan pembaca layar tetap bekerja.
+ */
+function onCheckoutAutoFocus(event: Event) {
+    event.preventDefault();
+    ((event.currentTarget ?? event.target) as HTMLElement | null)?.focus({ preventScroll: true });
+}
+
+/**
  * Tutup popup modal checkout dan kembali ke tampilan keranjang.
  */
 function closeCheckout() {
@@ -4816,7 +4826,10 @@ const sendWhatsAppInvoice = () => {
                                     }
                                 "
                             >
-                                <DialogContent class="pos-checkout-dialog flex max-h-[96dvh] max-w-[calc(100%-1rem)] flex-col gap-0 p-0 sm:max-h-[90vh] sm:max-w-2xl">
+                                <DialogContent
+                                    class="pos-checkout-dialog flex max-h-[96dvh] max-w-[calc(100%-1rem)] flex-col gap-0 p-0 outline-none sm:max-h-[90vh] sm:max-w-2xl"
+                                    @open-auto-focus="onCheckoutAutoFocus"
+                                >
                                     <!-- Tombol X ditangani oleh DialogContent bawaan -->
                                     <DialogTitle class="sr-only">Pembayaran</DialogTitle>
                                     <DialogDescription class="sr-only">
