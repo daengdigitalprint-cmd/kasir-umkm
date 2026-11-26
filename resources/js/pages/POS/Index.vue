@@ -67,6 +67,7 @@ import {
     WifiOff,
     X,
 } from 'lucide-vue-next';
+import { useBodyScrollLock } from 'reka-ui';
 import Swal from 'sweetalert2';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 
@@ -1490,6 +1491,23 @@ const splitBillCount = ref(1);
 // Invoice popup state
 const showInvoicePopup = ref(false);
 const transactionData = ref<any>(null);
+
+// Popup "Transaksi Berhasil" muncul saat popup bayar (Dialog reka-ui) masih menutup. Dialog itu
+// mengunci gulir halaman; begitu kuncinya dilepas, scrollbar muncul lagi dan popup struk yang sudah
+// tampil bergeser setengah lebar scrollbar (terlihat di desktop). Popup struk ikut memegang kunci
+// yang sama, jadi kuncinya tidak pernah lepas di antara dua popup dan baru dilepas saat struk ditutup.
+const invoiceScrollLock = useBodyScrollLock();
+watch(
+    showInvoicePopup,
+    (open) => {
+        invoiceScrollLock.value = open;
+        // Lihat html.pos-invoice-open di app.css: popup ini bukan Dialog reka-ui, jadi klik harus tetap hidup.
+        document.documentElement.classList.toggle('pos-invoice-open', open);
+    },
+    // sync: kunci harus sudah dipegang sebelum Dialog bayar dilepas pada render berikutnya.
+    { flush: 'sync' },
+);
+onUnmounted(() => document.documentElement.classList.remove('pos-invoice-open'));
 
 const filteredProducts = computed(() => {
     let result = localProducts.value;

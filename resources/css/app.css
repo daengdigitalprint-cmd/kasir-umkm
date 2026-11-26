@@ -537,6 +537,15 @@ html.lp-landing body {
     }
 }
 
+/*
+ * Selama popup struk POS terbuka, ia memegang kunci gulir reka-ui supaya tidak bergeser saat popup
+ * bayar ditutup. Kunci itu juga mematikan pointer-events di <body> (dibuat untuk Dialog reka-ui).
+ * Popup struk dan SweetAlert yang muncul di atasnya bukan Dialog reka-ui, jadi klik dihidupkan lagi.
+ */
+html.pos-invoice-open body {
+    pointer-events: auto !important;
+}
+
 /* POS invoice popup: smooth fade-in + subtle scale to prevent visual shift */
 .pos-invoice-popup {
     animation: pos-invoice-in 250ms cubic-bezier(0.16, 1, 0.3, 1) both;
