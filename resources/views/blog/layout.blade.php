@@ -246,6 +246,7 @@
                     <a href="{{ url('/#fitur') }}">Fitur</a>
                     <a href="{{ url('/#harga') }}">Harga</a>
                     <a href="{{ route('blog.index') }}">Blog</a>
+                    <a href="{{ url('/afiliasi') }}">Program Afiliasi</a>
                     <a href="{{ url('/refund') }}">Kebijakan Refund</a>
                     <a href="{{ url('/terms') }}">Syarat &amp; Ketentuan</a>
                     <a href="{{ url('/panduan') }}">Panduan</a>

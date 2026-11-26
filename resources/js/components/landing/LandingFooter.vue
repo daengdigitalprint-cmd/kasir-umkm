@@ -13,6 +13,7 @@ const navLinks: { label: string; href: string }[] = [
     { label: 'Harga', href: '#harga' },
     { label: 'FAQ', href: '#faq' },
     { label: 'Blog', href: '/blog' },
+    { label: 'Program Afiliasi', href: '/afiliasi' },
     { label: 'Kebijakan Refund', href: '/refund' },
     { label: 'Syarat & Ketentuan', href: '/terms' },
     { label: 'Kontak', href: '#kontak' },
