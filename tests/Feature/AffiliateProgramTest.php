@@ -763,6 +763,55 @@ class AffiliateProgramTest extends TestCase
             ->assertCookie(config('affiliate.cookie_name'), $affiliate->code);
     }
 
+    public function test_login_from_affiliate_button_lands_in_affiliate_area(): void
+    {
+        $affiliate = $this->affiliate();
+
+        // Tombol "Masuk akun afiliasi" → halaman login khusus afiliasi.
+        $this->get('/afiliasi/dashboard')->assertRedirect(route('login'));
+        $this->get('/login')->assertInertia(fn (Assert $page) => $page->where('affiliateLogin', true));
+
+        $this->post('/login', ['email' => $affiliate->user->email, 'password' => 'password'])
+            ->assertRedirect('/afiliasi/dashboard');
+    }
+
+    public function test_store_owner_logging_in_from_affiliate_button_is_not_sent_to_store_dashboard(): void
+    {
+        // Pemilik toko yang juga afiliator: biasanya ke dashboard owner, tapi di sini ke area afiliasi.
+        $affiliate = $this->affiliate();
+        $store = Store::create(['name' => 'Toko Budi', 'slug' => 'toko-budi', 'is_active' => true, 'currency' => 'IDR', 'timezone' => 'Asia/Jakarta']);
+        $affiliate->user->update(['store_id' => $store->id, 'role' => 'owner']);
+        $affiliate->user->stores()->attach($store->id, ['role' => 'owner']);
+
+        $this->get('/afiliasi/dashboard')->assertRedirect(route('login'));
+        $this->post('/login', ['email' => $affiliate->user->email, 'password' => 'password'])
+            ->assertRedirect('/afiliasi/dashboard');
+        auth()->logout();
+        $this->flushSession();
+
+        // Login biasa (bukan dari tombol afiliasi) tetap ke dashboard owner.
+        $this->get('/login')->assertInertia(fn (Assert $page) => $page->where('affiliateLogin', false));
+        $this->post('/login', ['email' => $affiliate->user->email, 'password' => 'password'])
+            ->assertRedirect(route('owner.dashboard'));
+    }
+
+    public function test_program_page_shows_monthly_and_yearly_commission_examples(): void
+    {
+        SubscriptionPlan::create(['name' => 'GrowUp (tahunan)', 'slug' => 'bisnis-tahunan', 'price' => 1188000, 'duration_days' => 365, 'is_active' => true, 'sort_order' => 5, 'billing_cycle' => 'yearly']);
+        // Paket promo dan paket nonaktif tidak dipakai sebagai contoh.
+        SubscriptionPlan::create(['name' => 'Promo', 'slug' => 'promo-onboarding-tahunan', 'price' => 792000, 'duration_days' => 365, 'is_active' => true, 'sort_order' => 3, 'billing_cycle' => 'yearly']);
+
+        $this->get('/afiliasi')->assertInertia(fn (Assert $page) => $page
+            ->has('examples', 2)
+            ->where('examples.0.cycle', 'bulan')
+            ->where('examples.0.commission', 19800)
+            ->where('examples.1.cycle', 'tahun')
+            ->where('examples.1.plan', 'GrowUp (tahunan)')
+            ->where('examples.1.price', 1188000)
+            ->where('examples.1.commission', 237600)
+        );
+    }
+
     // ───────────────────────── Tahap 3: aturan dari super admin ─────────────────────────
 
     public function test_superadmin_changes_rules_for_new_commissions_only(): void

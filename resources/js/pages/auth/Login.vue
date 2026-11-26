@@ -19,6 +19,8 @@ import { onMounted, onUnmounted, ref } from 'vue';
 defineProps<{
     status?: string;
     canResetPassword: boolean;
+    /** Datang dari tombol "Masuk akun afiliasi". */
+    affiliateLogin?: boolean;
 }>();
 
 const showPassword = ref(false);
@@ -115,8 +117,8 @@ onUnmounted(() => {
                             </div>
 
                             <div class="gt-section-title style-3 mb-4">
-                                <h6 class="tt-capitalize wow fadeInUp">Selamat datang kembali</h6>
-                                <h2 class="char-animation">Masuk ke akun Anda</h2>
+                                <h6 class="tt-capitalize wow fadeInUp">{{ affiliateLogin ? 'Program Afiliasi' : 'Selamat datang kembali' }}</h6>
+                                <h2 class="char-animation">{{ affiliateLogin ? 'Masuk ke akun afiliasi' : 'Masuk ke akun Anda' }}</h2>
                             </div>
 
                             <div
@@ -212,12 +214,12 @@ onUnmounted(() => {
                             </Form>
 
                             <div class="lp-auth-divider">
-                                <span>Belum punya akun?</span>
+                                <span>{{ affiliateLogin ? 'Belum jadi afiliator?' : 'Belum punya akun?' }}</span>
                             </div>
 
-                            <Link href="/register" class="gt-theme-btn style-3 bg-border lp-auth-alt">
+                            <Link :href="affiliateLogin ? '/afiliasi/daftar' : '/register'" class="gt-theme-btn style-3 bg-border lp-auth-alt">
                                 <UserPlus />
-                                Buat akun baru
+                                {{ affiliateLogin ? 'Daftar jadi afiliator' : 'Buat akun baru' }}
                             </Link>
                         </div>
                     </div>

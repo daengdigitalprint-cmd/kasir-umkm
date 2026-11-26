@@ -21,7 +21,17 @@ class AuthenticatedSessionController extends Controller
         return Inertia::render('auth/Login', [
             'canResetPassword' => Route::has('password.request'),
             'status' => $request->session()->get('status'),
+            // Datang dari tombol "Masuk akun afiliasi": halaman login menyesuaikan judulnya.
+            'affiliateLogin' => self::intendsAffiliateArea($request),
         ]);
+    }
+
+    /** Pengunjung diarahkan ke login dari area program afiliasi (/afiliasi/...). */
+    private static function intendsAffiliateArea(Request $request): bool
+    {
+        $path = (string) parse_url((string) $request->session()->get('url.intended', ''), PHP_URL_PATH);
+
+        return str_starts_with($path, '/afiliasi');
     }
 
     /**
@@ -42,6 +52,12 @@ class AuthenticatedSessionController extends Controller
         // Log aktivitas login
         if ($user && $user->store) {
             \App\Services\ActivityLogger::logLogin($user, $user->store);
+        }
+
+        // Masuk lewat tombol "Masuk akun afiliasi": kembali ke area afiliasi, juga untuk pemilik toko
+        // (yang biasanya diarahkan ke dashboard owner). Yang belum bergabung akan melihat ajakan gabung.
+        if (self::intendsAffiliateArea($request)) {
+            return redirect()->intended(route('affiliate.dashboard', absolute: false));
         }
 
         // Afiliator tanpa toko: areanya hanya program afiliasi.

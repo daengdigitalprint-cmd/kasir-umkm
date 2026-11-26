@@ -30,10 +30,12 @@ const props = defineProps<{
 const rupiah = (n: number) => 'Rp' + Math.round(n).toLocaleString('id-ID');
 const percentLabel = computed(() => props.rules.percent.toLocaleString('id-ID'));
 
-/* Simulasi sederhana: berapa toko yang diajak × komisi paket pertama. */
+/* Simulasi: jumlah toko yang diajak × komisi per paket. Paket tahunan ditonjolkan karena komisinya paling besar. */
 const stores = ref(5);
-const mainExample = computed(() => props.examples[0] ?? null);
-const simulated = computed(() => (mainExample.value ? mainExample.value.commission * stores.value : 0));
+const yearly = computed(() => props.examples.find((e) => e.cycle === 'tahun') ?? null);
+const monthly = computed(() => props.examples.find((e) => e.cycle === 'bulan') ?? null);
+const featured = computed(() => yearly.value ?? monthly.value);
+const secondary = computed(() => (yearly.value && monthly.value ? monthly.value : null));
 const step = (delta: number) => {
     stores.value = Math.min(100, Math.max(1, stores.value + delta));
 };
@@ -93,8 +95,8 @@ const steps = [
                         >
                             Daftar jadi afiliator <ArrowRight class="h-5 w-5" />
                         </Link>
-                        <Link href="/login" class="text-center text-sm font-semibold text-slate-700 underline underline-offset-4 hover:text-slate-900">
-                            Sudah punya akun Kasir UMKM? Masuk dulu
+                        <Link href="/afiliasi/dashboard" class="text-center text-sm font-semibold text-slate-700 underline underline-offset-4 hover:text-slate-900">
+                            Sudah punya akun? Masuk
                         </Link>
                     </div>
 
@@ -135,48 +137,77 @@ const steps = [
             </section>
 
             <!-- Simulasi -->
-            <section v-if="mainExample" class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6" aria-labelledby="simulasi">
+            <section v-if="featured" class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6" aria-labelledby="simulasi">
                 <h2 id="simulasi" class="text-lg font-bold text-slate-900">Berapa yang bisa Anda dapat?</h2>
                 <p class="mt-1 text-sm text-slate-600">
-                    Paket {{ mainExample.plan }} {{ rupiah(mainExample.price) }}/{{ mainExample.cycle }} menghasilkan komisi
-                    <strong class="text-slate-900">{{ rupiah(mainExample.commission) }}</strong> per toko setiap {{ mainExample.cycle }}.
+                    <template v-if="yearly">Komisi terbesar datang dari toko yang mengambil paket tahunan.</template>
+                    Atur jumlah toko yang Anda ajak untuk melihat perkiraannya.
                 </p>
 
-                <div class="mt-5 grid items-center gap-5 sm:grid-cols-2">
-                    <div>
-                        <p id="label-toko" class="text-sm font-semibold text-slate-700">Jumlah toko yang Anda ajak</p>
-                        <div class="mt-2 flex items-center gap-3">
-                            <button
-                                type="button"
-                                class="flex h-12 w-12 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                                aria-label="Kurangi jumlah toko"
-                                @click="step(-1)"
-                            >
-                                <Minus class="h-5 w-5" />
-                            </button>
-                            <output class="min-w-16 text-center text-3xl font-black text-slate-900 tabular-nums" aria-labelledby="label-toko">{{ stores }}</output>
-                            <button
-                                type="button"
-                                class="flex h-12 w-12 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                                aria-label="Tambah jumlah toko"
-                                @click="step(1)"
-                            >
-                                <Plus class="h-5 w-5" />
-                            </button>
-                        </div>
-                    </div>
-                    <div class="rounded-2xl bg-emerald-50 p-5 ring-1 ring-emerald-200 ring-inset">
-                        <p class="text-sm font-semibold text-emerald-800">Perkiraan komisi Anda</p>
-                        <p class="mt-1 text-3xl font-black text-emerald-700 tabular-nums">{{ rupiah(simulated) }}</p>
-                        <p class="text-sm text-emerald-800">per {{ mainExample.cycle }}, selama toko-toko itu terus berlangganan</p>
+                <div class="mt-4">
+                    <p id="label-toko" class="text-sm font-semibold text-slate-700">Jumlah toko yang Anda ajak</p>
+                    <div class="mt-2 flex items-center gap-3">
+                        <button
+                            type="button"
+                            class="flex h-12 w-12 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                            aria-label="Kurangi jumlah toko"
+                            @click="step(-1)"
+                        >
+                            <Minus class="h-5 w-5" />
+                        </button>
+                        <output class="min-w-16 text-center text-3xl font-black text-slate-900 tabular-nums" aria-labelledby="label-toko">{{ stores }}</output>
+                        <button
+                            type="button"
+                            class="flex h-12 w-12 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                            aria-label="Tambah jumlah toko"
+                            @click="step(1)"
+                        >
+                            <Plus class="h-5 w-5" />
+                        </button>
                     </div>
                 </div>
 
-                <p v-if="examples[1]" class="mt-4 text-sm text-slate-600">
-                    Paket {{ examples[1].plan }} {{ rupiah(examples[1].price) }}/{{ examples[1].cycle }} menghasilkan komisi
-                    <strong class="text-slate-900">{{ rupiah(examples[1].commission) }}</strong> per toko.
-                </p>
-                <p class="mt-2 text-xs text-slate-500">Angka di atas adalah simulasi, bukan jaminan penghasilan.</p>
+                <div class="mt-5 grid gap-3 sm:grid-cols-5">
+                    <!-- Paket yang ditonjolkan: tahunan (atau satu-satunya paket yang ada) -->
+                    <div :class="['rounded-2xl bg-gradient-to-br from-violet-600 via-primary to-purple-800 p-5 text-white sm:p-6', secondary ? 'sm:col-span-3' : 'sm:col-span-5']">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="rounded-full bg-secondary px-3 py-1 text-xs font-black tracking-wide text-secondary-foreground uppercase">
+                                {{ yearly ? 'Paket tahunan · komisi terbesar' : 'Paket ' + featured.plan }}
+                            </span>
+                        </div>
+                        <p class="mt-3 text-sm font-semibold text-white/85">{{ featured.plan }}</p>
+                        <p class="text-2xl font-black text-white tabular-nums sm:text-3xl">
+                            {{ rupiah(featured.price) }}<span class="text-base font-bold text-white/80"> / {{ featured.cycle }}</span>
+                        </p>
+
+                        <div class="mt-4 rounded-xl bg-white/15 p-4">
+                            <p class="text-sm font-semibold text-white/90">Perkiraan komisi Anda</p>
+                            <p class="mt-0.5 text-4xl font-black text-white tabular-nums">{{ rupiah(featured.commission * stores) }}</p>
+                            <p class="mt-1 text-sm text-white/90">
+                                {{ stores }} toko × {{ rupiah(featured.commission) }}<template v-if="yearly">, dari satu pembayaran tahunan per toko</template
+                                ><template v-else> setiap {{ featured.cycle }}, selama toko-toko itu terus berlangganan</template>.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Pembanding: paket bulanan -->
+                    <div v-if="secondary" class="rounded-2xl border border-slate-200 bg-slate-50 p-5 sm:col-span-2 sm:p-6">
+                        <span class="rounded-full bg-white px-3 py-1 text-xs font-bold tracking-wide text-slate-600 uppercase ring-1 ring-slate-200 ring-inset">Paket bulanan</span>
+                        <p class="mt-3 text-sm font-semibold text-slate-600">{{ secondary.plan }}</p>
+                        <p class="text-xl font-black text-slate-900 tabular-nums">
+                            {{ rupiah(secondary.price) }}<span class="text-sm font-bold text-slate-500"> / {{ secondary.cycle }}</span>
+                        </p>
+                        <p class="mt-4 text-sm font-semibold text-slate-600">Perkiraan komisi Anda</p>
+                        <p class="mt-0.5 text-2xl font-black text-slate-900 tabular-nums">
+                            {{ rupiah(secondary.commission * stores) }}<span class="text-sm font-bold text-slate-500"> / {{ secondary.cycle }}</span>
+                        </p>
+                        <p class="mt-1 text-sm text-slate-600">
+                            {{ stores }} toko × {{ rupiah(secondary.commission) }} setiap {{ secondary.cycle }}, selama toko-toko itu terus berlangganan.
+                        </p>
+                    </div>
+                </div>
+
+                <p class="mt-3 text-xs text-slate-500">Angka di atas adalah simulasi, bukan jaminan penghasilan.</p>
             </section>
 
             <!-- Ketentuan -->

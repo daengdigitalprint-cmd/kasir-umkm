@@ -151,9 +151,8 @@ const inputClass =
             </div>
 
             <p class="mt-5 text-center text-sm text-slate-600">
-                Sudah punya akun Kasir UMKM?
-                <Link href="/login" class="font-semibold text-primary underline underline-offset-2">Masuk</Link>, lalu buka lagi halaman
-                <Link href="/afiliasi" class="font-semibold text-primary underline underline-offset-2">Program Afiliasi</Link>.
+                Sudah punya akun Kasir UMKM atau akun afiliasi?
+                <Link href="/afiliasi/dashboard" class="font-semibold text-primary underline underline-offset-2">Masuk di sini</Link>.
             </p>
         </div>
     </AffiliateLayout>

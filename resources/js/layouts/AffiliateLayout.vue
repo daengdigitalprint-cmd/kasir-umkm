@@ -57,13 +57,14 @@ const handleLogout = () => {
                         <span class="hidden sm:inline">Keluar</span>
                     </Link>
                 </div>
+                <!-- Tamu: masuk langsung ke dashboard afiliasi (lewat halaman login) -->
                 <Link
                     v-else
-                    href="/login"
-                    class="inline-flex h-10 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    href="/afiliasi/dashboard"
+                    class="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-primary px-4 text-sm font-bold text-white shadow-sm transition-colors hover:bg-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2"
                 >
                     <LogIn class="h-4 w-4" />
-                    Masuk
+                    Masuk akun afiliasi
                 </Link>
             </div>
         </header>

@@ -110,16 +110,23 @@ class AffiliateProgramController extends Controller
     {
         $percent = (float) \App\Models\AffiliateSetting::value('commission_percent');
 
-        return SubscriptionPlan::active()
+        $plans = SubscriptionPlan::active()
             ->where('price', '>', 0)
+            ->where('slug', 'not like', 'promo-%')
             ->ordered()
-            ->limit(2)
-            ->get()
+            ->get();
+
+        $cycleOf = fn (SubscriptionPlan $plan) => ($plan->billing_cycle ?? 'monthly') === 'yearly' ? 'tahun' : 'bulan';
+
+        // Satu paket bulanan dan satu paket tahunan (yang tahunan ditonjolkan di halaman).
+        return collect(['bulan', 'tahun'])
+            ->map(fn (string $cycle) => $plans->first(fn (SubscriptionPlan $plan) => $cycleOf($plan) === $cycle))
+            ->filter()
             ->map(fn (SubscriptionPlan $plan) => [
                 'plan' => $plan->name,
                 'price' => (float) $plan->price,
                 'commission' => round((float) $plan->price * $percent / 100),
-                'cycle' => ($plan->billing_cycle ?? 'monthly') === 'yearly' ? 'tahun' : 'bulan',
+                'cycle' => $cycleOf($plan),
             ])
             ->values()
             ->all();
