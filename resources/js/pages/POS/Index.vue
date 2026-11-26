@@ -2696,6 +2696,20 @@ watch(
 const changeAmount = computed(() => {
     return Math.max(0, amountPaid.value - cashDue.value);
 });
+/** Kekurangan uang tunai; kredit boleh bayar sebagian, jadi tidak dianggap kurang. */
+const cashShortfall = computed(() => (isCredit.value ? 0 : Math.max(0, cashDue.value - amountPaid.value)));
+/** Keterangan satu baris di bawah total pada layar input uang versi HP. */
+const cashStepNotes = computed(() => {
+    const parts: string[] = [];
+    if (lineDiscountTotal.value > 0) parts.push(`diskon item −${formatCurrency(lineDiscountTotal.value)}`);
+    if (discountAmount.value > 0) parts.push(`diskon −${formatCurrency(discountAmount.value)}`);
+    if (props.store?.tax_enabled === true) parts.push(`termasuk ${props.store.tax_name} ${formatCurrency(taxAmount.value)}`);
+    if (activePreOrderId.value !== null && preOrderDepositApplied.value > 0) {
+        parts.push(`DP −${formatCurrency(preOrderDepositApplied.value)}`);
+    }
+    const text = parts.join(' · ');
+    return text.charAt(0).toUpperCase() + text.slice(1);
+});
 
 /** Pecahan uang kertas yang beredar di Indonesia. */
 const CASH_DENOMINATIONS = [1000, 2000, 5000, 10000, 20000, 50000, 100000];
@@ -5580,31 +5594,50 @@ const sendWhatsAppInvoice = () => {
                                     <!-- ═══ Step 3: Input nominal tunai & proses ═══ -->
                                     <div
                                         v-if="paymentStep === 'pay'"
-                                        class="flex flex-1 flex-col overflow-y-auto px-3 pt-12 pb-3 sm:overflow-y-auto sm:px-5 sm:pb-4"
+                                        class="flex flex-1 flex-col overflow-y-auto px-4 pt-3 pb-3 sm:overflow-y-auto sm:px-5 sm:pt-12 sm:pb-4"
                                     >
+                                        <!-- HP: judul + tombol kembali di baris tombol tutup (di tablet tombol kembali ada di numpad). -->
+                                        <div class="mb-2 flex h-8 shrink-0 items-center gap-1 pr-10 sm:hidden">
+                                            <button
+                                                type="button"
+                                                aria-label="Kembali ke pilihan metode"
+                                                class="-ml-1.5 flex h-8 w-8 items-center justify-center rounded-full text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+                                                :disabled="isProcessingPayment"
+                                                @click="paymentStep = 'method'"
+                                            >
+                                                <ArrowLeft class="h-5 w-5" />
+                                            </button>
+                                            <p class="text-base font-bold text-gray-900" aria-hidden="true">
+                                                {{ isCredit ? 'Bayar sebagian' : 'Bayar tunai' }}
+                                            </p>
+                                        </div>
                                         <div class="flex min-h-0 flex-1 flex-col gap-3 sm:flex-row sm:gap-4">
                                             <!-- Kolom kiri: Total + Quick Cash + Input + Kembalian -->
                                             <div class="flex min-w-0 flex-1 flex-col gap-2 sm:gap-4">
                                                 <!-- Total tagihan -->
                                                 <div
-                                                    class="flex items-center justify-between rounded-lg bg-red-500 px-3 py-2 text-white sm:rounded-xl sm:px-5 sm:py-4"
+                                                    class="flex items-center justify-between rounded-lg bg-red-500 px-3.5 py-2 text-white sm:rounded-xl sm:px-5 sm:py-4"
                                                 >
                                                     <span class="text-sm font-medium sm:text-base">{{
                                                         isSplitPayment ? 'Sisa dibayar tunai' : 'Total tagihan'
                                                     }}</span>
-                                                    <span class="text-lg font-bold tabular-nums sm:text-xl">{{ formatCurrency(cashDue) }}</span>
+                                                    <span class="text-xl font-bold tabular-nums">{{ formatCurrency(cashDue) }}</span>
                                                 </div>
+                                                <p v-if="cashStepNotes" class="-mt-1 px-1 text-xs text-gray-500 sm:hidden">{{ cashStepNotes }}</p>
                                                 <p v-if="isSplitPayment" class="text-xs text-gray-500">
                                                     Total {{ formatCurrency(balanceDue) }} · non-tunai {{ formatCurrency(splitNonCashTotal) }}
                                                 </p>
 
                                                 <!-- Quick cash buttons -->
-                                                <div class="grid grid-cols-3 gap-1.5 sm:grid-cols-2 sm:gap-2">
+                                                <div
+                                                    class="order-1 flex gap-1.5 overflow-x-auto [scrollbar-width:none] sm:order-none sm:grid sm:grid-cols-2 sm:gap-2 sm:overflow-visible"
+                                                    data-testid="cash-quick"
+                                                >
                                                     <button
                                                         type="button"
                                                         @click="applyCashSuggestion(cashDue)"
                                                         :class="[
-                                                            'rounded-lg border px-2 py-2 text-xs font-medium transition-colors sm:px-4 sm:py-3 sm:text-base',
+                                                            'h-9 flex-[1_0_auto] rounded-lg border px-3 text-xs font-medium whitespace-nowrap transition-colors sm:h-auto sm:px-4 sm:py-3 sm:text-base',
                                                             amountPaid === cashDue
                                                                 ? 'border-primary bg-primary/10 text-primary'
                                                                 : 'border-gray-200 text-gray-700 hover:bg-gray-50',
@@ -5618,20 +5651,23 @@ const sendWhatsAppInvoice = () => {
                                                         type="button"
                                                         @click="applyCashSuggestion(nominal)"
                                                         :class="[
-                                                            'rounded-lg border px-2 py-2 text-xs font-medium tabular-nums transition-colors sm:px-4 sm:py-3 sm:text-base',
+                                                            'h-9 flex-[1_0_auto] rounded-lg border px-3 text-xs font-medium whitespace-nowrap tabular-nums transition-colors sm:h-auto sm:px-4 sm:py-3 sm:text-base',
                                                             amountPaid === nominal
                                                                 ? 'border-primary bg-primary/10 text-primary'
                                                                 : 'border-gray-200 text-gray-700 hover:bg-gray-50',
                                                         ]"
                                                     >
-                                                        Rp {{ formatCurrency(nominal) }}
+                                                        <span class="hidden sm:inline">Rp </span>{{ formatCurrency(nominal) }}
                                                     </button>
                                                 </div>
 
                                                 <!-- Input Uang Diterima -->
-                                                <div class="space-y-1">
-                                                    <label class="text-xs font-medium tracking-wider text-gray-500 uppercase" for="pos-cash-input">
-                                                        Uang Diterima
+                                                <div class="relative sm:space-y-1">
+                                                    <label
+                                                        class="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-xs font-medium text-gray-500 sm:pointer-events-auto sm:static sm:translate-y-0 sm:tracking-wider sm:uppercase"
+                                                        for="pos-cash-input"
+                                                    >
+                                                        Uang diterima
                                                     </label>
                                                     <input
                                                         id="pos-cash-input"
@@ -5643,7 +5679,7 @@ const sendWhatsAppInvoice = () => {
                                                         @input="onCashInput(($event.target as HTMLInputElement).value)"
                                                         @keyup.enter="submitFromCashInput"
                                                         :class="[
-                                                            'w-full rounded-lg border-2 bg-white px-3 py-2.5 text-right text-xl font-bold tabular-nums transition-colors sm:rounded-xl sm:px-5 sm:py-4 sm:text-2xl',
+                                                            'w-full rounded-lg border-2 bg-white py-2.5 pr-3.5 pl-28 text-right text-2xl font-bold tabular-nums transition-colors sm:rounded-xl sm:px-5 sm:py-4',
                                                             amountPaid > 0 ? 'border-primary text-primary' : 'border-gray-300 text-gray-400',
                                                         ]"
                                                     />
@@ -5651,12 +5687,23 @@ const sendWhatsAppInvoice = () => {
 
                                                 <!-- Kembalian -->
                                                 <div
-                                                    class="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 px-3 py-2 sm:rounded-xl sm:px-5 sm:py-4"
+                                                    :class="[
+                                                        'flex items-baseline justify-between px-1 sm:items-center sm:rounded-xl sm:border sm:px-5 sm:py-4',
+                                                        cashShortfall > 0 ? 'sm:border-red-200 sm:bg-red-50' : 'sm:border-green-200 sm:bg-green-50',
+                                                    ]"
+                                                    data-testid="cash-change"
                                                 >
-                                                    <span class="text-sm font-medium text-green-700 sm:text-base">Kembalian</span>
-                                                    <span class="text-lg font-bold text-green-600 tabular-nums sm:text-xl">{{
-                                                        formatCurrency(changeAmount)
-                                                    }}</span>
+                                                    <span
+                                                        :class="['text-sm font-medium sm:text-base', cashShortfall > 0 ? 'text-red-700' : 'text-green-700']"
+                                                        >{{ cashShortfall > 0 ? 'Kurang' : 'Kembalian' }}</span
+                                                    >
+                                                    <span
+                                                        :class="[
+                                                            'text-lg font-bold tabular-nums sm:text-xl',
+                                                            cashShortfall > 0 ? 'text-red-600' : 'text-green-600',
+                                                        ]"
+                                                        >{{ formatCurrency(cashShortfall > 0 ? cashShortfall : changeAmount) }}</span
+                                                    >
                                                 </div>
                                             </div>
 
@@ -5677,7 +5724,7 @@ const sendWhatsAppInvoice = () => {
                                                             :key="n"
                                                             type="button"
                                                             @click="numpadInput(String(n))"
-                                                            class="h-11 rounded-lg border-2 border-gray-300 bg-white text-xl font-bold text-gray-800 transition-all hover:border-primary/30 hover:bg-gray-50 active:bg-gray-100 sm:h-14 sm:rounded-xl sm:text-2xl"
+                                                            class="h-12 rounded-lg border-2 border-gray-300 bg-white text-xl font-bold text-gray-800 transition-all hover:border-primary/30 hover:bg-gray-50 active:bg-gray-100 sm:h-14 sm:rounded-xl sm:text-2xl"
                                                         >
                                                             {{ n }}
                                                         </button>
@@ -5689,21 +5736,21 @@ const sendWhatsAppInvoice = () => {
                                                     <button
                                                         type="button"
                                                         @click="numpadInput('000')"
-                                                        class="h-11 rounded-lg border-2 border-gray-300 bg-white text-base font-bold text-gray-800 transition-all hover:border-primary/30 hover:bg-gray-50 active:bg-gray-100 sm:h-14 sm:rounded-xl sm:text-lg"
+                                                        class="h-12 rounded-lg border-2 border-gray-300 bg-white text-base font-bold text-gray-800 transition-all hover:border-primary/30 hover:bg-gray-50 active:bg-gray-100 sm:h-14 sm:rounded-xl sm:text-lg"
                                                     >
                                                         000
                                                     </button>
                                                     <button
                                                         type="button"
                                                         @click="numpadInput('0')"
-                                                        class="h-11 rounded-lg border-2 border-gray-300 bg-white text-xl font-bold text-gray-800 transition-all hover:border-primary/30 hover:bg-gray-50 active:bg-gray-100 sm:h-14 sm:rounded-xl sm:text-2xl"
+                                                        class="h-12 rounded-lg border-2 border-gray-300 bg-white text-xl font-bold text-gray-800 transition-all hover:border-primary/30 hover:bg-gray-50 active:bg-gray-100 sm:h-14 sm:rounded-xl sm:text-2xl"
                                                     >
                                                         0
                                                     </button>
                                                     <button
                                                         type="button"
                                                         @click="numpadBackspace()"
-                                                        class="flex h-11 items-center justify-center rounded-lg border-2 border-gray-300 bg-white text-gray-800 transition-all hover:border-red-300 hover:bg-red-50 active:bg-red-100 sm:h-14 sm:rounded-xl"
+                                                        class="flex h-12 items-center justify-center rounded-lg border-2 border-gray-300 bg-white text-gray-800 transition-all hover:border-red-300 hover:bg-red-50 active:bg-red-100 sm:h-14 sm:rounded-xl"
                                                     >
                                                         <svg
                                                             class="mx-auto h-5 w-5 sm:h-6 sm:w-6"
@@ -5727,7 +5774,7 @@ const sendWhatsAppInvoice = () => {
                                                         type="button"
                                                         @click="paymentStep = 'method'"
                                                         :disabled="isProcessingPayment"
-                                                        class="flex h-11 items-center justify-center rounded-lg border-2 border-gray-300 bg-white text-gray-600 transition-all hover:border-gray-400 hover:bg-gray-50 active:bg-gray-100 disabled:opacity-50 sm:h-14 sm:rounded-xl"
+                                                        class="hidden h-11 items-center justify-center rounded-lg border-2 border-gray-300 bg-white text-gray-600 transition-all hover:border-gray-400 hover:bg-gray-50 active:bg-gray-100 disabled:opacity-50 sm:flex sm:h-14 sm:rounded-xl"
                                                     >
                                                         <ArrowLeft class="mx-auto h-5 w-5 sm:h-6 sm:w-6" />
                                                     </button>
@@ -5745,7 +5792,7 @@ const sendWhatsAppInvoice = () => {
                                                                 !prescription.reference.trim() &&
                                                                 !prescription.number.trim())
                                                         "
-                                                        class="col-span-2 flex h-11 items-center justify-center gap-2 rounded-lg bg-primary font-bold text-white transition-all hover:bg-primary/90 disabled:opacity-50 sm:h-14 sm:rounded-xl"
+                                                        class="col-span-3 flex h-12 items-center justify-center gap-2 rounded-lg bg-primary font-bold text-white transition-all hover:bg-primary/90 disabled:opacity-50 sm:col-span-2 sm:h-14 sm:rounded-xl"
                                                     >
                                                         <CheckCircle2 v-if="!isProcessingPayment" class="h-5 w-5 shrink-0 sm:h-6 sm:w-6" />
                                                         <div
@@ -5764,7 +5811,7 @@ const sendWhatsAppInvoice = () => {
                                                     type="button"
                                                     @click="openSaveOrderDrawer"
                                                     :disabled="isProcessingPayment"
-                                                    class="flex h-11 w-full items-center justify-center gap-1.5 rounded-lg border-2 border-emerald-400 bg-emerald-50 text-sm font-semibold text-emerald-800 transition-all hover:bg-emerald-100 disabled:opacity-50 sm:h-14 sm:rounded-xl"
+                                                    class="flex h-8 w-full items-center justify-center gap-1.5 rounded-lg text-sm font-semibold text-emerald-700 transition-all hover:underline disabled:opacity-50 sm:h-14 sm:rounded-xl sm:border-2 sm:border-emerald-400 sm:bg-emerald-50 sm:text-emerald-800 sm:hover:bg-emerald-100 sm:hover:no-underline"
                                                 >
                                                     <Save class="h-4 w-4 shrink-0" />
                                                     Simpan Order
@@ -5774,7 +5821,7 @@ const sendWhatsAppInvoice = () => {
                                         </div>
 
                                         <!-- Ringkas Harga di bawah numpad -->
-                                        <div class="mt-2 shrink-0 space-y-1 text-xs text-gray-600 sm:mt-3 sm:text-sm">
+                                        <div class="mt-3 hidden shrink-0 space-y-1 text-sm text-gray-600 sm:block">
                                             <div v-if="lineDiscountTotal > 0" class="flex justify-between text-emerald-700">
                                                 <span>Diskon item:</span>
                                                 <span class="tabular-nums">-{{ formatCurrency(lineDiscountTotal) }}</span>
