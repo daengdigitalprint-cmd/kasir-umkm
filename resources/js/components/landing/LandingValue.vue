@@ -59,7 +59,7 @@ const tabs = computed<DashboardTab[]>(() => [
         iconSize: 20,
         src: '/multi%20cabang.webp',
         src800: '/multi-cabang-800.webp',
-        srcWidth: 1616,
+        srcWidth: 1678,
         active: false,
     },
 ]);
