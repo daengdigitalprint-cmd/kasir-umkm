@@ -168,25 +168,49 @@ const steps = [
                 </div>
 
                 <div class="mt-5 grid gap-3 sm:grid-cols-5">
-                    <!-- Paket yang ditonjolkan: tahunan (atau satu-satunya paket yang ada) -->
-                    <div :class="['rounded-2xl bg-gradient-to-br from-violet-600 via-primary to-purple-800 p-5 text-white sm:p-6', secondary ? 'sm:col-span-3' : 'sm:col-span-5']">
-                        <div class="flex flex-wrap items-center gap-2">
-                            <span class="rounded-full bg-secondary px-3 py-1 text-xs font-black tracking-wide text-secondary-foreground uppercase">
-                                {{ yearly ? 'Paket tahunan · komisi terbesar' : 'Paket ' + featured.plan }}
-                            </span>
+                    <!-- Paket yang ditonjolkan: tahunan (atau satu-satunya paket yang ada).
+                         Latar sama dengan kartu "Otomatis" di beranda (fs-solution-chart_box fa-chart-two). -->
+                    <div :class="['relative overflow-hidden rounded-[20px] bg-[#f2fff2] p-5 text-[#0d1738] sm:p-6', secondary ? 'sm:col-span-3' : 'sm:col-span-5']">
+                        <div class="xb-item--shape pointer-events-none absolute inset-0" aria-hidden="true">
+                            <div class="shape shape--1 absolute top-0 left-0 h-full max-h-[337px]">
+                                <img width="195" height="337" src="/sastik-assets/img/shape/solution_shape05.png" alt="" loading="lazy" decoding="async" class="h-full w-auto" />
+                            </div>
+                            <div class="shape shape--2 absolute top-0 right-0 h-full max-h-[337px]">
+                                <img width="195" height="337" src="/sastik-assets/img/shape/solution_shape06.png" alt="" loading="lazy" decoding="async" class="h-full w-auto" />
+                            </div>
+                            <div class="shape shape--3 absolute bottom-0 left-0 w-32 sm:w-48">
+                                <img width="264" height="299" src="/sastik-assets/img/shape/solution_shape07.png" alt="" loading="lazy" decoding="async" class="h-auto w-full" />
+                            </div>
+                            <div class="shape shape--4 absolute right-0 bottom-0 w-32 sm:w-48">
+                                <img width="264" height="300" src="/sastik-assets/img/shape/solution_shape08.png" alt="" loading="lazy" decoding="async" class="h-auto w-full" />
+                            </div>
+                            <div class="shape shape--5 absolute top-1/2 left-0 h-full max-h-[370px] -translate-y-1/2">
+                                <img width="204" height="370" src="/sastik-assets/img/shape/circle-blur03.png" alt="" loading="lazy" decoding="async" class="h-full w-auto" />
+                            </div>
+                            <div class="shape shape--6 absolute top-1/2 right-0 h-full max-h-[370px] -translate-y-1/2">
+                                <img width="204" height="370" src="/sastik-assets/img/shape/circle-blur03.png" alt="" loading="lazy" decoding="async" class="h-full w-auto" />
+                            </div>
                         </div>
-                        <p class="mt-3 text-sm font-semibold text-white/85">{{ featured.plan }}</p>
-                        <p class="text-2xl font-black text-white tabular-nums sm:text-3xl">
-                            {{ rupiah(featured.price) }}<span class="text-base font-bold text-white/80"> / {{ featured.cycle }}</span>
-                        </p>
 
-                        <div class="mt-4 rounded-xl bg-white/15 p-4">
-                            <p class="text-sm font-semibold text-white/90">Perkiraan komisi Anda</p>
-                            <p class="mt-0.5 text-4xl font-black text-white tabular-nums">{{ rupiah(featured.commission * stores) }}</p>
-                            <p class="mt-1 text-sm text-white/90">
-                                {{ stores }} toko × {{ rupiah(featured.commission) }}<template v-if="yearly">, dari satu pembayaran tahunan per toko</template
-                                ><template v-else> setiap {{ featured.cycle }}, selama toko-toko itu terus berlangganan</template>.
+                        <div class="relative z-10">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="rounded-full bg-secondary px-3 py-1 text-xs font-black tracking-wide text-secondary-foreground uppercase">
+                                    {{ yearly ? 'Paket tahunan · komisi terbesar' : 'Paket ' + featured.plan }}
+                                </span>
+                            </div>
+                            <p class="mt-3 text-sm font-semibold text-[#5a5869]">{{ featured.plan }}</p>
+                            <p class="text-2xl font-black text-[#0d1738] tabular-nums sm:text-3xl">
+                                {{ rupiah(featured.price) }}<span class="text-base font-bold text-[#5a5869]"> / {{ featured.cycle }}</span>
                             </p>
+
+                            <div class="mt-4 rounded-xl border border-[#d8ead8] bg-white/80 p-4">
+                                <p class="text-sm font-semibold text-[#5a5869]">Perkiraan komisi Anda</p>
+                                <p class="mt-0.5 text-4xl font-black text-emerald-700 tabular-nums">{{ rupiah(featured.commission * stores) }}</p>
+                                <p class="mt-1 text-sm text-[#5a5869]">
+                                    {{ stores }} toko × {{ rupiah(featured.commission) }}<template v-if="yearly">, dari satu pembayaran tahunan per toko</template
+                                    ><template v-else> setiap {{ featured.cycle }}, selama toko-toko itu terus berlangganan</template>.
+                                </p>
+                            </div>
                         </div>
                     </div>
 
