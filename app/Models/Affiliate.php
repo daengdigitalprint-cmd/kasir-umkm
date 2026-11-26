@@ -52,6 +52,11 @@ class Affiliate extends Model
         return $this->hasMany(AffiliateCommission::class);
     }
 
+    public function payouts(): HasMany
+    {
+        return $this->hasMany(AffiliatePayout::class);
+    }
+
     public function isActive(): bool
     {
         return $this->status === self::STATUS_ACTIVE;

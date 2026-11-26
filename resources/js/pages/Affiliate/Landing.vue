@@ -10,6 +10,8 @@ interface Rules {
     cookie_days: number;
     hold_days: number;
     min_payout: number;
+    referred_trial_days: number;
+    default_trial_days: number;
 }
 
 interface Example {
@@ -192,6 +194,13 @@ const steps = [
                         <span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary"></span>
                         <span>Pendaftaran dan masa coba gratis belum menghasilkan komisi. Komisi muncul setelah toko membayar.</span>
                     </li>
+                    <li v-if="rules.referred_trial_days > rules.default_trial_days" class="flex gap-2.5">
+                        <span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary"></span>
+                        <span
+                            >Toko yang mendaftar lewat link atau kode Anda bisa mencoba semua fitur gratis {{ rules.referred_trial_days }} hari (pendaftar biasa
+                            {{ rules.default_trial_days }} hari).</span
+                        >
+                    </li>
                     <li class="flex gap-2.5">
                         <span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary"></span>
                         <span
@@ -202,8 +211,8 @@ const steps = [
                     <li class="flex gap-2.5">
                         <span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary"></span>
                         <span
-                            >Komisi ditahan {{ rules.hold_days }} hari, lalu ditransfer ke rekening atau e-wallet Anda setelah terkumpul minimal
-                            {{ rupiah(rules.min_payout) }}.</span
+                            >Komisi ditahan {{ rules.hold_days }} hari. Setelah terkumpul minimal {{ rupiah(rules.min_payout) }}, Anda bisa menekan tombol
+                            Tarik komisi, lalu kami transfer ke rekening atau e-wallet Anda.</span
                         >
                     </li>
                     <li class="flex gap-2.5">

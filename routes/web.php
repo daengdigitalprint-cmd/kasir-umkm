@@ -155,6 +155,9 @@ Route::prefix('afiliasi')->name('affiliate.')->group(function () {
         Route::middleware('affiliate')->group(function () {
             Route::get('/dashboard', [App\Http\Controllers\Affiliate\AffiliateDashboardController::class, 'index'])->name('dashboard');
             Route::put('/rekening', [App\Http\Controllers\Affiliate\AffiliateDashboardController::class, 'updatePayout'])->name('payout.update');
+            Route::post('/pencairan', [App\Http\Controllers\Affiliate\AffiliateDashboardController::class, 'requestPayout'])
+                ->middleware('throttle:6,1')
+                ->name('payout.request');
         });
     });
 });
@@ -957,6 +960,8 @@ Route::prefix('superadmin')->name('superadmin.')->middleware(['auth', 'superadmi
     Route::post('/affiliates/{affiliate}/pay', [App\Http\Controllers\SuperAdmin\AffiliateController::class, 'pay'])->name('affiliates.pay');
     Route::post('/affiliates/{affiliate}/toggle', [App\Http\Controllers\SuperAdmin\AffiliateController::class, 'toggle'])->name('affiliates.toggle');
     Route::post('/affiliate-commissions/{commission}/cancel', [App\Http\Controllers\SuperAdmin\AffiliateController::class, 'cancelCommission'])->name('affiliate-commissions.cancel');
+    Route::post('/affiliate-payouts/{payout}/paid', [App\Http\Controllers\SuperAdmin\AffiliateController::class, 'payoutPaid'])->name('affiliate-payouts.paid');
+    Route::post('/affiliate-payouts/{payout}/reject', [App\Http\Controllers\SuperAdmin\AffiliateController::class, 'payoutReject'])->name('affiliate-payouts.reject');
 
     Route::get('/articles', [App\Http\Controllers\SuperAdmin\ArticleController::class, 'index'])->name('articles.index');
     Route::get('/articles/create', [App\Http\Controllers\SuperAdmin\ArticleController::class, 'create'])->name('articles.create');

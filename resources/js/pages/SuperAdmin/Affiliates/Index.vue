@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import SuperAdminLayout from '@/layouts/SuperAdminLayout.vue';
 import { Link, router } from '@inertiajs/vue3';
-import { Banknote, Clock, ExternalLink, Handshake, MessageCircle, Search, Store, UserPlus, Users, Wallet } from 'lucide-vue-next';
+import { Banknote, Clock, ExternalLink, Handshake, Hourglass, MessageCircle, Search, Store, UserPlus, Users, Wallet } from 'lucide-vue-next';
 import { ref } from 'vue';
 
 interface AffiliateRow {
@@ -36,12 +36,29 @@ interface CommissionRow {
     base_amount: number;
     percent: number;
     amount: number;
-    state: 'held' | 'ready' | 'paid' | 'cancelled';
+    state: 'held' | 'ready' | 'processing' | 'paid' | 'cancelled';
     created_at: string | null;
     available_at: string | null;
     paid_at: string | null;
     paid_note: string | null;
     cancel_reason: string | null;
+}
+
+interface PayoutRow {
+    id: number;
+    affiliate_name: string;
+    affiliate_code: string | null;
+    whatsapp: string | null;
+    amount: number;
+    status: 'requested' | 'paid' | 'rejected';
+    payout_provider: string | null;
+    payout_account_number: string | null;
+    payout_account_holder: string | null;
+    requested_at: string | null;
+    processed_at: string | null;
+    proof_url: string | null;
+    note: string | null;
+    reject_reason: string | null;
 }
 
 interface Paginated<T> {
@@ -53,7 +70,17 @@ interface Paginated<T> {
 const props = defineProps<{
     affiliates: Paginated<AffiliateRow>;
     commissions: Paginated<CommissionRow>;
-    stats: { affiliates: number; signups: number; paying: number; held: number; ready: number; paid: number };
+    payouts: Paginated<PayoutRow>;
+    stats: {
+        affiliates: number;
+        signups: number;
+        paying: number;
+        held: number;
+        ready: number;
+        paid: number;
+        pending_payouts: number;
+        pending_payouts_amount: number;
+    };
     rules: { percent: number; months: number; cookie_days: number; hold_days: number; min_payout: number };
     filters: { q: string | null; state: string | null };
 }>();
@@ -75,24 +102,90 @@ const applyFilter = () => {
 /* ───────── Catat transfer komisi (satu baris terbuka pada satu waktu) ───────── */
 const payingId = ref<number | null>(null);
 const payNote = ref('');
+const payProof = ref<File | null>(null);
+const payError = ref('');
 const processing = ref(false);
+
+const pickProof = (event: Event) => {
+    payProof.value = (event.target as HTMLInputElement).files?.[0] ?? null;
+};
+
+const resetTransferForm = () => {
+    payNote.value = '';
+    payProof.value = null;
+    payError.value = '';
+};
 
 const openPay = (row: AffiliateRow) => {
     payingId.value = payingId.value === row.id ? null : row.id;
-    payNote.value = '';
+    payoutPayingId.value = null;
+    resetTransferForm();
 };
 
-const submitPay = (row: AffiliateRow) => {
+/** Kirim catatan + bukti transfer (bila ada) ke alamat yang diberikan. */
+const sendTransfer = (url: string, onDone: () => void) => {
     processing.value = true;
+    payError.value = '';
     router.post(
-        `/superadmin/affiliates/${row.id}/pay`,
-        { note: payNote.value || null },
+        url,
+        { note: payNote.value || null, proof: payProof.value },
         {
             preserveScroll: true,
-            onSuccess: () => (payingId.value = null),
+            forceFormData: true,
+            onSuccess: onDone,
+            onError: (errors) => (payError.value = errors.proof ?? errors.note ?? 'Gagal menyimpan. Coba lagi.'),
             onFinish: () => (processing.value = false),
         },
     );
+};
+
+const submitPay = (row: AffiliateRow) => sendTransfer(`/superadmin/affiliates/${row.id}/pay`, () => (payingId.value = null));
+
+/* ───────── Permintaan pencairan dari afiliator ───────── */
+const payoutPayingId = ref<number | null>(null);
+const payoutRejectingId = ref<number | null>(null);
+const rejectReason = ref('');
+const rejectError = ref('');
+
+const openPayoutPay = (row: PayoutRow) => {
+    payoutPayingId.value = payoutPayingId.value === row.id ? null : row.id;
+    payoutRejectingId.value = null;
+    payingId.value = null;
+    resetTransferForm();
+};
+
+const submitPayoutPaid = (row: PayoutRow) => sendTransfer(`/superadmin/affiliate-payouts/${row.id}/paid`, () => (payoutPayingId.value = null));
+
+const openPayoutReject = (row: PayoutRow) => {
+    payoutRejectingId.value = payoutRejectingId.value === row.id ? null : row.id;
+    payoutPayingId.value = null;
+    rejectReason.value = '';
+    rejectError.value = '';
+};
+
+const submitPayoutReject = (row: PayoutRow) => {
+    if (!rejectReason.value.trim()) {
+        rejectError.value = 'Tulis alasan penolakan.';
+        return;
+    }
+    router.post(
+        `/superadmin/affiliate-payouts/${row.id}/reject`,
+        { reason: rejectReason.value },
+        { preserveScroll: true, onSuccess: () => (payoutRejectingId.value = null) },
+    );
+};
+
+const payoutBadge = (status: PayoutRow['status']) =>
+    ({
+        requested: { label: 'Menunggu transfer', cls: 'bg-amber-50 text-amber-700 ring-amber-200' },
+        paid: { label: 'Sudah ditransfer', cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
+        rejected: { label: 'Ditolak', cls: 'bg-slate-100 text-slate-500 ring-slate-200' },
+    })[status];
+
+const payoutWhatsapp = (row: PayoutRow) => {
+    const firstName = row.affiliate_name.trim().split(/\s+/)[0];
+    const text = `Halo ${firstName}, saya dari tim Kasir UMKM. Terkait permintaan pencairan komisi afiliasi Anda.`;
+    return `https://wa.me/${row.whatsapp}?text=${encodeURIComponent(text)}`;
 };
 
 const toggleStatus = (row: AffiliateRow) => {
@@ -138,6 +231,7 @@ const stateBadge = (state: CommissionRow['state']) =>
     ({
         held: { label: 'Ditahan', cls: 'bg-amber-50 text-amber-700 ring-amber-200' },
         ready: { label: 'Siap dibayar', cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
+        processing: { label: 'Diajukan cair', cls: 'bg-violet-50 text-violet-700 ring-violet-200' },
         paid: { label: 'Dibayar', cls: 'bg-sky-50 text-sky-700 ring-sky-200' },
         cancelled: { label: 'Dibatalkan', cls: 'bg-slate-100 text-slate-500 ring-slate-200' },
     })[state];
@@ -217,6 +311,194 @@ const typeLabel = (type: string | null) =>
                     <p class="mt-2 text-xl font-bold text-slate-900 tabular-nums">{{ rupiah(stats.paid) }}</p>
                 </div>
             </div>
+
+            <!-- Permintaan pencairan -->
+            <section class="rounded-xl border border-slate-200 bg-white">
+                <div class="flex flex-col gap-1 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <h2 class="text-base font-semibold text-slate-900">Pencairan ({{ payouts.total }})</h2>
+                    <p
+                        v-if="stats.pending_payouts > 0"
+                        class="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800 ring-1 ring-amber-200 ring-inset"
+                    >
+                        <Hourglass class="h-3.5 w-3.5" /> {{ stats.pending_payouts }} menunggu transfer · {{ rupiah(stats.pending_payouts_amount) }}
+                    </p>
+                </div>
+
+                <div v-if="payouts.data.length === 0" class="px-5 py-12 text-center">
+                    <Banknote class="mx-auto h-8 w-8 text-slate-300" />
+                    <p class="mt-3 text-sm text-slate-500">Belum ada pencairan. Permintaan dari afiliator muncul di sini.</p>
+                </div>
+
+                <div v-else class="overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-50 text-xs font-medium tracking-wide text-slate-500 uppercase">
+                            <tr>
+                                <th scope="col" class="px-5 py-3">Diajukan</th>
+                                <th scope="col" class="px-3 py-3">Afiliator</th>
+                                <th scope="col" class="px-3 py-3 text-right">Jumlah</th>
+                                <th scope="col" class="px-3 py-3">Rekening tujuan</th>
+                                <th scope="col" class="px-3 py-3">Status</th>
+                                <th scope="col" class="px-5 py-3 text-right"><span class="sr-only">Aksi</span></th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <template v-for="row in payouts.data" :key="row.id">
+                                <tr :class="['align-top hover:bg-slate-50/60', row.status === 'requested' ? 'bg-amber-50/40' : '']">
+                                    <td class="px-5 py-3.5 text-xs whitespace-nowrap text-slate-600">
+                                        {{ row.requested_at ? formatDate(row.requested_at) : 'Dicatat admin' }}
+                                    </td>
+                                    <td class="px-3 py-3.5">
+                                        <p class="font-medium text-slate-900">{{ row.affiliate_name }}</p>
+                                        <p class="font-mono text-xs text-slate-400">{{ row.affiliate_code }}</p>
+                                    </td>
+                                    <td class="px-3 py-3.5 text-right font-bold whitespace-nowrap text-slate-900 tabular-nums">{{ rupiah(row.amount) }}</td>
+                                    <td class="px-3 py-3.5 text-xs text-slate-600">
+                                        <template v-if="row.payout_account_number">
+                                            <p class="font-medium text-slate-800">{{ row.payout_provider }}</p>
+                                            <p class="tabular-nums">{{ row.payout_account_number }}</p>
+                                            <p class="text-slate-400">a.n. {{ row.payout_account_holder }}</p>
+                                        </template>
+                                        <span v-else class="text-slate-400">—</span>
+                                    </td>
+                                    <td class="px-3 py-3.5">
+                                        <span :class="['inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap ring-1 ring-inset', payoutBadge(row.status).cls]">
+                                            {{ payoutBadge(row.status).label }}
+                                        </span>
+                                        <p v-if="row.status !== 'requested'" class="mt-1 text-xs text-slate-400">{{ formatDate(row.processed_at) }}</p>
+                                        <p v-if="row.status === 'paid' && row.note" class="mt-0.5 max-w-[220px] text-xs text-slate-400">{{ row.note }}</p>
+                                        <p v-if="row.status === 'rejected' && row.reject_reason" class="mt-0.5 max-w-[220px] text-xs text-slate-400">{{ row.reject_reason }}</p>
+                                    </td>
+                                    <td class="px-5 py-3.5">
+                                        <div class="flex flex-wrap items-center justify-end gap-1.5">
+                                            <template v-if="row.status === 'requested'">
+                                                <button
+                                                    type="button"
+                                                    class="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap text-white hover:bg-slate-800"
+                                                    :aria-expanded="payoutPayingId === row.id"
+                                                    @click="openPayoutPay(row)"
+                                                >
+                                                    <Banknote class="h-3.5 w-3.5" /> Sudah ditransfer
+                                                </button>
+                                                <a
+                                                    v-if="row.whatsapp"
+                                                    :href="payoutWhatsapp(row)"
+                                                    target="_blank"
+                                                    rel="noopener"
+                                                    class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap text-white hover:bg-emerald-700"
+                                                >
+                                                    <MessageCircle class="h-3.5 w-3.5" /> WhatsApp
+                                                </a>
+                                                <button
+                                                    type="button"
+                                                    class="rounded-lg px-2.5 py-1.5 text-xs font-medium whitespace-nowrap text-red-600 hover:bg-red-50"
+                                                    :aria-expanded="payoutRejectingId === row.id"
+                                                    @click="openPayoutReject(row)"
+                                                >
+                                                    Tolak
+                                                </button>
+                                            </template>
+                                            <a
+                                                v-else-if="row.proof_url"
+                                                :href="row.proof_url"
+                                                target="_blank"
+                                                rel="noopener"
+                                                class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium whitespace-nowrap text-slate-600 hover:bg-slate-100"
+                                            >
+                                                <ExternalLink class="h-3.5 w-3.5" /> Bukti transfer
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr v-if="payoutPayingId === row.id" class="bg-slate-50/60">
+                                    <td colspan="6" class="px-5 py-4">
+                                        <p class="text-sm font-semibold text-slate-900">Transfer {{ rupiah(row.amount) }} ke {{ row.affiliate_name }}</p>
+                                        <p class="mt-0.5 text-xs text-slate-600">
+                                            {{ row.payout_provider }} · <span class="tabular-nums">{{ row.payout_account_number }}</span> · a.n. {{ row.payout_account_holder }}
+                                        </p>
+                                        <label :for="`payout-note-${row.id}`" class="mt-3 mb-1 block text-xs font-semibold text-slate-600">Catatan transfer (opsional)</label>
+                                        <input
+                                            :id="`payout-note-${row.id}`"
+                                            v-model="payNote"
+                                            type="text"
+                                            maxlength="500"
+                                            placeholder="mis. Transfer BCA 26 Nov, ref 12345"
+                                            class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                                        />
+                                        <label :for="`payout-proof-${row.id}`" class="mt-3 mb-1 block text-xs font-semibold text-slate-600">
+                                            Bukti transfer (opsional, gambar maks. 5 MB)
+                                        </label>
+                                        <input
+                                            :id="`payout-proof-${row.id}`"
+                                            type="file"
+                                            accept="image/*"
+                                            class="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-slate-700 hover:file:bg-slate-200"
+                                            @change="pickProof"
+                                        />
+                                        <p v-if="payError" class="mt-1 text-xs font-medium text-red-600" role="alert">{{ payError }}</p>
+                                        <p class="mt-1 text-xs text-slate-500">Lakukan transfernya dulu, baru tandai di sini. Afiliator bisa melihat bukti yang Anda unggah.</p>
+                                        <div class="mt-3 flex justify-end gap-2">
+                                            <button type="button" class="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100" @click="payoutPayingId = null">
+                                                Batal
+                                            </button>
+                                            <button
+                                                type="button"
+                                                :disabled="processing"
+                                                class="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+                                                @click="submitPayoutPaid(row)"
+                                            >
+                                                {{ processing ? 'Menyimpan…' : 'Sudah saya transfer' }}
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr v-if="payoutRejectingId === row.id" class="bg-slate-50/60">
+                                    <td colspan="6" class="px-5 py-3">
+                                        <label :for="`payout-reject-${row.id}`" class="mb-1 block text-xs font-semibold text-slate-600">
+                                            Alasan menolak pencairan {{ rupiah(row.amount) }} — {{ row.affiliate_name }}
+                                        </label>
+                                        <input
+                                            :id="`payout-reject-${row.id}`"
+                                            v-model="rejectReason"
+                                            type="text"
+                                            maxlength="500"
+                                            placeholder="mis. nama pemilik rekening tidak cocok"
+                                            class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                                            :aria-invalid="!!rejectError"
+                                        />
+                                        <p v-if="rejectError" class="mt-1 text-xs font-medium text-red-600" role="alert">{{ rejectError }}</p>
+                                        <p class="mt-1 text-xs text-slate-500">Alasan ini terlihat oleh afiliator. Komisinya kembali bisa ditarik.</p>
+                                        <div class="mt-2 flex justify-end gap-2">
+                                            <button type="button" class="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100" @click="payoutRejectingId = null">
+                                                Tidak jadi
+                                            </button>
+                                            <button type="button" class="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700" @click="submitPayoutReject(row)">
+                                                Tolak pencairan
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div v-if="payouts.links && payouts.links.length > 3" class="flex justify-center border-t border-slate-100 px-5 py-4">
+                    <nav class="flex items-center gap-1" aria-label="Halaman daftar pencairan">
+                        <Link
+                            v-for="link in payouts.links"
+                            :key="link.label"
+                            :href="link.url || '#'"
+                            preserve-scroll
+                            :class="[
+                                'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+                                link.active ? 'bg-slate-900 text-white' : link.url ? 'text-slate-600 hover:bg-slate-100' : 'cursor-default text-slate-300',
+                            ]"
+                        >
+                            <span v-html="link.label" />
+                        </Link>
+                    </nav>
+                </div>
+            </section>
 
             <!-- Afiliator -->
             <section class="rounded-xl border border-slate-200 bg-white">
@@ -347,6 +629,17 @@ const typeLabel = (type: string | null) =>
                                             placeholder="mis. Transfer BCA 26 Nov, ref 12345"
                                             class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
                                         />
+                                        <label :for="`pay-proof-${row.id}`" class="mt-3 mb-1 block text-xs font-semibold text-slate-600">
+                                            Bukti transfer (opsional, gambar maks. 5 MB)
+                                        </label>
+                                        <input
+                                            :id="`pay-proof-${row.id}`"
+                                            type="file"
+                                            accept="image/*"
+                                            class="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-slate-700 hover:file:bg-slate-200"
+                                            @change="pickProof"
+                                        />
+                                        <p v-if="payError" class="mt-1 text-xs font-medium text-red-600" role="alert">{{ payError }}</p>
                                         <p class="mt-1 text-xs text-slate-500">Lakukan transfernya dulu, baru catat di sini. Semua komisi yang siap dibayar ditandai sudah dibayar.</p>
                                         <div class="mt-3 flex justify-end gap-2">
                                             <button type="button" class="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100" @click="payingId = null">
@@ -398,6 +691,7 @@ const typeLabel = (type: string | null) =>
                     >
                         <option value="">Semua status</option>
                         <option value="ready">Siap dibayar</option>
+                        <option value="processing">Diajukan cair</option>
                         <option value="held">Ditahan</option>
                         <option value="paid">Dibayar</option>
                         <option value="cancelled">Dibatalkan</option>

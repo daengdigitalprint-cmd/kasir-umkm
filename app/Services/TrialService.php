@@ -49,10 +49,14 @@ final class TrialService
      * Trial otomatis untuk toko baru. Hanya toko pertama pemilik yang mendapat trial;
      * toko berikutnya (atau pemilik yang pernah trial) langsung di paket Gratis.
      *
+     * $days: lama trial khusus (mis. toko yang datang lewat link afiliasi); null = TRIAL_DAYS.
+     *
      * @return bool true bila trial dimulai
      */
-    public static function startForNewStore(Store $store, User $owner): bool
+    public static function startForNewStore(Store $store, User $owner, ?int $days = null): bool
     {
+        $days = max(1, $days ?? self::TRIAL_DAYS);
+
         $usedBefore = $owner->stores()
             ->where('stores.id', '!=', $store->id)
             ->where('pro_trial_used', true)
@@ -69,9 +73,9 @@ final class TrialService
         }
 
         $now = now();
-        $trialEnd = $now->copy()->addDays(self::TRIAL_DAYS);
+        $trialEnd = $now->copy()->addDays($days);
 
-        DB::transaction(function () use ($store, $growupPlan, $now, $trialEnd) {
+        DB::transaction(function () use ($store, $growupPlan, $now, $trialEnd, $days) {
             $store->forceFill([
                 'pro_trial_used' => true,
                 'pro_trial_active' => true,
@@ -80,9 +84,9 @@ final class TrialService
                 'subscription_plan_id' => $growupPlan->id,
                 'subscription_start' => $store->subscription_start ?? $now,
                 'subscription_end' => $trialEnd,
-                'subscription_days' => self::TRIAL_DAYS,
+                'subscription_days' => $days,
                 'is_subscription_active' => true,
-                'subscription_notes' => 'Registrasi: Trial Pro '.self::TRIAL_DAYS.' hari otomatis.',
+                'subscription_notes' => 'Registrasi: Trial Pro '.$days.' hari otomatis.',
             ])->save();
 
             TrialActivationLog::create([
@@ -93,10 +97,10 @@ final class TrialService
                 'new_plan_slug' => $growupPlan->slug,
                 'trial_start' => $now,
                 'trial_end' => $trialEnd,
-                'notes' => 'Trial Pro '.self::TRIAL_DAYS.' hari otomatis saat registrasi.',
+                'notes' => 'Trial Pro '.$days.' hari otomatis saat registrasi.',
             ]);
 
-            self::welcome($store, $trialEnd);
+            self::welcome($store, $trialEnd, $days);
         });
 
         return true;
@@ -148,7 +152,7 @@ final class TrialService
                 'notes' => "Trial Pro {$days} hari diaktifkan oleh {$admin->name}.",
             ]);
 
-            self::welcome($store, $trialEnd);
+            self::welcome($store, $trialEnd, $days);
 
             return $log;
         });
@@ -411,7 +415,10 @@ final class TrialService
 
         return [
             'active' => $active,
-            'days_total' => self::TRIAL_DAYS,
+            // Lama trial toko ini (toko rujukan afiliasi bisa lebih panjang dari TRIAL_DAYS).
+            'days_total' => $store->pro_trial_start
+                ? max(1, (int) round($store->pro_trial_start->diffInDays($store->pro_trial_end)))
+                : self::TRIAL_DAYS,
             'days_left' => $active ? max(1, (int) ceil(now()->diffInHours($store->pro_trial_end) / 24)) : 0,
             'ends_at' => $store->pro_trial_end->toISOString(),
             'ended' => ! $active,
@@ -431,12 +438,12 @@ final class TrialService
 
     private const DATA_SAFE = 'Data Anda aman: semua produk, pelanggan, dan riwayat transaksi tetap ada dan tetap bisa dipakai berjualan.';
 
-    private static function welcome(Store $store, Carbon $trialEnd): void
+    private static function welcome(Store $store, Carbon $trialEnd, int $days = self::TRIAL_DAYS): void
     {
         TrialNotification::create([
             'store_id' => $store->id,
             'type' => 'trial_activated',
-            'title' => 'Semua fitur Pro aktif '.self::TRIAL_DAYS.' hari',
+            'title' => 'Semua fitur Pro aktif '.$days.' hari',
             'body' => 'Selamat datang! Sampai '.self::tanggal($trialEnd).' Anda bisa mencoba semua fitur GrowUp tanpa biaya: '
                 .'shift kasir, pembelian & stok opname, diskon & loyalitas, varian produk, scan QR meja & antrean dapur, dan produk tanpa batas. '
                 .'Fitur bertanda Pro di menu adalah fitur GrowUp. Tidak perlu kartu atau pembayaran di awal.',

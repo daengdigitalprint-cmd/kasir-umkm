@@ -338,7 +338,8 @@ class StoreController extends Controller implements HasMiddleware
         }
 
         if (! $inherited) {
-            TrialService::startForNewStore($store, $owner);
+            // Toko yang datang lewat link afiliasi mendapat trial lebih panjang.
+            TrialService::startForNewStore($store, $owner, \App\Services\AffiliateService::trialDaysFor($owner));
         }
 
         // Outlet pertama di grup usaha otomatis menjadi Outlet Utama.

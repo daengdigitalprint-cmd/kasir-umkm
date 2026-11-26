@@ -25,6 +25,8 @@ class RegisteredUserController extends Controller
         return Inertia::render('auth/Register', [
             // Datang lewat link afiliasi: kodenya sudah terpasang di form.
             'referralCode' => AffiliateService::codeFromCookie($request),
+            // Keuntungan daftar lewat kode referal: trial Pro lebih panjang (0 = tidak ada).
+            'referralTrialDays' => AffiliateService::rules()['referred_trial_days'],
         ]);
     }
 

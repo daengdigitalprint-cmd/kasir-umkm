@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Affiliate;
 
 use App\Http\Controllers\Controller;
 use App\Models\AffiliateCommission;
+use App\Models\AffiliatePayout;
 use App\Models\AffiliateReferral;
 use App\Services\AffiliateService;
 use Illuminate\Http\RedirectResponse;
@@ -49,6 +50,24 @@ class AffiliateDashboardController extends Controller
                 'paid_at' => $commission->paid_at?->toISOString(),
             ]);
 
+        $payouts = $affiliate->payouts()
+            ->latest('id')
+            ->limit(20)
+            ->get()
+            ->map(fn (AffiliatePayout $payout) => [
+                'id' => $payout->id,
+                'amount' => (float) $payout->amount,
+                'status' => $payout->status,
+                'account' => trim(($payout->payout_provider ?? '').' '.($payout->payout_account_number ?? '')),
+                'requested_at' => ($payout->requested_at ?? $payout->created_at)?->toISOString(),
+                'processed_at' => $payout->processed_at?->toISOString(),
+                'proof_url' => $payout->proofUrl(),
+                'note' => $payout->note,
+                'reject_reason' => $payout->reject_reason,
+            ]);
+
+        $openPayout = AffiliateService::openPayout($affiliate);
+
         return Inertia::render('Affiliate/Dashboard', [
             'affiliate' => [
                 'code' => $affiliate->code,
@@ -63,7 +82,21 @@ class AffiliateDashboardController extends Controller
             'summary' => AffiliateService::summary($affiliate),
             'referrals' => $referrals,
             'commissions' => $commissions,
+            'payouts' => $payouts,
+            'openPayout' => $openPayout ? [
+                'amount' => (float) $openPayout->amount,
+                'requested_at' => $openPayout->requested_at?->toISOString(),
+            ] : null,
+            'promoTargets' => AffiliateService::promoTargets($affiliate),
         ]);
+    }
+
+    /** Ajukan pencairan seluruh komisi yang bisa ditarik. */
+    public function requestPayout(Request $request): RedirectResponse
+    {
+        $payout = AffiliateService::requestPayout($request->user()->affiliate()->firstOrFail());
+
+        return back()->with('success', 'Permintaan pencairan Rp'.number_format((float) $payout->amount, 0, ',', '.').' terkirim. Kami transfer ke rekening Anda setelah diperiksa.');
     }
 
     /** Simpan rekening/e-wallet tujuan transfer komisi. */

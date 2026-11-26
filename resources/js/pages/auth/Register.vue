@@ -21,6 +21,8 @@ import { onMounted, onUnmounted, ref } from 'vue';
 const props = defineProps<{
     /** Kode afiliator dari link yang diklik pengunjung (bila ada). */
     referralCode?: string | null;
+    /** Lama coba gratis untuk pendaftar lewat kode referal (0 = tidak ada keuntungan khusus). */
+    referralTrialDays?: number;
 }>();
 
 const showPassword = ref(false);
@@ -269,7 +271,11 @@ onUnmounted(() => {
                                     <template v-if="props.referralCode && !referralOpen && !errors.referral_code">
                                         <input type="hidden" name="referral_code" :value="referralInput" />
                                         <p class="lp-auth-referral-note">
-                                            <span>Kode referal <strong>{{ referralInput }}</strong> terpasang.</span>
+                                            <span
+                                                >Kode referal <strong>{{ referralInput }}</strong> terpasang<template v-if="props.referralTrialDays"
+                                                    >: coba gratis {{ props.referralTrialDays }} hari</template
+                                                >.</span
+                                            >
                                             <button type="button" class="lp-auth-referral-link" @click="referralOpen = true">Ubah</button>
                                         </p>
                                     </template>

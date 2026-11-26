@@ -24,5 +24,9 @@ return [
     // Komisi ditransfer setelah saldo siap bayar mencapai nominal ini.
     'min_payout' => (int) env('AFFILIATE_MIN_PAYOUT', 100000),
 
+    // Toko yang mendaftar lewat link afiliasi mendapat trial Pro selama ini (toko biasa: 14 hari).
+    // Isi 0 untuk mematikan keuntungan ini.
+    'referred_trial_days' => (int) env('AFFILIATE_REFERRED_TRIAL_DAYS', 30),
+
     'cookie_name' => 'kumkm_ref',
 ];

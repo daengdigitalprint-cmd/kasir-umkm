@@ -5,11 +5,11 @@ namespace App\Http\Controllers\SuperAdmin;
 use App\Http\Controllers\Controller;
 use App\Models\Affiliate;
 use App\Models\AffiliateCommission;
+use App\Models\AffiliatePayout;
 use App\Models\AffiliateReferral;
 use App\Services\AffiliateService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -70,6 +70,7 @@ class AffiliateController extends Controller
             ->with(['affiliate.user:id,name', 'referral.organization:id,name', 'referral.user:id,name'])
             ->when($state === 'held', fn ($q) => $q->held())
             ->when($state === 'ready', fn ($q) => $q->ready())
+            ->when($state === 'processing', fn ($q) => $q->processing())
             ->when($state === 'paid', fn ($q) => $q->paid())
             ->when($state === 'cancelled', fn ($q) => $q->where('status', AffiliateCommission::STATUS_CANCELLED))
             ->latest('id')
@@ -96,8 +97,33 @@ class AffiliateController extends Controller
                 'cancel_reason' => $commission->cancel_reason,
             ]);
 
+        $payouts = AffiliatePayout::query()
+            ->with('affiliate.user:id,name,phone')
+            // Yang menunggu diproses di atas, sisanya riwayat terbaru.
+            ->orderByRaw("CASE status WHEN 'requested' THEN 0 ELSE 1 END")
+            ->latest('id')
+            ->paginate(15, ['*'], 'pencairan_page')
+            ->withQueryString()
+            ->through(fn (AffiliatePayout $payout) => [
+                'id' => $payout->id,
+                'affiliate_name' => $payout->affiliate?->user?->name ?? '-',
+                'affiliate_code' => $payout->affiliate?->code,
+                'whatsapp' => $payout->affiliate?->user?->phone,
+                'amount' => (float) $payout->amount,
+                'status' => $payout->status,
+                'payout_provider' => $payout->payout_provider,
+                'payout_account_number' => $payout->payout_account_number,
+                'payout_account_holder' => $payout->payout_account_holder,
+                'requested_at' => $payout->requested_at?->toISOString(),
+                'processed_at' => $payout->processed_at?->toISOString(),
+                'proof_url' => $payout->proofUrl(),
+                'note' => $payout->note,
+                'reject_reason' => $payout->reject_reason,
+            ]);
+
         return Inertia::render('SuperAdmin/Affiliates/Index', [
             'affiliates' => $affiliates,
+            'payouts' => $payouts,
             'commissions' => $commissions,
             'stats' => [
                 'affiliates' => Affiliate::count(),
@@ -106,41 +132,74 @@ class AffiliateController extends Controller
                 'held' => (float) AffiliateCommission::held()->sum('amount'),
                 'ready' => (float) AffiliateCommission::ready()->sum('amount'),
                 'paid' => (float) AffiliateCommission::paid()->sum('amount'),
+                'pending_payouts' => AffiliatePayout::requested()->count(),
+                'pending_payouts_amount' => (float) AffiliatePayout::requested()->sum('amount'),
             ],
             'rules' => AffiliateService::rules(),
             'filters' => ['q' => $search ?: null, 'state' => $state ?: null],
         ]);
     }
 
-    /** Catat bahwa semua komisi siap bayar milik afiliator ini sudah ditransfer. */
+    /** Transfer tanpa menunggu permintaan: semua komisi yang bisa ditarik dicatat sudah dibayar. */
     public function pay(Request $request, Affiliate $affiliate): RedirectResponse
     {
-        $validated = $request->validate([
-            'note' => 'nullable|string|max:500',
-        ]);
+        $validated = $this->validateTransfer($request);
 
-        $total = DB::transaction(function () use ($affiliate, $validated) {
-            $ready = $affiliate->commissions()->ready()->lockForUpdate()->get();
-            $sum = (float) $ready->sum('amount');
+        $payout = AffiliateService::payDirect($affiliate, $request->user(), $validated['note'] ?? null, $this->storeProof($request));
 
-            if ($ready->isNotEmpty()) {
-                AffiliateCommission::whereKey($ready->modelKeys())->update([
-                    'status' => AffiliateCommission::STATUS_PAID,
-                    'paid_at' => now(),
-                    'paid_note' => $validated['note'] ?? null,
-                    'processed_by' => auth()->id(),
-                    'updated_at' => now(),
-                ]);
-            }
-
-            return $sum;
-        });
-
-        if ($total <= 0) {
-            return back()->with('error', 'Tidak ada komisi yang siap dibayar untuk afiliator ini.');
+        if (! $payout) {
+            return back()->with('error', 'Tidak ada komisi yang bisa dibayar untuk afiliator ini.');
         }
 
-        return back()->with('success', 'Komisi Rp'.number_format($total, 0, ',', '.').' dicatat sudah ditransfer.');
+        return back()->with('success', 'Komisi Rp'.number_format((float) $payout->amount, 0, ',', '.').' dicatat sudah ditransfer.');
+    }
+
+    /** Permintaan pencairan dari afiliator: tandai sudah ditransfer. */
+    public function payoutPaid(Request $request, AffiliatePayout $payout): RedirectResponse
+    {
+        $validated = $this->validateTransfer($request);
+
+        if (! $payout->isRequested()
+            || ! AffiliateService::markPayoutPaid($payout, $request->user(), $validated['note'] ?? null, $this->storeProof($request))) {
+            return back()->with('error', 'Permintaan pencairan ini sudah diproses.');
+        }
+
+        return back()->with('success', 'Pencairan Rp'.number_format((float) $payout->refresh()->amount, 0, ',', '.').' ditandai sudah ditransfer.');
+    }
+
+    /** Tolak permintaan pencairan: komisinya kembali bisa ditarik afiliator. */
+    public function payoutReject(Request $request, AffiliatePayout $payout): RedirectResponse
+    {
+        $validated = $request->validate([
+            'reason' => 'required|string|max:500',
+        ], [
+            'reason.required' => 'Tulis alasan penolakan.',
+        ]);
+
+        if (! AffiliateService::rejectPayout($payout, $request->user(), $validated['reason'])) {
+            return back()->with('error', 'Permintaan pencairan ini sudah diproses.');
+        }
+
+        return back()->with('success', 'Permintaan pencairan ditolak.');
+    }
+
+    /** @return array<string, mixed> */
+    private function validateTransfer(Request $request): array
+    {
+        return $request->validate([
+            'note' => 'nullable|string|max:500',
+            'proof' => 'nullable|image|max:5120',
+        ], [
+            'proof.image' => 'Bukti transfer harus berupa gambar.',
+            'proof.max' => 'Ukuran bukti transfer maksimal 5 MB.',
+        ]);
+    }
+
+    private function storeProof(Request $request): ?string
+    {
+        return $request->hasFile('proof')
+            ? $request->file('proof')->store('affiliate-payout-proofs', 'public')
+            : null;
     }
 
     /** Batalkan komisi (mis. pembayarannya di-refund). Komisi yang sudah ditransfer tidak bisa dibatalkan. */
@@ -154,6 +213,10 @@ class AffiliateController extends Controller
 
         if ($commission->status !== AffiliateCommission::STATUS_EARNED) {
             return back()->with('error', 'Komisi ini sudah dibayar atau sudah dibatalkan.');
+        }
+
+        if ($commission->affiliate_payout_id) {
+            return back()->with('error', 'Komisi ini sedang dalam permintaan pencairan. Tolak dulu permintaannya, baru batalkan komisinya.');
         }
 
         $commission->update([

@@ -25,6 +25,7 @@ class AffiliateCommission extends Model
         'percent',
         'amount',
         'status',
+        'affiliate_payout_id',
         'available_at',
         'paid_at',
         'paid_note',
@@ -61,10 +62,23 @@ class AffiliateCommission extends Model
         return $query->where('status', self::STATUS_EARNED)->where('available_at', '>', now());
     }
 
-    /** Masa tahan lewat, menunggu ditransfer. */
+    public function payout(): BelongsTo
+    {
+        return $this->belongsTo(AffiliatePayout::class, 'affiliate_payout_id');
+    }
+
+    /** Masa tahan lewat dan belum masuk permintaan pencairan: bisa ditarik. */
     public function scopeReady(Builder $query): Builder
     {
-        return $query->where('status', self::STATUS_EARNED)->where('available_at', '<=', now());
+        return $query->where('status', self::STATUS_EARNED)
+            ->where('available_at', '<=', now())
+            ->whereNull('affiliate_payout_id');
+    }
+
+    /** Sudah masuk permintaan pencairan yang belum diproses super admin. */
+    public function scopeProcessing(Builder $query): Builder
+    {
+        return $query->where('status', self::STATUS_EARNED)->whereNotNull('affiliate_payout_id');
     }
 
     public function scopePaid(Builder $query): Builder
@@ -72,10 +86,14 @@ class AffiliateCommission extends Model
         return $query->where('status', self::STATUS_PAID);
     }
 
-    /** Keadaan untuk ditampilkan: held | ready | paid | cancelled. */
+    /** Keadaan untuk ditampilkan: held | ready | processing | paid | cancelled. */
     public function state(): string
     {
         if ($this->status === self::STATUS_EARNED) {
+            if ($this->affiliate_payout_id) {
+                return 'processing';
+            }
+
             return $this->available_at && $this->available_at->isFuture() ? 'held' : 'ready';
         }
 

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Affiliate;
 use App\Models\AffiliateCommission;
+use App\Models\AffiliatePayout;
 use App\Models\AffiliateReferral;
 use App\Models\Organization;
 use App\Models\Store;
@@ -11,7 +12,10 @@ use App\Models\SubscriptionPayment;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
 use App\Services\AffiliateService;
+use App\Services\TrialService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -495,5 +499,267 @@ class AffiliateProgramTest extends TestCase
 
         $this->actingAs($admin)->post("/superadmin/affiliates/{$affiliate->id}/toggle");
         $this->assertTrue($affiliate->refresh()->isActive());
+    }
+
+    // ───────────────────────── Tahap 2: trial untuk yang diajak ─────────────────────────
+
+    public function test_referred_store_gets_longer_trial_and_others_keep_default(): void
+    {
+        config(['affiliate.referred_trial_days' => 30]);
+        $affiliate = $this->affiliate();
+
+        // Lewat link afiliasi: 30 hari.
+        $this->withCookie(config('affiliate.cookie_name'), $affiliate->code)->post('/register', $this->registrationPayload());
+        $referred = User::where('email', 'siti@example.com')->firstOrFail();
+        $this->actingAs($referred)->post('/stores', ['name' => 'Warung Siti', 'business_type' => 'general'])->assertRedirect();
+
+        $store = Store::where('name', 'Warung Siti')->firstOrFail();
+        $this->assertTrue($store->pro_trial_active);
+        $this->assertEqualsWithDelta(now()->addDays(30)->timestamp, $store->pro_trial_end->timestamp, 5);
+        $this->assertSame(30, (int) $store->subscription_days);
+        $this->assertSame(30, TrialService::payload($store)['days_total']);
+        $this->assertDatabaseHas('trial_notifications', ['store_id' => $store->id, 'title' => 'Semua fitur Pro aktif 30 hari']);
+
+        // Tanpa link: tetap 14 hari. (Cookie bawaan klien tes dikosongkan: pengunjung lain.)
+        auth()->logout();
+        $this->defaultCookies = [];
+        $this->post('/register', $this->registrationPayload(['email' => 'biasa@example.com', 'whatsapp' => '0813 1111 2222']));
+        $plain = User::where('email', 'biasa@example.com')->firstOrFail();
+        $this->actingAs($plain)->post('/stores', ['name' => 'Toko Biasa', 'business_type' => 'general'])->assertRedirect();
+
+        $plainStore = Store::where('name', 'Toko Biasa')->firstOrFail();
+        $this->assertEqualsWithDelta(now()->addDays(TrialService::TRIAL_DAYS)->timestamp, $plainStore->pro_trial_end->timestamp, 5);
+        $this->assertSame(TrialService::TRIAL_DAYS, TrialService::payload($plainStore)['days_total']);
+    }
+
+    public function test_longer_trial_can_be_switched_off(): void
+    {
+        config(['affiliate.referred_trial_days' => 0]);
+        $affiliate = $this->affiliate();
+
+        $this->withCookie(config('affiliate.cookie_name'), $affiliate->code)->post('/register', $this->registrationPayload());
+        $referred = User::where('email', 'siti@example.com')->firstOrFail();
+        $this->actingAs($referred)->post('/stores', ['name' => 'Warung Siti', 'business_type' => 'general']);
+
+        $store = Store::where('name', 'Warung Siti')->firstOrFail();
+        $this->assertEqualsWithDelta(now()->addDays(TrialService::TRIAL_DAYS)->timestamp, $store->pro_trial_end->timestamp, 5);
+        // Atribusinya tetap tercatat.
+        $this->assertSame(1, $affiliate->referrals()->count());
+    }
+
+    public function test_register_form_tells_trial_benefit_of_referral_code(): void
+    {
+        config(['affiliate.referred_trial_days' => 30]);
+
+        $this->get('/register')->assertInertia(fn (Assert $page) => $page->where('referralTrialDays', 30));
+    }
+
+    // ───────────────────────── Tahap 2: pencairan ─────────────────────────
+
+    /** Afiliator dengan rekening dan komisi Rp198.000 yang sudah bisa ditarik. */
+    private function affiliateWithReadyCommission(): array
+    {
+        $affiliate = $this->affiliate();
+        $affiliate->update(['payout_provider' => 'BCA', 'payout_account_number' => '1234567890', 'payout_account_holder' => 'Budi Santoso']);
+        [$owner, $store] = $this->referredStore($affiliate);
+
+        $this->confirm($this->pendingPayment($store, $owner, ['amount' => 990000, 'duration_days' => 365]));
+        $this->travel(15)->days();
+
+        return [$affiliate, $owner, $store];
+    }
+
+    public function test_affiliate_requests_payout_of_all_ready_commissions(): void
+    {
+        [$affiliate, $owner, $store] = $this->affiliateWithReadyCommission();
+        // Komisi baru yang masih ditahan tidak ikut dicairkan.
+        $this->confirm($this->pendingPayment($store, $owner));
+
+        $this->actingAs($affiliate->user)->post('/afiliasi/pencairan')->assertSessionHas('success');
+
+        $payout = AffiliatePayout::firstOrFail();
+        $this->assertSame('requested', $payout->status);
+        $this->assertEquals(198000, (float) $payout->amount);
+        $this->assertSame('1234567890', $payout->payout_account_number);
+        $this->assertSame(1, $payout->commissions()->count());
+
+        $summary = AffiliateService::summary($affiliate);
+        $this->assertEquals(0, $summary['ready']);
+        $this->assertEquals(198000, $summary['processing']);
+        $this->assertEquals(19800, $summary['held']);
+
+        // Selagi masih diproses, tidak bisa mengajukan lagi.
+        $this->actingAs($affiliate->user)->post('/afiliasi/pencairan')->assertSessionHasErrors('payout');
+        $this->assertSame(1, AffiliatePayout::count());
+
+        $this->actingAs($affiliate->user)->get('/afiliasi/dashboard')
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('openPayout.amount', 198000)
+                ->where('payouts.0.status', 'requested')
+                ->where('summary.processing', 198000)
+            );
+    }
+
+    public function test_payout_request_needs_minimum_account_and_active_status(): void
+    {
+        // Di bawah minimum (Rp19.800 < Rp100.000).
+        $small = $this->affiliate(['email' => 'kecil@example.com', 'phone' => '6281200000009']);
+        $small->update(['payout_provider' => 'BCA', 'payout_account_number' => '111', 'payout_account_holder' => 'Kecil']);
+        [$owner, $store] = $this->referredStore($small);
+        $this->confirm($this->pendingPayment($store, $owner));
+        $this->travel(15)->days();
+        $this->actingAs($small->user)->post('/afiliasi/pencairan')->assertSessionHasErrors('payout');
+
+        // Tanpa rekening.
+        $small->update(['payout_account_number' => null]);
+        config(['affiliate.min_payout' => 10000]);
+        $this->actingAs($small->user)->post('/afiliasi/pencairan')->assertSessionHasErrors('payout');
+
+        // Dibekukan.
+        $small->update(['payout_account_number' => '111', 'status' => Affiliate::STATUS_SUSPENDED]);
+        $this->actingAs($small->user)->post('/afiliasi/pencairan')->assertSessionHasErrors('payout');
+
+        $this->assertSame(0, AffiliatePayout::count());
+
+        // Syarat terpenuhi: berhasil.
+        $small->update(['status' => Affiliate::STATUS_ACTIVE]);
+        $this->actingAs($small->user)->post('/afiliasi/pencairan')->assertSessionHasNoErrors();
+        $this->assertSame(1, AffiliatePayout::count());
+    }
+
+    public function test_superadmin_marks_requested_payout_paid_with_proof(): void
+    {
+        Storage::fake('public');
+        [$affiliate] = $this->affiliateWithReadyCommission();
+        $this->actingAs($affiliate->user)->post('/afiliasi/pencairan');
+        $payout = AffiliatePayout::firstOrFail();
+        $admin = $this->superAdmin();
+
+        $this->actingAs($admin)->post("/superadmin/affiliate-payouts/{$payout->id}/paid", [
+            'note' => 'Transfer BCA ref 123',
+            'proof' => UploadedFile::fake()->image('bukti.jpg'),
+        ])->assertSessionHas('success');
+
+        $payout->refresh();
+        $this->assertSame('paid', $payout->status);
+        $this->assertSame($admin->id, $payout->processed_by);
+        $this->assertNotNull($payout->proof_path);
+        Storage::disk('public')->assertExists($payout->proof_path);
+
+        $summary = AffiliateService::summary($affiliate);
+        $this->assertEquals(198000, $summary['paid']);
+        $this->assertEquals(0, $summary['processing']);
+        $this->assertDatabaseHas('affiliate_commissions', ['affiliate_payout_id' => $payout->id, 'status' => 'paid', 'paid_note' => 'Transfer BCA ref 123']);
+
+        // Tidak bisa diproses dua kali.
+        $this->actingAs($admin)->post("/superadmin/affiliate-payouts/{$payout->id}/paid")->assertSessionHas('error');
+
+        // Afiliator melihat status dan buktinya; tidak ada lagi permintaan terbuka.
+        $this->actingAs($affiliate->user)->get('/afiliasi/dashboard')
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('openPayout', null)
+                ->where('payouts.0.status', 'paid')
+                ->where('payouts.0.proof_url', '/storage/'.$payout->proof_path)
+                ->where('commissions.0.state', 'paid')
+            );
+    }
+
+    public function test_payout_proof_must_be_an_image(): void
+    {
+        Storage::fake('public');
+        [$affiliate] = $this->affiliateWithReadyCommission();
+        $this->actingAs($affiliate->user)->post('/afiliasi/pencairan');
+        $payout = AffiliatePayout::firstOrFail();
+
+        $this->actingAs($this->superAdmin())->post("/superadmin/affiliate-payouts/{$payout->id}/paid", [
+            'proof' => UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf'),
+        ])->assertSessionHasErrors('proof');
+
+        $this->assertSame('requested', $payout->refresh()->status);
+    }
+
+    public function test_superadmin_rejects_payout_and_commissions_become_ready_again(): void
+    {
+        [$affiliate] = $this->affiliateWithReadyCommission();
+        $this->actingAs($affiliate->user)->post('/afiliasi/pencairan');
+        $payout = AffiliatePayout::firstOrFail();
+        $admin = $this->superAdmin();
+
+        $this->actingAs($admin)->post("/superadmin/affiliate-payouts/{$payout->id}/reject", [])->assertSessionHasErrors('reason');
+
+        $this->actingAs($admin)->post("/superadmin/affiliate-payouts/{$payout->id}/reject", ['reason' => 'Nama rekening tidak cocok'])
+            ->assertSessionHas('success');
+
+        $this->assertSame('rejected', $payout->refresh()->status);
+        $summary = AffiliateService::summary($affiliate);
+        $this->assertEquals(198000, $summary['ready']);
+        $this->assertEquals(0, $summary['processing']);
+
+        // Setelah ditolak, afiliator bisa mengajukan lagi.
+        $this->actingAs($affiliate->user)->post('/afiliasi/pencairan')->assertSessionHasNoErrors();
+        $this->assertSame(2, AffiliatePayout::count());
+    }
+
+    public function test_commission_in_open_payout_cannot_be_cancelled(): void
+    {
+        [$affiliate] = $this->affiliateWithReadyCommission();
+        $this->actingAs($affiliate->user)->post('/afiliasi/pencairan');
+        $commission = AffiliateCommission::firstOrFail();
+
+        $this->actingAs($this->superAdmin())
+            ->post("/superadmin/affiliate-commissions/{$commission->id}/cancel", ['reason' => 'Refund'])
+            ->assertSessionHas('error');
+
+        $this->assertSame('processing', $commission->refresh()->state());
+    }
+
+    public function test_direct_transfer_is_recorded_as_paid_payout(): void
+    {
+        [$affiliate] = $this->affiliateWithReadyCommission();
+
+        $this->actingAs($this->superAdmin())
+            ->post("/superadmin/affiliates/{$affiliate->id}/pay", ['note' => 'Transfer langsung'])
+            ->assertSessionHas('success');
+
+        $payout = AffiliatePayout::firstOrFail();
+        $this->assertSame('paid', $payout->status);
+        $this->assertNull($payout->requested_at);
+        $this->assertEquals(198000, (float) $payout->amount);
+        $this->assertDatabaseHas('affiliate_commissions', ['affiliate_payout_id' => $payout->id, 'status' => 'paid']);
+    }
+
+    public function test_superadmin_page_lists_pending_payouts_first(): void
+    {
+        [$affiliate] = $this->affiliateWithReadyCommission();
+        $this->actingAs($affiliate->user)->post('/afiliasi/pencairan');
+
+        $this->actingAs($this->superAdmin())->get('/superadmin/affiliates')
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('stats.pending_payouts', 1)
+                ->where('stats.pending_payouts_amount', 198000)
+                ->where('payouts.data.0.status', 'requested')
+                ->where('payouts.data.0.payout_account_number', '1234567890')
+            );
+    }
+
+    // ───────────────────────── Tahap 2: materi promosi ─────────────────────────
+
+    public function test_dashboard_offers_links_per_business_type(): void
+    {
+        $affiliate = $this->affiliate();
+
+        $this->actingAs($affiliate->user)->get('/afiliasi/dashboard')
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('promoTargets.0.key', 'umum')
+                ->where('promoTargets.0.url', url('/r/'.$affiliate->code))
+                ->where('promoTargets.1.key', 'aplikasi-kasir-cafe')
+                ->where('promoTargets.1.url', url('/aplikasi-kasir-cafe').'?ref='.$affiliate->code)
+            );
+
+        // Link halaman jenis usaha benar-benar memasang cookie afiliator.
+        auth()->logout();
+        $this->withHeader('User-Agent', 'Mozilla/5.0')->get('/aplikasi-kasir-cafe?ref='.$affiliate->code)
+            ->assertOk()
+            ->assertCookie(config('affiliate.cookie_name'), $affiliate->code);
     }
 }

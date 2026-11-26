@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import AffiliateLayout from '@/layouts/AffiliateLayout.vue';
-import { useForm } from '@inertiajs/vue3';
+import { router, useForm } from '@inertiajs/vue3';
 import {
+    ArrowDownToLine,
     Banknote,
     Check,
     CircleAlert,
     Clock,
     Copy,
+    ExternalLink,
+    Hourglass,
     Landmark,
     MessageCircle,
     MousePointerClick,
@@ -16,7 +19,7 @@ import {
     UserPlus,
     Wallet,
 } from 'lucide-vue-next';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 interface Referral {
     id: number;
@@ -32,10 +35,29 @@ interface Commission {
     base_amount: number;
     percent: number;
     amount: number;
-    state: 'held' | 'ready' | 'paid' | 'cancelled';
+    state: 'held' | 'ready' | 'processing' | 'paid' | 'cancelled';
     created_at: string | null;
     available_at: string | null;
     paid_at: string | null;
+}
+
+interface Payout {
+    id: number;
+    amount: number;
+    status: 'requested' | 'paid' | 'rejected';
+    account: string;
+    requested_at: string | null;
+    processed_at: string | null;
+    proof_url: string | null;
+    note: string | null;
+    reject_reason: string | null;
+}
+
+interface PromoTarget {
+    key: string;
+    label: string;
+    name: string | null;
+    url: string;
 }
 
 const props = defineProps<{
@@ -48,20 +70,48 @@ const props = defineProps<{
         payout_account_holder: string | null;
         has_payout_account: boolean;
     };
-    rules: { percent: number; months: number; cookie_days: number; hold_days: number; min_payout: number };
-    summary: { clicks: number; signups: number; paying: number; held: number; ready: number; paid: number };
+    rules: {
+        percent: number;
+        months: number;
+        cookie_days: number;
+        hold_days: number;
+        min_payout: number;
+        referred_trial_days: number;
+        default_trial_days: number;
+    };
+    summary: { clicks: number; signups: number; paying: number; held: number; ready: number; processing: number; paid: number };
     referrals: Referral[];
     commissions: Commission[];
+    payouts: Payout[];
+    openPayout: { amount: number; requested_at: string | null } | null;
+    promoTargets: PromoTarget[];
 }>();
 
 const rupiah = (n: number) => 'Rp' + Math.round(n).toLocaleString('id-ID');
 const formatDate = (d: string | null) => (d ? new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
 const percentLabel = computed(() => props.rules.percent.toLocaleString('id-ID'));
 
-/* ───────── Bagikan link ───────── */
-const message = ref(
-    `Lagi cari aplikasi kasir untuk usaha? Coba Kasir UMKM: catat penjualan, stok, dan laporan langsung dari HP. Bisa dicoba gratis.\n\nDaftar di sini: ${props.affiliate.link}`,
-);
+/* ───────── Materi promosi ───────── */
+// Yang diajak mendapat trial lebih panjang: jadi alasan untuk memakai link afiliator.
+const hasTrialPerk = computed(() => props.rules.referred_trial_days > props.rules.default_trial_days);
+
+const buildMessage = (target: PromoTarget) => {
+    const usaha = target.name ? target.name.toLowerCase() : null;
+    const opening = usaha
+        ? `Punya usaha ${usaha}? Coba Kasir UMKM, aplikasi kasir untuk ${usaha}: catat penjualan, stok, dan laporan langsung dari HP.`
+        : 'Lagi cari aplikasi kasir untuk usaha? Coba Kasir UMKM: catat penjualan, stok, dan laporan langsung dari HP.';
+    const perk = hasTrialPerk.value
+        ? `Daftar lewat link ini, semua fitur bisa dicoba gratis ${props.rules.referred_trial_days} hari:`
+        : 'Bisa dicoba gratis. Daftar di sini:';
+
+    return `${opening}\n\n${perk}\n${target.url}`;
+};
+
+const targetKey = ref(props.promoTargets[0]?.key ?? 'umum');
+const target = computed(() => props.promoTargets.find((t) => t.key === targetKey.value) ?? props.promoTargets[0]);
+const message = ref(buildMessage(target.value));
+// Ganti jenis usaha: pesan dan link ikut berganti (suntingan manual sebelumnya ditimpa).
+watch(targetKey, () => (message.value = buildMessage(target.value)));
 
 const copied = ref<'link' | 'message' | null>(null);
 let copiedTimer: ReturnType<typeof setTimeout> | undefined;
@@ -92,6 +142,34 @@ const nativeShare = () => {
     navigator.share({ text: message.value }).catch(() => {});
 };
 
+/* ───────── Tarik komisi ───────── */
+const canRequestPayout = computed(
+    () => props.affiliate.is_active && !props.openPayout && props.affiliate.has_payout_account && props.summary.ready >= props.rules.min_payout,
+);
+const requesting = ref(false);
+const payoutError = ref('');
+
+const requestPayout = () => {
+    payoutError.value = '';
+    requesting.value = true;
+    router.post(
+        '/afiliasi/pencairan',
+        {},
+        {
+            preserveScroll: true,
+            onError: (errors) => (payoutError.value = errors.payout ?? 'Pencairan belum bisa diajukan. Coba lagi.'),
+            onFinish: () => (requesting.value = false),
+        },
+    );
+};
+
+const payoutStatus = (status: Payout['status']) =>
+    ({
+        requested: { label: 'Sedang diproses', cls: 'bg-amber-50 text-amber-700 ring-amber-200' },
+        paid: { label: 'Sudah ditransfer', cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
+        rejected: { label: 'Ditolak', cls: 'bg-red-50 text-red-700 ring-red-200' },
+    })[status];
+
 /* ───────── Rekening pencairan ───────── */
 const editingPayout = ref(!props.affiliate.has_payout_account);
 const payoutForm = useForm({
@@ -117,7 +195,8 @@ const stageInfo = (stage: Referral['stage']) =>
 const stateInfo = (c: Commission) =>
     ({
         held: { label: `Ditahan s.d. ${formatDate(c.available_at)}`, cls: 'bg-amber-50 text-amber-700 ring-amber-200' },
-        ready: { label: 'Siap dibayar', cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
+        ready: { label: 'Bisa ditarik', cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
+        processing: { label: 'Sedang dicairkan', cls: 'bg-violet-50 text-violet-700 ring-violet-200' },
         paid: { label: `Dibayar ${formatDate(c.paid_at)}`, cls: 'bg-sky-50 text-sky-700 ring-sky-200' },
         cancelled: { label: 'Dibatalkan', cls: 'bg-slate-100 text-slate-500 ring-slate-200' },
     })[c.state];
@@ -192,18 +271,32 @@ const inputClass =
                         <strong class="rounded-md bg-white/80 px-2 py-0.5 font-mono tracking-wider text-primary">{{ affiliate.code }}</strong>
                         <span class="hidden sm:inline"> — bisa diketik di form daftar bila link tidak terpakai.</span>
                     </p>
+                    <p v-if="hasTrialPerk" class="mt-2 text-sm font-semibold text-slate-800">
+                        Yang mendaftar lewat link Anda bisa mencoba semua fitur gratis {{ rules.referred_trial_days }} hari (biasanya
+                        {{ rules.default_trial_days }} hari).
+                    </p>
                 </div>
             </section>
 
             <!-- Pesan siap kirim -->
             <section class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6" aria-labelledby="judul-pesan">
                 <h2 id="judul-pesan" class="text-base font-bold text-slate-900">Pesan siap kirim</h2>
-                <p class="mt-0.5 text-sm text-slate-600">Boleh diubah dulu sesuai gaya Anda, lalu kirim.</p>
+                <p class="mt-0.5 text-sm text-slate-600">Pilih jenis usaha teman Anda. Pesan dan link menyesuaikan, dan boleh diubah dulu sebelum dikirim.</p>
+
+                <label for="jenis-usaha" class="mt-4 mb-1.5 block text-sm font-semibold text-slate-700">Untuk usaha apa?</label>
+                <select
+                    id="jenis-usaha"
+                    v-model="targetKey"
+                    class="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-base text-slate-900 focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none sm:w-72"
+                >
+                    <option v-for="t in promoTargets" :key="t.key" :value="t.key">{{ t.label }}</option>
+                </select>
+
                 <label for="pesan" class="sr-only">Isi pesan</label>
                 <textarea
                     id="pesan"
                     v-model="message"
-                    rows="6"
+                    rows="8"
                     class="mt-3 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-relaxed text-slate-800 focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
                 ></textarea>
                 <div class="mt-3 flex flex-col gap-2 sm:flex-row">
@@ -262,15 +355,34 @@ const inputClass =
                 <h2 id="judul-komisi" class="mb-3 text-base font-bold text-slate-900">Komisi Anda</h2>
                 <div class="grid gap-3 sm:grid-cols-3">
                     <div class="rounded-2xl bg-emerald-50 p-4 ring-1 ring-emerald-200 ring-inset">
-                        <div class="flex items-center gap-2 text-sm font-semibold text-emerald-800"><Wallet class="h-4 w-4" /> Siap dibayar</div>
+                        <div class="flex items-center gap-2 text-sm font-semibold text-emerald-800"><Wallet class="h-4 w-4" /> Bisa ditarik</div>
                         <p class="mt-1 text-2xl font-black text-emerald-700 tabular-nums">{{ rupiah(summary.ready) }}</p>
-                        <p v-if="summary.ready >= rules.min_payout" class="mt-1 text-xs text-emerald-800">Akan ditransfer admin ke rekening Anda.</p>
-                        <p v-else class="mt-1 text-xs text-emerald-800">Kurang {{ rupiah(untilMinimum) }} lagi untuk ditransfer (minimal {{ rupiah(rules.min_payout) }}).</p>
+
+                        <p v-if="openPayout" class="mt-2 flex items-start gap-1.5 text-xs font-medium text-emerald-900">
+                            <Hourglass class="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                            <span>Pencairan {{ rupiah(openPayout.amount) }} sedang diproses sejak {{ formatDate(openPayout.requested_at) }}.</span>
+                        </p>
+                        <template v-else-if="summary.ready >= rules.min_payout">
+                            <button
+                                v-if="canRequestPayout"
+                                type="button"
+                                :disabled="requesting"
+                                class="mt-3 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-bold text-white transition-colors hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 disabled:opacity-60"
+                                @click="requestPayout"
+                            >
+                                <ArrowDownToLine class="h-4 w-4" /> {{ requesting ? 'Mengajukan…' : 'Tarik komisi' }}
+                            </button>
+                            <p v-else-if="!affiliate.has_payout_account" class="mt-1 text-xs font-medium text-emerald-900">
+                                Isi rekening pencairan di bawah dulu, lalu tombol tarik komisi muncul di sini.
+                            </p>
+                        </template>
+                        <p v-else class="mt-1 text-xs text-emerald-800">Kurang {{ rupiah(untilMinimum) }} lagi untuk bisa ditarik (minimal {{ rupiah(rules.min_payout) }}).</p>
+                        <p v-if="payoutError" class="mt-2 text-xs font-semibold text-red-700" role="alert">{{ payoutError }}</p>
                     </div>
                     <div class="rounded-2xl border border-slate-200 bg-white p-4">
                         <div class="flex items-center gap-2 text-sm font-semibold text-slate-600"><Clock class="h-4 w-4 text-amber-500" /> Masih ditahan</div>
                         <p class="mt-1 text-2xl font-black text-slate-900 tabular-nums">{{ rupiah(summary.held) }}</p>
-                        <p class="mt-1 text-xs text-slate-500">Siap dibayar {{ rules.hold_days }} hari setelah pembayaran toko.</p>
+                        <p class="mt-1 text-xs text-slate-500">Bisa ditarik {{ rules.hold_days }} hari setelah pembayaran toko.</p>
                     </div>
                     <div class="rounded-2xl border border-slate-200 bg-white p-4">
                         <div class="flex items-center gap-2 text-sm font-semibold text-slate-600"><Banknote class="h-4 w-4 text-sky-500" /> Sudah dibayar</div>
@@ -376,6 +488,40 @@ const inputClass =
                         </button>
                     </div>
                 </form>
+            </section>
+
+            <!-- Riwayat pencairan -->
+            <section v-if="payouts.length > 0" class="rounded-2xl border border-slate-200 bg-white" aria-labelledby="judul-pencairan">
+                <div class="border-b border-slate-100 px-5 py-4">
+                    <h2 id="judul-pencairan" class="text-base font-bold text-slate-900">Riwayat pencairan</h2>
+                </div>
+                <ul class="divide-y divide-slate-100">
+                    <li v-for="p in payouts" :key="p.id" class="flex items-start justify-between gap-3 px-5 py-3.5">
+                        <div class="min-w-0">
+                            <p class="text-sm font-black text-slate-900 tabular-nums">{{ rupiah(p.amount) }}</p>
+                            <p class="text-xs text-slate-500">
+                                {{ formatDate(p.requested_at) }}<template v-if="p.account"> · ke {{ p.account }}</template>
+                            </p>
+                            <p v-if="p.status === 'rejected' && p.reject_reason" class="mt-1 text-xs text-red-700">Alasan: {{ p.reject_reason }}</p>
+                            <p v-if="p.status === 'paid' && p.note" class="mt-1 text-xs text-slate-500">{{ p.note }}</p>
+                        </div>
+                        <div class="shrink-0 text-right">
+                            <span :class="['inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset', payoutStatus(p.status).cls]">
+                                {{ payoutStatus(p.status).label }}
+                            </span>
+                            <p v-if="p.status === 'paid'" class="mt-1 text-xs text-slate-500">{{ formatDate(p.processed_at) }}</p>
+                            <a
+                                v-if="p.proof_url"
+                                :href="p.proof_url"
+                                target="_blank"
+                                rel="noopener"
+                                class="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-primary underline underline-offset-2"
+                            >
+                                <ExternalLink class="h-3.5 w-3.5" /> Lihat bukti transfer
+                            </a>
+                        </div>
+                    </li>
+                </ul>
             </section>
 
             <!-- Orang yang diajak -->
