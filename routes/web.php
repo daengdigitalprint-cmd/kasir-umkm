@@ -918,6 +918,13 @@ Route::prefix('superadmin')->name('superadmin.')->middleware(['auth', 'superadmi
     Route::put('/leads/settings', [App\Http\Controllers\SuperAdmin\AdLeadController::class, 'updateSettings'])->name('leads.settings');
     Route::patch('/leads/{lead}', [App\Http\Controllers\SuperAdmin\AdLeadController::class, 'update'])->name('leads.update');
 
+    // Prospek penjualan dari sumber data terbuka (alat internal pemasaran)
+    Route::get('/prospects', [App\Http\Controllers\SuperAdmin\ProspectController::class, 'index'])->name('prospects.index');
+    Route::get('/prospects/export', [App\Http\Controllers\SuperAdmin\ProspectController::class, 'export'])->name('prospects.export');
+    Route::post('/prospects/search', [App\Http\Controllers\SuperAdmin\ProspectController::class, 'search'])->middleware('throttle:10,1')->name('prospects.search');
+    Route::patch('/prospects/{prospect}', [App\Http\Controllers\SuperAdmin\ProspectController::class, 'update'])->name('prospects.update');
+    Route::delete('/prospects/{prospect}', [App\Http\Controllers\SuperAdmin\ProspectController::class, 'destroy'])->name('prospects.destroy');
+
     Route::get('/articles', [App\Http\Controllers\SuperAdmin\ArticleController::class, 'index'])->name('articles.index');
     Route::get('/articles/create', [App\Http\Controllers\SuperAdmin\ArticleController::class, 'create'])->name('articles.create');
     Route::post('/articles', [App\Http\Controllers\SuperAdmin\ArticleController::class, 'store'])->name('articles.store');
