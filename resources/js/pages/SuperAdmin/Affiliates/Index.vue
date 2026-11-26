@@ -101,7 +101,7 @@ const props = defineProps<{
         pending_payouts: number;
         pending_payouts_amount: number;
     };
-    rules: { percent: number; months: number; cookie_days: number; hold_days: number; min_payout: number };
+    rules: { percent: number; months: number; once: boolean; cookie_days: number; hold_days: number; min_payout: number };
     settings: Record<SettingKey, { value: number; default: number; custom: boolean }>;
     leaderboard: { period: string; rows: { rank: number; name: string; paying: number; earned: number }[] };
     filters: { q: string | null; state: string | null };
@@ -113,7 +113,7 @@ const formatDate = (d: string | null) => (d ? new Date(d).toLocaleDateString('id
 /* ───────── Aturan program ───────── */
 const settingFields: { key: SettingKey; label: string; unit: string; help: string }[] = [
     { key: 'commission_percent', label: 'Komisi', unit: '%', help: 'Dari setiap pembayaran yang dikonfirmasi.' },
-    { key: 'commission_months', label: 'Lama komisi', unit: 'bulan', help: 'Sejak pembayaran pertama toko yang diajak.' },
+    { key: 'commission_months', label: 'Lama komisi', unit: 'bulan', help: '0 = sekali saja per toko (paket pertama). Lebih dari 0 = berulang selama sekian bulan.' },
     { key: 'cookie_days', label: 'Masa berlaku link', unit: 'hari', help: 'Link diingat sejak diklik.' },
     { key: 'hold_days', label: 'Masa tahan', unit: 'hari', help: 'Sebelum komisi bisa ditarik.' },
     { key: 'min_payout', label: 'Minimum pencairan', unit: 'Rp', help: 'Saldo minimal untuk menarik komisi.' },
@@ -331,7 +331,9 @@ const typeLabel = (type: string | null) =>
                 <div>
                     <h1 class="text-2xl font-bold tracking-tight text-slate-900">Afiliasi</h1>
                     <p class="text-sm text-slate-500">
-                        Komisi {{ rules.percent.toLocaleString('id-ID') }}% dari pembayaran yang dikonfirmasi, selama {{ rules.months }} bulan. Ditahan
+                        Komisi {{ rules.percent.toLocaleString('id-ID') }}%
+                        {{ rules.once ? 'dari paket pertama tiap toko rujukan, sekali per toko.' : `dari pembayaran yang dikonfirmasi, selama ${rules.months} bulan.` }}
+                        Ditahan
                         {{ rules.hold_days }} hari, ditransfer setelah {{ rupiah(rules.min_payout) }}.
                     </p>
                 </div>
@@ -407,7 +409,8 @@ const typeLabel = (type: string | null) =>
                         <span>
                             <span class="block text-base font-semibold text-slate-900">Aturan program</span>
                             <span class="block text-xs text-slate-500">
-                                Komisi {{ settings.commission_percent.value.toLocaleString('id-ID') }}% · {{ settings.commission_months.value }} bulan · tahan
+                                Komisi {{ settings.commission_percent.value.toLocaleString('id-ID') }}% ·
+                                {{ settings.commission_months.value > 0 ? settings.commission_months.value + ' bulan' : 'sekali per toko' }} · tahan
                                 {{ settings.hold_days.value }} hari · minimum {{ rupiah(settings.min_payout.value) }} · trial {{ settings.referred_trial_days.value }} hari
                             </span>
                         </span>

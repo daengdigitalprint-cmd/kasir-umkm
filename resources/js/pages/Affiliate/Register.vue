@@ -5,7 +5,7 @@ import { ArrowRight, Eye, EyeOff, LoaderCircle } from 'lucide-vue-next';
 import { ref } from 'vue';
 
 defineProps<{
-    rules: { percent: number; months: number };
+    rules: { percent: number; months: number; once: boolean };
 }>();
 
 const form = useForm({
@@ -36,7 +36,9 @@ const inputClass =
                 <p class="text-xs font-black tracking-widest text-primary uppercase">Program Afiliasi</p>
                 <h1 class="mt-1 text-2xl font-black tracking-tight text-slate-900">Daftar jadi afiliator</h1>
                 <p class="mt-1 text-sm text-slate-600">
-                    Gratis dan tidak perlu punya toko. Komisi {{ rules.percent.toLocaleString('id-ID') }}% dari setiap pembayaran selama {{ rules.months }} bulan.
+                    Gratis dan tidak perlu punya toko. Komisi {{ rules.percent.toLocaleString('id-ID') }}%
+                    <template v-if="rules.once">dari harga paket yang dibeli toko yang Anda ajak, sekali per toko.</template>
+                    <template v-else>dari setiap pembayaran selama {{ rules.months }} bulan.</template>
                 </p>
 
                 <form class="mt-6 space-y-4" novalidate @submit.prevent="submit">

@@ -7,6 +7,8 @@ import { computed, ref } from 'vue';
 interface Rules {
     percent: number;
     months: number;
+    /** Komisi sekali per toko (dari paket pertama), bukan berulang. */
+    once: boolean;
     cookie_days: number;
     hold_days: number;
     min_payout: number;
@@ -18,7 +20,9 @@ interface Example {
     plan: string;
     price: number;
     commission: number;
+    months: number;
     cycle: string;
+    label: string;
 }
 
 const props = defineProps<{
@@ -32,12 +36,10 @@ const props = defineProps<{
 const rupiah = (n: number) => 'Rp' + Math.round(n).toLocaleString('id-ID');
 const percentLabel = computed(() => props.rules.percent.toLocaleString('id-ID'));
 
-/* Simulasi: jumlah toko yang diajak × komisi per paket. Paket tahunan ditonjolkan karena komisinya paling besar. */
+/* Simulasi: jumlah toko yang diajak × komisi per paket. Paket terpanjang ditonjolkan karena komisinya paling besar. */
 const stores = ref(5);
-const yearly = computed(() => props.examples.find((e) => e.cycle === 'tahun') ?? null);
-const monthly = computed(() => props.examples.find((e) => e.cycle === 'bulan') ?? null);
-const featured = computed(() => yearly.value ?? monthly.value);
-const secondary = computed(() => (yearly.value && monthly.value ? monthly.value : null));
+const featured = computed(() => (props.examples.length ? props.examples[props.examples.length - 1] : null));
+const others = computed(() => props.examples.slice(0, -1).reverse());
 const step = (delta: number) => {
     stores.value = Math.min(100, Math.max(1, stores.value + delta));
 };
@@ -96,8 +98,14 @@ const steps = [
                         Ajak teman pakai Kasir UMKM, dapat komisi {{ percentLabel }}%
                     </h1>
                     <p class="mt-3 text-base leading-relaxed text-slate-700">
-                        Bagikan link Anda. Setiap kali toko yang Anda ajak membayar langganan, Anda mendapat {{ percentLabel }}% dari pembayarannya, selama
-                        {{ rules.months }} bulan.
+                        <template v-if="rules.once">
+                            Bagikan link Anda. Saat toko yang Anda ajak berlangganan, Anda mendapat {{ percentLabel }}% dari harga paket yang dibelinya. Komisi
+                            diberikan sekali untuk setiap toko.
+                        </template>
+                        <template v-else>
+                            Bagikan link Anda. Setiap kali toko yang Anda ajak membayar langganan, Anda mendapat {{ percentLabel }}% dari pembayarannya, selama
+                            {{ rules.months }} bulan.
+                        </template>
                     </p>
 
                     <!-- Belum masuk: daftar akun afiliator -->
@@ -153,7 +161,8 @@ const steps = [
             <section v-if="featured" class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6" aria-labelledby="simulasi">
                 <h2 id="simulasi" class="text-lg font-bold text-slate-900">Berapa yang bisa Anda dapat?</h2>
                 <p class="mt-1 text-sm text-slate-600">
-                    <template v-if="yearly">Komisi terbesar datang dari toko yang mengambil paket tahunan.</template>
+                    <template v-if="rules.once">Komisi dihitung sekali dari harga paket yang dibeli toko. Makin panjang paketnya, makin besar komisinya.</template>
+                    <template v-else-if="others.length">Komisi terbesar datang dari toko yang mengambil paket terpanjang.</template>
                     Atur jumlah toko yang Anda ajak untuk melihat perkiraannya.
                 </p>
 
@@ -183,7 +192,7 @@ const steps = [
                 <div class="mt-5 grid gap-3 sm:grid-cols-5">
                     <!-- Paket yang ditonjolkan: tahunan (atau satu-satunya paket yang ada).
                          Latar sama dengan kartu "Otomatis" di beranda (fs-solution-chart_box fa-chart-two). -->
-                    <div :class="['relative overflow-hidden rounded-[20px] bg-[#f2fff2] p-5 text-[#0d1738] sm:p-6', secondary ? 'sm:col-span-3' : 'sm:col-span-5']">
+                    <div :class="['relative overflow-hidden rounded-[20px] bg-[#f2fff2] p-5 text-[#0d1738] sm:p-6', others.length ? 'sm:col-span-3' : 'sm:col-span-5']">
                         <div class="xb-item--shape pointer-events-none absolute inset-0" aria-hidden="true">
                             <div class="shape shape--1 absolute top-0 left-0 h-full max-h-[337px]">
                                 <img width="195" height="337" src="/sastik-assets/img/shape/solution_shape05.png" alt="" loading="lazy" decoding="async" class="h-full w-auto" />
@@ -208,7 +217,7 @@ const steps = [
                         <div class="relative z-10">
                             <div class="flex flex-wrap items-center gap-2">
                                 <span class="rounded-full bg-secondary px-3 py-1 text-xs font-black tracking-wide text-secondary-foreground uppercase">
-                                    {{ yearly ? 'Paket tahunan · komisi terbesar' : 'Paket ' + featured.plan }}
+                                    {{ others.length ? featured.label + ' · komisi terbesar' : featured.label }}
                                 </span>
                             </div>
                             <p class="mt-3 text-sm font-semibold text-[#5a5869]">{{ featured.plan }}</p>
@@ -220,27 +229,33 @@ const steps = [
                                 <p class="text-sm font-semibold text-[#5a5869]">Perkiraan komisi Anda</p>
                                 <p class="mt-0.5 text-4xl font-black text-emerald-700 tabular-nums">{{ rupiah(featured.commission * stores) }}</p>
                                 <p class="mt-1 text-sm text-[#5a5869]">
-                                    {{ stores }} toko × {{ rupiah(featured.commission) }}<template v-if="yearly">, dari satu pembayaran tahunan per toko</template
+                                    {{ stores }} toko × {{ rupiah(featured.commission) }}<template v-if="rules.once">, sekali untuk setiap toko yang mengambil paket ini</template
+                                    ><template v-else-if="featured.months >= 12">, dari satu pembayaran tahunan per toko</template
                                     ><template v-else> setiap {{ featured.cycle }}, selama toko-toko itu terus berlangganan</template>.
                                 </p>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Pembanding: paket bulanan -->
-                    <div v-if="secondary" class="rounded-2xl border border-slate-200 bg-slate-50 p-5 sm:col-span-2 sm:p-6">
-                        <span class="rounded-full bg-white px-3 py-1 text-xs font-bold tracking-wide text-slate-600 uppercase ring-1 ring-slate-200 ring-inset">Paket bulanan</span>
-                        <p class="mt-3 text-sm font-semibold text-slate-600">{{ secondary.plan }}</p>
-                        <p class="text-xl font-black text-slate-900 tabular-nums">
-                            {{ rupiah(secondary.price) }}<span class="text-sm font-bold text-slate-500"> / {{ secondary.cycle }}</span>
-                        </p>
-                        <p class="mt-4 text-sm font-semibold text-slate-600">Perkiraan komisi Anda</p>
-                        <p class="mt-0.5 text-2xl font-black text-slate-900 tabular-nums">
-                            {{ rupiah(secondary.commission * stores) }}<span class="text-sm font-bold text-slate-500"> / {{ secondary.cycle }}</span>
-                        </p>
-                        <p class="mt-1 text-sm text-slate-600">
-                            {{ stores }} toko × {{ rupiah(secondary.commission) }} setiap {{ secondary.cycle }}, selama toko-toko itu terus berlangganan.
-                        </p>
+                    <!-- Pembanding: paket yang lebih pendek -->
+                    <div v-if="others.length" class="flex flex-col gap-3 sm:col-span-2">
+                        <div v-for="plan in others" :key="plan.plan" class="flex-1 rounded-2xl border border-slate-200 bg-slate-50 p-5 sm:p-6">
+                            <span class="rounded-full bg-white px-3 py-1 text-xs font-bold tracking-wide text-slate-600 uppercase ring-1 ring-slate-200 ring-inset">{{
+                                plan.label
+                            }}</span>
+                            <p class="mt-3 text-sm font-semibold text-slate-600">{{ plan.plan }}</p>
+                            <p class="text-xl font-black text-slate-900 tabular-nums">
+                                {{ rupiah(plan.price) }}<span class="text-sm font-bold text-slate-500"> / {{ plan.cycle }}</span>
+                            </p>
+                            <p class="mt-4 text-sm font-semibold text-slate-600">Perkiraan komisi Anda</p>
+                            <p class="mt-0.5 text-2xl font-black text-slate-900 tabular-nums">
+                                {{ rupiah(plan.commission * stores) }}<span v-if="!rules.once" class="text-sm font-bold text-slate-500"> / {{ plan.cycle }}</span>
+                            </p>
+                            <p class="mt-1 text-sm text-slate-600">
+                                {{ stores }} toko × {{ rupiah(plan.commission) }}<template v-if="rules.once">, sekali untuk setiap toko</template
+                                ><template v-else> setiap {{ plan.cycle }}, selama toko-toko itu terus berlangganan</template>.
+                            </p>
+                        </div>
                     </div>
                 </div>
 
@@ -254,8 +269,13 @@ const steps = [
                     <li class="flex gap-2.5">
                         <span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary"></span>
                         <span
-                            >Komisi {{ percentLabel }}% dihitung dari setiap pembayaran langganan (paket maupun fitur tambahan) yang sudah dikonfirmasi, selama
-                            {{ rules.months }} bulan sejak pembayaran pertama toko yang Anda ajak.</span
+                            ><template v-if="rules.once"
+                                >Komisi {{ percentLabel }}% dihitung dari harga paket pertama yang dibeli toko yang Anda ajak, setelah pembayarannya
+                                dikonfirmasi. Komisi diberikan sekali untuk setiap toko; perpanjangan berikutnya tidak menghasilkan komisi lagi.</template
+                            ><template v-else
+                                >Komisi {{ percentLabel }}% dihitung dari setiap pembayaran langganan (paket maupun fitur tambahan) yang sudah dikonfirmasi,
+                                selama {{ rules.months }} bulan sejak pembayaran pertama toko yang Anda ajak.</template
+                            ></span
                         >
                     </li>
                     <li class="flex gap-2.5">

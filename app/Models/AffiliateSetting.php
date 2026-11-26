@@ -13,7 +13,7 @@ class AffiliateSetting extends Model
     /** Aturan yang bisa diatur, beserta batas wajarnya [min, max]. */
     public const RULES = [
         'commission_percent' => [0, 100],
-        'commission_months' => [1, 120],
+        'commission_months' => [0, 120], // 0 = sekali saja per toko
         'cookie_days' => [1, 365],
         'hold_days' => [0, 90],
         'min_payout' => [0, 100000000],

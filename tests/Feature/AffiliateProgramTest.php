@@ -314,6 +314,67 @@ class AffiliateProgramTest extends TestCase
         $this->assertSame(2, AffiliateCommission::count());
     }
 
+    public function test_commission_is_paid_once_per_store_when_not_recurring(): void
+    {
+        // Aturan bawaan: komisi sekali saja, dari paket pertama yang dibeli toko.
+        config(['affiliate.commission_months' => 0]);
+        $affiliate = $this->affiliate();
+        [$owner, $store, $referral] = $this->referredStore($affiliate);
+
+        // Paket pertama: tahunan → komisi dari harga paket itu.
+        $this->confirm($this->pendingPayment($store, $owner, ['amount' => 1188000, 'duration_days' => 365]));
+        $this->assertSame(1, AffiliateCommission::count());
+        $this->assertEquals(237600, (float) AffiliateCommission::first()->amount);
+        $this->assertNull($referral->refresh()->commission_until);
+        $this->assertNotNull($referral->first_paid_at);
+
+        // Perpanjangan dan add-on berikutnya tidak menghasilkan komisi lagi.
+        $this->travel(1)->months();
+        $this->confirm($this->pendingPayment($store, $owner));
+        $this->confirm($this->pendingPayment($store, $owner, ['amount' => 85000, 'type' => 'outlet_addon', 'extra_outlets_count' => 1, 'subscription_plan_id' => null]));
+        $this->travel(13)->months();
+        $this->confirm($this->pendingPayment($store, $owner, ['amount' => 1188000, 'duration_days' => 365]));
+        $this->assertSame(1, AffiliateCommission::count());
+
+        $this->assertTrue(AffiliateService::rules()['once']);
+    }
+
+    public function test_monthly_first_package_also_earns_only_once(): void
+    {
+        config(['affiliate.commission_months' => 0]);
+        $affiliate = $this->affiliate();
+        [$owner, $store] = $this->referredStore($affiliate);
+
+        $this->confirm($this->pendingPayment($store, $owner)); // bulanan Rp99.000
+        $this->travel(1)->months();
+        $this->confirm($this->pendingPayment($store, $owner));
+        $this->travel(1)->months();
+        $this->confirm($this->pendingPayment($store, $owner));
+
+        $this->assertSame(1, AffiliateCommission::count());
+        $this->assertEquals(19800, AffiliateService::summary($affiliate)['held'] + AffiliateService::summary($affiliate)['ready']);
+    }
+
+    public function test_cancelled_first_commission_lets_next_valid_payment_earn(): void
+    {
+        config(['affiliate.commission_months' => 0]);
+        $affiliate = $this->affiliate();
+        [$owner, $store] = $this->referredStore($affiliate);
+
+        // Pembayaran pertama di-refund: komisinya dibatalkan.
+        $this->confirm($this->pendingPayment($store, $owner));
+        $this->actingAs($this->superAdmin())
+            ->post('/superadmin/affiliate-commissions/'.AffiliateCommission::first()->id.'/cancel', ['reason' => 'Refund']);
+        auth()->logout();
+
+        // Pembayaran sah berikutnya tetap menghasilkan satu komisi.
+        $this->confirm($this->pendingPayment($store, $owner, ['amount' => 1188000, 'duration_days' => 365]));
+        $this->confirm($this->pendingPayment($store, $owner));
+
+        $this->assertSame(1, AffiliateCommission::where('status', 'earned')->count());
+        $this->assertEquals(237600, (float) AffiliateCommission::where('status', 'earned')->first()->amount);
+    }
+
     public function test_payment_from_unreferred_store_earns_nothing(): void
     {
         $this->affiliate();
@@ -820,11 +881,26 @@ class AffiliateProgramTest extends TestCase
         $this->get('/afiliasi')->assertInertia(fn (Assert $page) => $page
             ->has('examples', 2)
             ->where('examples.0.cycle', 'bulan')
+            ->where('examples.0.label', 'Paket bulanan')
             ->where('examples.0.commission', 19800)
             ->where('examples.1.cycle', 'tahun')
+            ->where('examples.1.label', 'Paket tahunan')
             ->where('examples.1.plan', 'GrowUp (tahunan)')
             ->where('examples.1.price', 1188000)
             ->where('examples.1.commission', 237600)
+        );
+
+        // Paket 3 dan 6 bulan (bila admin menambahkannya) ikut tampil, urut dari terpendek.
+        SubscriptionPlan::create(['name' => 'GrowUp 6 bulan', 'slug' => 'bisnis-6-bulan', 'price' => 540000, 'duration_days' => 180, 'is_active' => true, 'sort_order' => 7, 'billing_cycle' => 'monthly']);
+        SubscriptionPlan::create(['name' => 'GrowUp 3 bulan', 'slug' => 'bisnis-3-bulan', 'price' => 285000, 'duration_days' => 90, 'is_active' => true, 'sort_order' => 8, 'billing_cycle' => 'monthly']);
+
+        $this->get('/afiliasi')->assertInertia(fn (Assert $page) => $page
+            ->has('examples', 4)
+            ->where('examples.1.label', 'Paket 3 bulan')
+            ->where('examples.1.cycle', '3 bulan')
+            ->where('examples.1.commission', 57000)
+            ->where('examples.2.label', 'Paket 6 bulan')
+            ->where('examples.3.label', 'Paket tahunan')
         );
     }
 
@@ -876,8 +952,8 @@ class AffiliateProgramTest extends TestCase
     public function test_rule_values_are_validated(): void
     {
         $this->actingAs($this->superAdmin())
-            ->put('/superadmin/affiliates/settings', ['commission_percent' => 150, 'commission_months' => 0])
-            ->assertSessionHasErrors(['commission_percent' => 'Persen komisi maksimal 100.', 'commission_months' => 'Lama komisi minimal 1.']);
+            ->put('/superadmin/affiliates/settings', ['commission_percent' => 150, 'commission_months' => -1])
+            ->assertSessionHasErrors(['commission_percent' => 'Persen komisi maksimal 100.', 'commission_months' => 'Lama komisi minimal 0.']);
 
         $this->assertEquals(20, AffiliateService::rules()['percent']);
     }

@@ -12,8 +12,9 @@ return [
     // Persen komisi dari setiap pembayaran yang dikonfirmasi (paket maupun add-on).
     'commission_percent' => (float) env('AFFILIATE_COMMISSION_PERCENT', 20),
 
-    // Komisi berlaku selama sekian bulan sejak pembayaran pertama toko yang diajak.
-    'commission_months' => (int) env('AFFILIATE_COMMISSION_MONTHS', 12),
+    // 0 = komisi SEKALI saja per toko, dari paket pertama yang dibelinya (bawaan, seperti afiliasi pada umumnya).
+    // Angka > 0 = komisi berulang dari setiap pembayaran selama sekian bulan sejak pembayaran pertama.
+    'commission_months' => (int) env('AFFILIATE_COMMISSION_MONTHS', 0),
 
     // Link afiliasi diingat sekian hari sejak diklik (klik terakhir yang menang).
     'cookie_days' => (int) env('AFFILIATE_COOKIE_DAYS', 30),

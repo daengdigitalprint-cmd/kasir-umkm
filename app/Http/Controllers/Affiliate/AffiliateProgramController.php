@@ -106,31 +106,51 @@ class AffiliateProgramController extends Controller
     /**
      * Contoh penghasilan dari harga paket yang sedang dijual.
      *
-     * @return list<array{plan:string, price:float, commission:float, cycle:string}>
+     * @return list<array{plan:string, price:float, commission:float, months:int, cycle:string, label:string}>
      */
     private function earningExamples(): array
     {
         $percent = (float) \App\Models\AffiliateSetting::value('commission_percent');
 
-        $plans = SubscriptionPlan::active()
+        // Satu paket per lama langganan (1, 3, 6, 12 bulan, ...), dari terpendek ke terpanjang.
+        // Paket terpanjang ditonjolkan di halaman karena komisinya paling besar.
+        return SubscriptionPlan::active()
             ->where('price', '>', 0)
+            ->where('duration_days', '>', 0)
             ->where('slug', 'not like', 'promo-%')
+            ->orderBy('duration_days')
             ->ordered()
-            ->get();
+            ->get()
+            ->unique(fn (SubscriptionPlan $plan) => self::planMonths($plan))
+            ->take(4)
+            ->map(function (SubscriptionPlan $plan) use ($percent) {
+                $months = self::planMonths($plan);
 
-        $cycleOf = fn (SubscriptionPlan $plan) => ($plan->billing_cycle ?? 'monthly') === 'yearly' ? 'tahun' : 'bulan';
-
-        // Satu paket bulanan dan satu paket tahunan (yang tahunan ditonjolkan di halaman).
-        return collect(['bulan', 'tahun'])
-            ->map(fn (string $cycle) => $plans->first(fn (SubscriptionPlan $plan) => $cycleOf($plan) === $cycle))
-            ->filter()
-            ->map(fn (SubscriptionPlan $plan) => [
-                'plan' => $plan->name,
-                'price' => (float) $plan->price,
-                'commission' => round((float) $plan->price * $percent / 100),
-                'cycle' => $cycleOf($plan),
-            ])
+                return [
+                    'plan' => $plan->name,
+                    'price' => (float) $plan->price,
+                    'commission' => round((float) $plan->price * $percent / 100),
+                    'months' => $months,
+                    // "per" di samping harga: /bulan, /tahun, /3 bulan.
+                    'cycle' => match (true) {
+                        $months === 1 => 'bulan',
+                        $months === 12 => 'tahun',
+                        default => $months.' bulan',
+                    },
+                    'label' => match (true) {
+                        $months === 1 => 'Paket bulanan',
+                        $months === 12 => 'Paket tahunan',
+                        default => 'Paket '.$months.' bulan',
+                    },
+                ];
+            })
             ->values()
             ->all();
+    }
+
+    /** Lama paket dalam bulan (30 hari = 1, 365 hari = 12). */
+    private static function planMonths(SubscriptionPlan $plan): int
+    {
+        return max(1, (int) round(((int) $plan->duration_days) / 30.4));
     }
 }

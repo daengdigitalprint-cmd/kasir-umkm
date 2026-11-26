@@ -27,6 +27,7 @@ use Illuminate\Validation\ValidationException;
  * Alur: klik link (/r/KODE atau ?ref=KODE) → cookie → daftar → atribusi terkunci di akun →
  * toko pertama dibuat (atribusi ikut grup usaha) → pembayaran dikonfirmasi super admin → komisi.
  * Komisi hanya lahir dari pembayaran yang sudah dikonfirmasi, tidak pernah dari klik atau pendaftaran.
+ * Bawaan: sekali per toko, dari paket pertama yang dibelinya (aturan `commission_months` = 0).
  */
 final class AffiliateService
 {
@@ -248,15 +249,26 @@ final class AffiliateService
         }
 
         $now = now();
-        if ($referral->commission_until && $now->gt($referral->commission_until)) {
-            return null;
+        $months = (int) AffiliateSetting::value('commission_months');
+
+        if ($months <= 0) {
+            // Komisi sekali saja per toko: hanya dari paket pertama. Komisi yang dibatalkan (mis. refund)
+            // tidak dihitung, jadi pembayaran sah berikutnya masih bisa menghasilkan komisi.
+            if ($referral->commissions()->where('status', '!=', AffiliateCommission::STATUS_CANCELLED)->exists()) {
+                return null;
+            }
+        } else {
+            $until = $referral->commission_until ?? $referral->first_paid_at?->copy()->addMonthsNoOverflow($months);
+            if ($until && $now->gt($until)) {
+                return null;
+            }
         }
 
-        $commission = DB::transaction(function () use ($payment, $referral, $affiliate, $store, $now) {
+        $commission = DB::transaction(function () use ($payment, $referral, $affiliate, $store, $now, $months) {
             if (! $referral->first_paid_at) {
                 $referral->forceFill([
                     'first_paid_at' => $now,
-                    'commission_until' => $now->copy()->addMonthsNoOverflow(max(1, (int) AffiliateSetting::value('commission_months'))),
+                    'commission_until' => $months > 0 ? $now->copy()->addMonthsNoOverflow($months) : null,
                     'organization_id' => $referral->organization_id ?? $store->organization_id,
                 ])->save();
             }
@@ -748,13 +760,15 @@ final class AffiliateService
     /**
      * Aturan program untuk ditampilkan di halaman.
      *
-     * @return array{percent:float, months:int, cookie_days:int, hold_days:int, min_payout:int, referred_trial_days:int, default_trial_days:int}
+     * @return array{percent:float, months:int, once:bool, cookie_days:int, hold_days:int, min_payout:int, referred_trial_days:int, default_trial_days:int}
      */
     public static function rules(?Affiliate $affiliate = null): array
     {
         return [
             'percent' => $affiliate ? $affiliate->effectivePercent() : (float) AffiliateSetting::value('commission_percent'),
             'months' => (int) AffiliateSetting::value('commission_months'),
+            // Komisi sekali per toko (dari paket pertama), bukan berulang.
+            'once' => (int) AffiliateSetting::value('commission_months') <= 0,
             'cookie_days' => (int) AffiliateSetting::value('cookie_days'),
             'hold_days' => (int) AffiliateSetting::value('hold_days'),
             'min_payout' => (int) AffiliateSetting::value('min_payout'),

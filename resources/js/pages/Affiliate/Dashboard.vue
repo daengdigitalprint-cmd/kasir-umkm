@@ -101,6 +101,7 @@ const props = defineProps<{
     rules: {
         percent: number;
         months: number;
+        once: boolean;
         cookie_days: number;
         hold_days: number;
         min_payout: number;
@@ -330,7 +331,14 @@ const inputClass =
                 <div class="relative z-10">
                     <h1 id="judul-link" class="text-xl font-black tracking-tight text-slate-900 sm:text-2xl">Link afiliasi Anda</h1>
                     <p class="mt-1 text-sm text-slate-700">
-                        Bagikan link ini. Anda mendapat komisi {{ percentLabel }}% setiap kali toko yang mendaftar lewat link ini membayar langganan.
+                        <template v-if="rules.once"
+                            >Bagikan link ini. Anda mendapat komisi {{ percentLabel }}% dari harga paket pertama yang dibeli toko yang mendaftar lewat link ini,
+                            sekali per toko.</template
+                        >
+                        <template v-else
+                            >Bagikan link ini. Anda mendapat komisi {{ percentLabel }}% setiap kali toko yang mendaftar lewat link ini membayar
+                            langganan.</template
+                        >
                     </p>
 
                     <div class="mt-4 flex flex-col gap-2 sm:flex-row">
