@@ -77,6 +77,23 @@ Route::get('/sitemap.xml', function () {
         ];
     }
 
+    // Halaman per kota + indeksnya (lastmod = file konten terakhir diubah).
+    $kotaLastmod = date('Y-m-d', filemtime(app_path('Support/KotaLayanan.php')));
+    $urls[] = [
+        'loc' => url('/'.\App\Support\KotaLayanan::INDEX_PATH),
+        'changefreq' => 'monthly',
+        'priority' => '0.8',
+        'lastmod' => $kotaLastmod,
+    ];
+    foreach (\App\Support\KotaLayanan::slugs() as $slug) {
+        $urls[] = [
+            'loc' => url('/'.$slug),
+            'changefreq' => 'monthly',
+            'priority' => '0.8',
+            'lastmod' => $kotaLastmod,
+        ];
+    }
+
     // Blog: indeks + semua artikel terbit (lastmod dari updated_at).
     $articles = \App\Models\Article::query()
         ->published()
@@ -119,6 +136,14 @@ Route::get('/mulai/terima-kasih', [App\Http\Controllers\AdLandingController::cla
 foreach (\App\Support\JenisUsaha::slugs() as $jenisUsahaSlug) {
     Route::get('/'.$jenisUsahaSlug, [App\Http\Controllers\JenisUsahaController::class, 'show'])
         ->name('jenis-usaha.'.$jenisUsahaSlug);
+}
+
+// ── Halaman per kota (SEO lokal): /aplikasi-kasir/kota (indeks), /aplikasi-kasir-makassar, dst. ──
+Route::get('/'.\App\Support\KotaLayanan::INDEX_PATH, [App\Http\Controllers\KotaController::class, 'index'])
+    ->name('kota.index');
+foreach (\App\Support\KotaLayanan::all() as $kotaPage) {
+    Route::get('/'.$kotaPage['slug'], [App\Http\Controllers\KotaController::class, 'show'])
+        ->name('kota.'.$kotaPage['key']);
 }
 
 // ── Halaman hub perbandingan semua aplikasi kasir (SEO) ──

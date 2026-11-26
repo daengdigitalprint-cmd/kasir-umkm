@@ -182,6 +182,7 @@
         .foot-usaha .label { margin-right: 4px; }
         .foot-usaha a { color: var(--ink); font-weight: 600; }
         .foot-usaha a:hover { color: var(--primary); }
+        .foot-kota { padding-top: 12px; }
         .foot-bottom { display: flex; flex-wrap: wrap; gap: 10px 20px; justify-content: space-between; align-items: center; padding: 24px 0 8px; font-size: 13.5px; color: var(--muted); }
         .foot-bottom nav { display: flex; flex-wrap: wrap; gap: 8px 18px; }
         .foot-bottom a { color: var(--muted); }
@@ -309,6 +310,14 @@
                 @foreach (\App\Support\JenisUsaha::all() as $ju)
                     <a href="{{ url('/'.$ju['slug']) }}">{{ $ju['name'] }}</a>
                 @endforeach
+            </nav>
+
+            <nav class="foot-usaha foot-kota" aria-label="Aplikasi kasir per kota">
+                <span class="label">Aplikasi kasir di</span>
+                @foreach (\App\Support\KotaLayanan::all() as $kt)
+                    <a href="{{ url('/'.$kt['slug']) }}">{{ $kt['name'] }}</a>
+                @endforeach
+                <a href="{{ url('/'.\App\Support\KotaLayanan::INDEX_PATH) }}">Semua kota</a>
             </nav>
 
             <div class="foot-bottom">

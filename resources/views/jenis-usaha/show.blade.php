@@ -270,4 +270,17 @@
             </div>
         </div>
     </section>
+
+    <section class="ju-sec">
+        <div class="wrap">
+            <h2>Aplikasi kasir per kota</h2>
+            <p class="sub">Lihat contoh usaha dan alur kasir yang khas di tiap kota. Aplikasinya sendiri bisa dipakai di seluruh Indonesia.</p>
+            <div class="ju-links">
+                @foreach (\App\Support\KotaLayanan::all() as $kt)
+                    <a href="{{ url('/'.$kt['slug']) }}">{{ $kt['name'] }}</a>
+                @endforeach
+                <a href="{{ url('/'.\App\Support\KotaLayanan::INDEX_PATH) }}">Semua kota</a>
+            </div>
+        </div>
+    </section>
 @endsection

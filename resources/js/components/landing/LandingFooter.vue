@@ -185,7 +185,8 @@ const channels: { icon: string; label: string; href: string; external: boolean; 
                     <Link href="/terms">Syarat &amp; Ketentuan</Link> &middot; <Link href="/privacy">Kebijakan Privasi</Link> &middot;
                     <Link href="/refund">Kebijakan Refund</Link> &middot; <Link href="/panduan">Panduan</Link> &middot;
                     <a href="/blog">Blog</a> &middot;
-                    <a href="/aplikasi-kasir-terbaik">Aplikasi Kasir Terbaik</a>
+                    <a href="/aplikasi-kasir-terbaik">Aplikasi Kasir Terbaik</a> &middot;
+                    <a href="/aplikasi-kasir/kota">Aplikasi Kasir per Kota</a>
                 </p>
             </div>
         </div>
