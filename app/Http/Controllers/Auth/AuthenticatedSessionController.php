@@ -44,6 +44,11 @@ class AuthenticatedSessionController extends Controller
             \App\Services\ActivityLogger::logLogin($user, $user->store);
         }
 
+        // Afiliator tanpa toko: areanya hanya program afiliasi.
+        if ($user?->isAffiliateOnly()) {
+            return redirect()->route('affiliate.dashboard');
+        }
+
         // Owner diarahkan langsung ke dashboard owner (laporan lintas outlet)
         if ($user?->isOwner()) {
             return redirect()->route('owner.dashboard');

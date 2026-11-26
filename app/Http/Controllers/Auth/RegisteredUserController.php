@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\AffiliateService;
 use App\Support\BusinessTypePresets;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
@@ -19,9 +20,12 @@ class RegisteredUserController extends Controller
     /**
      * Show the registration page.
      */
-    public function create(): Response
+    public function create(Request $request): Response
     {
-        return Inertia::render('auth/Register');
+        return Inertia::render('auth/Register', [
+            // Datang lewat link afiliasi: kodenya sudah terpasang di form.
+            'referralCode' => AffiliateService::codeFromCookie($request),
+        ]);
     }
 
     /**
@@ -33,13 +37,22 @@ class RegisteredUserController extends Controller
     {
         // Nomor WhatsApp dinormalkan ke format 62xxxxxxxxxx (siap dipakai wa.me)
         // sebelum divalidasi, jadi pengguna bebas mengetik 08…, +62…, atau 62….
-        $request->merge(['whatsapp' => self::normalizeWhatsapp($request->input('whatsapp'))]);
+        $request->merge([
+            'whatsapp' => self::normalizeWhatsapp($request->input('whatsapp')),
+            'referral_code' => AffiliateService::normalizeCode($request->input('referral_code')) ?: null,
+        ]);
 
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
             'whatsapp' => ['required', 'string', 'regex:/^628\d{7,12}$/'],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
+            // Kode referal opsional; bila diisi harus milik afiliator yang aktif.
+            'referral_code' => ['nullable', 'string', 'max:20', function (string $attribute, mixed $value, \Closure $fail) {
+                if (! AffiliateService::findByCode($value)) {
+                    $fail('Kode referal tidak ditemukan. Periksa lagi, atau kosongkan bila tidak punya.');
+                }
+            }],
         ], [
             'whatsapp.required' => 'Nomor WhatsApp wajib diisi.',
             'whatsapp.regex' => 'Nomor WhatsApp tidak valid. Contoh: 0812 3456 7890.',
@@ -57,6 +70,9 @@ class RegisteredUserController extends Controller
         ]);
 
         event(new Registered($user));
+
+        // Program afiliasi: kaitkan akun baru dengan afiliator (kode di form mengalahkan cookie).
+        rescue(fn () => AffiliateService::attributeRegistration($user, $request, $request->input('referral_code')));
 
         Auth::login($user);
 

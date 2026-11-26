@@ -506,6 +506,10 @@ class SuperAdminController extends Controller
                 Voucher::whereKey($payment->voucher_id)->increment('used_count');
             }
 
+            // Program afiliasi: pembayaran dari toko rujukan menghasilkan komisi (paket maupun add-on).
+            // Kegagalan di sini tidak boleh membatalkan konfirmasi pembayaran.
+            rescue(fn () => \App\Services\AffiliateService::recordCommission($payment));
+
             $store = $payment->store;
 
             // Handle outlet add-on payment

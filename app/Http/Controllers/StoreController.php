@@ -354,6 +354,9 @@ class StoreController extends Controller implements HasMiddleware
             $store->id => ['role' => 'admin'],
         ]);
 
+        // Program afiliasi: rujukan pemilik ikut ke grup usahanya (komisi dihitung per grup).
+        rescue(fn () => \App\Services\AffiliateService::linkOrganization($owner, $store));
+
         // Salin produk bahan baku & kemasan dari Gudang Pusat jika dipilih
         $copyProducts = (bool) ($validated['copy_products'] ?? false);
         if ($copyProducts && $organizationId) {

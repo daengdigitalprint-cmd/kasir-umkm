@@ -25,6 +25,11 @@ class DashboardController extends Controller
         $store = $user->store;
 
         if (! $store) {
+            // Afiliator tanpa toko tidak punya dashboard toko: arahkan ke area afiliasi.
+            if ($user->isAffiliateOnly()) {
+                return redirect()->route('affiliate.dashboard');
+            }
+
             return Inertia::render('Dashboard');
         }
 

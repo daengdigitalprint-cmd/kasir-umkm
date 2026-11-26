@@ -50,6 +50,8 @@ return Application::configure(basePath: dirname(__DIR__))
             AddLinkHeadersForPreloadedAssets::class,
             // Modul berbayar (resep, akuntansi, KPI, AI, ...) dikunci untuk paket Gratis.
             \App\Http\Middleware\EnsurePlanModule::class,
+            // Program afiliasi: ingat afiliator saat pengunjung datang lewat ?ref=KODE.
+            \App\Http\Middleware\CaptureAffiliateReferral::class,
         ]);
 
         $middleware->alias([
@@ -72,6 +74,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'payroll.enabled' => EnsurePayrollEnabled::class,
             'scan_meja.enabled' => EnsureScanMejaEnabled::class,
             'central_kitchen.enabled' => \App\Http\Middleware\EnsureCentralKitchenModule::class,
+            'affiliate' => \App\Http\Middleware\EnsureAffiliate::class,
         ]);
     })
     ->withSchedule(function (Schedule $schedule) {

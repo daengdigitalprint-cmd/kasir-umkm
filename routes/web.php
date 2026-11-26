@@ -132,6 +132,33 @@ foreach (\App\Support\Kompetitor::all() as $kompetitorPage) {
         ->name('alternatif.'.$kompetitorPage['key']);
 }
 
+// ── Program afiliasi ──
+// Link pendek afiliator: catat klik, ingat afiliator (cookie), lalu ke beranda.
+Route::get('/r/{code}', App\Http\Controllers\Affiliate\AffiliateLinkController::class)
+    ->where('code', '[A-Za-z0-9]{3,20}')
+    ->middleware('throttle:60,1')
+    ->name('affiliate.link');
+
+Route::prefix('afiliasi')->name('affiliate.')->group(function () {
+    Route::get('/', [App\Http\Controllers\Affiliate\AffiliateProgramController::class, 'landing'])->name('landing');
+
+    Route::middleware('guest')->group(function () {
+        Route::get('/daftar', [App\Http\Controllers\Affiliate\AffiliateProgramController::class, 'showRegister'])->name('register');
+        Route::post('/daftar', [App\Http\Controllers\Affiliate\AffiliateProgramController::class, 'register'])
+            ->middleware('throttle:6,1')
+            ->name('register.store');
+    });
+
+    Route::middleware('auth')->group(function () {
+        Route::post('/gabung', [App\Http\Controllers\Affiliate\AffiliateProgramController::class, 'join'])->name('join');
+
+        Route::middleware('affiliate')->group(function () {
+            Route::get('/dashboard', [App\Http\Controllers\Affiliate\AffiliateDashboardController::class, 'index'])->name('dashboard');
+            Route::put('/rekening', [App\Http\Controllers\Affiliate\AffiliateDashboardController::class, 'updatePayout'])->name('payout.update');
+        });
+    });
+});
+
 // Server yang meneruskan path apa adanya (mis. Herd lokal) melihat "/index.php" sebagai path.
 Route::get('/index.php', fn () => redirect('/', 301));
 
@@ -924,6 +951,12 @@ Route::prefix('superadmin')->name('superadmin.')->middleware(['auth', 'superadmi
     Route::post('/prospects/search', [App\Http\Controllers\SuperAdmin\ProspectController::class, 'search'])->middleware('throttle:10,1')->name('prospects.search');
     Route::patch('/prospects/{prospect}', [App\Http\Controllers\SuperAdmin\ProspectController::class, 'update'])->name('prospects.update');
     Route::delete('/prospects/{prospect}', [App\Http\Controllers\SuperAdmin\ProspectController::class, 'destroy'])->name('prospects.destroy');
+
+    // Program afiliasi: afiliator, komisi, pencatatan transfer komisi
+    Route::get('/affiliates', [App\Http\Controllers\SuperAdmin\AffiliateController::class, 'index'])->name('affiliates.index');
+    Route::post('/affiliates/{affiliate}/pay', [App\Http\Controllers\SuperAdmin\AffiliateController::class, 'pay'])->name('affiliates.pay');
+    Route::post('/affiliates/{affiliate}/toggle', [App\Http\Controllers\SuperAdmin\AffiliateController::class, 'toggle'])->name('affiliates.toggle');
+    Route::post('/affiliate-commissions/{commission}/cancel', [App\Http\Controllers\SuperAdmin\AffiliateController::class, 'cancelCommission'])->name('affiliate-commissions.cancel');
 
     Route::get('/articles', [App\Http\Controllers\SuperAdmin\ArticleController::class, 'index'])->name('articles.index');
     Route::get('/articles/create', [App\Http\Controllers\SuperAdmin\ArticleController::class, 'create'])->name('articles.create');

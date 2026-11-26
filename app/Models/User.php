@@ -116,6 +116,18 @@ class User extends Authenticatable
         return $this->hasMany(Transaction::class);
     }
 
+    /** Keanggotaan program afiliasi (null bila bukan afiliator). */
+    public function affiliate(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(Affiliate::class);
+    }
+
+    /** Afiliator yang tidak punya toko: areanya hanya /afiliasi. */
+    public function isAffiliateOnly(): bool
+    {
+        return ! $this->store_id && ! $this->stores()->exists() && $this->affiliate()->exists();
+    }
+
     public function cashShifts()
     {
         return $this->hasMany(CashShift::class);

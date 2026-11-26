@@ -1221,6 +1221,14 @@ const subscriptionCardSoft = computed(() => {
                 </div>
             </div>
         </Link>
+
+        <!-- Program afiliasi: pemilik toko bisa ikut dengan akun yang sama -->
+        <Link href="/afiliasi" class="mt-2 block w-full outline-none" @click="emit('close-mobile-menu')">
+            <div class="group flex h-12 w-full items-center rounded-2xl px-4 text-violet-700 transition-all duration-300 hover:bg-violet-50">
+                <Gift class="mr-4 size-5 shrink-0 transition-transform duration-300 group-hover:scale-110" />
+                <span class="text-sm font-bold tracking-tight">Ajak Teman, Dapat Komisi</span>
+            </div>
+        </Link>
         </template>
 
         <!-- System Section -->

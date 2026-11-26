@@ -14,11 +14,22 @@ import {
     User,
     UserPlus,
     LogIn,
+    Ticket,
 } from 'lucide-vue-next';
 import { onMounted, onUnmounted, ref } from 'vue';
 
+const props = defineProps<{
+    /** Kode afiliator dari link yang diklik pengunjung (bila ada). */
+    referralCode?: string | null;
+}>();
+
 const showPassword = ref(false);
 const showPasswordConfirmation = ref(false);
+
+// Kode referal: terpasang otomatis bila datang lewat link; kalau tidak, cukup tautan kecil
+// "Punya kode referal?" supaya form tetap pendek.
+const referralInput = ref(props.referralCode ?? '');
+const referralOpen = ref(false);
 
 const togglePasswordVisibility = () => {
     showPassword.value = !showPassword.value;
@@ -254,9 +265,42 @@ onUnmounted(() => {
                                     <InputError :message="errors.password_confirmation" />
                                 </div>
 
+                                <div class="lp-auth-field">
+                                    <template v-if="props.referralCode && !referralOpen && !errors.referral_code">
+                                        <input type="hidden" name="referral_code" :value="referralInput" />
+                                        <p class="lp-auth-referral-note">
+                                            <span>Kode referal <strong>{{ referralInput }}</strong> terpasang.</span>
+                                            <button type="button" class="lp-auth-referral-link" @click="referralOpen = true">Ubah</button>
+                                        </p>
+                                    </template>
+                                    <template v-else-if="referralOpen || errors.referral_code">
+                                        <Label for="referral_code" class="lp-auth-label">Kode referal (opsional)</Label>
+                                        <div class="lp-auth-input">
+                                            <Ticket class="lp-auth-input-icon" />
+                                            <Input
+                                                id="referral_code"
+                                                v-model="referralInput"
+                                                type="text"
+                                                name="referral_code"
+                                                :tabindex="6"
+                                                autocomplete="off"
+                                                autocapitalize="characters"
+                                                maxlength="20"
+                                                placeholder="mis. BUDI482"
+                                                class="lp-auth-input-control !pl-14 !pr-14"
+                                            />
+                                        </div>
+                                        <p class="lp-auth-hint">Kode dari teman yang mengajak Anda. Kosongkan bila tidak punya.</p>
+                                    </template>
+                                    <button v-else type="button" class="lp-auth-referral-link" @click="referralOpen = true">
+                                        Punya kode referal?
+                                    </button>
+                                    <InputError :message="errors.referral_code" />
+                                </div>
+
                                 <button
                                     type="submit"
-                                    :tabindex="6"
+                                    :tabindex="7"
                                     :disabled="processing"
                                     class="gt-theme-btn style-3 bg-theme lp-auth-submit"
                                 >
@@ -435,6 +479,40 @@ onUnmounted(() => {
     font-size: 0.75rem;
     color: #94a3b8;
     font-weight: 500;
+}
+
+.lp-auth-referral-note {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0;
+    padding: 12px 16px;
+    border-radius: 14px;
+    background: rgba(160, 234, 113, 0.18);
+    color: #173401;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+.lp-auth-referral-link {
+    align-self: flex-start;
+    padding: 6px 0;
+    background: transparent;
+    border: 0;
+    color: #3d7a12;
+    font-size: 0.9rem;
+    font-weight: 700;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+}
+.lp-auth-referral-link:hover {
+    color: #173401;
+}
+.lp-auth-referral-note .lp-auth-referral-link {
+    align-self: center;
+    flex-shrink: 0;
+    padding: 0;
 }
 
 .lp-auth-input {

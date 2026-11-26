@@ -2,7 +2,7 @@
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { logout } from '@/routes';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { Bot, Building2, CreditCard, Crown, History, Landmark, LogOut, MapPinned, Megaphone, Menu, Newspaper, Settings2, Shield, Ticket } from 'lucide-vue-next';
+import { Bot, Building2, CreditCard, Crown, Handshake, History, Landmark, LogOut, MapPinned, Megaphone, Menu, Newspaper, Settings2, Shield, Ticket } from 'lucide-vue-next';
 import { computed, ref, type Component } from 'vue';
 
 interface Props {
@@ -63,6 +63,7 @@ const navGroups = computed<{ label: string; items: NavItem[] }[]>(() => [
         items: [
             { id: 'leads', label: 'Lead Iklan', icon: Megaphone, url: '/superadmin/leads' },
             { id: 'prospects', label: 'Cari Prospek', icon: MapPinned, url: '/superadmin/prospects' },
+            { id: 'affiliates', label: 'Afiliasi', icon: Handshake, url: '/superadmin/affiliates' },
             { id: 'articles', label: 'Artikel SEO', icon: Newspaper, url: '/superadmin/articles' },
         ],
     },
