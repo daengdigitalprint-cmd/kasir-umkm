@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { getInitials } from '@/composables/useInitials';
+import { useRememberScroll } from '@/composables/useRememberScroll';
 import { resolveProfileImageSrc } from '@/lib/profileAvatar';
 import { toastWarning } from '@/lib/swal';
 import { Head, Link, usePage, router } from '@inertiajs/vue3';
@@ -130,6 +131,12 @@ function onSwitchStore(ev: Event) {
 }
 
 const isMobileMenuOpen = ref(false);
+
+// Menu samping tetap di posisi gulir terakhir saat pindah halaman (tidak melompat ke atas).
+const desktopSidebarRef = ref<HTMLElement | null>(null);
+const mobileSidebarRef = ref<HTMLElement | null>(null);
+useRememberScroll(desktopSidebarRef, 'menu-desktop');
+useRememberScroll(mobileSidebarRef, 'menu-ponsel');
 
 // Track landscape orientation on mobile/tablet
 const isLandscape = ref(false);
@@ -449,6 +456,7 @@ const isCurrentRoute = (href: string) => {
             <!-- Desktop Sidebar -->
             <div
                 v-if="showDesktopSidebar && !props.fullscreen"
+                ref="desktopSidebarRef"
                 :class="[
                     'bg-white border-r border-slate-200 sticky top-0 h-screen overflow-y-auto overflow-x-hidden transition-[width] duration-200 ease-linear shrink-0 sidebar-scroll',
                     isDesktopSidebarOpen ? 'w-52 lg:w-60' : 'w-0 overflow-hidden border-r-0',
@@ -495,6 +503,7 @@ const isCurrentRoute = (href: string) => {
             <!-- Mobile Sidebar -->
             <div 
                 v-if="!showDesktopSidebar"
+                ref="mobileSidebarRef"
                 :class="[
                     'lg:hidden fixed top-0 left-0 z-50 w-64 h-full bg-white transform transition-transform duration-300 ease-in-out shadow-2xl overflow-y-auto overflow-x-hidden sidebar-scroll',
                     isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'

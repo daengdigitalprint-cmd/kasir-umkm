@@ -3,7 +3,12 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/
 import { logout } from '@/routes';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { Bot, Building2, CreditCard, Crown, Handshake, History, Landmark, LogOut, MapPinned, Megaphone, Menu, Newspaper, Settings2, Shield, Ticket } from 'lucide-vue-next';
+import { useRememberScroll } from '@/composables/useRememberScroll';
 import { computed, ref, type Component } from 'vue';
+
+// Menu samping tetap di posisi gulir terakhir saat pindah halaman.
+const sidebarNavRef = ref<HTMLElement | null>(null);
+useRememberScroll(sidebarNavRef, 'menu-superadmin');
 
 interface Props {
     title: string;
@@ -111,7 +116,7 @@ const activeLabel = computed(() => {
                 </div>
             </div>
 
-            <nav class="flex-1 overflow-y-auto px-3 py-4" aria-label="Menu super admin">
+            <nav ref="sidebarNavRef" class="flex-1 overflow-y-auto px-3 py-4" aria-label="Menu super admin">
                 <div v-for="group in navGroups" :key="group.label" class="mb-5 last:mb-0">
                     <p class="mb-1.5 px-3 text-[11px] font-semibold tracking-wider text-slate-400 uppercase">{{ group.label }}</p>
                     <ul class="space-y-0.5">
