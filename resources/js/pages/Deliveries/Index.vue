@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import MenuAppearanceSettings, { type MenuAppearance } from '@/components/MenuAppearanceSettings.vue';
 import {
     Banknote,
     Bike,
@@ -61,6 +62,8 @@ const props = defineProps<{
     defaultFee: number;
     /** Pemesanan mandiri lewat tautan toko. */
     selfOrder: { enabled: boolean; url: string };
+    /** Sampul, logo, dan banner halaman pesan antar. */
+    appearance?: MenuAppearance;
     canManage: boolean;
     currentUserId: number;
 }>();
@@ -340,6 +343,15 @@ const copyLink = () => {
                     </Button>
                 </div>
             </div>
+
+            <!-- Tampilan halaman pesan antar: sampul, logo, banner geser -->
+            <MenuAppearanceSettings
+                v-if="enabled && selfOrder.enabled && canManage"
+                :appearance="appearance"
+                action="/deliveries/appearance"
+                :preview-url="selfOrder.url"
+                variant="delivery"
+            />
 
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div class="inline-flex flex-wrap rounded-xl bg-slate-100 p-1">

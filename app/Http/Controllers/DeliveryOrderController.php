@@ -10,6 +10,7 @@ use App\Models\Transaction;
 use App\Support\CustomerSegments;
 use App\Support\DeliveryFeatures;
 use App\Support\KitchenOrders;
+use App\Support\ScanMejaAppearance;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -102,6 +103,8 @@ class DeliveryOrderController extends Controller
                 'enabled' => (bool) ($store->settings['delivery_self_order_enabled'] ?? false),
                 'url' => DeliveryFeatures::publicUrl($store),
             ],
+            // Sampul, logo, dan banner halaman pesan antar (sama dengan menu digital Scan Meja).
+            'appearance' => ScanMejaAppearance::forStore($store),
             'canManage' => $user->canManageStoreSettings(),
             'currentUserId' => $user->id,
         ]);
@@ -291,6 +294,19 @@ class DeliveryOrderController extends Controller
         $store->update(['settings' => $settings]);
 
         return back()->with('success', $validated['enabled'] ? 'Pesanan Antar aktif di kasir.' : 'Pesanan Antar dimatikan.');
+    }
+
+    /**
+     * Tampilan halaman pesan antar (sampul, logo, banner geser). Datanya sama dengan menu digital
+     * Scan Meja, tetapi bisa diatur dari sini tanpa perlu modul Scan Meja menyala.
+     */
+    public function appearance(Request $request): RedirectResponse
+    {
+        abort_unless($request->user()->canManageStoreSettings(), 403);
+
+        ScanMejaAppearance::save($request->user()->store, $request);
+
+        return back()->with('success', 'Tampilan halaman pesan antar disimpan.');
     }
 
     /** Batalkan transaksi pesanan tamu yang belum dibayar dan cabut dari papan dapur. */

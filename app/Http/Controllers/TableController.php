@@ -6,7 +6,6 @@ use App\Models\Table;
 use App\Services\QrCodeService;
 use App\Support\ScanMejaAppearance;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 class TableController extends Controller
@@ -153,7 +152,7 @@ class TableController extends Controller
     }
 
     /**
-     * Simpan tampilan menu digital: foto latar header (sampul) dan logo khusus menu.
+     * Simpan tampilan menu digital: foto latar header (sampul), logo khusus menu, dan banner geser.
      * Logo kosong → menu memakai logo toko; sampul kosong → menu memakai foto menu pertama.
      */
     public function updateAppearance(Request $request)
@@ -163,30 +162,7 @@ class TableController extends Controller
             return $redirect;
         }
 
-        $request->validate([
-            'cover' => 'nullable|file|image|mimes:jpeg,jpg,png,webp|max:3072',
-            'logo' => 'nullable|file|image|mimes:jpeg,jpg,png,webp|max:1024',
-            'remove_cover' => 'nullable|boolean',
-            'remove_logo' => 'nullable|boolean',
-        ]);
-
-        $settings = $store->settings ?? [];
-
-        foreach (['cover' => 'scan_meja_cover', 'logo' => 'scan_meja_logo'] as $field => $key) {
-            $old = $settings[$key] ?? null;
-            $replace = $request->hasFile($field);
-
-            if (($replace || $request->boolean('remove_'.$field)) && $old) {
-                Storage::disk('public')->delete($old);
-                unset($settings[$key]);
-            }
-
-            if ($replace) {
-                $settings[$key] = $request->file($field)->store('scan-meja/'.$store->id, 'public');
-            }
-        }
-
-        $store->update(['settings' => $settings]);
+        ScanMejaAppearance::save($store, $request);
 
         return back()->with('success', 'Tampilan menu digital disimpan.');
     }

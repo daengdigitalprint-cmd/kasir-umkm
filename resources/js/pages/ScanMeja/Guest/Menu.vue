@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
+import BannerSlider from '@/components/BannerSlider.vue';
 import { ref, computed, onMounted } from 'vue';
 import { ShoppingCart, Plus, Minus, X, Check, Utensils, MapPin, Clock, Banknote, QrCode, Building, Flame, ExternalLink, Search, Phone, MessageCircle, Bike } from 'lucide-vue-next';
 
@@ -40,7 +41,7 @@ const props = defineProps<{
     table: { id: number; name: string; slug: string; capacity: number | null } | null;
     /** Mode pesan antar (kurir toko): halaman dibuka dari tautan toko, bukan QR meja. */
     delivery?: { slug: string; fee: number } | null;
-    store: { id: number; name: string; currency: string; address?: string | null; phone?: string | null; logo_url?: string | null; cover_url?: string | null };
+    store: { id: number; name: string; currency: string; address?: string | null; phone?: string | null; logo_url?: string | null; cover_url?: string | null; banner_urls?: string[] };
     categories: Category[];
     bestSelling?: Product[];
     paymentMethods?: PaymentMethod[];
@@ -380,6 +381,9 @@ const submitOrder = async () => {
                     <Phone class="h-4 w-4" /> Telepon
                 </a>
             </div>
+
+            <!-- Banner promo geser (diunggah toko di Atur tampilan) -->
+            <BannerSlider v-if="store.banner_urls?.length" :images="store.banner_urls" class="mt-3" />
 
             <!-- Info singkat -->
             <div class="mt-3 grid grid-cols-2 gap-2">

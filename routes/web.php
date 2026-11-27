@@ -693,6 +693,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware(['store.active', 'role.pos'])->group(function () {
         Route::get('deliveries', [App\Http\Controllers\DeliveryOrderController::class, 'index'])->name('deliveries.index');
         Route::post('deliveries/settings', [App\Http\Controllers\DeliveryOrderController::class, 'settings'])->name('deliveries.settings');
+        Route::post('deliveries/appearance', [App\Http\Controllers\DeliveryOrderController::class, 'appearance'])->name('deliveries.appearance');
         Route::patch('deliveries/{deliveryOrder}/status', [App\Http\Controllers\DeliveryOrderController::class, 'updateStatus'])->name('deliveries.status');
         Route::patch('deliveries/{deliveryOrder}/courier', [App\Http\Controllers\DeliveryOrderController::class, 'assignCourier'])->name('deliveries.courier');
         // Pesanan dari tautan pesan antar: terima / tolak / catat pembayaran.
