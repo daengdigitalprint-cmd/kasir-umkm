@@ -119,7 +119,8 @@ async function copyList() {
 <template>
     <Head title="Daftar Belanja" />
 
-    <AdminLayout title="Daftar Belanja">
+    <!-- Menu bawah ponsel disembunyikan di halaman ini: bilah aksi "Salin daftar / Jadikan Pembelian" menempel di dasar layar dan tertutup olehnya. -->
+    <AdminLayout title="Daftar Belanja" hide-bottom-nav>
         <div class="mx-auto space-y-6 pb-28" style="max-width: 90rem">
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div>
