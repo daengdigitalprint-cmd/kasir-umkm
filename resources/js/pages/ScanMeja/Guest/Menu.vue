@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
 import BannerSlider from '@/components/BannerSlider.vue';
-import { ref, computed, onMounted } from 'vue';
-import { ShoppingCart, Plus, Minus, X, Check, Utensils, MapPin, Clock, Banknote, QrCode, Building, Flame, ExternalLink, Search, Phone, MessageCircle, Bike } from 'lucide-vue-next';
+import { ref, computed, onBeforeUnmount, onMounted } from 'vue';
+import { ShoppingCart, Plus, Minus, X, Check, Utensils, MapPin, Clock, Banknote, QrCode, Building, Flame, ExternalLink, Search, Phone, MessageCircle, Bike, Home } from 'lucide-vue-next';
 
 interface Product {
     id: number;
@@ -182,6 +182,36 @@ const scrollToCategory = (categoryId: number) => {
         go();
     }
 };
+
+// ── Menu bawah (khusus ponsel) ──
+const stickyBar = ref<HTMLElement | null>(null);
+/** true bila bilah kategori sudah menempel di atas, artinya pelanggan sedang melihat daftar menu. */
+const pastHeader = ref(false);
+const onPageScroll = () => {
+    const el = stickyBar.value;
+    pastHeader.value = !!el && el.getBoundingClientRect().top <= 1;
+};
+onMounted(() => {
+    window.addEventListener('scroll', onPageScroll, { passive: true });
+    onPageScroll();
+});
+onBeforeUnmount(() => window.removeEventListener('scroll', onPageScroll));
+const scrollToMenuBar = () => stickyBar.value?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+const goHome = () => {
+    if (searchOpen.value && !searching.value) closeSearch();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+const goMenu = () => {
+    ordered.value = false;
+    if (searchOpen.value) closeSearch();
+    setTimeout(scrollToMenuBar, 30);
+};
+const goSearch = () => {
+    ordered.value = false;
+    openSearch();
+    scrollToMenuBar();
+};
+const bottomNavActive = computed(() => (searchOpen.value ? 'cari' : pastHeader.value ? 'menu' : 'beranda'));
 
 const cartCount = computed(() => cart.value.reduce((sum, item) => sum + item.quantity, 0));
 const cartSubtotal = computed(() => cart.value.reduce((sum, item) => sum + item.product.price * item.quantity, 0));
@@ -412,7 +442,7 @@ const submitOrder = async () => {
         </header>
 
         <!-- Bilah lengket: cari / kategori -->
-        <div class="sticky top-0 z-30 mt-4 border-b border-slate-200 bg-white">
+        <div ref="stickyBar" class="sticky top-0 z-30 mt-4 border-b border-slate-200 bg-white">
             <div class="mx-auto max-w-3xl px-4">
                 <div v-if="searchOpen" class="flex items-center gap-2 py-2">
                     <label class="flex flex-1 items-center gap-2 rounded-xl border border-violet-300 bg-white px-3 py-2">
@@ -541,7 +571,8 @@ const submitOrder = async () => {
             </div>
         </main>
 
-        <footer class="border-t border-slate-200 bg-white px-4 pt-6 text-center" :class="cartCount > 0 && !cartOpen && !ordered ? 'pb-32' : 'pb-6'">
+        <!-- Ruang bawah menyesuaikan bilah keranjang dan menu bawah ponsel agar isi footer tidak tertutup -->
+        <footer class="border-t border-slate-200 bg-white px-4 pt-6 text-center" :class="cartCount > 0 && !cartOpen && !ordered ? 'pb-48 md:pb-32' : 'pb-24 md:pb-6'">
             <div class="mx-auto max-w-3xl">
                 <p class="text-sm font-bold text-slate-800">{{ store.name }}</p>
                 <p v-if="store.address" class="mt-0.5 text-xs text-slate-500">{{ store.address }}</p>
@@ -566,10 +597,12 @@ const submitOrder = async () => {
             </div>
         </footer>
 
+        <!-- Area bawah yang menempel: bilah keranjang, lalu menu bawah khusus ponsel -->
+        <div class="fixed inset-x-0 bottom-0 z-30">
         <!-- Cart Bar (bottom) -->
         <div
             v-if="cartCount > 0 && !cartOpen && !ordered"
-            class="fixed bottom-0 inset-x-0 z-30 rounded-t-3xl border-t border-slate-200 bg-white px-4 pt-3 pb-4"
+            class="rounded-t-3xl border-t border-slate-200 bg-white px-4 pt-3 pb-3 md:pb-4"
         >
             <div class="max-w-3xl mx-auto">
                 <!-- F8: saran tambahan menu -->
@@ -607,6 +640,75 @@ const submitOrder = async () => {
                     <span class="text-base">{{ formatPrice(cartSubtotal) }}</span>
                 </button>
             </div>
+        </div>
+
+        <!-- Menu bawah (ponsel): pintasan ke beranda, daftar menu, pencarian, keranjang, dan WhatsApp toko -->
+        <nav class="border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] md:hidden" aria-label="Menu bawah" data-testid="menu-bawah">
+            <ul class="mx-auto grid max-w-3xl" :class="phoneDigits ? 'grid-cols-5' : 'grid-cols-4'">
+                <li>
+                    <button
+                        type="button"
+                        class="flex min-h-14 w-full flex-col items-center justify-center gap-0.5 text-[11px] font-semibold focus:outline-none focus-visible:bg-violet-50"
+                        :class="bottomNavActive === 'beranda' ? 'text-violet-700' : 'text-slate-500'"
+                        :aria-current="bottomNavActive === 'beranda' ? 'page' : undefined"
+                        @click="goHome"
+                    >
+                        <Home class="h-5 w-5" /> Beranda
+                    </button>
+                </li>
+                <li>
+                    <button
+                        type="button"
+                        class="flex min-h-14 w-full flex-col items-center justify-center gap-0.5 text-[11px] font-semibold focus:outline-none focus-visible:bg-violet-50"
+                        :class="bottomNavActive === 'menu' ? 'text-violet-700' : 'text-slate-500'"
+                        :aria-current="bottomNavActive === 'menu' ? 'page' : undefined"
+                        @click="goMenu"
+                    >
+                        <Utensils class="h-5 w-5" /> Menu
+                    </button>
+                </li>
+                <li>
+                    <button
+                        type="button"
+                        class="flex min-h-14 w-full flex-col items-center justify-center gap-0.5 text-[11px] font-semibold focus:outline-none focus-visible:bg-violet-50"
+                        :class="bottomNavActive === 'cari' ? 'text-violet-700' : 'text-slate-500'"
+                        :aria-current="bottomNavActive === 'cari' ? 'page' : undefined"
+                        @click="goSearch"
+                    >
+                        <Search class="h-5 w-5" /> Cari
+                    </button>
+                </li>
+                <li>
+                    <button
+                        type="button"
+                        class="flex min-h-14 w-full flex-col items-center justify-center gap-0.5 text-[11px] font-semibold focus:outline-none focus-visible:bg-violet-50 text-slate-500"
+                        :aria-label="cartCount > 0 ? `Keranjang, ${cartCount} item` : 'Keranjang, kosong'"
+                        @click="cartOpen = true"
+                    >
+                        <span class="relative">
+                            <ShoppingCart class="h-5 w-5" :class="cartCount > 0 ? 'text-violet-700' : ''" />
+                            <span
+                                v-if="cartCount > 0"
+                                class="absolute -top-1.5 -right-2.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-violet-600 px-1 text-[10px] leading-none font-bold text-white"
+                                aria-hidden="true"
+                                >{{ cartCount > 99 ? '99+' : cartCount }}</span
+                            >
+                        </span>
+                        Keranjang
+                    </button>
+                </li>
+                <li v-if="phoneDigits">
+                    <a
+                        :href="`https://wa.me/${waNumber}`"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="flex min-h-14 w-full flex-col items-center justify-center gap-0.5 text-[11px] font-semibold focus:outline-none focus-visible:bg-violet-50 text-slate-500"
+                    >
+                        <MessageCircle class="h-5 w-5" /> Hubungi
+                    </a>
+                </li>
+            </ul>
+        </nav>
         </div>
 
         <!-- Cart Drawer -->
