@@ -710,13 +710,24 @@ const daysUntilExpiry = (dateString: string) => {
 
                 <!-- Maskot & sambutan -->
                 <div class="relative z-0 mb-5 md:mb-6">
-                    <div
-                        class="relative overflow-visible rounded-xl border border-violet-200/80 bg-gradient-to-br from-violet-100 via-fuchsia-50 to-purple-100"
-                    >
-                        <!-- Aksen gradasi (terpotong radius kartu) -->
+                    <div class="relative overflow-visible rounded-xl bg-[#d4ceff]">
+                        <!-- Latar sama dengan hero halaman afiliasi: sorot cahaya di atas, kotak-kotak di kiri-kanan bawah, pendar dari bawah (terpotong radius kartu) -->
                         <div class="pointer-events-none absolute inset-0 overflow-hidden rounded-xl" aria-hidden="true">
-                            <div class="absolute -top-10 -left-12 h-28 w-28 rounded-full bg-violet-400/20 blur-xl" />
-                            <div class="absolute top-1/2 -right-6 h-28 w-28 -translate-y-1/2 rounded-full bg-fuchsia-400/25 blur-xl" />
+                            <div class="absolute top-0 left-0 h-full max-h-[337px]">
+                                <img width="195" height="337" src="/sastik-assets/img/shape/das_shape03.png" alt="" loading="lazy" decoding="async" class="h-full w-auto" />
+                            </div>
+                            <div class="absolute top-0 right-0 h-full max-h-[337px]">
+                                <img width="195" height="337" src="/sastik-assets/img/shape/das_shape04.png" alt="" loading="lazy" decoding="async" class="h-full w-auto" />
+                            </div>
+                            <div class="absolute bottom-0 left-0 w-20 sm:w-28">
+                                <img width="255" height="264" src="/sastik-assets/img/shape/das_shape01.png" alt="" loading="lazy" decoding="async" class="h-auto w-full" />
+                            </div>
+                            <div class="absolute right-0 bottom-0 w-20 sm:w-28">
+                                <img width="255" height="264" src="/sastik-assets/img/shape/das_shape02.png" alt="" loading="lazy" decoding="async" class="h-auto w-full" />
+                            </div>
+                            <div class="absolute bottom-0 left-1/2 w-full -translate-x-1/2">
+                                <img width="1328" height="388" src="/sastik-assets/img/shape/circle-blur.webp" alt="" loading="lazy" decoding="async" class="h-auto w-full" />
+                            </div>
                         </div>
                         <div
                             class="relative z-10 flex flex-col-reverse items-center gap-2 px-4 py-3 sm:flex-row sm:justify-between sm:gap-3 md:px-5 md:py-4"
