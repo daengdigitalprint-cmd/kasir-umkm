@@ -2503,6 +2503,7 @@ class POSController extends Controller
 
         return Inertia::render('Invoice', [
             'transaction' => $transaction,
+            'receipt_watermark' => ReceiptSettings::payload($store)['watermark'],
             'fnb_enabled' => FnBFeatures::enabled($store),
             'pharmacy_enabled' => PharmacyFeatures::enabled($store),
             'barbershop_enabled' => BarbershopFeatures::enabled($store),

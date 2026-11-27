@@ -9,7 +9,7 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Tampilan halaman pelanggan (menu digital Scan Meja & tautan Pesan Antar) yang bisa
- * diatur pemilik toko: foto latar header (sampul), logo khusus menu, dan banner geser.
+ * diatur pemilik toko: foto latar header (sampul), logo khusus menu, banner geser, dan warna utama.
  *
  * Disimpan di settings toko (path disk public): scan_meja_cover, scan_meja_logo,
  * dan scan_meja_banners (daftar berurutan, paling banyak MAX_BANNERS).
@@ -28,10 +28,13 @@ class ScanMejaAppearance
 
     private const BANNER_KEY = 'scan_meja_banners';
 
+    /** Warna utama halaman pelanggan pilihan toko (heksadesimal #rrggbb). Kosong = ungu bawaan. */
+    private const COLOR_KEY = 'scan_meja_color';
+
     /**
      * URL yang dipakai halaman menu tamu. Logo menu kosong → pakai logo toko.
      *
-     * @return array{cover_url: ?string, logo_url: ?string, banner_urls: list<string>}
+     * @return array{cover_url: ?string, logo_url: ?string, banner_urls: list<string>, accent_color: ?string}
      */
     public static function urls(Store $store): array
     {
@@ -41,6 +44,7 @@ class ScanMejaAppearance
             'cover_url' => self::url($settings['scan_meja_cover'] ?? null),
             'logo_url' => self::url($settings['scan_meja_logo'] ?? null) ?? self::url($store->logo),
             'banner_urls' => array_column(self::banners($store), 'url'),
+            'accent_color' => self::color($settings),
         ];
     }
 
@@ -59,6 +63,7 @@ class ScanMejaAppearance
             'logo_url' => self::url($settings['scan_meja_logo'] ?? null),
             'store_logo_url' => self::url($store->logo),
             'banners' => self::banners($store),
+            'accent_color' => self::color($settings),
             'banner_limits' => [
                 'max' => self::MAX_BANNERS,
                 'width' => self::BANNER_WIDTH,
@@ -83,7 +88,9 @@ class ScanMejaAppearance
             'banners.*' => 'file|image|mimes:jpeg,jpg,png,webp|max:'.self::BANNER_MAX_KB,
             'remove_banners' => 'nullable|array',
             'remove_banners.*' => 'string|max:150',
+            'accent_color' => ['nullable', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
         ], [
+            'accent_color.regex' => 'Warna tidak dikenali. Pilih lagi warnanya.',
             'banners.max' => 'Banner paling banyak '.self::MAX_BANNERS.' gambar.',
             'banners.*.image' => 'Banner harus berupa gambar JPG, PNG, atau WebP.',
             'banners.*.mimes' => 'Banner harus berupa gambar JPG, PNG, atau WebP.',
@@ -131,6 +138,16 @@ class ScanMejaAppearance
             $settings[self::BANNER_KEY] = $kept;
         }
 
+        // Warna: hanya disentuh bila form mengirimkannya. Kosong = kembali ke warna bawaan.
+        if ($request->has('accent_color')) {
+            $color = strtolower((string) $request->input('accent_color'));
+            if ($color === '') {
+                unset($settings[self::COLOR_KEY]);
+            } else {
+                $settings[self::COLOR_KEY] = $color;
+            }
+        }
+
         $store->update(['settings' => $settings]);
     }
 
@@ -161,6 +178,16 @@ class ScanMejaAppearance
         $paths = $settings[self::BANNER_KEY] ?? [];
 
         return is_array($paths) ? array_values(array_filter($paths, fn ($p) => is_string($p) && $p !== '')) : [];
+    }
+
+    /**
+     * @param  array<string, mixed>  $settings
+     */
+    private static function color(array $settings): ?string
+    {
+        $color = $settings[self::COLOR_KEY] ?? null;
+
+        return is_string($color) && preg_match('/^#[0-9a-f]{6}$/i', $color) === 1 ? strtolower($color) : null;
     }
 
     private static function url(?string $path): ?string

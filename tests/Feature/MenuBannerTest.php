@@ -179,3 +179,44 @@ test('banner dari Manajemen Meja juga tampil di menu digital meja', function () 
         ->assertOk()
         ->assertInertia(fn ($page) => $page->where('store.banner_urls', [Storage::disk('public')->url($path)]));
 });
+
+test('warna utama halaman pelanggan bisa dipilih, tampil di halaman pesan antar, dan bisa dikembalikan ke bawaan', function () {
+    Storage::fake('public');
+    ['store' => $store, 'admin' => $admin] = menuBannerStore();
+
+    $this->get('/antar/'.$store->slug)
+        ->assertInertia(fn ($page) => $page->where('store.accent_color', null));
+
+    $this->actingAs($admin)
+        ->post('/deliveries/appearance', ['accent_color' => '#0D9488'])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    expect($store->fresh()->settings['scan_meja_color'])->toBe('#0d9488');
+
+    $this->get('/antar/'.$store->slug)
+        ->assertInertia(fn ($page) => $page->where('store.accent_color', '#0d9488'));
+    $this->actingAs($admin)->get('/deliveries')
+        ->assertInertia(fn ($page) => $page->where('appearance.accent_color', '#0d9488'));
+
+    // Menyimpan hal lain tanpa mengirim warna tidak mengubah warna.
+    $this->actingAs($admin)->post('/deliveries/appearance', ['banners' => [menuBannerFile()]])->assertSessionHasNoErrors();
+    expect($store->fresh()->settings['scan_meja_color'])->toBe('#0d9488');
+
+    // Warna dikosongkan = kembali ke bawaan.
+    $this->actingAs($admin)->post('/deliveries/appearance', ['accent_color' => ''])->assertSessionHasNoErrors();
+    expect($store->fresh()->settings)->not->toHaveKey('scan_meja_color');
+});
+
+test('warna yang bukan kode heksadesimal ditolak', function () {
+    Storage::fake('public');
+    ['store' => $store, 'admin' => $admin] = menuBannerStore();
+
+    foreach (['merah', '#12345', 'rgb(1,2,3)', '#12345g', 'javascript:alert(1)'] as $buruk) {
+        $this->actingAs($admin)
+            ->post('/deliveries/appearance', ['accent_color' => $buruk])
+            ->assertSessionHasErrors('accent_color');
+    }
+
+    expect($store->fresh()->settings)->not->toHaveKey('scan_meja_color');
+});

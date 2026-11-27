@@ -86,11 +86,14 @@ interface Props {
     transaction: Transaction;
     fnb_enabled?: boolean;
     pharmacy_enabled?: boolean;
+    /** Baris tanda Kasir UMKM di kaki struk/invoice (hanya toko paket Gratis). */
+    receipt_watermark?: string[];
 }
 
 const props = withDefaults(defineProps<Props>(), {
     fnb_enabled: false,
     pharmacy_enabled: false,
+    receipt_watermark: () => [],
 });
 
 const { transaction } = props;
@@ -176,7 +179,7 @@ async function printInvoiceBluetooth(forcePicker = false) {
         return;
     }
     try {
-        const lines = buildReceiptPlainLinesFromInvoicePage(props.transaction, props.pharmacy_enabled);
+        const lines = buildReceiptPlainLinesFromInvoicePage(props.transaction, props.pharmacy_enabled, props.receipt_watermark);
         const bytes = receiptLinesToEscPos(lines);
         const result = await printEscPosBytes(bytes, 'cashier');
         if (result.success) {
@@ -535,6 +538,9 @@ const getStatusVariant = (status: string): "default" | "secondary" | "destructiv
                     <div class="mt-8 pt-6 border-t border-gray-200 text-center text-sm text-gray-500 invoice-footer">
                         <p>Terima kasih telah berbelanja di {{ transaction.store.name }}!</p>
                         <p class="mt-1">Invoice ini dicetak pada {{ formatDate(new Date().toISOString()) }}</p>
+                        <p v-if="receipt_watermark.length" class="mt-3 text-xs text-gray-400" data-testid="tanda-kasir-umkm">
+                            <template v-for="(line, i) in receipt_watermark" :key="i"><br v-if="i > 0" />{{ line }}</template>
+                        </p>
                         <p
                             v-if="pharmacy_enabled"
                             class="mt-3 max-w-lg mx-auto text-xs leading-relaxed text-amber-900/90 border border-amber-200/80 rounded-lg bg-amber-50/80 px-3 py-2"

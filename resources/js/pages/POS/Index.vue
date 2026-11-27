@@ -3704,6 +3704,7 @@ function defaultReceiptFallback(): ReceiptConfig {
         subtitle: '',
         footer: 'Terima kasih atas kunjungan Anda.',
         footer_line2: '',
+        watermark: [],
         show_address: true,
         show_phone: true,
         show_logo: true,
@@ -4033,6 +4034,11 @@ const sendWhatsAppInvoice = () => {
         lines.push(footer);
         if (r.footer_line2) {
             lines.push(String(r.footer_line2));
+        }
+        // Tanda Kasir UMKM untuk toko paket Gratis.
+        if (r.watermark.length) {
+            lines.push('─'.repeat(28));
+            lines.push(...r.watermark);
         }
 
         let text = lines.join('\n');

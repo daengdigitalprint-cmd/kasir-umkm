@@ -90,6 +90,8 @@ export function buildReceiptPlainLinesFromPosResponse(
             subtitle?: string;
             footer?: string;
             footer_line2?: string;
+            /** Baris tanda Kasir UMKM (toko paket Gratis). */
+            watermark?: string[];
             show_address?: boolean;
             show_phone?: boolean;
             address?: string;
@@ -321,10 +323,21 @@ export function buildReceiptPlainLinesFromPosResponse(
     lines.push(escPosDefaultLineSpacing());
 
     lines.push(centerLine(`Dicetak: ${new Date().toLocaleString('id-ID')}`, w));
+    pushWatermark(lines, r.watermark, w);
     lines.push('');
     lines.push('');
 
     return lines;
+}
+
+/** Tanda Kasir UMKM di kaki struk teks (toko paket Gratis): garis pemisah lalu baris-barisnya di tengah. */
+function pushWatermark(lines: { push: (...items: string[]) => unknown }, watermark: unknown, w: number): void {
+    const rows = Array.isArray(watermark) ? watermark.filter((v): v is string => typeof v === 'string' && v.trim() !== '').slice(0, 3) : [];
+    if (!rows.length) return;
+    lines.push(rule(w));
+    for (const row of rows) {
+        lines.push(centerLine(row.trim(), w));
+    }
 }
 
 function wrapText(text: string, width: number): string[] {
@@ -409,6 +422,8 @@ export function buildReceiptPlainLinesFromInvoicePage(
     barber?: { name?: string } | null;
     },
     pharmacyEnabled = false,
+    /** Baris tanda Kasir UMKM (toko paket Gratis); kosong untuk paket lain. */
+    watermark: string[] = [],
 ): string[] {
     const w = 48;
     const lines: string[] = [];
@@ -539,6 +554,7 @@ export function buildReceiptPlainLinesFromInvoicePage(
     }
     lines.push(centerLine('Terima kasih', w));
     lines.push(centerLine(`Dicetak: ${new Date().toLocaleString('id-ID')}`, w));
+    pushWatermark(lines, watermark, w);
     lines.push('');
     lines.push('');
     return lines;

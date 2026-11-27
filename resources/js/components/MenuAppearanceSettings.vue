@@ -6,8 +6,9 @@
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { ACCENT_PRESETS, DEFAULT_ACCENT, accentStyle, buttonColor, isAdjusted } from '@/lib/accentPalette';
 import { useForm } from '@inertiajs/vue3';
-import { ExternalLink, ImagePlus, Images, Palette, Trash2, Utensils } from 'lucide-vue-next';
+import { Check, ExternalLink, ImagePlus, Images, Palette, Plus, ShoppingCart, Trash2, Utensils } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, ref } from 'vue';
 
 export interface MenuAppearance {
@@ -17,6 +18,8 @@ export interface MenuAppearance {
     store_logo_url: string | null;
     banners?: { id: string; url: string }[];
     banner_limits?: { max: number; width: number; height: number; max_mb: number };
+    /** Warna utama pilihan toko (#rrggbb). Kosong = ungu bawaan. */
+    accent_color?: string | null;
 }
 
 const props = defineProps<{
@@ -49,6 +52,8 @@ const form = useForm({
     remove_logo: false,
     banners: [] as File[],
     remove_banners: [] as string[],
+    /** '' = warna bawaan. Selalu ikut terkirim, jadi nilai awalnya warna yang tersimpan. */
+    accent_color: props.appearance?.accent_color ?? '',
 });
 const coverPreview = ref<string | null>(null);
 const logoPreview = ref<string | null>(null);
@@ -72,7 +77,15 @@ onBeforeUnmount(clearPreviews);
  * jadi reset() saja akan mengembalikan berkas yang baru diunggah: nilai bawaannya ditetapkan ulang dulu.
  */
 const kosongkan = () => {
-    form.defaults({ cover: null, logo: null, remove_cover: false, remove_logo: false, banners: [], remove_banners: [] });
+    form.defaults({
+        cover: null,
+        logo: null,
+        remove_cover: false,
+        remove_logo: false,
+        banners: [],
+        remove_banners: [],
+        accent_color: props.appearance?.accent_color ?? '',
+    });
     form.reset();
     form.clearErrors();
     clearPreviews();
@@ -115,6 +128,17 @@ const storeInitials = computed(() =>
         .map((w) => w[0]?.toUpperCase())
         .join(''),
 );
+
+// --- Warna toko ---
+const warna = computed(() => (form.accent_color || DEFAULT_ACCENT).toLowerCase());
+const pilihWarna = (hex: string) => {
+    form.accent_color = hex.toLowerCase() === DEFAULT_ACCENT ? '' : hex.toLowerCase();
+};
+const warnaDigelapkan = computed(() => isAdjusted(warna.value));
+const warnaTombol = computed(() => buttonColor(warna.value));
+const warnaKustom = computed(() => !ACCENT_PRESETS.some((p) => p.hex === warna.value));
+/** Pratinjau memakai variabel warna yang sama dengan halaman pelanggan. */
+const previewStyle = computed(() => accentStyle(form.accent_color || null));
 
 // --- Banner geser ---
 const savedBanners = computed(() => (props.appearance?.banners ?? []).filter((b) => !form.remove_banners.includes(b.id)));
@@ -271,6 +295,56 @@ const save = () => {
                         <p v-if="form.errors.logo" class="mt-1 text-sm text-red-600">{{ form.errors.logo }}</p>
                     </div>
 
+                    <!-- Warna toko -->
+                    <div>
+                        <Label>Warna toko</Label>
+                        <p class="mt-0.5 text-xs text-slate-500">
+                            Dipakai untuk tombol, harga, dan penanda di halaman pelanggan. Pilih yang sesuai warna merek Anda.
+                        </p>
+                        <div class="mt-2 flex flex-wrap items-center gap-2" role="group" aria-label="Pilihan warna toko">
+                            <button
+                                v-for="p in ACCENT_PRESETS"
+                                :key="p.hex"
+                                type="button"
+                                class="flex h-9 w-9 items-center justify-center rounded-full border-2 border-white shadow ring-1 ring-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500"
+                                :class="warna === p.hex ? 'scale-110 ring-2 ring-slate-900' : 'hover:scale-105'"
+                                :style="{ backgroundColor: p.hex }"
+                                :aria-label="`Warna ${p.name}`"
+                                :aria-pressed="warna === p.hex"
+                                :title="p.name"
+                                @click="pilihWarna(p.hex)"
+                            >
+                                <Check v-if="warna === p.hex" class="h-4 w-4 text-white" />
+                            </button>
+                            <label
+                                class="inline-flex h-9 cursor-pointer items-center gap-2 rounded-full border border-slate-200 py-1 pr-3 pl-1 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                :class="warnaKustom ? 'ring-2 ring-slate-900' : ''"
+                            >
+                                <input
+                                    type="color"
+                                    class="h-7 w-7 cursor-pointer rounded-full border-0 bg-transparent p-0"
+                                    :value="warna"
+                                    aria-label="Pilih warna lain"
+                                    @input="pilihWarna(($event.target as HTMLInputElement).value)"
+                                />
+                                Warna lain
+                            </label>
+                        </div>
+                        <p class="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                            <span class="inline-flex items-center gap-1.5">
+                                <span class="h-3 w-3 rounded-full ring-1 ring-slate-200" :style="{ backgroundColor: warnaTombol }" />
+                                Dipakai: <span class="font-mono font-semibold text-slate-700">{{ warnaTombol }}</span>
+                            </span>
+                            <button v-if="form.accent_color" type="button" class="font-semibold text-slate-700 underline underline-offset-2" @click="pilihWarna(DEFAULT_ACCENT)">
+                                Kembali ke ungu bawaan
+                            </button>
+                        </p>
+                        <p v-if="warnaDigelapkan" class="mt-1 text-xs text-amber-700" role="status">
+                            Warna pilihan Anda terlalu terang untuk tulisan putih, jadi dipakai versi yang sedikit lebih tua agar tombol tetap terbaca.
+                        </p>
+                        <p v-if="form.errors.accent_color" class="mt-1 text-sm text-red-600" role="alert">{{ form.errors.accent_color }}</p>
+                    </div>
+
                     <!-- Banner geser -->
                     <div>
                         <div class="flex items-baseline justify-between gap-2">
@@ -336,7 +410,7 @@ const save = () => {
                 <!-- Pratinjau ala layar HP -->
                 <div>
                     <p class="mb-2 text-xs font-semibold text-slate-500">Pratinjau di HP pelanggan</p>
-                    <div class="overflow-hidden rounded-[1.75rem] border-4 border-slate-800 bg-white">
+                    <div class="overflow-hidden rounded-[1.75rem] border-4 border-slate-800 bg-white" :style="previewStyle">
                         <div class="relative h-24 bg-violet-100">
                             <img v-if="shownCover" :src="shownCover" alt="" class="h-full w-full object-cover" />
                             <div v-else class="flex h-full items-center justify-center"><Utensils class="h-8 w-8 text-violet-200" /></div>
@@ -373,8 +447,15 @@ const save = () => {
                                 <div class="h-10 w-10 rounded-lg bg-slate-100" />
                                 <div class="flex-1 space-y-1 pt-1">
                                     <div class="h-2 w-3/4 rounded bg-slate-200" />
-                                    <div class="h-2 w-1/3 rounded bg-slate-100" />
+                                    <div class="h-2 w-1/3 rounded bg-violet-300" />
                                 </div>
+                                <span class="mt-1.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-violet-300 text-violet-700">
+                                    <Plus class="h-3 w-3" />
+                                </span>
+                            </div>
+                            <div class="flex items-center justify-between rounded-full bg-violet-600 px-3 py-1.5 text-[9px] font-bold text-white">
+                                <span class="inline-flex items-center gap-1"><ShoppingCart class="h-3 w-3" /> Keranjang · 2 item</span>
+                                <span>Rp 30.000</span>
                             </div>
                         </div>
                     </div>

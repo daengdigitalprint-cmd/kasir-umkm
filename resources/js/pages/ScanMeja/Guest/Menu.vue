@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
 import BannerSlider from '@/components/BannerSlider.vue';
+import { accentStyle } from '@/lib/accentPalette';
 import { ref, computed, onBeforeUnmount, onMounted } from 'vue';
 import { ShoppingCart, Plus, Minus, X, Check, Utensils, MapPin, Clock, Banknote, QrCode, Building, Flame, ExternalLink, Search, Phone, MessageCircle, Bike, Home } from 'lucide-vue-next';
 
@@ -41,7 +42,7 @@ const props = defineProps<{
     table: { id: number; name: string; slug: string; capacity: number | null } | null;
     /** Mode pesan antar (kurir toko): halaman dibuka dari tautan toko, bukan QR meja. */
     delivery?: { slug: string; fee: number } | null;
-    store: { id: number; name: string; currency: string; address?: string | null; phone?: string | null; logo_url?: string | null; cover_url?: string | null; banner_urls?: string[] };
+    store: { id: number; name: string; currency: string; address?: string | null; phone?: string | null; logo_url?: string | null; cover_url?: string | null; banner_urls?: string[]; accent_color?: string | null };
     categories: Category[];
     bestSelling?: Product[];
     paymentMethods?: PaymentMethod[];
@@ -364,7 +365,8 @@ const submitOrder = async () => {
 <template>
     <Head :title="`${store.name} - ${isDelivery ? 'Pesan Antar' : 'Menu Digital'}`" />
 
-    <div class="min-h-screen bg-white flex flex-col">
+    <!-- Warna utama mengikuti pilihan toko (Atur tampilan); tanpa pilihan = ungu bawaan -->
+    <div class="min-h-screen bg-white flex flex-col" :style="accentStyle(store.accent_color)">
         <!-- Sampul + kartu toko -->
         <div class="relative">
             <div class="h-40 w-full overflow-hidden bg-violet-100 sm:h-52">

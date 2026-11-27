@@ -12,6 +12,8 @@ export interface ReceiptConfig {
     paper_width_mm: number;
     address: string;
     phone: string;
+    /** Baris tanda Kasir UMKM di kaki struk (hanya toko paket Gratis; kosong untuk yang lain). */
+    watermark: string[];
 }
 
 export interface ThermalReceiptContext {
@@ -32,7 +34,17 @@ export function defaultReceiptConfig(storeName: string): ReceiptConfig {
         paper_width_mm: 80,
         address: '',
         phone: '',
+        watermark: [],
     };
+}
+
+/** Rapikan baris tanda dari server: hanya teks tak kosong, paling banyak 3 baris. */
+export function watermarkLines(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+    return value
+        .filter((v): v is string => typeof v === 'string' && v.trim() !== '')
+        .map((v) => v.trim())
+        .slice(0, 3);
 }
 
 export function mergeReceiptConfig(
@@ -56,6 +68,7 @@ export function mergeReceiptConfig(
         })(),
         address: String(a.address ?? b.address ?? ''),
         phone: String(a.phone ?? b.phone ?? ''),
+        watermark: watermarkLines(a.watermark ?? b.watermark),
     };
 }
 
@@ -318,6 +331,10 @@ export function buildThermalReceiptInnerHtml(
     const foot2 = r.footer_line2.trim()
         ? `<div class="struk-foot2">${escapeHtml(r.footer_line2.trim())}</div>`
         : '';
+    // Tanda Kasir UMKM untuk toko paket Gratis, paling bawah setelah waktu cetak.
+    const watermark = r.watermark.length
+        ? `<div class="struk-wm">${r.watermark.map((line) => escapeHtml(line)).join('<br>')}</div>`
+        : '';
 
     return `
             <div class="struk">
@@ -354,6 +371,7 @@ export function buildThermalReceiptInnerHtml(
                 <div class="struk-foot">${escapeHtml(r.footer)}</div>
                 ${foot2}
                 <div class="struk-printed">Dicetak: ${escapeHtml(new Date().toLocaleString('id-ID'))}</div>
+                ${watermark}
             </div>`;
 }
 
@@ -428,6 +446,10 @@ html, body, header, footer { margin: 0 !important; padding: 0 !important; height
 .struk-foot2 { font-size: ${smallFs - 1}px; }
 .struk-printed {
     text-align: center; font-size: ${smallFs - 1}px; color: #444; margin-top: 6px;
+}
+.struk-wm {
+    text-align: center; font-size: ${smallFs - 1}px; line-height: 1.35;
+    margin-top: 6px; padding-top: 5px; border-top: 1px dashed #000;
 }
 @media print {
     html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }

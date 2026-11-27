@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
 import { ArrowLeft, Bell, Bike, Check, CheckCircle2, ChefHat, Clock, Copy, MapPin, MessageCircle, Plus, Send, Utensils, XCircle } from 'lucide-vue-next';
+import { accentStyle } from '@/lib/accentPalette';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 interface OrderItem {
@@ -42,7 +43,7 @@ const props = defineProps<{
     table: { id: number; name: string; slug: string; capacity: number | null } | null;
     /** Pesanan antar (kurir toko): status mengikuti pengantaran, bukan meja. */
     delivery?: { slug: string; fee: number; recipient_name?: string | null; address?: string | null } | null;
-    store: { id: number; name: string; currency: string; phone?: string | null; logo_url?: string | null; cover_url?: string | null };
+    store: { id: number; name: string; currency: string; phone?: string | null; logo_url?: string | null; cover_url?: string | null; accent_color?: string | null };
     transaction: TransactionData;
     paymentMethod?: PaymentMethod | null;
 }>();
@@ -249,7 +250,7 @@ onBeforeUnmount(() => {
 <template>
     <Head :title="`Status Pesanan #${current.number}`" />
 
-    <div class="min-h-screen bg-slate-50">
+    <div class="min-h-screen bg-slate-50" :style="accentStyle(store.accent_color)">
         <!-- Kepala halaman -->
         <header class="sticky top-0 z-20 border-b border-slate-200 bg-white">
             <div class="mx-auto flex max-w-md items-center gap-3 px-4 py-3">

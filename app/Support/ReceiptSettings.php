@@ -6,6 +6,12 @@ use App\Models\Store;
 
 class ReceiptSettings
 {
+    /**
+     * Baris tanda di kaki struk untuk toko paket Gratis (Starter). Toko berbayar dan toko
+     * yang sedang masa coba tidak mendapat baris ini.
+     */
+    public const WATERMARK = ['Kasir UMKM by MaccaPOS', 'kasirumkm.web.id'];
+
     /** URL path sama origin (hindari salah host jika APP_URL beda dengan domain akses, mis. Herd). */
     private static function publicStoragePath(?string $relativePath): ?string
     {
@@ -29,6 +35,7 @@ class ReceiptSettings
      *     paper_width_mm: int,
      *     address: string,
      *     phone: string,
+     *     watermark: list<string>,
      * }
      */
     public static function payload(Store $store): array
@@ -72,6 +79,7 @@ class ReceiptSettings
             'paper_width_mm' => $paperMm,
             'address' => (string) ($store->address ?? ''),
             'phone' => (string) ($store->phone ?? ''),
+            'watermark' => PlanModules::onFreePlan($store) ? self::WATERMARK : [],
         ];
     }
 }
