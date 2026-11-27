@@ -78,8 +78,9 @@ const onAmountBlur = (field: string, e: Event) => {
 };
 
 const submit = () => {
-    form.post('/payroll/settings', {
-        method: 'put',
+    // Rutenya PUT. Dulu ditulis form.post(..., { method: 'put' }), tapi opsi `method` diabaikan
+    // sehingga yang terkirim tetap POST dan server menjawab 405.
+    form.put('/payroll/settings', {
         preserveScroll: true,
     });
 };
