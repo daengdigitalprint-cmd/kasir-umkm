@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import AdminLayout from '@/layouts/AdminLayout.vue';
 import PayrollNav from '@/components/PayrollNav.vue';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import RupiahInput from '@/components/RupiahInput.vue';
 import { Label } from '@/components/ui/label';
-import { Save, AlertCircle, Clock, Timer, Shield, ShieldCheck, Receipt } from 'lucide-vue-next';
+import { Save, AlertCircle, Clock, Timer, Shield, ShieldCheck, Receipt, ListChecks, ChevronRight } from 'lucide-vue-next';
 
 const props = defineProps<{
     settings: {
@@ -65,25 +66,85 @@ const formatAmount = (value: string | number) => {
     return num ? new Intl.NumberFormat('id-ID').format(Number(num)) : '';
 };
 
-const parseAmount = (value: string) => value.replace(/\D/g, '');
-
-const onAmountInput = (field: string, e: Event) => {
-    const input = e.target as HTMLInputElement;
-    (form as any)[field] = parseAmount(input.value);
-};
-
-const onAmountBlur = (field: string, e: Event) => {
-    const input = e.target as HTMLInputElement;
-    input.value = formatAmount((form as any)[field]);
-};
-
 const submit = () => {
     // Rutenya PUT. Dulu ditulis form.post(..., { method: 'put' }), tapi opsi `method` diabaikan
     // sehingga yang terkirim tetap POST dan server menjawab 405.
     form.put('/payroll/settings', {
         preserveScroll: true,
+        // Tombol Simpan mengirim semua tab sekaligus. Kalau ada isian yang ditolak di tab lain,
+        // pindahkan ke tab itu supaya pesannya terlihat (dulu tampak seperti tidak terjadi apa-apa).
+        onError: (errors) => {
+            const first = Object.keys(errors)[0];
+            const tab = first ? tabOfField(first) : null;
+            if (tab) activeTab.value = tab;
+        },
     });
 };
+
+type TabKey = 'late' | 'overtime' | 'bpjs' | 'tax' | 'approval';
+const tabOfField = (field: string): TabKey | null => {
+    if (field.startsWith('late_') || field === 'absence_deduction_enabled') return 'late';
+    if (field.startsWith('overtime_')) return 'overtime';
+    if (field.startsWith('bpjs_')) return 'bpjs';
+    if (field === 'pph21_enabled') return 'tax';
+    if (field === 'owner_approval') return 'approval';
+    return null;
+};
+const errorCount = computed(() => Object.keys(form.errors).length);
+const tabHasError = (tab: TabKey) => Object.keys(form.errors).some((f) => tabOfField(f) === tab);
+
+const rupiah = (value: string | number) => `Rp ${formatAmount(String(Math.round(Number(value) || 0))) || '0'}`;
+const kali = (value: string | number) => `${String(Number(value) || 0).replace('.', ',')}×`;
+
+/** Contoh denda di tab Keterlambatan: 2 hari telat, total 30 menit. */
+const contohDenda = computed(() => {
+    if (form.late_penalty_method === 'none') return 0;
+    return form.late_penalty_method === 'per_minute'
+        ? 30 * (Number(form.late_penalty_per_minute) || 0)
+        : 2 * (Number(form.late_penalty_per_day) || 0);
+});
+
+/**
+ * Daftar aturan yang SEDANG BERLAKU, dibaca dari data tersimpan (bukan dari isian yang sedang diubah),
+ * jadi setelah Simpan daftar ini langsung menunjukkan hasilnya.
+ */
+const aturan = computed(() => {
+    const st = props.settings;
+    const telat =
+        st.late_penalty_method === 'none'
+            ? 'Tidak ada denda'
+            : st.late_penalty_method === 'per_minute'
+              ? `${rupiah(st.late_penalty_per_minute)} per menit telat`
+              : `${rupiah(st.late_penalty_per_day)} per hari telat`;
+    return [
+        { tab: 'late' as TabKey, label: 'Denda terlambat', nilai: telat, aktif: st.late_penalty_method !== 'none' },
+        {
+            tab: 'late' as TabKey,
+            label: 'Alpa & cuti tanpa gaji',
+            nilai: st.absence_deduction_enabled ? 'Gaji dipotong per hari tidak masuk' : 'Tidak memotong gaji',
+            aktif: st.absence_deduction_enabled,
+        },
+        {
+            tab: 'overtime' as TabKey,
+            label: 'Upah lembur',
+            nilai: `Jam pertama ${kali(st.overtime_rate_first_hour)} · jam berikutnya ${kali(st.overtime_rate_next_hour)} · hari libur ${kali(st.overtime_rate_holiday)}`,
+            aktif: true,
+        },
+        {
+            tab: 'bpjs' as TabKey,
+            label: 'BPJS',
+            nilai: st.bpjs_enabled ? 'Dihitung dan dipotong dari gaji' : 'Tidak dihitung',
+            aktif: st.bpjs_enabled,
+        },
+        { tab: 'tax' as TabKey, label: 'PPh 21', nilai: st.pph21_enabled ? 'Dihitung dan dipotong dari gaji' : 'Tidak dihitung', aktif: st.pph21_enabled },
+        {
+            tab: 'approval' as TabKey,
+            label: 'Persetujuan gaji',
+            nilai: st.owner_approval ? 'Hanya pemilik yang menyetujui' : 'Admin atau manajer boleh menyetujui',
+            aktif: st.owner_approval,
+        },
+    ];
+});
 
 const tabs = [
     { key: 'late' as const, label: 'Keterlambatan', icon: Clock },
@@ -101,6 +162,38 @@ const tabs = [
         <div class="space-y-6 pb-8">
             <PayrollNav />
 
+            <!-- Aturan yang sedang berlaku (dari data tersimpan) -->
+            <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5" aria-labelledby="aturan-berlaku" data-testid="aturan-berlaku">
+                <div class="flex items-center gap-2">
+                    <ListChecks class="h-5 w-5 text-indigo-600" />
+                    <h2 id="aturan-berlaku" class="text-base font-bold text-slate-900">Aturan gaji yang berlaku sekarang</h2>
+                </div>
+                <p class="mt-0.5 text-sm text-slate-500">Dipakai setiap kali gaji dihitung. Tekan salah satu untuk mengubahnya.</p>
+                <ul class="mt-3 grid gap-2 sm:grid-cols-2">
+                    <li v-for="a in aturan" :key="a.label">
+                        <button
+                            type="button"
+                            class="flex w-full items-center gap-3 rounded-xl border border-slate-200 px-3 py-2.5 text-left transition hover:border-indigo-300 hover:bg-indigo-50/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                            @click="activeTab = a.tab"
+                        >
+                            <span class="h-2.5 w-2.5 shrink-0 rounded-full" :class="a.aktif ? 'bg-emerald-500' : 'bg-slate-300'" aria-hidden="true" />
+                            <span class="min-w-0 flex-1">
+                                <span class="block text-xs font-semibold tracking-wide text-slate-500 uppercase">{{ a.label }}</span>
+                                <span class="block text-sm font-semibold text-slate-900">{{ a.nilai }}</span>
+                            </span>
+                            <ChevronRight class="h-4 w-4 shrink-0 text-slate-400" />
+                        </button>
+                    </li>
+                </ul>
+            </section>
+
+            <p v-if="errorCount" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800" role="alert">
+                Belum tersimpan: ada {{ errorCount }} isian yang perlu diperbaiki. Tab yang bermasalah diberi tanda merah.
+            </p>
+            <p v-else-if="form.isDirty" class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">
+                Ada perubahan yang belum disimpan. Tekan <strong>Simpan Pengaturan</strong> agar berlaku.
+            </p>
+
             <!-- Tab Navigation -->
             <div class="flex gap-2 overflow-x-auto rounded-xl bg-white p-1.5 ring-1 ring-slate-200">
                 <button
@@ -113,6 +206,7 @@ const tabs = [
                 >
                     <component :is="tab.icon" class="h-4 w-4" />
                     {{ tab.label }}
+                    <span v-if="tabHasError(tab.key)" class="h-2 w-2 rounded-full bg-red-500" aria-label="ada isian yang perlu diperbaiki" />
                 </button>
             </div>
 
@@ -121,68 +215,52 @@ const tabs = [
                 <CardHeader>
                     <CardTitle>Potongan Keterlambatan</CardTitle>
                     <CardDescription>
-                        Konfigurasi denda otomatis untuk karyawan yang terlambat berdasarkan data absensi.
+                        Denda dipotong otomatis dari gaji karyawan yang terlambat, berdasarkan data absensinya.
                     </CardDescription>
                 </CardHeader>
                 <CardContent class="space-y-6">
                     <div class="space-y-1">
-                        <Label>Metode Denda</Label>
+                        <Label for="late-method">Cara menghitung denda</Label>
                         <select
+                            id="late-method"
                             v-model="form.late_penalty_method"
                             class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                         >
-                            <option value="per_day">Per hari telat</option>
-                            <option value="per_minute">Per menit telat</option>
+                            <option value="per_day">Per hari telat (berapa pun menitnya, dendanya sama)</option>
+                            <option value="per_minute">Per menit telat (makin lama telat, makin besar)</option>
                             <option value="none">Tanpa denda</option>
                         </select>
-                        <p class="text-xs text-slate-500">Hanya satu metode denda yang diterapkan.</p>
+                        <p class="text-xs text-slate-500">Hanya satu cara yang dipakai. Isian di bawah menyesuaikan pilihan ini.</p>
                         <p v-if="form.errors.late_penalty_method" class="text-sm text-red-600">{{ form.errors.late_penalty_method }}</p>
                     </div>
 
-                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div class="space-y-1">
-                            <Label>Denda per Hari Telat</Label>
-                            <Input
-                                type="text"
-                                inputmode="numeric"
-                                :value="formatAmount(form.late_penalty_per_day)"
-                                @input="onAmountInput('late_penalty_per_day', $event)"
-                                @blur="onAmountBlur('late_penalty_per_day', $event)"
-                                placeholder="10.000"
-                            />
-                            <p class="text-xs text-slate-500">Denda untuk setiap hari keterlambatan</p>
-                            <p v-if="form.errors.late_penalty_per_day" class="text-sm text-red-600">{{ form.errors.late_penalty_per_day }}</p>
-                        </div>
-                        <div class="space-y-1">
-                            <Label>Denda per Menit Telat</Label>
-                            <Input
-                                type="text"
-                                inputmode="numeric"
-                                :value="formatAmount(form.late_penalty_per_minute)"
-                                @input="onAmountInput('late_penalty_per_minute', $event)"
-                                @blur="onAmountBlur('late_penalty_per_minute', $event)"
-                                placeholder="100"
-                            />
-                            <p class="text-xs text-slate-500">Denda untuk setiap menit keterlambatan</p>
-                            <p v-if="form.errors.late_penalty_per_minute" class="text-sm text-red-600">{{ form.errors.late_penalty_per_minute }}</p>
-                        </div>
+                    <div v-if="form.late_penalty_method === 'per_day'" class="space-y-1 sm:max-w-xs">
+                        <Label for="late-per-day">Denda per hari telat (Rp)</Label>
+                        <RupiahInput id="late-per-day" v-model="form.late_penalty_per_day" placeholder="10.000" />
+                        <p class="text-xs text-slate-500">Dikenakan sekali untuk setiap hari karyawan datang terlambat.</p>
+                        <p v-if="form.errors.late_penalty_per_day" class="text-sm text-red-600">{{ form.errors.late_penalty_per_day }}</p>
                     </div>
+                    <div v-else-if="form.late_penalty_method === 'per_minute'" class="space-y-1 sm:max-w-xs">
+                        <Label for="late-per-minute">Denda per menit telat (Rp)</Label>
+                        <RupiahInput id="late-per-minute" v-model="form.late_penalty_per_minute" placeholder="100" />
+                        <p class="text-xs text-slate-500">Dikalikan jumlah menit terlambat selama periode gaji.</p>
+                        <p v-if="form.errors.late_penalty_per_minute" class="text-sm text-red-600">{{ form.errors.late_penalty_per_minute }}</p>
+                    </div>
+                    <p v-else class="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600">Keterlambatan tetap tercatat di absensi, tetapi tidak memotong gaji.</p>
 
                     <div class="rounded-lg bg-amber-50 border border-amber-200 p-4">
                         <div class="flex gap-2">
                             <AlertCircle class="h-5 w-5 text-amber-600 shrink-0" />
                             <div class="text-sm text-amber-800">
-                                <p class="font-medium">Contoh Perhitungan:</p>
-                                <p class="mt-1">
-                                    Jika karyawan terlambat <strong>2 hari</strong> dengan total <strong>30 menit</strong>:<br>
+                                <p class="font-medium">Contoh:</p>
+                                <p class="mt-1" data-testid="contoh-denda">
+                                    Karyawan terlambat <strong>2 hari</strong> dengan total <strong>30 menit</strong> dalam satu periode gaji.<br />
                                     <template v-if="form.late_penalty_method === 'per_minute'">
-                                        Potongan = 30 × {{ formatAmount(form.late_penalty_per_minute) || '0' }}
+                                        Potongan = 30 menit × {{ rupiah(form.late_penalty_per_minute) }} = <strong>{{ rupiah(contohDenda) }}</strong>
                                     </template>
-                                    <template v-else-if="form.late_penalty_method === 'none'">
-                                        Potongan = 0 (tanpa denda)
-                                    </template>
+                                    <template v-else-if="form.late_penalty_method === 'none'">Potongan = <strong>Rp 0</strong> (tanpa denda)</template>
                                     <template v-else>
-                                        Potongan = 2 × {{ formatAmount(form.late_penalty_per_day) || '0' }}
+                                        Potongan = 2 hari × {{ rupiah(form.late_penalty_per_day) }} = <strong>{{ rupiah(contohDenda) }}</strong>
                                     </template>
                                 </p>
                             </div>
@@ -217,7 +295,7 @@ const tabs = [
                 <CardHeader>
                     <CardTitle>Tarif Upah Lembur</CardTitle>
                     <CardDescription>
-                        Multiplier upah lembur terhadap upah per jam dasar.
+                        Pengali upah lembur terhadap upah per jam. Contoh: 1,5 berarti lembur dibayar satu setengah kali upah per jam.
                     </CardDescription>
                 </CardHeader>
                 <CardContent class="space-y-6">
@@ -268,7 +346,7 @@ const tabs = [
                 <CardHeader>
                     <CardTitle>BPJS Kesehatan & Ketenagakerjaan</CardTitle>
                     <CardDescription>
-                        Konfigurasi persentase iuran BPJS. Potongan karyawan akan otomatis dihitung dari gaji pokok.
+                        Persentase iuran BPJS. Potongan karyawan dihitung otomatis dari total komponen gaji tetap (gaji pokok dan tunjangan tetap).
                     </CardDescription>
                 </CardHeader>
                 <CardContent class="space-y-6">
@@ -335,23 +413,13 @@ const tabs = [
                             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <div class="space-y-1">
                                     <Label>Batas upah BPJS Kesehatan (Rp)</Label>
-                                    <Input
-                                        :model-value="formatAmount(form.bpjs_health_wage_cap)"
-                                        inputmode="numeric"
-                                        @input="onAmountInput('bpjs_health_wage_cap', $event)"
-                                        @blur="onAmountBlur('bpjs_health_wage_cap', $event)"
-                                    />
+                                    <RupiahInput v-model="form.bpjs_health_wage_cap" />
                                     <p class="text-xs text-slate-500">Saat ini Rp 12.000.000 (Perpres 64/2020).</p>
                                     <p v-if="form.errors.bpjs_health_wage_cap" class="text-sm text-red-600">{{ form.errors.bpjs_health_wage_cap }}</p>
                                 </div>
                                 <div class="space-y-1">
                                     <Label>Batas upah Jaminan Pensiun (Rp)</Label>
-                                    <Input
-                                        :model-value="formatAmount(form.bpjs_jp_wage_cap)"
-                                        inputmode="numeric"
-                                        @input="onAmountInput('bpjs_jp_wage_cap', $event)"
-                                        @blur="onAmountBlur('bpjs_jp_wage_cap', $event)"
-                                    />
+                                    <RupiahInput v-model="form.bpjs_jp_wage_cap" />
                                     <p class="text-xs text-slate-500">Diumumkan BPJS Ketenagakerjaan tiap Maret — perbarui setiap tahun.</p>
                                     <p v-if="form.errors.bpjs_jp_wage_cap" class="text-sm text-red-600">{{ form.errors.bpjs_jp_wage_cap }}</p>
                                 </div>

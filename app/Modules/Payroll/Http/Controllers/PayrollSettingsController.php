@@ -51,31 +51,61 @@ class PayrollSettingsController extends AdminPayrollController
         $store = $this->currentStore();
         $this->authorizeAdmin();
 
+        $persen = 'numeric|min:0|max:100';
         $validated = $request->validate([
             // Potongan keterlambatan
-            'late_penalty_per_day' => 'required|numeric|min:0',
-            'late_penalty_per_minute' => 'required|numeric|min:0',
+            'late_penalty_per_day' => 'required|numeric|min:0|max:100000000',
+            'late_penalty_per_minute' => 'required|numeric|min:0|max:100000000',
             'late_penalty_method' => 'required|in:none,per_day,per_minute',
-            // Tarif lembur
-            'overtime_rate_first_hour' => 'required|numeric|min:0',
-            'overtime_rate_next_hour' => 'required|numeric|min:0',
-            'overtime_rate_holiday' => 'required|numeric|min:0',
+            // Tarif lembur (pengali upah per jam)
+            'overtime_rate_first_hour' => 'required|numeric|min:0|max:20',
+            'overtime_rate_next_hour' => 'required|numeric|min:0|max:20',
+            'overtime_rate_holiday' => 'required|numeric|min:0|max:20',
             // BPJS
             'bpjs_enabled' => 'required|boolean',
-            'bpjs_health_employee' => 'required_if:bpjs_enabled,true|numeric|min:0',
-            'bpjs_health_employer' => 'required_if:bpjs_enabled,true|numeric|min:0',
-            'bpjs_jht_employee' => 'required_if:bpjs_enabled,true|numeric|min:0',
-            'bpjs_jht_employer' => 'required_if:bpjs_enabled,true|numeric|min:0',
-            'bpjs_jp_employee' => 'required_if:bpjs_enabled,true|numeric|min:0',
-            'bpjs_jp_employer' => 'required_if:bpjs_enabled,true|numeric|min:0',
-            'bpjs_jkk' => 'required_if:bpjs_enabled,true|numeric|min:0',
-            'bpjs_jkm' => 'required_if:bpjs_enabled,true|numeric|min:0',
-            'bpjs_health_wage_cap' => 'required|numeric|min:0',
-            'bpjs_jp_wage_cap' => 'required|numeric|min:0',
+            'bpjs_health_employee' => 'required_if:bpjs_enabled,true|'.$persen,
+            'bpjs_health_employer' => 'required_if:bpjs_enabled,true|'.$persen,
+            'bpjs_jht_employee' => 'required_if:bpjs_enabled,true|'.$persen,
+            'bpjs_jht_employer' => 'required_if:bpjs_enabled,true|'.$persen,
+            'bpjs_jp_employee' => 'required_if:bpjs_enabled,true|'.$persen,
+            'bpjs_jp_employer' => 'required_if:bpjs_enabled,true|'.$persen,
+            'bpjs_jkk' => 'required_if:bpjs_enabled,true|'.$persen,
+            'bpjs_jkm' => 'required_if:bpjs_enabled,true|'.$persen,
+            'bpjs_health_wage_cap' => 'required|numeric|min:0|max:1000000000',
+            'bpjs_jp_wage_cap' => 'required|numeric|min:0|max:1000000000',
             'absence_deduction_enabled' => 'required|boolean',
             // PPh 21
             'pph21_enabled' => 'required|boolean',
             'owner_approval' => 'sometimes|boolean',
+        ], [
+            'required' => ':attribute wajib diisi. Isi 0 bila tidak dipakai.',
+            'required_if' => ':attribute wajib diisi selama BPJS diaktifkan.',
+            'numeric' => ':attribute harus berupa angka.',
+            'min' => ':attribute tidak boleh kurang dari :min.',
+            'max' => ':attribute terlalu besar (paling banyak :max).',
+            'in' => 'Pilihan :attribute tidak dikenali.',
+            'boolean' => 'Pilihan :attribute tidak dikenali.',
+        ], [
+            'late_penalty_per_day' => 'Denda per hari telat',
+            'late_penalty_per_minute' => 'Denda per menit telat',
+            'late_penalty_method' => 'cara menghitung denda',
+            'overtime_rate_first_hour' => 'Pengali lembur jam pertama',
+            'overtime_rate_next_hour' => 'Pengali lembur jam berikutnya',
+            'overtime_rate_holiday' => 'Pengali lembur hari libur',
+            'bpjs_enabled' => 'BPJS',
+            'bpjs_health_employee' => 'Iuran BPJS Kesehatan karyawan',
+            'bpjs_health_employer' => 'Iuran BPJS Kesehatan perusahaan',
+            'bpjs_jht_employee' => 'Iuran JHT karyawan',
+            'bpjs_jht_employer' => 'Iuran JHT perusahaan',
+            'bpjs_jp_employee' => 'Iuran JP karyawan',
+            'bpjs_jp_employer' => 'Iuran JP perusahaan',
+            'bpjs_jkk' => 'Iuran JKK',
+            'bpjs_jkm' => 'Iuran JKM',
+            'bpjs_health_wage_cap' => 'Batas upah BPJS Kesehatan',
+            'bpjs_jp_wage_cap' => 'Batas upah Jaminan Pensiun',
+            'absence_deduction_enabled' => 'potongan alpa',
+            'pph21_enabled' => 'PPh 21',
+            'owner_approval' => 'persetujuan gaji',
         ]);
 
         // Disimpan di settings JSON (bukan kolom tabel stores).
@@ -100,6 +130,6 @@ class PayrollSettingsController extends AdminPayrollController
             ]);
         }
 
-        return back()->with('success', 'Pengaturan payroll berhasil disimpan.');
+        return back()->with('success', 'Pengaturan gaji berhasil disimpan.');
     }
 }

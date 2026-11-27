@@ -6,6 +6,7 @@ import PayrollNav from '@/components/PayrollNav.vue';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import RupiahInput from '@/components/RupiahInput.vue';
 import { Label } from '@/components/ui/label';
 import { Pencil, Plus, Trash2, X } from 'lucide-vue-next';
 
@@ -41,23 +42,6 @@ const form = useForm({
 });
 
 const editing = () => form.id !== null;
-
-const formatAmount = (value: string | number) => {
-    const num = String(value).replace(/\D/g, '');
-    return num ? new Intl.NumberFormat('id-ID').format(Number(num)) : '';
-};
-
-const parseAmount = (value: string) => value.replace(/\D/g, '');
-
-const onAmountInput = (e: Event) => {
-    const input = e.target as HTMLInputElement;
-    form.amount = parseAmount(input.value);
-};
-
-const onAmountBlur = (e: Event) => {
-    const input = e.target as HTMLInputElement;
-    input.value = formatAmount(form.amount);
-};
 
 const startEdit = (employeeId: number, item: ComponentItem) => {
     form.id = item.id;
@@ -135,14 +119,7 @@ const updateTaxStatus = (employee: Employee, taxStatus: string) => {
                         </div>
                         <div class="space-y-1">
                             <Label>Nominal per bulan (Rp)</Label>
-                            <Input
-                                type="text"
-                                inputmode="numeric"
-                                v-model="form.amount"
-                                @input="onAmountInput"
-                                @blur="onAmountBlur"
-                                placeholder="5.000.000"
-                            />
+                            <RupiahInput v-model="form.amount" placeholder="5.000.000" />
                             <p v-if="form.errors.amount" class="text-sm text-red-600">{{ form.errors.amount }}</p>
                         </div>
                     </div>
