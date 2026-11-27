@@ -101,10 +101,10 @@ function submit() {
             </Button>
 
             <Card class="rounded-2xl border-slate-200 shadow-sm">
-                <CardHeader>
-                    <CardTitle>{{ isPurchase ? 'Beli stok' : 'Minta stok' }} untuk {{ store.name }}</CardTitle>
+                <CardHeader class="px-4 sm:px-6">
+                    <CardTitle class="break-words">{{ isPurchase ? 'Beli stok' : 'Minta stok' }} untuk {{ store.name }}</CardTitle>
                 </CardHeader>
-                <CardContent class="space-y-5">
+                <CardContent class="space-y-5 px-4 sm:px-6">
                     <!-- Jenis permintaan -->
                     <fieldset>
                         <legend class="text-sm font-semibold text-slate-700">Jenis</legend>
@@ -171,14 +171,14 @@ function submit() {
                                 v-for="p in suggestions"
                                 :key="p.id"
                                 type="button"
-                                class="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-slate-50"
+                                class="flex w-full flex-col gap-0.5 px-4 py-2.5 text-left text-sm hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
                                 @click="addProduct(p)"
                             >
-                                <span>
+                                <span class="min-w-0">
                                     <span class="font-medium text-slate-900">{{ p.name }}</span>
                                     <span v-if="p.sku" class="ml-2 font-mono text-xs text-slate-400">{{ p.sku }}</span>
                                 </span>
-                                <span class="text-xs" :class="supplierStock(p.id) === null ? 'text-red-500' : 'text-slate-500'">
+                                <span class="shrink-0 text-xs" :class="supplierStock(p.id) === null ? 'text-red-500' : 'text-slate-500'">
                                     {{ supplierStock(p.id) === null ? `Tidak ada di ${supplierName}` : `Stok ${supplierName}: ${fmt(supplierStock(p.id)!)}` }}
                                 </span>
                             </button>
@@ -188,7 +188,62 @@ function submit() {
                     <div v-if="form.items.length === 0" class="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-500">
                         Belum ada barang. Cari barang di atas, atau buka dari Daftar Belanja.
                     </div>
-                    <div v-else class="overflow-x-auto rounded-xl border border-slate-100">
+                    <!-- Ponsel: satu kartu per barang (tabel 5–7 kolom tidak muat di layar sempit). -->
+                    <ul v-if="form.items.length" class="space-y-3 md:hidden" data-testid="items-mobile">
+                        <li v-for="(item, i) in form.items" :key="item.product_id" class="rounded-xl border border-slate-200 p-3">
+                            <div class="flex items-start justify-between gap-2">
+                                <p class="min-w-0 break-words font-semibold text-slate-900">{{ productById(item.product_id)?.name }}</p>
+                                <button type="button" class="-mr-1 -mt-1 shrink-0 rounded-md p-1.5 text-red-600 hover:bg-red-50" @click="removeItem(i)">
+                                    <Trash2 class="h-4 w-4" />
+                                    <span class="sr-only">Hapus</span>
+                                </button>
+                            </div>
+                            <dl class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                                <div>
+                                    <dt class="text-slate-500">Stok di sini / Min</dt>
+                                    <dd class="tabular-nums text-slate-700">
+                                        {{ fmt(productById(item.product_id)?.stock ?? 0) }} / {{ fmt(productById(item.product_id)?.min_stock ?? 0) }}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt class="truncate text-slate-500">Stok {{ supplierName }}</dt>
+                                    <dd class="tabular-nums">
+                                        <span v-if="supplierStock(item.product_id) === null" class="font-semibold text-red-600">Tidak ada</span>
+                                        <span v-else :class="supplierStock(item.product_id)! < Number(item.quantity) ? 'text-amber-700' : 'text-slate-700'">
+                                            {{ fmt(supplierStock(item.product_id)!) }}
+                                        </span>
+                                    </dd>
+                                </div>
+                                <div v-if="isPurchase">
+                                    <dt class="text-slate-500">Harga</dt>
+                                    <dd class="tabular-nums text-slate-700">
+                                        {{ unitPrice(item.product_id) === null ? '—' : rupiah(unitPrice(item.product_id)!) }}
+                                    </dd>
+                                </div>
+                                <div v-if="isPurchase">
+                                    <dt class="text-slate-500">Subtotal</dt>
+                                    <dd class="font-semibold tabular-nums text-slate-900">{{ rupiah(lineTotal(item)) }}</dd>
+                                </div>
+                            </dl>
+                            <label class="mt-3 flex items-center gap-2 text-sm">
+                                <span class="text-slate-600">{{ isPurchase ? 'Jumlah dibeli' : 'Jumlah diminta' }}</span>
+                                <input
+                                    v-model.number="item.quantity"
+                                    type="number"
+                                    inputmode="decimal"
+                                    :min="productById(item.product_id)?.allows_decimal ? 0.01 : 1"
+                                    :step="productById(item.product_id)?.allows_decimal ? 0.01 : 1"
+                                    class="ml-auto h-10 w-24 rounded-md border border-slate-200 px-2 text-right"
+                                    :aria-label="`Jumlah ${productById(item.product_id)?.name}`"
+                                />
+                                <span class="w-10 shrink-0 text-slate-500">{{ productById(item.product_id)?.unit }}</span>
+                            </label>
+                            <span v-if="form.errors[`items.${i}.quantity`]" class="block text-xs text-red-600">{{ form.errors[`items.${i}.quantity`] }}</span>
+                            <span v-if="form.errors[`items.${i}.product_id`]" class="block text-xs text-red-600">{{ form.errors[`items.${i}.product_id`] }}</span>
+                        </li>
+                    </ul>
+
+                    <div v-if="form.items.length" class="hidden overflow-x-auto rounded-xl border border-slate-100 md:block">
                         <table class="w-full text-sm">
                             <thead>
                                 <tr class="border-b bg-slate-50 text-left text-xs font-bold uppercase tracking-wide text-slate-600">
@@ -259,7 +314,7 @@ function submit() {
                     </div>
 
                     <div class="flex justify-end">
-                        <Button class="rounded-xl" :disabled="!canSubmit || form.processing" @click="submit">
+                        <Button class="w-full rounded-xl sm:w-auto" :disabled="!canSubmit || form.processing" @click="submit">
                             <Send class="mr-2 h-4 w-4" />
                             {{ isPurchase ? 'Kirim pesanan beli' : 'Kirim permintaan' }}
                         </Button>
